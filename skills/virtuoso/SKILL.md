@@ -110,8 +110,10 @@ for similar tasks." This feedback helps Cowork calibrate future dispatches.
 Before touching any file or running any command:
 
 1. **Read the full task specification.** If the task references external docs, read those too.
-2. **Read the behavioral reference** (`zeus.md` or the project's lead agent definition) to
-   load the routing decision tree, escalation rules, and coordination protocol.
+2. **Read the behavioral reference** — the bundled [`references/zeus.md`](references/zeus.md)
+   (Virtuoso's orchestration protocol: routing decision tree, agent hierarchy, escalation
+   rules), or the project's own lead-agent definition if it overrides — to load the routing
+   decision tree, escalation rules, and coordination protocol.
 3. **Identify every discrete deliverable.** A deliverable is something you can point to when done
    (a file changed, a test passing, a document updated, a commit made).
 4. **Flag anything unclear.** If a step is ambiguous, a file path might be wrong, or a dependency
@@ -249,8 +251,9 @@ They are not standalone `$virtuoso` chats and they do not own the parent plan.
 Search the project directory for role/agent definitions if they help preserve local
 language. Look in:
 - `.claude/agents/` — project agent definitions
+- The plugin's bundled `agents/` (e.g., `Socrates`, the calibration specialist)
 - The dispatch spec or task description for named roles
-- The behavioral reference (`zeus.md`) for the routing decision tree
+- The bundled behavioral reference [`references/zeus.md`](references/zeus.md) for the routing decision tree
 
 Build a compact inventory. Do not spawn yet; spawning only happens during Phase 4
 after the plan identifies a concrete worker task.
