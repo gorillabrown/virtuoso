@@ -113,4 +113,4 @@ When reporting AKM findings, state whether the result is merely a behavioral KPI
 - Use seed ranges for reproducibility (e.g., seeds 0-199 for 200 fights).
 
 See `AGENT_MEMORY_GUIDE.md` for memory system instructions.
-Memory location: `C:\Users\estra\Projects\Gloves_Of_Glory_fresh\.claude\agent-memory\hesiod\`
+Memory location: `<project-root>/.claude/agent-memory/hesiod/`

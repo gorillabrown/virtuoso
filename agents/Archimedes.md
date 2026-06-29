@@ -103,4 +103,4 @@ At the START of every task, count the total fixes/steps and print a progress hea
 3. **Do NOT ask questions.** End with findings summary. No postamble.
 
 See `AGENT_MEMORY_GUIDE.md` for memory system instructions.
-Memory location: `C:\Users\estra\Projects\Gloves_Of_Glory_fresh\.claude\agent-memory\archimedes\`
+Memory location: `<project-root>/.claude/agent-memory/archimedes/`
