@@ -586,7 +586,7 @@ what was learned]
   performance analysis but not for the close-out record. If performance
   recommendations are warranted, append them after the close-out block.
 - Git state and Key engineering finding close the block — these are what Cowork
-  reads first when processing a close-out into a Phase Close-Out Report
+  reads first when processing a close-out into a Pointer Close-Out Report
 
 **Performance Recommendations** (append after the close-out block when warranted):
 Focus on three dimensions with concrete task references:
@@ -689,7 +689,7 @@ main governance docs — formatted as **fold-in instructions**, not as raw edits
 
 ### Rule 3 — Staging File Structure
 
-The staging file is organized so phase-closeout can mechanically apply each entry.
+The staging file is organized so pointer-closeout can mechanically apply each entry.
 Section headers name the target document; entries within name the target section
 and the fold-in action.
 
@@ -698,7 +698,7 @@ and the fold-in action.
 
 This file enumerates every governance change the sprint would have made to
 main governance documents during execution, but staged here per virtuoso's
-worktree-edit prohibition. phase-closeout processes this file at sprint
+worktree-edit prohibition. pointer-closeout processes this file at sprint
 close to apply the fold-ins to canonical main.
 
 ## Target: <document-name>
@@ -731,14 +731,14 @@ subsection and destination = close-out memo §Mid-Dispatch Decisions. These must
 be processed BEFORE inline spec collapse fold-ins (so amendment content is
 preserved before the spec containing it gets collapsed).
 
-### Rule 4 — phase-closeout Processes the Staging File as Wave 2 Step 0
+### Rule 4 — pointer-closeout Processes the Staging File as Wave 2 Step 0
 
-phase-closeout's existing Wave 2 procedure gains a new first step:
+pointer-closeout's existing Wave 2 procedure gains a new first step:
 
 **Step 0 (NEW): Read and process the sprint's staging file.**
 
 If `Memo.<sprint-id>.GovernanceStaging.<date>.md` exists in the worktree (or has
-already merged from the worktree), phase-closeout:
+already merged from the worktree), pointer-closeout:
 
 1. Parses all fold-in instructions
 2. Applies them to canonical main as Edit calls against the named target documents
@@ -749,7 +749,7 @@ The close-out memo is the durable record. The staging file is transient infrastr
 
 **Discrepancy handling:** If a fold-in instruction conflicts with current canonical
 main state (e.g., the target section no longer exists, or content has changed since
-the fold-in was staged), phase-closeout surfaces the discrepancy as a reconciliation
+the fold-in was staged), pointer-closeout surfaces the discrepancy as a reconciliation
 prompt to the user rather than silently overwriting or failing.
 
 ### Rule 5 — Mid-Dispatch Amendments Use the Staging File
@@ -784,7 +784,7 @@ surface check becomes unnecessary because the conflict surface no longer exists.
 
 ### Rule 6 — Cowork-Side Sprints Follow the Same Pattern by Default
 
-Cowork-side governance work that runs in a single session (e.g., /phase-closeout,
+Cowork-side governance work that runs in a single session (e.g., /pointer-closeout,
 /roadmap-review, /governance-sweep) doesn't have a worktree boundary, so the conflict
 surface doesn't apply in the same way. But the staging-file pattern still has value:
 
@@ -805,7 +805,7 @@ Sprints dispatched before this pattern was introduced continue under the old pat
 (mid-dispatch-decision writes amendments inline to the roadmap). The new staging-file
 pattern starts with the next sprint dispatched after this skill update.
 
-When processing a close-out for a grandfathered sprint, phase-closeout checks for
+When processing a close-out for a grandfathered sprint, pointer-closeout checks for
 BOTH: a staging file (new pattern) and inline Mid-Dispatch Amendment blocks with
 Close-Out Preservation instructions (old pattern). If both exist, surface as a
 reconciliation prompt. The transition point should be noted in CLAUDE.md so it's
@@ -821,9 +821,9 @@ The pattern of:
 
 Under the new pattern: the worktree NEVER edits canonical main governance documents.
 Conflicts on those files between worktree and Cowork are structurally impossible.
-The staging file consolidates intent; phase-closeout applies it once at close-out,
+The staging file consolidates intent; pointer-closeout applies it once at close-out,
 with full visibility of any concurrent Cowork edits at that moment.
 
-**Trade-off:** phase-closeout becomes mechanically heavier (more fold-ins to process)
+**Trade-off:** pointer-closeout becomes mechanically heavier (more fold-ins to process)
 and the staging file is one more artifact per sprint. Both are small costs for the
 structural elimination of a recurring failure mode.

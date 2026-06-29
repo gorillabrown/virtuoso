@@ -278,7 +278,7 @@ When ULTRATHINK's behavioral directives conflict with another skill's requiremen
 
 Specific combinations:
 
-- **ULTRATHINK + phase-closeout:** Deeper interpretation of findings, more thorough
+- **ULTRATHINK + pointer-closeout:** Deeper interpretation of findings, more thorough
   tradeoff analysis on dispositions, Phase 1 assumption archaeology applied to sprint
   conclusions before the phase is closed.
 - **ULTRATHINK + effort-levels:** Deeper analysis of task complexity, more careful

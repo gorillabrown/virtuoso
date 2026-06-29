@@ -11,7 +11,7 @@ backed by a self-healing per-project workspace.
 
 - **14 skills**, **10 commands**, and a **SessionStart hook**.
   - Execution & planning: `virtuoso`, `roadmap-review`, `roadmap-status`, `next-pointer`.
-  - Close-out & decisions: `phase-closeout`, `mid-dispatch-decision`.
+  - Close-out & decisions: `pointer-closeout`, `mid-dispatch-decision`.
   - Governance & audits: `governance-sweep`, `3rd-party-audit`.
   - Reasoning modifiers: `ultrathink`, `effort-levels`, `adversarial-review`.
   - Utilities: `delayed-start`, `git-handoff` (legacy/manual), `virtuoso-init`.
@@ -29,7 +29,7 @@ backed by a self-healing per-project workspace.
   into `Virtuoso/scripts/`, so every in-skill script call is workspace-relative and robust.
 - **SessionStart hook scoped** to `startup|clear|compact` (was `*`), `async: false`.
 - **Authoring fixes from the build:** the `3rd Party Audit SKILL.md` filename normalized;
-  `delayed-start` frontmatter added; `phase-closeout` absolute paths removed; dangling
+  `delayed-start` frontmatter added; `pointer-closeout` absolute paths removed; dangling
   `WORKFLOW_REFERENCE.md §` citations repointed to the `effort-levels` / `3rd-party-audit`
   skills (with a generated index in the workspace).
 - **Description hygiene:** `next-pointer` and `adversarial-review` descriptions trimmed under

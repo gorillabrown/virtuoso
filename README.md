@@ -75,7 +75,7 @@ skill or command bodies.
 | `roadmap-review` | `/roadmap-review` | Heavyweight roadmap recalibration |
 | `roadmap-status` | `/roadmap-status` | Lightweight roadmap pulse check |
 | `next-pointer` | `/next-pointer` | Finalize + dispatch the next sprint |
-| `phase-closeout` | `/phase-closeout` | Close-out report + retrospective |
+| `pointer-closeout` | `/pointer-closeout` | Close-out report + retrospective |
 | `mid-dispatch-decision` | `/mid-dispatch-decision` | Decide when a dispatch pauses mid-run |
 | `governance-sweep` | `/governance-sweep` | Read-only doc-hygiene audit → CLI spec |
 | `3rd-party-audit` | `/3rd-party-audit` | External codebase audit lifecycle |
@@ -103,7 +103,7 @@ Some skills reference skills from other plugins. They are **not** bundled:
 - **`zeus.md` / lead-agent reference** — several skills can read a project-supplied
   behavioral reference (routing, escalation, coordination rules). Provide your own per
   project; Virtuoso ships none.
-- **Git Workflow** — `next-pointer` and `phase-closeout` follow your project's Git Workflow
+- **Git Workflow** — `next-pointer` and `pointer-closeout` follow your project's Git Workflow
   (typically defined in the project's `CLAUDE.md`) for how — and whether — read-only git
   inspection runs and who commits. Cowork never runs mutating git itself.
 

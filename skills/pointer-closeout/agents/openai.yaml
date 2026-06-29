@@ -1,4 +1,4 @@
 interface:
-  display_name: "Phase Close-Out"
+  display_name: "Pointer Close-Out"
   short_description: "Turn completed CLI sprint summaries into saved close-out and retrospective outputs"
   default_prompt: "Process the completed CLI sprint or phase summary into two deliverables: a project-facing close-out report and a workflow-facing spec retrospective. Propose dispositions first, save only after confirmation, and persist both outputs to files."

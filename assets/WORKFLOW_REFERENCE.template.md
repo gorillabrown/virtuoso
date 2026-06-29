@@ -12,7 +12,7 @@ This index maps the old section numbers to their new homes.
 
 - **virtuoso** — multi-step execution discipline (sprints, narration, progress tracking)
 - **roadmap-review / roadmap-status / next-pointer** — plan, pulse-check, and dispatch
-- **phase-closeout** — close-out report + spec retrospective
+- **pointer-closeout** — close-out report + spec retrospective
 - **mid-dispatch-decision** — decision protocol when a dispatch pauses
 - **governance-sweep** — read-only doc-hygiene audit → CLI spec
 - **3rd-party-audit** — external codebase audit lifecycle

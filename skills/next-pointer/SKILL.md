@@ -43,6 +43,12 @@ file:line reference, every test name, every constant, every edge-case
 response — explicit enough that perfect implementation is the only
 possible outcome.
 
+**Bookend with `/pointer-closeout`.** This skill opens a dispatch; `pointer-closeout`
+closes it. After the dispatched sprint completes and the implementer reports back, run
+`/pointer-closeout` to process the result into the roadmap and the retrospective. The two
+are a matched pair — every pointer this skill prints is later closed by a
+`pointer-closeout` run.
+
 ## Completely reconciling git — two halves
 
 "Completely reconciles git" spans **two** reconciliations, and the

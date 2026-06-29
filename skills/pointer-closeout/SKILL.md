@@ -1,13 +1,13 @@
 ---
-name: phase-closeout
+name: pointer-closeout
 description: >
-  Process CLI phase or sprint summaries into two durable outputs: a Phase Close-Out Report
+  Process CLI phase or sprint summaries into two durable outputs: a Pointer Close-Out Report
   for project decisions and a Spec Retrospective for workflow improvement. Use when a
   completed CLI run, sprint summary, merge summary, or "phase complete" update needs to be
   interpreted, dispositioned, saved to files, and folded back into roadmap/governance work.
 ---
 
-# Phase Close-Out
+# Pointer Close-Out
 
 ## Preflight — workspace check (run first)
 
@@ -20,12 +20,17 @@ The script is idempotent — it never overwrites existing files. The bundled-scr
 **Workspace paths.** Canonical files live under `Virtuoso/`: `Virtuoso/Roadmap.md`, `Virtuoso/sprint-queue.xlsx`, bundled scripts in `Virtuoso/scripts/`, review outputs in `Virtuoso/roadmap-reviews/` (check-ins in `Virtuoso/roadmap-reviews/checkins/`), close-outs in `Virtuoso/Close-Outs/`, audits in `Virtuoso/audits/`. Wherever this skill names `Roadmap.md`, `sprint-queue.xlsx`, or `roadmap-reviews/` without a directory, resolve them under `Virtuoso/` first (falling back to the project root for legacy projects).
 
 
-Using the phase-closeout skill to process this summary.
+Using the pointer-closeout skill to process this summary.
+
+**Bookend with `/next-pointer`.** `/next-pointer` is the dispatch gate that opens a sprint;
+`pointer-closeout` is its bookend — it ingests the completed sprint's summary and folds the
+result back into the roadmap, sprint queue, and retrospective. Run it whenever a sprint
+dispatched via `/next-pointer` reports back.
 
 Treat this skill as a structured close-out workflow for completed CLI work. Produce two
 deliverables in order:
 
-1. **Phase Close-Out Report**
+1. **Pointer Close-Out Report**
 2. **Spec Retrospective**
 
 Persist both outputs to files after user confirmation.
@@ -111,7 +116,7 @@ unless they're already part of the user's working vocabulary.
 
 ## Deliverables
 
-### 1. Phase Close-Out Report
+### 1. Pointer Close-Out Report
 
 Purpose:
 - interpret the results
@@ -221,7 +226,7 @@ always vacates the head and the next one always moves up, even when nothing else
 
 This skill **does not** print a next-sprint dispatch pointer. The next pointer (single
 or parallel) is the responsibility of the `/next-pointer` skill, run separately after
-phase-closeout finishes.
+pointer-closeout finishes.
 
 Wave 1's *Recommend* line names a direction in prose only (no code box). Wave 2 ends
 at persistence and the git hand-off — no dispatch pointer.

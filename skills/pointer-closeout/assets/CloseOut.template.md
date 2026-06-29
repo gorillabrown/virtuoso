@@ -6,7 +6,7 @@ tokens: [~NNNk]
 status: [all-pass | has-regressions | has-discoveries]
 ---
 
-# Phase Close-Out: [SPRINT-ID]
+# Pointer Close-Out: [SPRINT-ID]
 
 ## Sprint Brief
 

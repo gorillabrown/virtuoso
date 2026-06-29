@@ -130,16 +130,16 @@ annotations. Keep task IDs and done-when unchanged.
 ### Type 4 — Pivot Stop and Regroup
 
 CLI stops. Completed work preserved; remaining tasks cancelled. Cowork runs a
-partial phase-closeout, then authors a new dispatch.
+partial pointer-closeout, then authors a new dispatch.
 
 **CLI block format:** "Stop the dispatch. Preserve completed work from tasks
 #1-N. Cancel remaining tasks. I'll send a new dispatch from Cowork."
 
-**Partial close-out contract:** When Type 4 fires, Cowork invokes phase-closeout
+**Partial close-out contract:** When Type 4 fires, Cowork invokes pointer-closeout
 with these inputs: (a) completed tasks treated as the sprint's deliverables,
 (b) cancelled tasks listed with reason "mid-dispatch pivot," (c) the close-out's
 findings table includes the pause-point finding that triggered the stop,
-(d) the next pointer enters Case C (brainstorm). Phase-closeout does not need
+(d) the next pointer enters Case C (brainstorm). Pointer-closeout does not need
 a full CLI summary — the mid-dispatch decision's Step 2 assessment serves as
 the summary input.
 
@@ -465,7 +465,7 @@ recommendation. Instead:
 ### Step 5.5 — Cross-Worktree Conflict Surface Check
 
 **Exemption: Type 4 (Pivot Stop) skips this step entirely.** Type 4 triggers
-partial phase-closeout immediately, so the amendment authoring and the close-out
+partial pointer-closeout immediately, so the amendment authoring and the close-out
 integration happen in the same workflow — no cross-worktree timing gap exists.
 Steps 5.5 and the staging-file branching in Step 6b apply only to Types 1a, 1b,
 2, 3, 3a, and 5, where the dispatch continues and the close-out happens later.
@@ -623,7 +623,7 @@ to the staging file.
    `Memo.<sprint-id>.GovernanceStaging.<YYYY-MM-DD>.md` (fold-in N).
    Registry shows [N] decisions for this sprint."
 
-At close-out, phase-closeout processes the staging file as Wave 2 Step 0 —
+At close-out, pointer-closeout processes the staging file as Wave 2 Step 0 —
 it migrates the amendment content to the close-out memo's §Mid-Dispatch
 Decisions section and deletes the staging file. The fold-in instruction's
 Action: Migrate tells the handler exactly what to do.
@@ -713,9 +713,9 @@ Print confirmation: "Added SRL-NNN to lessons learned: [one-line summary]."
 
 ## Integration with Other Skills
 
-### + Phase-Closeout
+### + Pointer-Closeout
 
-**Type 4 triggers partial phase-closeout immediately.** Inputs: (a) completed
+**Type 4 triggers partial pointer-closeout immediately.** Inputs: (a) completed
 tasks as deliverables, (b) cancelled tasks with reason "mid-dispatch pivot,"
 (c) pause-point finding in the findings table, (d) next pointer enters Case C.
 Step 2's situation assessment serves as the CLI summary input.

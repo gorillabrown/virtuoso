@@ -25,7 +25,7 @@ PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VENDOR_SCRIPTS = [
     os.path.join(PLUGIN_ROOT, "skills", "roadmap-review", "scripts", "recalc.py"),
     os.path.join(PLUGIN_ROOT, "skills", "roadmap-review", "scripts", "build_sprint_queue.py"),
-    os.path.join(PLUGIN_ROOT, "skills", "phase-closeout", "scripts", "prepare_closeout_files.py"),
+    os.path.join(PLUGIN_ROOT, "skills", "pointer-closeout", "scripts", "prepare_closeout_files.py"),
 ]
 TEMPLATE_XLSX = os.path.join(
     PLUGIN_ROOT, "skills", "roadmap-review", "assets", "sprint-queue.template.xlsx"

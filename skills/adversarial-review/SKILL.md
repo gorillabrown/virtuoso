@@ -337,7 +337,7 @@ conclusions drive high-stakes decisions (architecture changes, calibration passe
 shifts). ULTRATHINK's multi-dimensional analysis and tradeoff mapping reinforce the
 adversarial review structure.
 
-**Adversarial Review + Phase-Closeout:** Review the sprint's findings before writing
+**Adversarial Review + Pointer-Closeout:** Review the sprint's findings before writing
 dispositions. The adversarial review identifies which findings are load-bearing and which
 are provisional — dispositions should reflect this.
 
