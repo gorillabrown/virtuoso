@@ -145,7 +145,7 @@ Every task line follows this format: `□ N. owner-label: Task description [mode
 - **Effort level** in curly braces: `{low}`, `{medium}`, `{high}`, or `{max}`.
   Effort is optional when it matches the model-tier default (haiku→low, sonnet→medium,
   opus→high). Only annotate effort when overriding the default.
-- **Task #1 is always `codex-parent: Load spec, build plan, assign owners [opus]`.** Non-negotiable.
+- **Task #1 is always `Zeus: Load spec, build plan, assign owners [opus]`.** Non-negotiable.
   This represents Phases 1–3 combined. Task #1 is marked ✓ only after CLI has:
   1. Read and understood the full dispatch spec (Phase 1)
   2. Built the numbered task plan (Phase 2)
@@ -179,7 +179,7 @@ files, calibration interpretation, resolving conflicting requirements.
 
 ```
 ## Task Plan — Effort: Medium | Override: tasks #6, #8 → High
-□ 1. codex-parent: Load spec, build plan, assign owners                [opus]
+□ 1. Zeus: Load spec, build plan, assign owners                [opus]
 □ 2. unassigned: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [sonnet]
 □ 3. unassigned: Update constants.toml default                          [haiku]
 □ 4. unassigned: Run fast test suite — all shards pass                  [haiku]
@@ -232,7 +232,7 @@ execution map without creating a fresh parent chat for the sprint.
 ### The Owner Hierarchy
 
 ```
-codex-parent — owns plan, scope, integration, verification, close-out [opus]
+Zeus — owns plan, scope, integration, verification, close-out [opus]
   ├── hermes-worker  — mechanical execution, known-correct changes   [haiku]
   ├── hercules-worker — single-domain implementation, bounded judgment [sonnet]
   ├── aristotle-worker — cross-system implementation, architectural  [opus]
@@ -297,7 +297,7 @@ For every task in the plan, walk this tree top-to-bottom. Take the FIRST match.
 Is this task on the critical path, tightly coupled to current integration work,
 mostly orchestration, or unsafe to hand off because the parent needs the result
 immediately?
-→ **codex-parent**
+→ **Zeus**
 
 **1. Specialist match?**
 Does a specialist label match this task exactly?
@@ -328,7 +328,7 @@ break file B? (Multi-module refactors, interface changes, pipeline integration,
 data flow redesigns)
 → **aristotle-worker**
 
-**5. When in doubt:** Default to **codex-parent** for urgent/blocking work, or
+**5. When in doubt:** Default to **Zeus** for urgent/blocking work, or
 **hercules-worker** for independent implementation work with bounded scope.
 
 The parent may execute any task directly when that keeps the critical path moving.
@@ -341,16 +341,16 @@ final plan that governs execution.
 
 ```
 ## Task Plan (single parent chat — child workers allowed)
-✓ 1. codex-parent: Load spec, build plan, assign owners                [opus]
+✓ 1. Zeus: Load spec, build plan, assign owners                [opus]
 □ 2. hercules-worker: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0 [sonnet]
 □ 3. hermes-worker: Update constants.toml default                      [haiku]
 □ 4. hippocrates-worker: Run fast test suite — all shards pass         [haiku]
 □ 5. hippocrates-worker: Run calibration N=1,200×3 seeds               [haiku]
-□ 6. codex-parent: Interpret cal results + decide if tuning needed     [opus]
+□ 6. Zeus: Interpret cal results + decide if tuning needed     [opus]
 □ 7. hippocrates-worker: Generate profiler snapshot with pathway metrics [haiku]
 □ 8. aristotle-worker: Analyze profiler — does freed space flow to both? [opus]
 □ 9. marcusaurelius-worker: Update CLAUDE.md with constants and cal results [sonnet]
-□ 10. codex-parent: Commit, merge to main, push                        [haiku]
+□ 10. Zeus: Commit, merge to main, push                        [haiku]
 ```
 
 The header states that the parent chat remains singular even when child workers are
@@ -436,7 +436,7 @@ Print what you're about to do. Use a consistent prefix so the human can scan the
 
 ```
 > Launching worker: hercules — task #2, modify calc_defense_effectiveness()
-> Executing locally: codex-parent — task #6, interpret calibration results
+> Executing locally: Zeus — task #6, interpret calibration results
 > Launching worker: hippocrates — task #4, run fast test suite
 > Integrating worker result: aristotle — task #8, profiler analysis
 ```
@@ -480,7 +480,7 @@ of them is wrong.
 
 ```
 ## Task Plan — [30% complete] Fast tests running, code changes landed.
-✓ 1. codex-parent: Load spec, build plan, assign owners                [opus]
+✓ 1. Zeus: Load spec, build plan, assign owners                [opus]
 ✓ 2. hercules: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [sonnet]
 ✓ 3. hermes: Update constants.toml default                              [haiku]
 ■ 4. hippocrates: Run fast test suite — all shards pass                 [haiku]
@@ -547,7 +547,7 @@ outcome was success, partial, or pivot stop. If the work was empirically falsifi
 or a gate triggered early stop, say so directly.
 ---
 Task Plan — SPRINT-NAME | [X% of authorized scope] Outcome summary.
-✓ 1.   codex-parent:   Load spec, build plan, assign owners                  [opus]
+✓ 1.   Zeus:   Load spec, build plan, assign owners                  [opus]
 ✓ 2.   hercules:       Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0 [sonnet]
 ...
 ✗ 9.   socrates:       Full-cal N=1,200×3 — CANCELLED (pivot stop)          [sonnet]
@@ -556,7 +556,7 @@ Worker Utilization Summary
 ┌─────────────┬────────────────┬──────────────────────────────────────────────┐
 │    Owner    │     Tasks      │                  Key output                   │
 ├─────────────┼────────────────┼──────────────────────────────────────────────┤
-│ codex-parent │ #1, #6, #10   │ Coordination, integration, decisions          │
+│ Zeus        │ #1, #6, #10   │ Coordination, integration, decisions          │
 │ hermes      │ #3, #10        │ 2 commits; repository updates                │
 │ hercules    │ #2             │ Single-line constant edit                     │
 │ aristotle   │ #6, #8         │ Cal interpretation; profiler analysis         │

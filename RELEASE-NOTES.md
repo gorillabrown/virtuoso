@@ -1,5 +1,14 @@
 # Virtuoso Release Notes
 
+## v1.1.1 (2026-06-29)
+
+### Fixed
+
+- **Orchestrator renamed `codex-parent` → `Zeus`** in the `virtuoso` skill, matching the
+  `zeus.md` orchestration protocol and the capitalized deity worker roster. The orchestrator
+  (the parent agent that owns the plan, integration, decisions, and close-out) now shows as
+  `Zeus` in task plans, the routing tree, narration, and the worker-utilization summary.
+
 ## v1.1.0 (2026-06-29)
 
 Sprint-queue **v2** workbook support. The roadmap workbook was restructured; Virtuoso's
