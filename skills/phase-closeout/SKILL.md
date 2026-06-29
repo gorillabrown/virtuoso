@@ -9,6 +9,17 @@ description: >
 
 # Phase Close-Out
 
+## Preflight — workspace check (run first)
+
+This skill operates on the project's `Virtuoso/` workspace. Before anything else, ensure it exists and is complete:
+
+    python "${CLAUDE_PLUGIN_ROOT}/scripts/virtuoso_preflight.py" --root . --mode create
+
+The script is idempotent — it never overwrites existing files. If `${CLAUDE_PLUGIN_ROOT}` is not available in your shell, run `/virtuoso-init` instead (same effect). If the workspace was just created (fresh project), tell the user where it lives, then continue.
+
+**Workspace paths.** Canonical files live under `Virtuoso/`: `Virtuoso/Roadmap.md`, `Virtuoso/sprint-queue.xlsx`, review outputs in `Virtuoso/roadmap-reviews/` (check-ins in `Virtuoso/roadmap-reviews/checkins/`), close-outs in `Virtuoso/Close-Outs/`, audits in `Virtuoso/audits/`. Wherever this skill names `Roadmap.md`, `sprint-queue.xlsx`, or `roadmap-reviews/` without a directory, resolve them under `Virtuoso/` first (falling back to the project root for legacy projects).
+
+
 Using the phase-closeout skill to process this summary.
 
 Treat this skill as a structured close-out workflow for completed CLI work. Produce two
