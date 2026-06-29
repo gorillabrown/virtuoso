@@ -52,7 +52,7 @@ Virtuoso/
 ├── roadmap-reviews/  └── checkins/
 ├── Close-Outs/
 ├── audits/
-└── scripts/                       # plugin-managed: recalc.py, build_sprint_queue.py, prepare_closeout_files.py
+└── scripts/                       # plugin-managed: recalc.py, prepare_closeout_files.py
 ```
 
 Three ways the workspace stays healthy:
@@ -119,8 +119,9 @@ delegating worker tasks):
 Some skills reference skills from other plugins. They are **not** bundled:
 
 - **`anthropic-skills`** — `docx` (audit orientation documents) and `xlsx` (spreadsheet
-  mechanics). The roadmap spreadsheet still works without `xlsx`, because Virtuoso bundles
-  `build_sprint_queue.py` (template generator) and `recalc.py` (Dashboard KPI recalc).
+  mechanics). The bundled `sprint-queue.template.xlsx` is the canonical roadmap workbook (a
+  hand-built Excel file with live formulas + chart); `recalc.py` refreshes its Dashboard KPIs
+  headlessly when a skill edits the Catalog without opening Excel.
 - **`product-management`** — `write-spec` and `roadmap-update`, used by `roadmap-review`.
 
 ## Project conventions
@@ -134,8 +135,8 @@ Some skills reference skills from other plugins. They are **not** bundled:
 
 ## Requirements
 
-- Python 3 with `openpyxl` for the bundled spreadsheet scripts (`build_sprint_queue.py`,
-  `recalc.py`, `virtuoso_preflight.py`).
+- Python 3 with `openpyxl` for the bundled spreadsheet scripts (`recalc.py`,
+  `virtuoso_preflight.py`).
 
 ## License
 

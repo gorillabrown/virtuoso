@@ -476,15 +476,22 @@ and the Implementation Detail sub-section.
 ### 1.4 Pull KPIs from Dashboard
 Read with `data_only=True`. Source cells:
 
+Sprint data lives on the **`DATA.sprint-catalog`** sheet (table `sprint_catalog`).
+
+**From the Dashboard** (`data_only=True`):
 | KPI | Cell |
 |---|---|
-| Fully specced sprints remaining (incl. this one) | B29 |
-| Buffer health flag | B32 |
-| Sprints to end of current phase | B37 |
-| Sprints to finish line | B20 |
 | % Complete (by LOE) | B24 |
 | LOE remaining (points) | B21 |
-| Avg sprint size (LOE points) | B25 |
+| Sprints to finish line (sprints remaining) | B25 |
+| Avg sprint size (points) | B26 |
+
+**Computed from the Catalog** (no longer on the Dashboard in this workbook):
+| KPI | How |
+|---|---|
+| Fully specced sprints remaining (incl. this one) | count rows where Implementation Status `Queued` ∧ Written Status `Full Spec` |
+| Buffer health | from that count → ≥5 Healthy / ≥3 Running low / ≥1 Critical / else Empty |
+| Sprints to end of current phase | count rows where Phase = current phase and not done |
 
 Compute "% remaining by LOE" = 1 − B24.
 

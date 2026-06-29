@@ -510,20 +510,29 @@ YYYY-MM-DD` sub-sections.
 
 **D.5.4 Update sprint-queue.xlsx (Catalog tab).**
 
-Column layout: A=Seq, B=Sprint Code, C=Title, D=Phase, E=Stage,
-F=LOE, G=Dependencies, H=Implementation Status, I=Written Status,
-J=Description, K=Branch, L=Date Started, M=Date Completed,
-N=Close-Out File, O=Notes.
+Sprint data lives on the **`DATA.sprint-catalog`** sheet (Excel table
+`sprint_catalog`). Column layout (A–T):
+A=Priority\*, B=Seq, C=Sprint Code, D=Phase, E=Stage, F=Title, G=LOE,
+H=Dependencies, I=Implementation Status, J=Written Status, K=Branch,
+L=Date Started, M=Date Completed, N=Close-Out File, O=Description, P=Notes,
+Q=Done?\*, R=PhaseRank\*, S=SizeRank\*, T=SortKey\*.
 
-For each newly written full spec:
+`\*` = formula-driven computed columns — do **not** hand-write them (the Excel
+table auto-fills them; `Priority` auto-ranks the conveyor belt from `SortKey`).
+`Description` (O) and `Notes` (P) are plain text columns — write the one-liner and
+any notes directly in the Catalog row.
+
+For each newly written full spec, set on the `DATA.sprint-catalog` row:
 - `Seq`: conveyor-belt position
+- `Sprint Code`, `Title`, `Phase`, `Stage`, `LOE`, `Dependencies`: from the spec
 - `Implementation Status`: `Queued`
 - `Written Status`: `Full Spec`
-- `Description`: one-line plain-language
 - `Branch`: from spec
 
-Status values constrained via data validation dropdowns. After
-edits, run `python Virtuoso/scripts/recalc.py Virtuoso/sprint-queue.xlsx`.
+Write the one-line description in `Description` (O) and any notes in `Notes` (P).
+Status/LOE vocabularies live on the `Variables` sheet. After
+editing the Catalog headlessly (without Excel), run
+`python Virtuoso/scripts/recalc.py Virtuoso/sprint-queue.xlsx` to refresh KPIs.
 
 **D.5.5 Reconcile.**
 Roadmap active section and Catalog tab match; positions 1-5 are
@@ -619,25 +628,33 @@ sprint_queue_doc: sprint-queue.xlsx
 
 ## Sprint queue spreadsheet structure
 
-### Tab 1: Dashboard
-- **Project Info** (rows 3-8): user-input cells (blue font)
-- **Pipeline Status** (rows 10-17): formula-driven category counts
-- **Progress to Finish Line** (rows 19-25): LOE-weighted progress —
-  Sprints remaining, LOE remaining, LOE completed, Total LOE,
-  **% Complete (by LOE)**, Avg sprint size. LOE points: S=1, M=3,
-  L=8, XL=20.
-- **Eager-Spec Buffer Status** (rows 27-32): Target (5), Full specs
-  queued, Stubs queued, Drafts queued, Buffer Health flag
-- **Current Phase Progress** (rows 34-38)
-- **Pie chart** of Implementation Status (anchored D10)
-- **Bar chart** of Written Status (anchored D27)
+The workbook has **three sheets**:
 
-### Tab 2: Catalog
-Excel Table `SprintCatalog` with 15 columns. Data validation
-dropdowns on Implementation Status, Written Status, LOE.
+### Dashboard
+- **Project Info** (B4–B8).
+- **Pipeline Status** (B11–B18): Total, Completed, Blocked, Queued, In Flight,
+  Dissolved, Superseded, % Complete (by count). `Completed*` matches dated variants
+  (e.g. `Completed 2026-06-29`).
+- **Effort & Progress** (B21–B26): LOE remaining, LOE completed, Total LOE,
+  **% Complete (by LOE)**, Sprints remaining, Avg sprint size. The "Effort by LOE"
+  helper (D10:H20) defines LOE points: XS 0.5, XS-S 0.75, S 1, S-M 2, M 3, M-L 5,
+  L 8, XL 20.
+- **Next Up — Active Queue** (A28–F41): auto-ranked from the Catalog `Priority`
+  column (XLOOKUP).
+- **Status Distribution** doughnut chart.
+- Buffer health, full-specs-queued, and phase progress are **not** Dashboard cells —
+  compute them from the Catalog (see /roadmap-status and /next-pointer).
 
-All Dashboard KPIs are formula-driven against the Catalog. Run
-recalc after edits.
+### DATA.sprint-catalog
+Excel Table `sprint_catalog`, 20 columns A–T (layout in D.5.4). Five are
+formula-driven computed columns (Priority, Done?, PhaseRank, SizeRank, SortKey).
+
+### Variables
+Lookup tables — Status vocabulary, Phase→PhaseRank, LOE→size weight. Editing these
+re-ranks the conveyor belt via the `Priority` column.
+
+All Dashboard scalar KPIs are formula-driven and recompute live in Excel. For a
+headless refresh, run `python Virtuoso/scripts/recalc.py Virtuoso/sprint-queue.xlsx`.
 
 ---
 

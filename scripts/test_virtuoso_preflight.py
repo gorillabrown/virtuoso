@@ -10,8 +10,7 @@ EXPECTED_DIRS = [
 EXPECTED_FILES = [
     "Virtuoso/.virtuoso", "Virtuoso/Roadmap.md",
     "Virtuoso/SpecRetro.Lessons_Learned.md", "Virtuoso/WORKFLOW_REFERENCE.md",
-    "Virtuoso/scripts/recalc.py", "Virtuoso/scripts/build_sprint_queue.py",
-    "Virtuoso/scripts/prepare_closeout_files.py",
+    "Virtuoso/scripts/recalc.py", "Virtuoso/scripts/prepare_closeout_files.py",
 ]
 
 
