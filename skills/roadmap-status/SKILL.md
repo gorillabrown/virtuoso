@@ -236,32 +236,37 @@ values. Read these cells:
 |---|---|
 | B11 | Total sprints |
 | B12 | Completed |
-| B13 | In Flight |
+| B13 | Blocked |
 | B14 | Queued |
-| B15 | Blocked |
+| B15 | In Flight |
 | B16 | Dissolved |
-| B17 | % Complete (by count) |
-| B20 | Sprints remaining (uncompleted, undissolved) |
+| B17 | Superseded |
+| B18 | % Complete (by count) |
 | B21 | LOE remaining (points) |
 | B22 | LOE completed (points) |
 | B23 | Total LOE (points, excl. dissolved) |
 | B24 | **% Complete (by LOE)** — primary progress metric |
-| B25 | Avg sprint size (LOE points) |
-| B29 | Full specs queued |
-| B32 | **Buffer health** flag (Healthy / Running low / Critical / Empty) |
-| B35 | Sprints in current phase |
-| B36 | Completed in current phase |
-| B37 | Remaining in current phase |
-| B38 | % phase complete |
+| B25 | Sprints remaining |
+| B26 | Avg sprint size (points) |
 
-Prefer these cached values over recomputing from Catalog rows. The
-Dashboard is recalculated at the end of every /roadmap-review and
-at the end of /roadmap-status Phase 2.
+Sprint data lives on the **`DATA.sprint-catalog`** sheet (Excel table
+`sprint_catalog`, columns A–T; see the layout in /roadmap-review). Status
+vocabulary includes **`Superseded`** and **`Pivot`**, and a completed sprint may
+read `Completed` or `Completed <date>` (match `Completed*`). LOE sizes are
+XS/XS-S/S/S-M/M/M-L/L/XL (points 0.5/0.75/1/2/3/5/8/20).
 
-If Dashboard cells return stale or missing values (e.g., file
-hasn't been recalced after manual edits), fall back to computing
-from Catalog and flag the staleness as a recommendation (run
-recalc).
+**No longer on the Dashboard — compute these from the Catalog:**
+- **Full specs queued** = rows where Implementation Status = `Queued` AND Written
+  Status = `Full Spec`.
+- **Buffer health** from that count: ≥5 Healthy, ≥3 Running low, ≥1 Critical, else Empty.
+- **Phase progress** = rows where Phase = the current phase (total / completed / remaining).
+
+Prefer the cached Dashboard values (B11–B26) for the scalar KPIs — Excel keeps them
+live. For a headless refresh after editing the Catalog without Excel, run
+`python Virtuoso/scripts/recalc.py Virtuoso/sprint-queue.xlsx`.
+
+If Dashboard cells return stale or missing values, compute from the Catalog and flag
+the staleness as a recommendation (run recalc).
 
 **1.3b Read window-specific signals from the Catalog tab.**
 The Dashboard doesn't capture temporal information; the Catalog
@@ -306,9 +311,10 @@ bullet must obey the writing rules above.
 - [Plain-language sentence about anything stuck.]
 - [Plain-language sentence about anything sideways.]
 - [Plain-language sentence about pace.]
-- [Plain-language sentence about buffer health — sourced from
-  Dashboard B32; mention N full specs of 5 if buffer is not
-  "Healthy".]
+- [Plain-language sentence about buffer health — computed from the Catalog
+  (full specs queued = Implementation Status `Queued` ∧ Written Status `Full Spec`;
+  ≥5 Healthy / ≥3 Running low / ≥1 Critical / else Empty); mention N full specs of 5
+  if not "Healthy".]
 - [If stragglers: plain-language sentence noting N sprints look
   complete and need migration.]
 - [If sync mismatches: plain-language sentence noting roadmap and
@@ -325,9 +331,9 @@ bullet must obey the writing rules above.
 
 ### Where we stand
 - **Current phase ([Phase Name]):** X% of work remaining.
-  *(sourced from Dashboard B38; X = 1 − B38)*
+  *(computed from the Catalog: completed-in-phase ÷ sprints-in-phase; X = 1 − that ratio)*
 - **Finish line:** Y% of work remaining by LOE; N sprints remaining.
-  *(sourced from Dashboard B24 and B20; Y = 1 − B24)*
+  *(sourced from Dashboard B24 and B25; Y = 1 − B24)*
 
 ### Health read
 - **[On Track / Watch Closely / Concerns]** — one plain-language
