@@ -13,11 +13,11 @@ description: >
 
 This skill operates on the project's `Virtuoso/` workspace. Before anything else, ensure it exists and is complete:
 
-    python "${CLAUDE_PLUGIN_ROOT}/scripts/virtuoso_preflight.py" --root . --mode create
+    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/virtuoso_preflight.py" --root . --mode create
 
-The script is idempotent — it never overwrites existing files. If `${CLAUDE_PLUGIN_ROOT}` is not available in your shell, run `/virtuoso-init` instead (same effect). If the workspace was just created (fresh project), tell the user where it lives, then continue.
+The script is idempotent — it never overwrites existing files. The bundled-script path comes from `~/.virtuoso/plugin-root`, a bridge file the plugin's session-start hook records every session (skill bodies cannot read `${CLAUDE_PLUGIN_ROOT}`, only hooks can). If that file is missing or the command fails, run `/virtuoso-init`, or create the workspace by hand: a `Virtuoso/` directory containing `roadmap-reviews/` (and `roadmap-reviews/checkins/`), `Close-Outs/`, `audits/`, `scripts/`, a `.virtuoso` marker, and seed `Roadmap.md` + `SpecRetro.Lessons_Learned.md`. If the workspace was just created, tell the user where it lives, then continue.
 
-**Workspace paths.** Canonical files live under `Virtuoso/`: `Virtuoso/Roadmap.md`, `Virtuoso/sprint-queue.xlsx`, review outputs in `Virtuoso/roadmap-reviews/` (check-ins in `Virtuoso/roadmap-reviews/checkins/`), close-outs in `Virtuoso/Close-Outs/`, audits in `Virtuoso/audits/`. Wherever this skill names `Roadmap.md`, `sprint-queue.xlsx`, or `roadmap-reviews/` without a directory, resolve them under `Virtuoso/` first (falling back to the project root for legacy projects).
+**Workspace paths.** Canonical files live under `Virtuoso/`: `Virtuoso/Roadmap.md`, `Virtuoso/sprint-queue.xlsx`, bundled scripts in `Virtuoso/scripts/`, review outputs in `Virtuoso/roadmap-reviews/` (check-ins in `Virtuoso/roadmap-reviews/checkins/`), close-outs in `Virtuoso/Close-Outs/`, audits in `Virtuoso/audits/`. Wherever this skill names `Roadmap.md`, `sprint-queue.xlsx`, or `roadmap-reviews/` without a directory, resolve them under `Virtuoso/` first (falling back to the project root for legacy projects).
 
 
 Using the phase-closeout skill to process this summary.
@@ -159,7 +159,7 @@ For the retrospective categories, promotion rules, and persistence model, read:
 To prepare output files and compute the next `SRL-NNN`, use:
 
 ```powershell
-python "${CLAUDE_PLUGIN_ROOT}/skills/phase-closeout/scripts/prepare_closeout_files.py" --project-root "<project-root>" --sprint-id "<SPRINT-ID>" --date "<YYYY-MM-DD>"
+python Virtuoso/scripts/prepare_closeout_files.py --project-root "<project-root>" --sprint-id "<SPRINT-ID>" --date "<YYYY-MM-DD>"
 ```
 
 ## Save Location

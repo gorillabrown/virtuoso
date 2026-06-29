@@ -16,7 +16,7 @@ read and write.
 
 **Run:**
 
-    python "${CLAUDE_PLUGIN_ROOT}/scripts/virtuoso_preflight.py" --root . --mode create
+    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/virtuoso_preflight.py" --root . --mode create
 
 Then report to the user what was created vs. what already existed (the script prints
 this), and where the workspace lives. The workspace contains:
@@ -28,6 +28,9 @@ this), and where the workspace lives. The workspace contains:
 - `WORKFLOW_REFERENCE.md` — index mapping legacy section numbers to skills
 - `roadmap-reviews/` (+ `checkins/`), `Close-Outs/`, `audits/`
 
-The script never overwrites existing files, so it is safe to re-run any time. If
-`${CLAUDE_PLUGIN_ROOT}` is not available in the shell, the plugin's `scripts/` directory
-holds `virtuoso_preflight.py` — run it from there with the same arguments.
+The script never overwrites existing files, so it is safe to re-run any time. The path
+comes from `~/.virtuoso/plugin-root`, a bridge file the plugin's session-start hook records
+every session (skill bodies cannot read `${CLAUDE_PLUGIN_ROOT}`). If that file is missing,
+create the `Virtuoso/` workspace by hand (dirs `roadmap-reviews/`, `Close-Outs/`, `audits/`,
+`scripts/`; a `.virtuoso` marker; seed `Roadmap.md` and `SpecRetro.Lessons_Learned.md`) — the
+spreadsheet and scripts then populate on the next session, when the hook runs preflight.
