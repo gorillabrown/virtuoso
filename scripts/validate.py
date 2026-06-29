@@ -75,7 +75,7 @@ def main():
                 continue
             if "C:\\Users" in t:
                 abs_hits.append(rel)
-            if "WORKFLOW_REFERENCE.md §" in t or "WORKFLOW_REFERENCE.md §" in t:
+            if rel.startswith("skills/") and "WORKFLOW_REFERENCE.md §" in t:
                 ref_hits.append(rel)
             if rel.startswith("skills/") and "${CLAUDE_PLUGIN_ROOT}/" in t:
                 root_path_hits.append(rel)
