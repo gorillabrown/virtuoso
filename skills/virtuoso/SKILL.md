@@ -514,11 +514,25 @@ When you hit something unexpected:
 - A required tool, file, dependency, or instruction is unavailable
 
 **What to do when stopped:**
-1. Mark the current task ✗ (blocked)
-2. Reprint the full task plan showing current state
-3. Describe what went wrong in plain language
-4. Propose options if you have them, but don't pick one without approval
-5. Wait for direction
+1. Mark the current task ✗ (blocked).
+2. Reprint the full task plan showing current state.
+3. **Render the issue in the 7-field format below** and **save an identical `.md`** to
+   `Virtuoso/Issues/Issue.<SPRINT-ID>.<YYYY-MM-DD>.md` (append `-N` if more than one on a date).
+4. Hand the saved path to **`/mid-dispatch-decision`** — it reads the file and returns the
+   call. Do not pick a path yourself without approval.
+
+**Issue format** — every stop / hold / block / elevation routed to `/mid-dispatch-decision`
+is defined with these seven fields (the saved `.md` holds fields 1–6; field 7 is its path):
+
+1. **tl;dr:** one line.
+2. **Executive Summary:** 2–4 sentences — what happened and why it blocks.
+3. **Evidence of issue:** errors, failing test, contradicted assumption, file:line, logs.
+4. **Possible cause(s):** ranked hypotheses.
+5. **Likely solution(s):** candidate fixes/paths.
+6. **Confidence in cause and solution identification (1–10):** integer + one-line justification.
+7. **Exported issue documentation path:** the saved `.md` path.
+
+The saved file IS the handoff token — `/mid-dispatch-decision` expects a path to it.
 
 **Do not:**
 - Guess and keep going ("it's probably fine")
@@ -589,7 +603,9 @@ what was learned]
   performance analysis but not for the close-out record. If performance
   recommendations are warranted, append them after the close-out block.
 - Git state and Key engineering finding close the block — these are what Cowork
-  reads first when processing a close-out into a Pointer Close-Out Report
+  reads first when processing a close-out into a Pointer Close-Out Report. Run
+  **`/pointer-closeout`** on this block to fold the result into the roadmap, sprint queue,
+  and retrospective. (This sprint's spec arrived via **`/next-pointer`**'s dispatch pointer.)
 
 **Performance Recommendations** (append after the close-out block when warranted):
 Focus on three dimensions with concrete task references:

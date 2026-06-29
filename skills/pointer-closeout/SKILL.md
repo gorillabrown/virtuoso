@@ -221,6 +221,15 @@ priorities (rare — flag it if so), or the roadmap was already updated via gove
 checks in step 3. The retire/elevate pair is **not** discretionary — a closed sprint
 always vacates the head and the next one always moves up, even when nothing else changes.
 
+**Buffer-depletion check (mandatory).** Every close-out drains the eager-spec buffer by one.
+After retiring + elevating, count the remaining dispatch-ready sprints (Implementation Status
+`Queued` ∧ Written Status `Full Spec` in the Catalog). If that count is **< 5**, or the newly
+elevated head is a **stub** (not `Full Spec`), recommend the user run **`/roadmap-review`** to
+replenish the buffer to 5 — state it plainly in the close-out summary. This closes the loop:
+close-out drains the buffer, `/roadmap-review` refills it. Do not author specs here (that is
+`/roadmap-review`'s job) — only flag the depletion so the next `/next-pointer` doesn't hit an
+empty buffer.
+
 ## Next Dispatch Pointer — Out of Scope
 
 This skill **does not** print a next-sprint dispatch pointer. The next pointer (single

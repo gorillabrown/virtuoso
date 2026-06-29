@@ -5,7 +5,7 @@ SCRIPT = os.path.join(HERE, "virtuoso_preflight.py")
 
 EXPECTED_DIRS = [
     "Virtuoso", "Virtuoso/roadmap-reviews", "Virtuoso/roadmap-reviews/checkins",
-    "Virtuoso/Close-Outs", "Virtuoso/audits", "Virtuoso/scripts",
+    "Virtuoso/Close-Outs", "Virtuoso/audits", "Virtuoso/scripts", "Virtuoso/Issues",
 ]
 EXPECTED_FILES = [
     "Virtuoso/.virtuoso", "Virtuoso/Roadmap.md",
