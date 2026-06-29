@@ -1,5 +1,40 @@
 # Virtuoso Release Notes
 
+## v1.1.0 (2026-06-29)
+
+Sprint-queue **v2** workbook support. The roadmap workbook was restructured; Virtuoso's
+data engine, skills, and bundled template now match it.
+
+### Changed
+
+- **`sprint-queue.xlsx` v2 structure** — three sheets (`Dashboard`, `DATA.sprint-catalog`,
+  `Variables`). The Catalog is a 20-column Excel table (`sprint_catalog`) with five
+  formula-driven computed columns (Priority, Done?, PhaseRank, SizeRank, SortKey) that
+  auto-rank the conveyor belt; the Dashboard carries a Status-Distribution doughnut chart and
+  an auto-ranked "Next Up" queue.
+- **`recalc.py` rewritten** — reads the Catalog by **header name** (column-order independent)
+  and auto-detects the data sheet, so it is robust to the rename and the added `Notes` column.
+  New Dashboard cell map (`B11–B18` pipeline incl. `Superseded`, `B21–B26` effort); LOE points
+  span eight sizes (XS 0.5 … XL 20); status vocabulary adds `Superseded`/`Pivot` and matches
+  `Completed*`. Validated against real data (reproduces every cached KPI); preserves the chart
+  and tables on save.
+- **Skills remapped to v2** — `roadmap-status`, `next-pointer`, and `roadmap-review` use the
+  new Dashboard cells and the `DATA.sprint-catalog` layout. Buffer health, full-specs-queued,
+  and phase progress (no longer Dashboard cells) are computed from the Catalog.
+- **Bundled template refreshed** — `sprint-queue.template.xlsx` is the clean v2 workbook
+  (chart, tables, and live formulas intact).
+
+### Removed
+
+- **`build_sprint_queue.py`** — the bundled `.xlsx` is the single source of truth for the
+  template; the generator and its preflight/test/doc wiring are gone.
+
+### Migration
+
+- `/virtuoso-init` never overwrites an existing `sprint-queue.xlsx`. A project still on the
+  old two-sheet workbook keeps it and will mismatch the v2 cell map — recreate it from the new
+  template (or re-point your data) to adopt v2. New projects get v2 automatically.
+
 ## v1.0.0 (2026-06-29)
 
 First public release. Virtuoso packages a complete Cowork-style governance & dispatch
