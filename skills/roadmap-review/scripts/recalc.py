@@ -1,7 +1,7 @@
 """Recalculate sprint-queue.xlsx Dashboard KPIs from the Catalog, in pure Python.
 
-Matches the v2 workbook structure (4 sheets; 19-column Catalog table `Table1`;
-Variables + Sprint Details sheets). Reads the Catalog by HEADER name (so column
+Matches the v2 workbook structure (Dashboard + DATA.sprint-catalog + Variables;
+20-column Catalog table `sprint_catalog`). Reads the Catalog by HEADER name (so column
 order is irrelevant), then writes literal values into the documented Dashboard
 cells so ``data_only`` reads are correct without opening Excel. Usage:
 

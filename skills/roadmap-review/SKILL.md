@@ -519,8 +519,8 @@ Q=Done?\*, R=PhaseRank\*, S=SizeRank\*, T=SortKey\*.
 
 `\*` = formula-driven computed columns — do **not** hand-write them (the Excel
 table auto-fills them; `Priority` auto-ranks the conveyor belt from `SortKey`).
-`Description` (O) is pulled from the `Sprint Details` sheet via XLOOKUP, so write
-prose there, not in the Catalog.
+`Description` (O) and `Notes` (P) are plain text columns — write the one-liner and
+any notes directly in the Catalog row.
 
 For each newly written full spec, set on the `DATA.sprint-catalog` row:
 - `Seq`: conveyor-belt position
@@ -529,8 +529,8 @@ For each newly written full spec, set on the `DATA.sprint-catalog` row:
 - `Written Status`: `Full Spec`
 - `Branch`: from spec
 
-Put the one-line description (and any notes) on the `Sprint Details` sheet keyed by
-the same `Sprint Code`. Status/LOE vocabularies live on the `Variables` sheet. After
+Write the one-line description in `Description` (O) and any notes in `Notes` (P).
+Status/LOE vocabularies live on the `Variables` sheet. After
 editing the Catalog headlessly (without Excel), run
 `python Virtuoso/scripts/recalc.py Virtuoso/sprint-queue.xlsx` to refresh KPIs.
 
@@ -628,7 +628,7 @@ sprint_queue_doc: sprint-queue.xlsx
 
 ## Sprint queue spreadsheet structure
 
-The workbook has **four sheets**:
+The workbook has **three sheets**:
 
 ### Dashboard
 - **Project Info** (B4–B8).
@@ -652,10 +652,6 @@ formula-driven computed columns (Priority, Done?, PhaseRank, SizeRank, SortKey).
 ### Variables
 Lookup tables — Status vocabulary, Phase→PhaseRank, LOE→size weight. Editing these
 re-ranks the conveyor belt via the `Priority` column.
-
-### Sprint Details
-`Sprint Code → Title, Description, Notes` (table `DetailsTbl`); the Catalog's
-`Description` pulls from here via XLOOKUP. Put long prose here, not in the Catalog.
 
 All Dashboard scalar KPIs are formula-driven and recompute live in Excel. For a
 headless refresh, run `python Virtuoso/scripts/recalc.py Virtuoso/sprint-queue.xlsx`.
