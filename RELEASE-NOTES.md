@@ -1,5 +1,43 @@
 # Virtuoso Release Notes
 
+## v1.1.2 (2026-06-29)
+
+Integration-correctness pass — **Phase 1 of the v1.2.0 integration design**
+([docs/virtuoso/specs/2026-06-29-v1.2.0-integration-design.md](docs/virtuoso/specs/2026-06-29-v1.2.0-integration-design.md)).
+Closes the lifecycle loop, reconciles conflicting load-bearing rules, and adds a structured
+issue-handoff contract.
+
+### Fixed
+
+- **Git ownership reconciled; legacy `git-handoff` no longer mandated.** `pointer-closeout`
+  now persists per the project's Git Workflow (Cowork never mutates git; the user or a
+  dispatched executor commits; Cowork verifies read-only) instead of invoking the
+  LEGACY/MANUAL-ONLY `git-handoff` skill, which disclaimed sprint-closeout use. (BC-1/BC-2)
+- **Orchestrator naming unified to `Zeus`.** `zeus.md` no longer calls the orchestrator
+  "CLI" (which contradicted the skill body and the README). It is rewritten as a lean,
+  project-agnostic protocol — GoG-specific calibration bands, worktree scripts, absolute
+  paths, and SRL/memo references removed; two clearly-marked illustrative blocks retained —
+  with a Cowork/CLI ↔ Zeus vocabulary bridge. (BC-3/F17)
+
+### Added
+
+- **Closed the planning loop.** `pointer-closeout` runs a mandatory buffer-depletion check
+  after elevating the conveyor belt — if fewer than 5 dispatch-ready specs remain (or the new
+  head is a stub), it recommends `/roadmap-review`. The executor (`virtuoso`) is now
+  bookended: its close-out names `/pointer-closeout`, and its spec source is `/next-pointer`.
+  (BC-4/BC-5)
+- **Structured issue-handoff contract (`virtuoso` → `mid-dispatch-decision`).** Every
+  stop/hold/block/elevation is rendered in a fixed 7-field format (tl;dr, executive summary,
+  evidence, possible causes, likely solutions, confidence 1–10, exported path) and saved as
+  `Virtuoso/Issues/Issue.<id>.<date>.md`; `mid-dispatch-decision` now expects that path as
+  its primary input. New `Virtuoso/Issues/` workspace directory.
+
+### Notes
+
+Phases 2–4 of the integration design (authoring-modifier wiring, the Ideas + `/reconcile`
+skills, governance-sweep roadmap/queue hygiene, and shared-reference de-duplication) ship in
+v1.2.0.
+
 ## v1.1.1 (2026-06-29)
 
 ### Fixed
