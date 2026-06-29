@@ -233,8 +233,8 @@ last action of this skill is to **run the `git-handoff` skill** so the work is c
 to version control. Cowork never runs git directly, so `git-handoff` produces the
 copy-paste packet the user runs from their own shell.
 
-- Skill location:
-  `${CLAUDE_PLUGIN_ROOT}/skills/git-handoff`
+- The `git-handoff` skill is a sibling skill bundled in this plugin — invoke it by
+  name via the Skill tool (no path needed).
 - Invoke it after step 10's persistence summary, handing it the set of files this
   close-out just wrote/changed so they land in one commit.
 - This is distinct from the next-dispatch pointer: `git-handoff` persists files, it does
