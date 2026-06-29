@@ -4,7 +4,13 @@ Modes:
   create  build/heal the workspace under <root>/Virtuoso, write the marker, report.
   detect  act only if <root>/Virtuoso (or its marker) already exists; else no-op.
 
-Never overwrites existing files. Usage:
+Always records the plugin root to ``<home>/.virtuoso/plugin-root`` so skill bodies
+can locate bundled scripts without relying on ${CLAUDE_PLUGIN_ROOT} (which does not
+resolve inside skill/command markdown — only in hooks/MCP). It also vendors the
+bundled scripts into ``Virtuoso/scripts/`` so skills can call them workspace-relative.
+
+User content (Roadmap.md, sprint-queue.xlsx, lessons) is never overwritten; bundled
+scripts are refreshed to track the installed plugin version. Usage:
 
     python virtuoso_preflight.py --root <dir> [--mode create|detect] [--quiet]
 """
@@ -14,16 +20,21 @@ import shutil
 import sys
 
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Bundled scripts vendored into the workspace so skills invoke them workspace-relative.
+VENDOR_SCRIPTS = [
+    os.path.join(PLUGIN_ROOT, "skills", "roadmap-review", "scripts", "recalc.py"),
+    os.path.join(PLUGIN_ROOT, "skills", "roadmap-review", "scripts", "build_sprint_queue.py"),
+    os.path.join(PLUGIN_ROOT, "skills", "phase-closeout", "scripts", "prepare_closeout_files.py"),
+]
 TEMPLATE_XLSX = os.path.join(
     PLUGIN_ROOT, "skills", "roadmap-review", "assets", "sprint-queue.template.xlsx"
 )
-WORKFLOW_REF_TEMPLATE = os.path.join(
-    PLUGIN_ROOT, "assets", "WORKFLOW_REFERENCE.template.md"
-)
+WORKFLOW_REF_TEMPLATE = os.path.join(PLUGIN_ROOT, "assets", "WORKFLOW_REFERENCE.template.md")
 
 DIRS = [
     "Virtuoso", "Virtuoso/roadmap-reviews", "Virtuoso/roadmap-reviews/checkins",
-    "Virtuoso/Close-Outs", "Virtuoso/audits",
+    "Virtuoso/Close-Outs", "Virtuoso/audits", "Virtuoso/scripts",
 ]
 
 ROADMAP_SEED = """# Project Roadmap
@@ -66,6 +77,21 @@ WORKFLOW_REF_FALLBACK = (
 )
 
 
+def _home():
+    return os.environ.get("VIRTUOSO_HOME") or os.path.expanduser("~")
+
+
+def record_root():
+    """Record the plugin root so skill bodies can locate bundled scripts. Non-fatal."""
+    try:
+        d = os.path.join(_home(), ".virtuoso")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "plugin-root"), "w", encoding="utf-8") as f:
+            f.write(PLUGIN_ROOT + "\n")
+    except OSError:
+        pass
+
+
 def _say(quiet, msg):
     if not quiet:
         print(msg)
@@ -90,12 +116,32 @@ def _ensure_file(path, content, created):
 
 
 def _ensure_copy(src, dst, created):
+    """Copy only if the destination is absent (preserves user content)."""
     if not os.path.exists(dst) and os.path.exists(src):
         shutil.copyfile(src, dst)
         created.append(dst)
 
 
+def _refresh_copy(src, dst, created):
+    """Copy plugin-managed files, overwriting only when content differs."""
+    if not os.path.exists(src):
+        return
+    if os.path.exists(dst):
+        try:
+            with open(src, "rb") as a, open(dst, "rb") as b:
+                if a.read() == b.read():
+                    return
+        except OSError:
+            pass
+        shutil.copyfile(src, dst)
+        created.append(dst + " (refreshed)")
+    else:
+        shutil.copyfile(src, dst)
+        created.append(dst)
+
+
 def preflight(root, mode="create", quiet=False):
+    record_root()  # always — the plugin-root bridge for skill bodies
     if mode == "detect" and not _is_project(root):
         _say(quiet, "virtuoso: no Virtuoso/ workspace here — skipping "
                     "(run /virtuoso-init to create one).")
@@ -111,12 +157,17 @@ def preflight(root, mode="create", quiet=False):
         _ensure_copy(WORKFLOW_REF_TEMPLATE, os.path.join(v, "WORKFLOW_REFERENCE.md"), created)
     else:
         _ensure_file(os.path.join(v, "WORKFLOW_REFERENCE.md"), WORKFLOW_REF_FALLBACK, created)
+    # User data — never clobber:
     _ensure_copy(TEMPLATE_XLSX, os.path.join(v, "sprint-queue.xlsx"), created)
+    # Plugin-managed scripts — vendor into the workspace for workspace-relative calls:
+    for src in VENDOR_SCRIPTS:
+        _refresh_copy(src, os.path.join(v, "scripts", os.path.basename(src)), created)
 
     if created:
-        _say(quiet, "virtuoso: created %d item(s):" % len(created))
+        _say(quiet, "virtuoso: created/updated %d item(s):" % len(created))
         for c in created:
-            _say(quiet, "  + " + os.path.relpath(c, root))
+            _say(quiet, "  + " + os.path.relpath(c.split(" (refreshed)")[0], root)
+                 + (" (refreshed)" if c.endswith("(refreshed)") else ""))
     else:
         _say(quiet, "virtuoso: workspace already complete — nothing to do.")
     return created
