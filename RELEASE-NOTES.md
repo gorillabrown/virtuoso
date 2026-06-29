@@ -18,8 +18,8 @@ backed by a self-healing per-project workspace.
 - **Self-healing `Virtuoso/` workspace** — `Roadmap.md`, `sprint-queue.xlsx`, lessons
   catalog, workflow-reference index, and review/close-out/audit folders, created and healed
   idempotently and never overwritten.
-- **Bundled, dependency-light scripts** — `build_sprint_queue.py` and `recalc.py` (Python
-  KPI recalc, no Excel/LibreOffice required) and `virtuoso_preflight.py`.
+- **Bundled, dependency-light scripts** — `recalc.py` (pure-Python Dashboard KPI recalc,
+  no Excel/LibreOffice required) and `virtuoso_preflight.py`.
 - **Agent roster** — a dispatchable `agents/` roster (`Aristotle`, `Hercules`, `Hermes`,
   `Hippocrates`, `Plato`, `MarcusAurelius`, `Socrates`, `Pythagoras`, `Archimedes`, `Hesiod`)
   with the shared `AGENT_MEMORY_GUIDE.md`, plus the `zeus` orchestration protocol at
