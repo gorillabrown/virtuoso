@@ -1,10 +1,13 @@
 ---
 name: mid-dispatch-decision
 description: >
-  Decision protocol for when CLI pauses mid-sprint. Produces a recommendation,
-  then a CLI-pasteable instruction block and amends the dispatch spec. Trigger on:
-  "CLI is stuck", "decision needed", "escalation decision", "what should I tell CLI",
-  or any pasted CLI output showing a paused sprint awaiting direction.
+  Decision protocol for when a Virtuoso execution (Zeus) pauses mid-sprint and routes a
+  structured issue. Primary input: a path to a Virtuoso/Issues/Issue.*.md — the 7-field
+  issue document produced by the virtuoso skill. Reads the issue, produces a recommendation
+  and a worker-pasteable instruction block, appends a Decision block to the issue file, and
+  amends the dispatch spec. Trigger on: "mid-dispatch decision", "decision needed",
+  "escalation decision", "what should I tell CLI / the worker", "CLI is stuck", a virtuoso
+  issue path, or any pasted execution output showing a paused sprint awaiting direction.
 ---
 
 # Mid-Dispatch Decision
@@ -20,9 +23,13 @@ The script is idempotent — it never overwrites existing files. The bundled-scr
 **Workspace paths.** Canonical files live under `Virtuoso/`: `Virtuoso/Roadmap.md`, `Virtuoso/sprint-queue.xlsx`, bundled scripts in `Virtuoso/scripts/`, review outputs in `Virtuoso/roadmap-reviews/` (check-ins in `Virtuoso/roadmap-reviews/checkins/`), close-outs in `Virtuoso/Close-Outs/`, audits in `Virtuoso/audits/`. Wherever this skill names `Roadmap.md`, `sprint-queue.xlsx`, or `roadmap-reviews/` without a directory, resolve them under `Virtuoso/` first (falling back to the project root for legacy projects).
 
 
-CLI has paused mid-sprint and needs direction. Your job: bring Cowork's planning
-context to CLI's execution state, recommend a path, and — after user confirmation —
-print a CLI-pasteable block and amend the dispatch spec and lessons learned.
+A Virtuoso execution (Zeus) has paused mid-sprint and routed a structured issue. **Your
+primary input is a path to a `Virtuoso/Issues/Issue.*.md`** — the 7-field issue document the
+virtuoso skill produced. Read it first. Then bring Cowork's planning context to the execution
+state, recommend a path, and — after user confirmation — print a worker-pasteable block,
+append a `## Decision` block to the issue file, and amend the dispatch spec and lessons
+learned. (If handed raw pasted output instead of a path — legacy fallback — reconstruct the
+7 fields from it before deciding.)
 
 **Announce at start:** "Mid-dispatch decision engaged — loading context for [sprint ID]."
 

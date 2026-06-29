@@ -43,11 +43,10 @@ The skill runs in **two waves**:
 - **Wave 2 — Persist** (after confirmation): apply the confirmed roadmap and sprint-queue
   edits — **retiring the sprint just closed and elevating the next dispatch** — save the
   close-out report, append the retrospective entries, report what was saved, and finally
-  **run the `git-handoff` skill** to persist everything to version control.
+  **persist everything to version control per the project's Git Workflow**.
   **Do not print a next-sprint dispatch pointer in either wave** — the next pointer is
-  the responsibility of the separate `/next-pointer` skill, not this one. (Running
-  `git-handoff` is unrelated: it commits the saved files, it does not print a dispatch
-  pointer.)
+  the responsibility of the separate `/next-pointer` skill, not this one. (Persistence is
+  unrelated: it commits the saved files, it does not print a dispatch pointer.)
 
 ## Core Workflow
 
@@ -87,8 +86,8 @@ The skill runs in **two waves**:
 10. Brief persistence summary — files saved and their paths (close-out report,
     retrospective, roadmap, sprint queue). No next-sprint dispatch pointer; that is
     `/next-pointer`'s job.
-11. **Run the `git-handoff` skill** as the final step to persist all of the above to
-    version control. See the Git Hand-Off section below.
+11. **Persist all of the above to version control** as the final step, per the project's
+    Git Workflow (Cowork never runs mutating git itself). See the Persistence section below.
 
 ## Sprint Brief — Lead of Wave 1
 
@@ -222,6 +221,15 @@ priorities (rare — flag it if so), or the roadmap was already updated via gove
 checks in step 3. The retire/elevate pair is **not** discretionary — a closed sprint
 always vacates the head and the next one always moves up, even when nothing else changes.
 
+**Buffer-depletion check (mandatory).** Every close-out drains the eager-spec buffer by one.
+After retiring + elevating, count the remaining dispatch-ready sprints (Implementation Status
+`Queued` ∧ Written Status `Full Spec` in the Catalog). If that count is **< 5**, or the newly
+elevated head is a **stub** (not `Full Spec`), recommend the user run **`/roadmap-review`** to
+replenish the buffer to 5 — state it plainly in the close-out summary. This closes the loop:
+close-out drains the buffer, `/roadmap-review` refills it. Do not author specs here (that is
+`/roadmap-review`'s job) — only flag the depletion so the next `/next-pointer` doesn't hit an
+empty buffer.
+
 ## Next Dispatch Pointer — Out of Scope
 
 This skill **does not** print a next-sprint dispatch pointer. The next pointer (single
@@ -229,23 +237,26 @@ or parallel) is the responsibility of the `/next-pointer` skill, run separately 
 pointer-closeout finishes.
 
 Wave 1's *Recommend* line names a direction in prose only (no code box). Wave 2 ends
-at persistence and the git hand-off — no dispatch pointer.
+at persistence — no dispatch pointer.
 
-## Git Hand-Off — Final Step of Wave 2
+## Persistence — Final Step of Wave 2
 
 Once all files are saved (close-out report, retrospective, roadmap, sprint queue), the
-last action of this skill is to **run the `git-handoff` skill** so the work is committed
-to version control. Cowork never runs git directly, so `git-handoff` produces the
-copy-paste packet the user runs from their own shell.
+last action of this skill is to **persist them to version control per the project's Git
+Workflow** (typically defined in the project's `CLAUDE.md`).
 
-- The `git-handoff` skill is a sibling skill bundled in this plugin — invoke it by
-  name via the Skill tool (no path needed).
-- Invoke it after step 10's persistence summary, handing it the set of files this
-  close-out just wrote/changed so they land in one commit.
-- This is distinct from the next-dispatch pointer: `git-handoff` persists files, it does
-  **not** print a `/next-pointer` dispatch code box.
-- If `git-handoff` is unavailable for any reason, say so plainly rather than silently
-  skipping it — the close-out is not finished until the changes are committed.
+- **Cowork (the planner) never runs mutating git itself.** Per the standard Git-Ownership
+  rule, the entity doing the work does not solely certify that git reflects it: the user —
+  or a dispatched executor — commits, while Cowork verifies with read-only, lock-free git
+  (`git --no-optional-locks status`, `git log`). Follow whatever the project's `CLAUDE.md`
+  Git Workflow specifies.
+- Hand the committer the exact set of files this close-out wrote/changed so they land in
+  one commit. This is distinct from the next-dispatch pointer (that is `/next-pointer`'s
+  job) — persistence commits files, it does not print a dispatch code box.
+- If no project Git Workflow is defined, state plainly that the saved files are
+  uncommitted and ask the user how to commit them — the close-out is not finished until
+  the changes are committed. (The legacy `git-handoff` skill remains available for the old
+  browser-sandbox packet flow if a user explicitly asks, but it is not invoked here.)
 
 ## Important Guardrails
 
@@ -256,8 +267,8 @@ copy-paste packet the user runs from their own shell.
 - Lead Wave 1 with the 5-line Sprint Brief; everything else is support detail.
 - **Always retire the closed sprint and elevate the next dispatch** in the roadmap and
   sprint queue — the conveyor belt moves forward by one on every close-out.
-- **End Wave 2 by running `git-handoff`** — the close-out isn't done until the changes
-  are committed.
+- **End Wave 2 by persisting per the project's Git Workflow** — the close-out isn't done
+  until the changes are committed (by the user or a dispatched executor, not Cowork).
 - **No next-sprint dispatch pointer in either wave.** That belongs to `/next-pointer`.
 
 ## Anti-Patterns
@@ -270,7 +281,7 @@ copy-paste packet the user runs from their own shell.
   the actual referents — name the things or explain the failure in one clause
 - Printing a next-sprint dispatch pointer (Wave 1 or Wave 2) — that is `/next-pointer`'s job
 - Leaving the closed sprint at the head of the queue, or failing to elevate the next dispatch
-- Ending Wave 2 without running `git-handoff` — leaving saved files uncommitted
+- Ending Wave 2 without persisting the changes — leaving saved files uncommitted
 - Writing vague retrospective lessons
 - Promoting one-off observations into standing rules
 - Skipping the Wave 1 roadmap-update proposals

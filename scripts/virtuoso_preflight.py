@@ -33,7 +33,7 @@ WORKFLOW_REF_TEMPLATE = os.path.join(PLUGIN_ROOT, "assets", "WORKFLOW_REFERENCE.
 
 DIRS = [
     "Virtuoso", "Virtuoso/roadmap-reviews", "Virtuoso/roadmap-reviews/checkins",
-    "Virtuoso/Close-Outs", "Virtuoso/audits", "Virtuoso/scripts",
+    "Virtuoso/Close-Outs", "Virtuoso/audits", "Virtuoso/scripts", "Virtuoso/Issues",
 ]
 
 ROADMAP_SEED = """# Project Roadmap
