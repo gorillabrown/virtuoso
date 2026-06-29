@@ -20,6 +20,13 @@ backed by a self-healing per-project workspace.
   idempotently and never overwritten.
 - **Bundled, dependency-light scripts** — `build_sprint_queue.py` and `recalc.py` (Python
   KPI recalc, no Excel/LibreOffice required) and `virtuoso_preflight.py`.
+- **Agent roster** — a dispatchable `agents/` roster (`Aristotle`, `Hercules`, `Hermes`,
+  `Hippocrates`, `Plato`, `MarcusAurelius`, `Socrates`, `Pythagoras`, `Archimedes`, `Hesiod`)
+  with the shared `AGENT_MEMORY_GUIDE.md`, plus the `zeus` orchestration protocol at
+  `skills/virtuoso/references/zeus.md` (read by the virtuoso skill, not dispatched). The
+  legacy single-dimension analysis agents were folded into `Plato` / `Hippocrates` /
+  `MarcusAurelius` / `Aristotle`; superseded older agents were archived. All agent
+  absolute paths were de-hardcoded to `<project-root>/…`.
 
 ### Robustness (incorporating learnings from obra/superpowers)
 

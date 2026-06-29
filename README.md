@@ -77,7 +77,7 @@ skill or command bodies.
 | `next-pointer` | `/next-pointer` | Finalize + dispatch the next sprint |
 | `pointer-closeout` | `/pointer-closeout` | Close-out report + retrospective |
 | `mid-dispatch-decision` | `/mid-dispatch-decision` | Decide when a dispatch pauses mid-run |
-| `governance-sweep` | `/governance-sweep` | Read-only doc-hygiene audit → CLI spec |
+| `governance-sweep` | `/governance-sweep` | 3-phase doc-hygiene sweep: discover → approve → fix |
 | `3rd-party-audit` | `/3rd-party-audit` | External codebase audit lifecycle |
 | `ultrathink` | `/ultrathink` | Deep first-principles reasoning |
 | `effort-levels` | — | Effort/cost sizing framework (modifier) |
@@ -88,6 +88,31 @@ skill or command bodies.
 
 (The three modifiers and `virtuoso` itself are model-invoked — they layer onto other work
 rather than being entry points, so they ship without a slash command.)
+
+## Agents
+
+Virtuoso bundles a dispatchable agent roster in `agents/` (the virtuoso skill scans it when
+delegating worker tasks):
+
+| Agent | Model | Role |
+|-------|-------|------|
+| `Aristotle` | opus | Lead — investigation, cross-system, root-cause, cross-finding synthesis |
+| `Hercules` | sonnet | Single-domain implementation |
+| `Hermes` | haiku | Mechanical execution (config, renames, git) |
+| `Hippocrates` | haiku | Test execution + coverage-gap reporting |
+| `Plato` | sonnet | Code-quality review (complexity, coupling, dead code, duplication, churn, TODOs) |
+| `MarcusAurelius` | sonnet | Docs, compliance, archiving + doc/spec drift detection |
+| `Socrates` | sonnet | Calibration specialist |
+| `Pythagoras` | sonnet | SQLite / data-integrity auditing |
+| `Archimedes` | sonnet | Display / stats / scorecard auditing |
+| `Hesiod` | opus | Archetype behavioral-KPI evaluation |
+
+- **`skills/virtuoso/references/zeus.md`** is the orchestration protocol (routing tree, agent
+  hierarchy, escalation rules) the `virtuoso` skill *reads* at Phase 1 — it is not a
+  dispatchable subagent.
+- **`agents/AGENT_MEMORY_GUIDE.md`** documents the shared agent-memory convention.
+- `Socrates`, `Pythagoras`, `Archimedes`, and `Hesiod` are domain-flavored templates — adapt
+  their project-specific paths and targets per project.
 
 ## External prerequisites (recommended)
 
