@@ -4,23 +4,12 @@ description: |
   MANUAL INVOCATION ONLY. Dispatch-finalization + pointer skill. ONLY
   runs when the user types "/next-pointer", "next pointer", "show
   next", or "what's next". Reads the next fully-specced sprint at the
-  head of the conveyor belt, runs a dispatch-readiness audit against
-  the spec, performs final investigative work (grep verification,
-  code-line enumeration, constant lookups, schema checks), enriches
-  the spec inline so perfect implementation by a lower-model CLI
-  agent is unavoidable, then prints a plain-language summary, roadmap
-  KPIs, and a code-boxed dispatch pointer. Drives every pre-flight
-  check to done — recalc Dashboard, advance Catalog, reconcile git —
-  or elevates it as an AskUserQuestion; never leaves a dangling
-  unchecked item under a "Ready" verdict. Reconciles git both sides:
-  upstream it ensures main carries the freshly enriched spec (verified
-  from primary evidence; the commit handed off, since the author never
-  commits its own edit; any commit deadlock broken); downstream every
-  pointer embeds a recipe the CLI implementer runs first (clean tree,
-  main synced, stale branches cleared, branch from clean main). Cowork
-  never runs mutating git; read-only inspection follows the project's
-  Git Workflow. If the head is a stub or has structural gaps Cowork
-  cannot resolve, this skill STOPS and tells the user to run
+  head of the conveyor belt, runs a dispatch-readiness audit, finalizes
+  the spec so a lower-capability implementer cannot fail, drives every
+  pre-flight check to done (or elevates it as a question), reconciles
+  git on both sides, and prints a plain-language summary, roadmap KPIs,
+  and a code-boxed dispatch pointer. If the head is a stub or has
+  unresolved structural gaps, it STOPS and tells the user to run
   /roadmap-review.
 ---
 

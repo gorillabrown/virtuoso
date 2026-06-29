@@ -1,18 +1,14 @@
 ---
 name: adversarial-review
 description: >
-  Structured adversarial review of any technical document — diagnostic plans, analysis reports,
-  architecture proposals, calibration results, feature specs, research findings, or any work
-  product that makes claims and proposes actions. The skill forces the reviewer to separate
-  what is proven from what is assumed, identify gaps that could invalidate conclusions, and
-  assess whether the evidence is strong enough to drive the decisions the document proposes.
-  Use this skill whenever the user says "adversarial review", "red team this", "challenge
-  this", "tear this apart", "what am I missing", "review this critically", "poke holes in
-  this", "stress test this analysis", "is this rigorous enough", or any request for a
-  deliberately skeptical evaluation of technical work. Also trigger when the user shares a
-  completed analysis and asks whether to proceed — the implicit question is "is this ready?"
-  and adversarial review is how you answer it. This skill layers naturally with ULTRATHINK
-  for maximum analytical depth.
+  Structured adversarial review of any technical document — diagnostic plans, analysis
+  reports, architecture proposals, calibration results, feature specs, research findings, or
+  any work product that makes claims and proposes actions. Use whenever the user says
+  "adversarial review", "red team this", "challenge this", "tear this apart", "what am I
+  missing", "review this critically", "poke holes in this", "stress test this analysis",
+  "is this rigorous enough", or wants a deliberately skeptical evaluation of technical work.
+  Also trigger when the user shares a completed analysis and asks whether to proceed
+  ("is this ready?").
 ---
 
 # Adversarial Review
