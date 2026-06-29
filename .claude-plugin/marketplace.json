@@ -1,0 +1,12 @@
+{
+  "name": "virtuoso-marketplace",
+  "owner": { "name": "gorillabrown", "url": "https://github.com/gorillabrown" },
+  "description": "Marketplace hosting the Virtuoso governance & dispatch plugin.",
+  "plugins": [
+    {
+      "name": "virtuoso",
+      "source": ".",
+      "description": "Cowork governance & dispatch suite — 14 skills + commands for roadmap planning, sprint execution discipline, close-outs, audits, and doc hygiene, with a self-healing workspace."
+    }
+  ]
+}
