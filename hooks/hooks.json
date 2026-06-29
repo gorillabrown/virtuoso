@@ -2,11 +2,12 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "*",
+        "matcher": "startup|clear|compact",
         "hooks": [
           {
             "type": "command",
-            "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/virtuoso_preflight.py\" --root \"${CLAUDE_PROJECT_DIR}\" --mode detect --quiet"
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/virtuoso_preflight.py\" --root \"${CLAUDE_PROJECT_DIR}\" --mode detect --quiet",
+            "async": false
           }
         ]
       }
