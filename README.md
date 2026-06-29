@@ -18,6 +18,12 @@ The skills enforce the discipline that makes that hand-off reliable: rigorous sp
 execution narration, progress tracking, mid-run decision protocols, close-out
 retrospectives, and read-only governance audits.
 
+**Reading the vocabulary.** The skills speak in terms of *Cowork* and *CLI* (their origin
+in a Codex/Cowork setup). Read these as roles, not products: *Cowork* = your main planning
+agent (on Claude Code, your interactive session); *CLI* / *the implementer* = whatever
+executes a fully-specified sprint — a subagent, a separate lower-tier session, or a CLI
+runner. The discipline is platform-neutral; only the names are historical.
+
 ## Install
 
 ```
@@ -45,7 +51,8 @@ Virtuoso/
 ├── WORKFLOW_REFERENCE.md          # index → skills
 ├── roadmap-reviews/  └── checkins/
 ├── Close-Outs/
-└── audits/
+├── audits/
+└── scripts/                       # plugin-managed: recalc.py, build_sprint_queue.py, prepare_closeout_files.py
 ```
 
 Three ways the workspace stays healthy:
@@ -54,6 +61,11 @@ Three ways the workspace stays healthy:
 2. **Inline preflight** — every governance skill checks/creates it before running.
 3. **SessionStart hook** — auto-heals an *existing* Virtuoso project (a no-op in unrelated
    folders, so it never litters directories you open by chance).
+
+The hook also records the plugin's install path to `~/.virtuoso/plugin-root`, and preflight
+vendors its scripts into `Virtuoso/scripts/`. This lets skills locate bundled scripts
+*without* relying on `${CLAUDE_PLUGIN_ROOT}` — which resolves only inside hooks/MCP, never in
+skill or command bodies.
 
 ## Skills & commands
 
