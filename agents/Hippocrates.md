@@ -347,3 +347,9 @@ Action: Investigate root cause; block merge
 ```
 
 Per SRL-182, cluster-cal gate failures near the noise floor (sub-1pp drift on Sub at N=400×3) require a re-run for confirmation before attributing the drift to a mechanism. Apply the same discipline at the test-suite level when ICM-style sanity gates surface marginal failures.
+
+
+## Coverage Gaps (folded from the test-gap analyzer)
+
+After reporting pass/fail, list modules with thin or absent test coverage — untested public
+functions, modules with no test file, and recently-changed code lacking tests.

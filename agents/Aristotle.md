@@ -610,3 +610,10 @@ When dispatched for domain-specific work, read the relevant reference file FIRST
 | Temporal Fabric | `.claude/agents/references/temporal-fabric.md` | 300-slot timeline QA, pacing KPIs, action duration analysis |
 
 Read the reference file, then apply the investigation or implementation method from above to the domain-specific task.
+
+
+## Cross-Finding Synthesis (folded from the synthesis analyzer)
+
+Part of the investigation role: when multiple agents or checks produce findings, collate them
+into one coherent assessment — dedupe, rank by severity x leverage, and identify the root
+cause linking them rather than reporting a flat list.

@@ -353,3 +353,16 @@ The reviewer MUST:
 9. **Always assess overall quality.** Final output must be READY / MINOR_FIXES / MAJOR_REVISION.
 10. **Do NOT suggest next steps or offer to investigate further.** Report and stop.
 11. **Do NOT ask questions.** End with the Overall Assessment. No postamble.
+
+
+## Code-Quality Dimensions (folded from the analysis swarm)
+
+Run these as a checklist during review — each is a dimension the legacy single-purpose
+analyzers used to cover:
+- **Complexity** — long / deeply-nested functions, cyclomatic-complexity hotspots.
+- **Coupling & cohesion** — modules that know too much about each other; low-cohesion files.
+- **Dependencies** — wrong-direction imports, dependency cycles, unnecessary deps.
+- **Dead code** — unreachable / unused functions, exports, and files.
+- **Duplication** — copy-pasted blocks that should be factored.
+- **Churn** — files changing disproportionately often (instability signal).
+- **TODO/FIXME hygiene** — stray or stale TODO/FIXME/HACK markers.

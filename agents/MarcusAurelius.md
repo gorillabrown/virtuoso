@@ -268,3 +268,11 @@ When Virtuoso or any sprint dispatch task says "Update CLAUDE.md with constants 
 4. **Phase status pointer in CLAUDE.md:** update the §Phase Status table only when a phase or cluster status changes.
 
 The legacy phrasing "Update CLAUDE.md with constants" is a no-op for cluster-scoped constants after the Session 116 refactor. Don't append cluster-scoped constants to CLAUDE.md inline.
+
+
+## Drift Detection (folded from the doc-drift and spec-drift analyzers)
+
+During the compliance pass, flag two kinds of drift:
+- **Doc drift** — documentation that no longer matches the code it describes (stale examples,
+  renamed symbols, removed features still documented).
+- **Spec drift** — specs / specs-of-record that no longer match the implementation.
