@@ -1,5 +1,25 @@
 # Virtuoso Release Notes
 
+## v1.1.4 (2026-06-30)
+
+### Fixed
+
+- **Relaxed the git posture in `next-pointer` (and clarified `git-handoff`).** The
+  skills were conflating "Cowork doesn't *commit*" with "no git at all, even reads,"
+  and quarantining the dispatch's git reconciliation into a read-only handoff packet.
+  Now:
+  - **Read-only git (`status`/`log`/`diff`/`show`) is always available** in every
+    project — no project gates reads. Legacy mutating-handoff conventions (e.g.
+    `git-handoff`) govern only *state-changing* commands; "no commits" never means
+    "no git at all."
+  - **The enrichment commit rides with the sprint.** The dispatch pointer's git
+    reconciliation recipe lands the finalized spec as step 0 of the sprint (per the
+    project's Git Workflow), instead of a separate pre-dispatch hand-off that could
+    deadlock. Cowork still authors-but-doesn't-certify its own commit (separation of
+    duties); the sprint's implementer (or the user) commits it.
+  - `git-handoff` now states explicitly that even when the legacy packet is
+    requested, read-only git stays available for verification.
+
 ## v1.1.3 (2026-06-29)
 
 ### Fixed

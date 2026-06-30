@@ -54,14 +54,16 @@ are a matched pair — every pointer this skill prints is later closed by a
 "Completely reconciles git" spans **two** reconciliations, and the
 gate is not "ready" until both hold:
 
-- **Upstream — the enrichment commit (Phase 3.5, Cowork's job).** When
-  Cowork enriches the head spec inline (Phase 3), that edit lands in
-  the working tree *uncommitted*. Before dispatch, main must actually
-  carry the finalized spec — otherwise the implementer cuts a worktree
-  from a main that is missing its own spec. Cowork reconciles this:
-  verifies state from primary evidence, then hands the governance
-  commit to the user or a dispatched agent. **Cowork authored the edit,
-  so Cowork never commits or certifies it** (separation of duties).
+- **Upstream — the enrichment commit (folded into the sprint's git
+  reconciliation).** When Cowork enriches the head spec inline (Phase 3), that
+  edit lands in the working tree *uncommitted*. Rather than quarantining it into a
+  separate pre-dispatch hand-off, the dispatch pointer's git reconciliation recipe
+  lands it **as part of the sprint**: the implementer commits the finalized spec
+  (to the default branch, or the sprint branch, per the project's Git Workflow) as
+  step 0, before cutting the worktree — so the work always proceeds from a branch
+  that carries its own spec. Cowork authored the edit and verifies the
+  working-tree state read-only; the sprint's implementer commits it (separation of
+  duties — the author doesn't certify its own commit).
 - **Downstream — the worktree recipe (embedded in the pointer, the CLI
   implementer's job).** /next-pointer bakes a complete, ordered git
   reconciliation recipe into the dispatch pointer. The implementer runs
@@ -76,14 +78,13 @@ mutating git** — no `add`, `commit`, `push`, `merge`, `rebase`,
 `branch`, `checkout`, `switch -c`, `reset`, `stash`, `worktree add`,
 or any state-changing subcommand. Cowork verifies from **primary
 evidence**, never from a pasted summary ("tree clean", "reconciled").
-*How* Cowork inspects state is project-dependent: where the project's
-Git Workflow permits read-only git, Cowork runs it lock-free
-(`GIT_OPTIONAL_LOCKS=0 git --no-optional-locks status/log/diff/…`) as
-the independent reconciler; where the project bans even read-only git
-(e.g. a strict git-handoff hard rule), Cowork requests the raw output
-via a read-only handoff and verifies from that — but still never
-trusts a *summary* claim without the underlying evidence. Read the
-project's Git Workflow / CLAUDE.md before choosing the mechanic.
+**Read-only git is always available** — Cowork runs `status`, `log`, `diff`, and
+`show` freely and lock-free (`GIT_OPTIONAL_LOCKS=0 git --no-optional-locks …`) in
+**every** project, as the independent reconciler. Legacy mutating-handoff
+conventions (e.g. `git-handoff`) govern only *state-changing* git — they never
+gate reads, and "no commits" never means "no git at all." Cowork verifies from
+this primary evidence, and still never trusts a pasted *summary* claim ("tree
+clean", "reconciled") without the underlying output.
 
 ## When to use
 
@@ -168,25 +169,24 @@ These terms are used precisely throughout this skill.
    escalate to AskUserQuestion when the gap is a real decision.
 9. **Cowork never runs mutating git.** No `add`/`commit`/`push`/
    `merge`/`rebase`/`branch`/`checkout`/`switch -c`/`reset`/`stash`/
-   `worktree add` — ever, in any project. Read-only inspection is
-   governed by the project's Git Workflow: where permitted, run it
-   lock-free (`GIT_OPTIONAL_LOCKS=0 git --no-optional-locks …`) as the
-   independent reconciler; where banned, request the raw output via a
-   read-only handoff. Either way, **verify from primary evidence, never
-   from a pasted summary.**
-10. **The enrichment commit is part of the gate.** If Phase 3 edited
-    the spec inline, that edit is uncommitted in the working tree. The
-    gate is NOT "ready to dispatch" until main carries the finalized
-    spec. Reconcile this in Phase 3.5: verify, then hand the governance
-    commit off — **Cowork authored it, so Cowork never commits or
-    certifies it** (separation of duties). The committer is the user or
-    a dispatched agent (not the author).
-11. **Break commit deadlocks; don't perpetuate them.** The
-    author-can't-commit rule bars exactly one entity: the author
-    (Cowork). A non-author — the user, or a dispatched agent — is the
-    sanctioned committer. If a bounce-back loop forms (each party
-    declines, citing the rule), name the misread and point to the
-    sanctioned path. Do not let the spec sit uncommitted.
+   `worktree add` — ever, in any project. **Read-only inspection is always
+   allowed**: run it lock-free (`GIT_OPTIONAL_LOCKS=0 git --no-optional-locks …`)
+   in every project as the independent reconciler (legacy mutating-handoff rules
+   never gate reads). **Verify from primary evidence, never from a pasted
+   summary.**
+10. **The enrichment commit rides with the sprint.** If Phase 3 edited the spec
+    inline, that edit is uncommitted in the working tree. Rather than blocking
+    dispatch on a separate hand-off, fold it into the pointer's git reconciliation
+    recipe: the implementer commits the finalized spec as step 0 of the sprint
+    (before cutting the worktree), per the project's Git Workflow. Cowork verifies
+    the uncommitted edit read-only; the implementer commits it (separation of
+    duties — the author doesn't certify its own commit).
+11. **Don't let the spec sit uncommitted.** The author-can't-commit rule bars
+    exactly one entity: the author (Cowork). The sprint's implementer (or the
+    user) is the sanctioned committer and lands the enrichment as part of the
+    sprint's git reconciliation. If anyone cites "no git" to refuse, correct the
+    misread — reads are always allowed and the implementer commits — and do not
+    let a bounce-back loop leave the spec uncommitted.
 12. **Every pointer carries a complete git reconciliation recipe.**
     The recipe is mandatory and non-negotiable per dispatch. It lands
     the repo in a fully reconciled state (clean tree, synced main, no
@@ -325,9 +325,10 @@ as step 0. Verify all four guarantees are expressed:
       branch name with `git switch -c <branch> <default>`, and HALTS
       if the branch already exists on a stale base.
 - [ ] The recipe's default branch name (`main` vs `master`) matches
-      this repo. Determine it by reading the repo's git config / a
-      committed reference (not by running git); if unknown, the recipe
-      derives it via `git symbolic-ref refs/remotes/origin/HEAD`.
+      this repo. Determine it by reading the repo's git config (e.g.
+      `git config`, `git symbolic-ref` — both read-only) or a committed
+      reference; if unknown, the recipe derives it via
+      `git symbolic-ref refs/remotes/origin/HEAD`.
 - [ ] Final **verification block** is present (tree empty, HEAD on the
       sprint branch, `main..origin/main` count == 0).
 - [ ] If any element is missing, **insert the canonical recipe into
@@ -354,10 +355,9 @@ as step 0. Verify all four guarantees are expressed:
 7. **Project codebase** — for rubric verification (grep, code
    reads, schema queries)
 8. **The project's Git Workflow rules** (CLAUDE.md / governance doc) —
-   to choose the read-only inspection mechanic for Phase 3.5 (lock-free
-   read-only git where permitted; read-only handoff where banned) and
-   to identify the sanctioned non-author committer (user / dispatched
-   agent)
+   to identify the sanctioned committer for the enrichment commit (the
+   sprint's implementer, or the user). Read-only git is always available
+   for inspection — no project gates reads.
 
 ## Outputs
 
@@ -613,13 +613,13 @@ the implementer's worktree (downstream) will be cut from `main`. If
 **missing its own spec**. So the gate is not "ready" until `main`
 carries the finalized spec.
 
-**Cowork never runs mutating git, and never commits its own authored
-edit.** This phase reconciles state and produces a *handoff*; the user
-or a dispatched agent runs the commit.
+**Cowork never runs mutating git, and never commits its own authored edit** — but
+read-only git is always available here. This phase verifies state and folds the
+enrichment commit into the sprint's git reconciliation recipe; the sprint's
+implementer (or the user) runs the commit as step 0 of the sprint.
 
 ### 3.5.1 Verify state from primary evidence
-Inspect — using the project's permitted mechanic (read-only lock-free
-git where allowed; otherwise a requested read-only handoff):
+Inspect with read-only, lock-free git (always available — reads are never gated):
 
 ```
 GIT_OPTIONAL_LOCKS=0 git --no-optional-locks status -sb        # branch + dirty paths
