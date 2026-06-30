@@ -565,7 +565,19 @@ Write `YYYY-MM-DD-phase-brief.md`:
   dispatch-ready (rubric failed after 2 enrichment passes); list
   with the rubric items that blocked
 
-### D.7 Final summary to user
+### D.7 Regenerate the planning cockpit
+The roadmap and `sprint-queue.xlsx` were just updated, so refresh the read-only planning
+cockpit so it reflects the new state. Run from the project root:
+
+    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/generate_cockpit.py" --root .
+
+The launcher pins its own import root, so it runs from any working directory and for both a
+cloned repo and an installed plugin. It reads `Virtuoso/workspace-layout.json` to locate the
+roadmap and sprint-queue and writes `Virtuoso/reports/planning-cockpit.html`. It never
+modifies the roadmap or the spreadsheet — if they disagree it surfaces the drift in the
+report instead. Note the output path for the final summary.
+
+### D.8 Final summary to user
 Present:
 - Roadmap changes
 - Catalog changes
@@ -573,6 +585,7 @@ Present:
 - Phase brief in chat
 - Buffer status: N dispatch-ready full specs (out of 5 target)
 - Lessons-applied highlights
+- Planning cockpit regenerated: `Virtuoso/reports/planning-cockpit.html`
 
 ---
 
