@@ -1,5 +1,30 @@
 # Virtuoso Release Notes
 
+## v1.1.7 (2026-06-30)
+
+### Added
+
+- **cwd-independent cockpit launcher.** `scripts/generate_cockpit.py` pins its own import
+  root so the roadmap planning cockpit runs from any working directory (and for an installed
+  plugin), fixing the previous `python -m tools.roadmap_visualizer.generate` command that
+  only worked from `plugins/virtuoso/`. `/roadmap-review` now regenerates the cockpit as its
+  final step (D.7) via the `~/.virtuoso/plugin-root` bridge; there is no standalone command.
+- **`conftest.py`** pins the test import root so `tools.roadmap_visualizer` resolves
+  regardless of the directory pytest is invoked from.
+
+### Changed
+
+- **CI runs the full test suite.** The `Tests` step now runs `pytest plugins/virtuoso/`
+  instead of two hand-picked files, so the roadmap-visualizer suite (and every other
+  previously-ungated test) actually gates merges. The green check is now honest.
+- Removed the standalone "Roadmap planning cockpit" command/section from the README — the
+  visualizer is invoked only from within `/roadmap-review`.
+
+### Fixed
+
+- `.gitignore` now excludes the `skills.zip` build artifact so it cannot be committed by
+  accident.
+
 ## v1.1.6 (2026-06-30)
 
 ### Added
