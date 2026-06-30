@@ -1,5 +1,36 @@
 # Virtuoso Release Notes
 
+## v1.1.5 (2026-06-30)
+
+### Added
+
+- **Roadmap visualizer** (`tools/roadmap_visualizer/`) — renders the roadmap +
+  sprint-queue Dashboard to HTML, with manifest-aware workspace discovery and a
+  staleness check that flags a drifted Excel Dashboard cache and routes it to
+  `/roadmap-review`.
+- **Workspace layout manifest.** `virtuoso-init` now offers a layout choice
+  (plugin-only vs. canonical `Virtuoso/Project Documentation/`) and the preflight
+  writes `Virtuoso/workspace-layout.json`. Skills resolve workspace paths from that
+  manifest (`roadmap`, `sprintQueue`, `closeOuts`, `issues`, `outsideAudits`,
+  `reference`, `scripts`) instead of hard-coded flat paths, falling back to the
+  legacy layout for older projects.
+
+### Changed
+
+- **Preflight** gained `--mode detect|create` and `--layout plugin-only|canonical`,
+  generating and respecting the workspace manifest (idempotent, non-destructive).
+- Skills (`roadmap-review`, `roadmap-status`, `next-pointer`, `pointer-closeout`,
+  `mid-dispatch-decision`, `3rd-party-audit`, `virtuoso`, `virtuoso-init`) now read
+  the manifest as the source of truth for workspace paths.
+
+### Fixed
+
+- **Removed duplicate slash-menu entries.** The 10 `commands/*.md` wrappers each only
+  re-invoked their matching skill, so every name appeared twice — once bare
+  (`/roadmap-review`) and once namespaced (`/virtuoso:roadmap-review`). Skills are
+  invoked directly via the `virtuoso:` namespace, so the wrappers were removed; the
+  structural validator now treats `commands/` as optional.
+
 ## v1.1.4 (2026-06-30)
 
 ### Fixed
