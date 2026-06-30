@@ -44,10 +44,16 @@ def main():
             fail(f"skill {name}: name '{m.group(1).strip()}' != folder")
     ok(f"{len(skill_names)} skills; frontmatter/folder names checked")
 
-    # 2. Manifests
-    for rel in [".claude-plugin/plugin.json", ".claude-plugin/marketplace.json", "hooks/hooks.json"]:
+    # 2. Manifests. The plugin lives at <repo>/plugins/virtuoso (ROOT); marketplace.json
+    # stays at the repo root, two levels up.
+    manifests = [
+        (".claude-plugin/plugin.json", os.path.join(ROOT, ".claude-plugin", "plugin.json")),
+        (".claude-plugin/marketplace.json", os.path.join(ROOT, "..", "..", ".claude-plugin", "marketplace.json")),
+        ("hooks/hooks.json", os.path.join(ROOT, "hooks", "hooks.json")),
+    ]
+    for rel, path in manifests:
         try:
-            data = json.load(open(os.path.join(ROOT, rel), encoding="utf-8"))
+            data = json.load(open(path, encoding="utf-8"))
             ok(f"json valid: {rel}")
         except Exception as e:  # noqa: BLE001
             fail(f"json INVALID: {rel}: {e}")
@@ -57,8 +63,8 @@ def main():
                 fail(f"plugin name = {data.get('name')!r}")
         if rel.endswith("marketplace.json"):
             plugins = data.get("plugins", [])
-            if not (plugins and plugins[0].get("source") == "."):
-                fail(f"marketplace source = {plugins and plugins[0].get('source')!r} (want '.')")
+            if not (plugins and plugins[0].get("source") == "./plugins/virtuoso"):
+                fail(f"marketplace source = {plugins and plugins[0].get('source')!r} (want './plugins/virtuoso')")
 
     # 3/4/5. Text scans
     abs_hits, ref_hits, root_path_hits = [], [], []

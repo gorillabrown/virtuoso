@@ -15,8 +15,8 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip openpyxl pytest
       - name: Structural validation
-        run: python scripts/validate.py
+        run: python plugins/virtuoso/scripts/validate.py
       - name: Version sync check
-        run: python scripts/bump_version.py --check
+        run: python plugins/virtuoso/scripts/bump_version.py --check
       - name: Tests
-        run: python -m pytest skills/roadmap-review/scripts/test_recalc.py scripts/test_virtuoso_preflight.py -q
+        run: python -m pytest plugins/virtuoso/skills/roadmap-review/scripts/test_recalc.py plugins/virtuoso/scripts/test_virtuoso_preflight.py -q
