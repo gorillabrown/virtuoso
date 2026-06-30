@@ -1,5 +1,25 @@
 # Virtuoso Release Notes
 
+## v1.1.3 (2026-06-29)
+
+### Fixed
+
+- **Eliminated duplicate skill registration.** The plugin now lives in a subdirectory
+  (`plugins/virtuoso/`) with `marketplace.json` at the repo root pointing to it
+  (`"source": "./plugins/virtuoso"`), matching the documented marketplace layout. Previously
+  the plugin sat at the repo root (`"source": "."`), so the cloned marketplace directory was
+  itself a plugin directory and Claude Code loaded every skill twice — once namespaced
+  (`virtuoso:roadmap-review`) and once unprefixed (`roadmap-review`). Internal
+  `${CLAUDE_PLUGIN_ROOT}` / vendored-script paths are unaffected (they resolve relative to the
+  plugin directory, which moved as one unit). **Install commands are unchanged.**
+
+### Upgrade note
+
+- To clear the duplicate locally, fully reset the marketplace rather than a plain update:
+  `/plugin marketplace remove virtuoso-marketplace`, then `/plugin marketplace add gorillabrown/virtuoso`
+  and `/plugin install virtuoso@virtuoso-marketplace`. A plain `/plugin update` may leave the old
+  root-plugin clone in place.
+
 ## v1.1.2 (2026-06-29)
 
 Integration-correctness pass — **Phase 1 of the v1.2.0 integration design**
