@@ -21,13 +21,23 @@ description: |
 
 ## Preflight — workspace check (run first)
 
-This skill operates on the project's `Virtuoso/` workspace. Before anything else, ensure it exists and is complete:
+This skill operates on the project's Virtuoso workspace. Before anything else, bring the project under management non-destructively:
 
-    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/virtuoso_preflight.py" --root . --mode detect
+    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/virtuoso_preflight.py" --root . --mode adopt
 
-This is a detect-only preflight so first-time setup can ask the layout question. If the script reports no workspace, or if `~/.virtuoso/plugin-root` is missing, stop this skill and route the user to `/virtuoso-init`; that skill asks whether to use the plugin-only documentation layout or the canonical `Virtuoso/Project Documentation/` layout. If the workspace was just created, tell the user which layout was selected, then continue.
+`adopt` never moves or duplicates anything. Read the `virtuoso-status:` line it prints and branch:
 
-**Workspace paths.** Read `Virtuoso/workspace-layout.json` first and use its `paths` map. Key entries include `roadmap`, `sprintQueue`, `closeOuts`, `issues`, `outsideAudits`, `reference`, and `scripts`. If the manifest is missing, run `/virtuoso-init`; only fall back to legacy flat `Virtuoso/` paths for older projects.
+- `ready` — a `Virtuoso/` workspace already exists (it was healed if needed); continue.
+- `adopted roadmap=<path>` — the project already had an established documentation tree (e.g. `Project Documentation/` or `2. Project Documentation/`) with its own roadmap, so a thin `Virtuoso/` control marker was written that points at that existing roadmap. Tell the user it was adopted in place — nothing was moved or duplicated — then continue.
+- `none` — there is no workspace and no documentation tree to adopt (treat a missing `~/.virtuoso/plugin-root` the same way). Stop this skill and route the user to `/virtuoso-init`, which asks whether to use the plugin-only or the canonical `Virtuoso/Project Documentation/` layout.
+
+**Workspace paths.** Read `Virtuoso/workspace-layout.json` first and use its `paths` map. For an adopted project, `paths.roadmap` and `paths.sprintQueue` point at the project's own existing files under whatever names they use (e.g. `GoG_Roadmap.md`). Key entries include `roadmap`, `sprintQueue`, `closeOuts`, `issues`, `outsideAudits`, `reference`, and `scripts`. If the manifest is missing, run `/virtuoso-init`; only fall back to legacy flat `Virtuoso/` paths for older projects.
+
+**Integrity gate.** This ceremony rewrites the roadmap in place, so before migrating or rewriting anything, verify the resolved roadmap is sound (substitute the `paths.roadmap` value from the manifest):
+
+    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/virtuoso_preflight.py" --check-roadmap "<paths.roadmap>"
+
+Read the `roadmap-integrity:` line. On `fail` (null bytes, non-UTF-8, or missing — exit 3), STOP and report the corruption to the user; do not migrate or rewrite a corrupt roadmap. On `warn` (empty or unusually large — exit 2), surface it and confirm with the user before proceeding. On `ok`, continue.
 
 
 Heavyweight, periodic recalibration of an entire project. The ceremony
