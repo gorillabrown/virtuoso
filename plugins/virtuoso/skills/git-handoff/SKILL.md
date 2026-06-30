@@ -24,6 +24,8 @@ If working in Codex Desktop, Codex CLI, Claude Code CLI, or a native/local shell
 
 If the user explicitly says "use git-handoff" or "give me the old handoff packet," use the packet template below. Otherwise, do not invoke this skill.
 
+**Even when the packet is requested, read-only git stays available.** "Do not run git" / "no commits" governs only *state-changing* commands — `git status`, `git log`, `git diff`, and `git show` remain fine for verification. It never means "no git at all, even reads."
+
 ---
 
 ## Trigger Conditions
