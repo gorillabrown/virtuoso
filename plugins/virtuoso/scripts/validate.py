@@ -93,15 +93,20 @@ def main():
         "no ${CLAUDE_PLUGIN_ROOT}/ path-uses in skill bodies"
         if not root_path_hits else f"${{CLAUDE_PLUGIN_ROOT}}/ path-use in skills: {root_path_hits}")
 
-    # 6. Commands 1:1 with skills
+    # 6. Commands (optional): if present, each must map 1:1 to a skill.
+    # Skills are invoked via the `virtuoso:` namespace, so standalone command
+    # wrappers are not required — they only duplicated the slash menu.
     cmd_dir = os.path.join(ROOT, "commands")
-    cmds = sorted(c[:-3] for c in os.listdir(cmd_dir) if c.endswith(".md"))
-    for c in cmds:
-        if not os.path.isdir(os.path.join(skills_dir, c)):
-            fail(f"command {c}: no matching skill")
-        if not open(os.path.join(cmd_dir, c + ".md"), encoding="utf-8").read().startswith("---"):
-            fail(f"command {c}: no frontmatter")
-    ok(f"{len(cmds)} commands; all map to skills")
+    if os.path.isdir(cmd_dir):
+        cmds = sorted(c[:-3] for c in os.listdir(cmd_dir) if c.endswith(".md"))
+        for c in cmds:
+            if not os.path.isdir(os.path.join(skills_dir, c)):
+                fail(f"command {c}: no matching skill")
+            if not open(os.path.join(cmd_dir, c + ".md"), encoding="utf-8").read().startswith("---"):
+                fail(f"command {c}: no frontmatter")
+        ok(f"{len(cmds)} commands; all map to skills")
+    else:
+        ok("no commands/ dir (skills invoked via virtuoso: namespace)")
 
     print("VALIDATION RESULTS")
     for m in oks:

@@ -133,27 +133,31 @@ vendors its scripts into `Virtuoso/scripts/`. This lets skills locate bundled sc
 *without* relying on `${CLAUDE_PLUGIN_ROOT}` — which resolves only inside hooks/MCP, never in
 skill or command bodies.
 
-## Skills & commands
+## Skills
 
-| Skill | Command | Purpose |
-|-------|---------|---------|
+All skills are invoked through the plugin namespace, e.g. `/virtuoso:roadmap-review`.
+(The standalone `commands/` wrappers were removed — each only re-invoked its matching skill,
+so it produced a duplicate slash entry alongside `/virtuoso:<name>`.)
+
+| Skill | Slash | Purpose |
+|-------|-------|---------|
 | `virtuoso` | — | Multi-step execution discipline for sprints |
-| `roadmap-review` | `/roadmap-review` | Heavyweight roadmap recalibration |
-| `roadmap-status` | `/roadmap-status` | Lightweight roadmap pulse check |
-| `next-pointer` | `/next-pointer` | Finalize + dispatch the next sprint |
-| `pointer-closeout` | `/pointer-closeout` | Close-out report + retrospective |
-| `mid-dispatch-decision` | `/mid-dispatch-decision` | Decide when a dispatch pauses mid-run |
-| `governance-sweep` | `/governance-sweep` | 3-phase doc-hygiene sweep: discover → approve → fix |
-| `3rd-party-audit` | `/3rd-party-audit` | External codebase audit lifecycle |
-| `ultrathink` | `/ultrathink` | Deep first-principles reasoning |
+| `roadmap-review` | `/virtuoso:roadmap-review` | Heavyweight roadmap recalibration |
+| `roadmap-status` | `/virtuoso:roadmap-status` | Lightweight roadmap pulse check |
+| `next-pointer` | `/virtuoso:next-pointer` | Finalize + dispatch the next sprint |
+| `pointer-closeout` | `/virtuoso:pointer-closeout` | Close-out report + retrospective |
+| `mid-dispatch-decision` | `/virtuoso:mid-dispatch-decision` | Decide when a dispatch pauses mid-run |
+| `governance-sweep` | `/virtuoso:governance-sweep` | 3-phase doc-hygiene sweep: discover → approve → fix |
+| `3rd-party-audit` | `/virtuoso:3rd-party-audit` | External codebase audit lifecycle |
+| `ultrathink` | `/virtuoso:ultrathink` | Deep first-principles reasoning |
 | `effort-levels` | — | Effort/cost sizing framework (modifier) |
 | `adversarial-review` | — | Structured red-team review (modifier) |
 | `git-handoff` | — | Legacy git handoff packet (manual only) |
-| `delayed-start` | `/delayed-start` | Defer execution to a clock time / delay |
-| `virtuoso-init` | `/virtuoso-init` | Create/repair the `Virtuoso/` workspace |
+| `delayed-start` | `/virtuoso:delayed-start` | Defer execution to a clock time / delay |
+| `virtuoso-init` | `/virtuoso:virtuoso-init` | Create/repair the `Virtuoso/` workspace |
 
 (The three modifiers and `virtuoso` itself are model-invoked — they layer onto other work
-rather than being entry points, so they ship without a slash command.)
+rather than being entry points.)
 
 ## Agents
 
