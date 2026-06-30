@@ -39,21 +39,87 @@ Then initialize a project workspace:
 
 ## The `Virtuoso/` workspace
 
-Governance state lives in a `Virtuoso/` directory at your project root. It is created and
-healed automatically; it is **never overwritten**.
+Virtuoso supports two bootstrap layouts. Both are created and healed automatically, and
+neither overwrites existing user files.
+
+### Option 1: plugin-only `Virtuoso/` folder
+
+Project documentation lives in the project root under `Project Documentation/`; `Virtuoso/`
+holds plugin-managed files only. This is the default.
+
+```
+Project Documentation/
+├── 1 governance/
+│   ├── Roadmap.md
+│   └── SpecRetro.Lessons_Learned.md
+├── 2 operational/
+│   ├── sprint-queue.xlsx
+│   ├── roadmap-reviews/  └── checkins/
+│   ├── Close-Outs/
+│   └── Issues/
+├── 3 temp/
+├── 4 Outside Audits/
+└── 5 Reference/
+    └── WORKFLOW_REFERENCE.md
+
+Virtuoso/
+├── .virtuoso
+├── workspace-layout.json
+└── scripts/                       # plugin-managed: recalc.py, prepare_closeout_files.py
+```
+
+### Option 2: canonical Virtuoso layout
+
+Project documentation lives under `Virtuoso/Project Documentation/`. When selected,
+preflight migrates existing documentation into the new tree only when the destination path
+is free; conflicts are left in place for human review.
 
 ```
 Virtuoso/
 ├── .virtuoso                      # marker — tags this as a Virtuoso project
-├── Roadmap.md                     # canonical roadmap
-├── sprint-queue.xlsx              # Dashboard + Catalog (KPIs)
-├── SpecRetro.Lessons_Learned.md   # running lessons catalog
-├── WORKFLOW_REFERENCE.md          # index → skills
-├── roadmap-reviews/  └── checkins/
-├── Close-Outs/
-├── audits/
+├── workspace-layout.json          # selected layout + path map
+├── Project Documentation/
+│   ├── 1 governance/
+│   │   ├── Roadmap.md
+│   │   └── SpecRetro.Lessons_Learned.md
+│   ├── 2 operational/
+│   │   ├── sprint-queue.xlsx
+│   │   ├── roadmap-reviews/  └── checkins/
+│   │   ├── Close-Outs/
+│   │   └── Issues/
+│   ├── 3 temp/
+│   ├── 4 Outside Audits/
+│   └── 5 Reference/
+│       └── WORKFLOW_REFERENCE.md
 └── scripts/                       # plugin-managed: recalc.py, prepare_closeout_files.py
 ```
+
+`Virtuoso/workspace-layout.json` is the source of truth for skill path resolution. The
+SessionStart hook runs preflight in `auto` mode, so it preserves whichever layout was
+selected during `/virtuoso-init`.
+
+## Roadmap planning cockpit
+
+Virtuoso includes a read-only static planning cockpit generator. It treats `Roadmap.md`
+as the source of truth and `sprint-queue.xlsx` as a structured mirror. If they disagree,
+the report surfaces drift instead of changing files.
+
+Generate the report from a project root:
+
+```bash
+python -m tools.roadmap_visualizer.generate --root .
+```
+
+The default output is:
+
+```text
+Virtuoso/reports/planning-cockpit.html
+```
+
+The generator uses `Virtuoso/workspace-layout.json` when present (which lets it support
+non-standard layouts); otherwise it automatically uses the conventional
+`Virtuoso/Roadmap.md` + `Virtuoso/sprint-queue.xlsx` layout. No manifest or upgrade step
+is required for a standard plugin workspace.
 
 Three ways the workspace stays healthy:
 

@@ -275,7 +275,7 @@ Key decisions made by agents: <list>
 ```
 ===== PHASE 3: IMPLEMENT BLOCKED =====
 Task <N> failed after <X> attempts.
-Issue documented at: <path to Virtuoso/Issues/Issue.<id>.<date>.md>
+Issue documented at: <path to manifest issues directory>/Issue.<id>.<date>.md
 Awaiting user direction (or /mid-dispatch-decision).
 =====
 ```
@@ -476,7 +476,8 @@ Followed by the session summary block.
 
 When a task is BLOCKED/FAILED, or any stop / hold / elevation arises that Zeus cannot
 resolve alone, do NOT improvise a fix. Render the issue in the fixed **7-field format**,
-save an identical `.md` to `Virtuoso/Issues/Issue.<sprint-id>.<YYYY-MM-DD>.md`, and route
+save an identical `.md` to the manifest `issues` directory as
+`Issue.<sprint-id>.<YYYY-MM-DD>.md`, and route
 that path to **`/mid-dispatch-decision`**:
 
 1. **tl;dr** — one line.

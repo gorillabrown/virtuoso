@@ -517,7 +517,8 @@ When you hit something unexpected:
 1. Mark the current task ✗ (blocked).
 2. Reprint the full task plan showing current state.
 3. **Render the issue in the 7-field format below** and **save an identical `.md`** to
-   `Virtuoso/Issues/Issue.<SPRINT-ID>.<YYYY-MM-DD>.md` (append `-N` if more than one on a date).
+   the `issues` directory from `Virtuoso/workspace-layout.json` as
+   `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md` (append `-N` if more than one on a date).
 4. Hand the saved path to **`/mid-dispatch-decision`** — it reads the file and returns the
    call. Do not pick a path yourself without approval.
 
