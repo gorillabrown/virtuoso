@@ -5,3 +5,8 @@ __pycache__/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Dogfooding workspace & local WIP — dev clone only, never published
+/Virtuoso/
+.codex-plugin/
+.superpowers/
