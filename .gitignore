@@ -5,6 +5,7 @@ __pycache__/
 .DS_Store
 Thumbs.db
 desktop.ini
+skills.zip
 
 # Dogfooding workspace & local WIP — dev clone only, never published
 /Virtuoso/

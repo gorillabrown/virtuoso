@@ -1,4 +1,4 @@
-import os, subprocess, sys
+import json, os, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, "virtuoso_preflight.py")
@@ -49,6 +49,23 @@ def _run(root, mode, layout=None):
     if layout:
         cmd.extend(["--layout", layout])
     subprocess.run(cmd, check=True, env=env)
+
+
+def _run_capture(*args, root=None):
+    """Run the script capturing stdout+stderr and the exit code (no check)."""
+    env = dict(os.environ)
+    if root is not None:
+        env["VIRTUOSO_HOME"] = str(root)
+    proc = subprocess.run(
+        [sys.executable, SCRIPT, *args], capture_output=True, text=True, env=env
+    )
+    return proc.returncode, proc.stdout + proc.stderr
+
+
+def _manifest(root):
+    return json.loads(
+        (root / "Virtuoso" / "workspace-layout.json").read_text(encoding="utf-8")
+    )
 
 
 def test_create_builds_tree(tmp_path):
@@ -123,3 +140,267 @@ def test_canonical_layout_migrates_existing_documentation_without_overwriting(tm
     assert canonical_roadmap.read_text(encoding="utf-8") == "CANONICAL ROADMAP"
     assert root_roadmap.read_text(encoding="utf-8") == "ROOT ROADMAP"
     assert (tmp_path / "Virtuoso" / "Project Documentation" / "2 operational" / "sprint-queue.xlsx").is_file()
+
+
+# ---------------------------------------------------------------------------
+# Adopt: bring an established, un-markered project under management in place.
+# ---------------------------------------------------------------------------
+
+def _seed_established_tree(tmp_path, doc_root="2. Project Documentation", roadmap_name="GoG_Roadmap.md"):
+    op = tmp_path / doc_root / "2 operational"
+    op.mkdir(parents=True)
+    (op / roadmap_name).write_text(
+        "# GoG Roadmap\n## Completed Work Summary\n## Active & Remaining Sprint Skeletons\n",
+        encoding="utf-8",
+    )
+    (op / "sprint-queue.xlsx").write_bytes(b"PK\x03\x04 stub workbook")
+    return op
+
+
+def test_adopt_recognizes_established_tree_and_points_at_existing_roadmap(tmp_path):
+    _seed_established_tree(tmp_path)
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0
+    assert "virtuoso-status: adopted" in out
+    assert (tmp_path / "Virtuoso" / ".virtuoso").is_file()
+    m = _manifest(tmp_path)
+    assert m["adopted"] is True
+    assert m["paths"]["roadmap"] == "2. Project Documentation/2 operational/GoG_Roadmap.md"
+    assert m["paths"]["sprintQueue"] == "2. Project Documentation/2 operational/sprint-queue.xlsx"
+
+
+def test_adopt_never_seeds_a_parallel_roadmap_or_scaffolds_the_tree(tmp_path):
+    _seed_established_tree(tmp_path)
+    _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    # The only roadmap on disk is the project's own — no default Roadmap.md anywhere.
+    roadmaps = sorted(p.name for p in tmp_path.rglob("*.md") if "roadmap" in p.name.lower())
+    assert roadmaps == ["GoG_Roadmap.md"], roadmaps
+    # Adopt writes ONLY the thin control dir; it does not scaffold the rest of the tree.
+    assert not (tmp_path / "2. Project Documentation" / "1 governance").exists()
+    assert not (tmp_path / "2. Project Documentation" / "3 temp").exists()
+
+
+def test_adopt_is_noop_on_bare_project(tmp_path):
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0
+    assert "virtuoso-status: none" in out
+    assert not (tmp_path / "Virtuoso").exists()
+    # ...but the plugin-root bridge is still recorded.
+    assert (tmp_path / ".virtuoso" / "plugin-root").is_file()
+
+
+def test_adopt_is_idempotent_and_heal_stays_thin(tmp_path):
+    op = _seed_established_tree(tmp_path, doc_root="Project Documentation", roadmap_name="Custom_Roadmap.md")
+    roadmap = op / "Custom_Roadmap.md"
+    original = roadmap.read_text(encoding="utf-8")
+    _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0
+    assert "virtuoso-status: ready" in out  # marker now present -> heal path
+    assert roadmap.read_text(encoding="utf-8") == original  # never rewritten
+    m = _manifest(tmp_path)
+    assert m["adopted"] is True
+    assert m["paths"]["roadmap"] == "Project Documentation/2 operational/Custom_Roadmap.md"
+    # Healing an adopted workspace must not scaffold the doc tree.
+    assert not (tmp_path / "Project Documentation" / "1 governance").exists()
+
+
+def test_detect_reports_adoptable_without_writing(tmp_path):
+    _seed_established_tree(tmp_path)
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "detect", root=tmp_path)
+    assert rc == 0
+    assert "virtuoso-status: adoptable" in out
+    assert not (tmp_path / "Virtuoso").exists()  # detect never writes a marker
+
+
+def test_create_discovers_existing_nonstandard_roadmap(tmp_path):
+    gov = tmp_path / "Project Documentation" / "1 governance"
+    gov.mkdir(parents=True)
+    (gov / "MyProject_Roadmap.md").write_text(
+        "# MyProject\n## Completed Work Summary\n## Active & Remaining Sprint Skeletons\n",
+        encoding="utf-8",
+    )
+    _run(tmp_path, "create", "plugin-only")
+    m = _manifest(tmp_path)
+    assert m["paths"]["roadmap"] == "Project Documentation/1 governance/MyProject_Roadmap.md"
+    # No parallel default Roadmap.md seeded beside it.
+    assert not (gov / "Roadmap.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# Integrity guard: protect a roadmap from a destructive rewrite when corrupt.
+# ---------------------------------------------------------------------------
+
+def test_check_roadmap_ok(tmp_path):
+    p = tmp_path / "Roadmap.md"
+    p.write_text("# Roadmap\nContent here.\n", encoding="utf-8")
+    rc, out = _run_capture("--check-roadmap", str(p))
+    assert rc == 0
+    assert "roadmap-integrity: ok" in out
+
+
+def test_check_roadmap_fails_on_null_bytes(tmp_path):
+    p = tmp_path / "Roadmap.md"
+    p.write_bytes(b"# Roadmap\n\x00\x00 corrupted payload\n")
+    rc, out = _run_capture("--check-roadmap", str(p))
+    assert rc == 3
+    assert "roadmap-integrity: fail" in out
+    assert "null-bytes" in out
+
+
+def test_check_roadmap_warns_on_oversize(tmp_path):
+    p = tmp_path / "Roadmap.md"
+    p.write_text("# Roadmap\n" + ("x" * (520 * 1024)), encoding="utf-8")
+    rc, out = _run_capture("--check-roadmap", str(p))
+    assert rc == 2
+    assert "roadmap-integrity: warn" in out
+    assert "oversize" in out
+
+
+def test_check_roadmap_fails_when_missing(tmp_path):
+    rc, out = _run_capture("--check-roadmap", str(tmp_path / "nope.md"))
+    assert rc == 3
+    assert "roadmap-integrity: fail" in out
+    assert "missing" in out
+
+
+def test_check_roadmap_warns_on_empty(tmp_path):
+    p = tmp_path / "Roadmap.md"
+    p.write_text("   \n\n\t\n", encoding="utf-8")
+    rc, out = _run_capture("--check-roadmap", str(p))
+    assert rc == 2
+    assert "roadmap-integrity: warn" in out
+    assert "empty" in out
+
+
+def test_check_roadmap_fails_on_non_utf8(tmp_path):
+    p = tmp_path / "Roadmap.md"
+    p.write_bytes(b"\xff\xfe not valid utf8 \xff")
+    rc, out = _run_capture("--check-roadmap", str(p))
+    assert rc == 3
+    assert "roadmap-integrity: fail" in out
+    assert "not-utf-8" in out
+
+
+# ---------------------------------------------------------------------------
+# Discovery hardening: the live roadmap must beat a stale seed / backup / archive.
+# ---------------------------------------------------------------------------
+
+def test_discovery_prefers_real_roadmap_over_stale_seed(tmp_path):
+    # A prior /virtuoso-init left an untouched seed at the conventional location...
+    gov = tmp_path / "2. Project Documentation" / "1 governance"
+    gov.mkdir(parents=True)
+    (gov / "Roadmap.md").write_text(
+        "# Project Roadmap\n\n**Last updated:** (initialized by virtuoso-init)\n"
+        "## Completed Work Summary\n## Active & Remaining Sprint Skeletons\nFinish Line\n"
+        "roadmap_doc: Roadmap.md\nfinish_line: \"\"\n",
+        encoding="utf-8",
+    )
+    # ...while the project's real roadmap lives in 2 operational under its own (smaller) file.
+    op = tmp_path / "2. Project Documentation" / "2 operational"
+    op.mkdir(parents=True)
+    (op / "GoG_Roadmap.md").write_text("# GoG\n## Completed Work Summary\n", encoding="utf-8")
+
+    _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    m = _manifest(tmp_path)
+    assert m["paths"]["roadmap"] == "2. Project Documentation/2 operational/GoG_Roadmap.md", m["paths"]["roadmap"]
+
+
+def test_discovery_prefers_live_roadmap_over_backup_copy(tmp_path):
+    op = tmp_path / "Project Documentation" / "2 operational"
+    op.mkdir(parents=True)
+    (op / "GoG_Roadmap.md").write_text(
+        "# Live\n## Completed Work Summary\n## Active & Remaining Sprint Skeletons\n", encoding="utf-8"
+    )
+    # A fat stale snapshot kept beside the live file must not win on size.
+    (op / "GoG_Roadmap_OLD_2024.md").write_text(
+        "# Old\n## Completed Work Summary\n## Active & Remaining Sprint Skeletons\n" + ("x" * 5000),
+        encoding="utf-8",
+    )
+    _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    m = _manifest(tmp_path)
+    assert m["paths"]["roadmap"] == "Project Documentation/2 operational/GoG_Roadmap.md", m["paths"]["roadmap"]
+
+
+def test_discovery_prefers_live_roadmap_over_archived(tmp_path):
+    op = tmp_path / "Project Documentation" / "2 operational"
+    (op / "roadmap-reviews" / "archive").mkdir(parents=True)
+    (op / "roadmap-reviews" / "archive" / "Old_Roadmap.md").write_text(
+        "# Old\n## Completed Work Summary\n## Active & Remaining Sprint Skeletons\nFinish Line\n" + ("x" * 5000),
+        encoding="utf-8",
+    )
+    (op / "Live_Roadmap.md").write_text("# Live\n## Completed Work Summary\n", encoding="utf-8")
+    _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    m = _manifest(tmp_path)
+    assert m["paths"]["roadmap"] == "Project Documentation/2 operational/Live_Roadmap.md", m["paths"]["roadmap"]
+
+
+def test_discovery_not_fooled_by_codename_containing_backup_substring(tmp_path):
+    # "Gold" must NOT be read as an "old" backup; the real marker-rich roadmap still wins
+    # over a markerless decoy even though backup-rank sits above structural markers.
+    gov = tmp_path / "Project Documentation" / "1 governance"
+    gov.mkdir(parents=True)
+    (gov / "Gold_Roadmap.md").write_text(
+        "# Gold\n## Completed Work Summary\n## Active & Remaining Sprint Skeletons\nFinish Line\n",
+        encoding="utf-8",
+    )
+    (gov / "draft-roadmap.md").write_text("just notes, no markers\n", encoding="utf-8")
+    _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    m = _manifest(tmp_path)
+    assert m["paths"]["roadmap"] == "Project Documentation/1 governance/Gold_Roadmap.md", m["paths"]["roadmap"]
+
+
+def test_discovery_not_fooled_by_roadmap_quoting_the_seed_sentinel(tmp_path):
+    # A real roadmap that merely MENTIONS the seed phrase in prose must not be demoted as a seed.
+    op = tmp_path / "Project Documentation" / "2 operational"
+    op.mkdir(parents=True)
+    (op / "Main_Roadmap.md").write_text(
+        "# Main\n> Originally (initialized by virtuoso-init) long ago, since fleshed out.\n"
+        "## Completed Work Summary\n## Active & Remaining Sprint Skeletons\n",
+        encoding="utf-8",
+    )
+    (op / "Roadmap.md").write_text("# thin placeholder\n", encoding="utf-8")
+    _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    m = _manifest(tmp_path)
+    assert m["paths"]["roadmap"] == "Project Documentation/2 operational/Main_Roadmap.md", m["paths"]["roadmap"]
+
+
+def test_adopt_routes_to_none_when_only_archived_roadmap_exists(tmp_path):
+    rev = tmp_path / "2. Project Documentation" / "2 operational" / "roadmap-reviews"
+    rev.mkdir(parents=True)
+    (rev / "2024-01-01-Roadmap.md").write_text("# Snapshot\n## Completed Work Summary\n", encoding="utf-8")
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0
+    assert "virtuoso-status: none" in out
+    assert not (tmp_path / "Virtuoso").exists()
+
+
+def test_adopt_routes_to_none_when_tree_has_no_roadmap(tmp_path):
+    # An established doc subtree but no roadmap is NOT adopted (no phantom manifest path) —
+    # it routes to /virtuoso-init, which seeds a roadmap.
+    (tmp_path / "2. Project Documentation" / "2 operational").mkdir(parents=True)
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0
+    assert "virtuoso-status: none" in out
+    assert not (tmp_path / "Virtuoso").exists()
+
+
+def test_detect_quiet_never_adopts_established_tree(tmp_path):
+    # The SessionStart hook runs `--mode detect --quiet`; it must never write a marker.
+    _seed_established_tree(tmp_path)
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "detect", "--quiet", root=tmp_path)
+    assert rc == 0
+    assert not (tmp_path / "Virtuoso").exists()
+
+
+def test_heal_with_missing_manifest_discovers_roadmap_and_seeds_no_parallel(tmp_path):
+    # Marker dir present but no manifest: heal must still discover the real roadmap and not
+    # seed a parallel one.
+    (tmp_path / "Virtuoso").mkdir()
+    op = _seed_established_tree(tmp_path, doc_root="Project Documentation", roadmap_name="Custom_Roadmap.md")
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0
+    assert "virtuoso-status: ready" in out
+    m = _manifest(tmp_path)
+    assert m["paths"]["roadmap"] == "Project Documentation/2 operational/Custom_Roadmap.md", m["paths"]["roadmap"]
+    assert not (op / "Roadmap.md").exists()

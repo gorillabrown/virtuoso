@@ -1,5 +1,65 @@
 # Virtuoso Release Notes
 
+## v1.1.7 (2026-06-30)
+
+### Added
+
+- **cwd-independent cockpit launcher.** `scripts/generate_cockpit.py` pins its own import
+  root so the roadmap planning cockpit runs from any working directory (and for an installed
+  plugin), fixing the previous `python -m tools.roadmap_visualizer.generate` command that
+  only worked from `plugins/virtuoso/`. `/roadmap-review` now regenerates the cockpit as its
+  final step (D.7) via the `~/.virtuoso/plugin-root` bridge; there is no standalone command.
+- **`conftest.py`** pins the test import root so `tools.roadmap_visualizer` resolves
+  regardless of the directory pytest is invoked from.
+
+### Changed
+
+- **CI runs the full test suite.** The `Tests` step now runs `pytest plugins/virtuoso/`
+  instead of two hand-picked files, so the roadmap-visualizer suite (and every other
+  previously-ungated test) actually gates merges. The green check is now honest.
+- Removed the standalone "Roadmap planning cockpit" command/section from the README — the
+  visualizer is invoked only from within `/roadmap-review`.
+
+### Fixed
+
+- `.gitignore` now excludes the `skills.zip` build artifact so it cannot be committed by
+  accident.
+
+## v1.1.6 (2026-06-30)
+
+### Added
+
+- **Adopt an established project in place.** The preflight gained `--mode adopt`: when a
+  project already maintains its own documentation tree (`Project Documentation/` or
+  `2. Project Documentation/` with a `1 governance` / `2 operational` subtree) but has no
+  `Virtuoso/` marker, `adopt` lays down only a thin `Virtuoso/` control dir whose
+  `workspace-layout.json` **points at the existing roadmap** (under any name, e.g.
+  `GoG_Roadmap.md`). Nothing is moved or duplicated, and no parallel `Roadmap.md` is
+  seeded. It prints a parseable `virtuoso-status: ready|adopted|none` line.
+- **Roadmap discovery.** Both `adopt` and `create` now discover an existing roadmap and
+  sprint-queue anywhere under the documentation root (preferring the live, non-archived
+  copy with roadmap structural markers) and record those real paths in the manifest,
+  instead of assuming `1 governance/Roadmap.md`.
+- **Roadmap integrity guard.** `--check-roadmap PATH` sanity-checks a roadmap before a
+  heavyweight rewrite and exits `0` ok / `2` warn (empty or unusually large) / `3` fail
+  (null bytes, non-UTF-8, or missing). `/roadmap-review` runs it as a pre-rewrite gate and
+  stops on a corrupt roadmap rather than rewriting it.
+
+### Changed
+
+- **Governance gate skills now adopt instead of bailing.** `roadmap-review`,
+  `roadmap-status`, `next-pointer`, `pointer-closeout`, `mid-dispatch-decision`, and
+  `3rd-party-audit` call `--mode adopt` and branch on the printed status, so an
+  established project is brought under management in place rather than reporting "no
+  workspace" and routing to `/virtuoso-init` (which would have scaffolded a parallel tree).
+- `virtuoso-init` documents adoption and its `create` flow is now adoption-aware (points
+  at an existing roadmap rather than seeding a new one).
+
+### Fixed
+
+- **No more parallel roadmap.** An established roadmap kept under a non-default name or in
+  `2 operational/` is no longer shadowed by a freshly seeded `1 governance/Roadmap.md`.
+
 ## v1.1.5 (2026-06-30)
 
 ### Added
