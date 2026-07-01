@@ -116,29 +116,6 @@ discoverable roadmap is routed to `/virtuoso-init` instead, which seeds one. Bef
 destructive rewrite, `/roadmap-review` also runs a `--check-roadmap` integrity gate and
 stops on a corrupt roadmap (null bytes, non-UTF-8) rather than rewriting it.
 
-## Roadmap planning cockpit
-
-Virtuoso includes a read-only static planning cockpit generator. It treats `Roadmap.md`
-as the source of truth and `sprint-queue.xlsx` as a structured mirror. If they disagree,
-the report surfaces drift instead of changing files.
-
-Generate the report from a project root:
-
-```bash
-python -m tools.roadmap_visualizer.generate --root .
-```
-
-The default output is:
-
-```text
-Virtuoso/reports/planning-cockpit.html
-```
-
-The generator uses `Virtuoso/workspace-layout.json` when present (which lets it support
-non-standard layouts); otherwise it automatically uses the conventional
-`Virtuoso/Roadmap.md` + `Virtuoso/sprint-queue.xlsx` layout. No manifest or upgrade step
-is required for a standard plugin workspace.
-
 Three ways the workspace stays healthy:
 
 1. **`/virtuoso-init`** — explicit setup/repair.
@@ -225,8 +202,10 @@ Some skills reference skills from other plugins. They are **not** bundled:
 
 ## Requirements
 
-- Python 3 with `openpyxl` for the bundled spreadsheet scripts (`recalc.py`,
-  `virtuoso_preflight.py`).
+- Python 3 with `openpyxl` for the parts that read/write the sprint-queue workbook:
+  `recalc.py` (Dashboard KPI refresh) and the roadmap visualizer
+  (`tools/roadmap_visualizer/`, incl. `scripts/generate_cockpit.py`). The preflight
+  (`virtuoso_preflight.py`) and the rest of the scripts need only the standard library.
 
 ## License
 

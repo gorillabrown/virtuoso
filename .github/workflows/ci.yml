@@ -19,4 +19,4 @@ jobs:
       - name: Version sync check
         run: python plugins/virtuoso/scripts/bump_version.py --check
       - name: Tests
-        run: python -m pytest plugins/virtuoso/skills/roadmap-review/scripts/test_recalc.py plugins/virtuoso/scripts/test_virtuoso_preflight.py -q
+        run: python -m pytest plugins/virtuoso/ -q
