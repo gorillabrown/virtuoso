@@ -202,8 +202,10 @@ Some skills reference skills from other plugins. They are **not** bundled:
 
 ## Requirements
 
-- Python 3 with `openpyxl` for the bundled spreadsheet scripts (`recalc.py`,
-  `virtuoso_preflight.py`).
+- Python 3 with `openpyxl` for the parts that read/write the sprint-queue workbook:
+  `recalc.py` (Dashboard KPI refresh) and the roadmap visualizer
+  (`tools/roadmap_visualizer/`, incl. `scripts/generate_cockpit.py`). The preflight
+  (`virtuoso_preflight.py`) and the rest of the scripts need only the standard library.
 
 ## License
 
