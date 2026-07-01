@@ -1,28 +1,43 @@
-"""Idempotent bootstrap / heal of a per-project Virtuoso workspace.
+"""Idempotent bootstrap / heal / adopt of a per-project Virtuoso workspace.
 
 Modes:
   create  build/heal the selected workspace layout, write the marker, report.
-  detect  act only if <root>/Virtuoso (or its marker) already exists; else no-op.
+  detect  act only if <root>/Virtuoso (or its marker) already exists; else report status.
+  adopt   non-destructively bring an *established* project under Virtuoso management:
+          if a Virtuoso/ marker exists -> heal; else if the project already has a
+          documentation tree (Project Documentation/ or 2. Project Documentation/ with a
+          governance/operational subdir or a discoverable roadmap) -> lay down only a thin
+          control dir (marker + workspace-layout.json + vendored scripts) whose manifest
+          POINTS AT the existing roadmap/sprint-queue. Nothing is moved, nothing is
+          duplicated, and no parallel Roadmap.md is seeded. A bare project writes nothing
+          and is routed to /virtuoso-init by the caller.
 
 Layouts:
   plugin-only  keep project documentation outside Virtuoso/ under Project Documentation/.
   canonical    keep project documentation under Virtuoso/Project Documentation/.
   auto         reuse the recorded layout, or default to plugin-only for new workspaces.
 
+Integrity:
+  --check-roadmap PATH   sanity-check a roadmap before a heavyweight rewrite. Exits 0 (ok),
+                         2 (warn: empty / oversize), or 3 (fail: null bytes / not UTF-8 /
+                         missing). Prints a `roadmap-integrity: ...` line.
+
 Always records the plugin root to ``<home>/.virtuoso/plugin-root`` so skill bodies
 can locate bundled scripts without relying on ${CLAUDE_PLUGIN_ROOT} (which does not
 resolve inside skill/command markdown — only in hooks/MCP). It also vendors the
 bundled scripts into ``Virtuoso/scripts/`` so skills can call them workspace-relative.
 
-User content (Roadmap.md, sprint-queue.xlsx, lessons) is never overwritten; bundled
-scripts are refreshed to track the installed plugin version. Usage:
+User content (Roadmap.md, sprint-queue.xlsx, lessons) is never overwritten; an existing
+roadmap under any name is discovered and pointed at rather than re-seeded. Usage:
 
-    python virtuoso_preflight.py --root <dir> [--mode create|detect]
+    python virtuoso_preflight.py --root <dir> [--mode create|detect|adopt]
         [--layout auto|plugin-only|canonical] [--quiet]
+    python virtuoso_preflight.py --check-roadmap <path>
 """
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 
@@ -47,6 +62,35 @@ DOC_SUBDIRS = {
     "outside_audits": "4 Outside Audits",
     "reference": "5 Reference",
 }
+
+# A roadmap larger than this is suspicious for an archive-forward document and earns a
+# WARN from the integrity guard (GoG's corrupt 627 KB roadmap trips this).
+ROADMAP_OVERSIZE_BYTES = 512 * 1024
+
+# Structural markers that distinguish a live roadmap from an arbitrary *roadmap*.md file.
+_ROADMAP_MARKERS = (
+    b"Completed Work Summary",
+    b"Active & Remaining Sprint",
+    b"Finish Line",
+    b"roadmap_doc:",
+    b"finish_line:",
+)
+# Directory segments (relative to the documentation root) that mark archived / non-canonical
+# copies; discovery excludes roadmaps/queues living under them from being treated as live.
+_ARCHIVE_SEGMENTS = (
+    "roadmap-reviews", "checkins", "close-outs", "archive", "audits",
+    "3 temp", "4 outside audits", "5 reference",
+)
+# An untouched virtuoso-init seed carries this exact line in its head; matching the whole
+# "**Last updated:**" line (not just the parenthetical) avoids demoting a real roadmap that
+# merely quotes the phrase in prose.
+_SEED_SENTINEL = "**Last updated:** (initialized by virtuoso-init)"
+# Backup/snapshot markers, matched as whole tokens bounded by separators so legitimate
+# codenames like "Gold", "Cold", "Threshold", "Scaffold" are NOT mistaken for an "old" backup.
+_BACKUP_NAME_TOKENS = ("backup", "snapshot", "copy", "bak", "old")
+_BACKUP_NAME_RE = re.compile(
+    r"(?:^|[ _\-.()])(?:" + "|".join(_BACKUP_NAME_TOKENS) + r")(?:[ _\-.()]|$)"
+)
 
 ROADMAP_SEED = """# Project Roadmap
 
@@ -117,15 +161,23 @@ def _layout_manifest(root):
     return os.path.join(root, "Virtuoso", "workspace-layout.json")
 
 
-def _read_recorded_layout(root):
+def _read_manifest(root):
     try:
         with open(_layout_manifest(root), "r", encoding="utf-8") as f:
-            layout = json.load(f).get("layout")
-        if layout in ("plugin-only", "canonical"):
-            return layout
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
     except (OSError, ValueError, TypeError):
-        pass
-    return None
+        return {}
+
+
+def _read_recorded_layout(root):
+    layout = _read_manifest(root).get("layout")
+    return layout if layout in ("plugin-only", "canonical") else None
+
+
+def _read_adopted(root):
+    """True when the recorded workspace was laid down by a thin adopt (heal stays thin)."""
+    return bool(_read_manifest(root).get("adopted"))
 
 
 def _resolve_layout(root, requested):
@@ -134,12 +186,136 @@ def _resolve_layout(root, requested):
     return _read_recorded_layout(root) or "plugin-only"
 
 
-def _project_doc_root(root):
+def _established_doc_root(root):
+    """The pre-existing documentation root, if any (prefers the canonical-name candidate)."""
     for name in DOC_ROOT_CANDIDATES:
         path = os.path.join(root, name)
         if os.path.isdir(path):
             return path
-    return os.path.join(root, "Project Documentation")
+    return None
+
+
+def _project_doc_root(root):
+    return _established_doc_root(root) or os.path.join(root, "Project Documentation")
+
+
+def _is_adoptable(root):
+    """An un-markered project with an established documentation tree AND a discoverable live
+    roadmap, which we can adopt in place. A tree with no live roadmap routes to /virtuoso-init
+    (which seeds one) rather than adopting and pointing the manifest at a file that does not
+    exist."""
+    if _is_project(root):
+        return False
+    docs = _established_doc_root(root)
+    if not docs:
+        return False
+    return _discover_roadmap(docs) is not None
+
+
+def _walk_docs(doc_root):
+    if not doc_root or not os.path.isdir(doc_root):
+        return
+    for dirpath, _dirs, files in os.walk(doc_root):
+        yield dirpath, files
+
+
+def _is_archived(path, doc_root):
+    """True when path lives under an archive / non-canonical subdir of doc_root (checked on
+    the path RELATIVE to doc_root, so a project that merely happens to sit under a directory
+    named e.g. 'archive' is not misclassified)."""
+    rel = os.path.relpath(path, doc_root).replace("\\", "/").lower()
+    return any(seg in _ARCHIVE_SEGMENTS for seg in rel.split("/")[:-1])
+
+
+def _looks_like_seed(path):
+    """True for an untouched virtuoso-init roadmap seed (sentinel still in its head)."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            return _SEED_SENTINEL in f.read(2048)
+    except OSError:
+        return False
+
+
+def _has_backup_name(path):
+    # Drop only the final extension so "Roadmap.bak.md" -> "roadmap.bak" still matches "bak".
+    stem = os.path.basename(path).lower().rsplit(".", 1)[0]
+    return bool(_BACKUP_NAME_RE.search(stem))
+
+
+def _discover_roadmap(doc_root):
+    """Find the project's LIVE roadmap (any *roadmap*.md name). Archived copies (under
+    roadmap-reviews/, 3 temp/, etc.) are excluded outright; an untouched virtuoso-init seed and
+    backup/snapshot copies are demoted below any real roadmap; ties break on recency then size.
+    Returns an absolute path or None when no live roadmap exists."""
+    cands = [
+        os.path.join(dirpath, fn)
+        for dirpath, files in _walk_docs(doc_root)
+        for fn in files
+        if fn.lower().endswith(".md") and "roadmap" in fn.lower()
+    ]
+    live = [p for p in cands if not _is_archived(p, doc_root)]
+    if not live:
+        return None
+
+    def score(p):
+        try:
+            with open(p, "rb") as f:
+                head = f.read(16384)
+        except OSError:
+            head = b""
+        structural = sum(1 for m in _ROADMAP_MARKERS if m in head)
+        try:
+            mtime = os.path.getmtime(p)
+        except OSError:
+            mtime = 0
+        try:
+            size = os.path.getsize(p)
+        except OSError:
+            size = 0
+        return (
+            0 if _looks_like_seed(p) else 1,   # fresh seed placeholder sinks below any real roadmap
+            0 if _has_backup_name(p) else 1,   # OLD/backup/copy snapshots sink
+            structural,                         # real roadmaps carry structural markers
+            mtime,                              # most recently edited wins
+            size,                               # final tiebreak
+        )
+
+    live.sort(key=score, reverse=True)
+    return live[0]
+
+
+def _discover_sprint_queue(doc_root):
+    """Find the project's LIVE sprint queue (any *sprint*queue*.xlsx). Archived copies are
+    excluded; prefers 2 operational, then recency, then size. Returns a path or None."""
+    cands = [
+        os.path.join(dirpath, fn)
+        for dirpath, files in _walk_docs(doc_root)
+        for fn in files
+        if fn.lower().endswith(".xlsx") and "sprint" in fn.lower() and "queue" in fn.lower()
+    ]
+    live = [p for p in cands if not _is_archived(p, doc_root)]
+    if not live:
+        return None
+
+    def score(p):
+        rel = os.path.relpath(p, doc_root).replace("\\", "/").lower()
+        try:
+            mtime = os.path.getmtime(p)
+        except OSError:
+            mtime = 0
+        try:
+            size = os.path.getsize(p)
+        except OSError:
+            size = 0
+        return (
+            0 if _has_backup_name(p) else 1,
+            1 if "2 operational" in rel else 0,
+            mtime,
+            size,
+        )
+
+    live.sort(key=score, reverse=True)
+    return live[0]
 
 
 def _workspace_paths(root, layout):
@@ -170,6 +346,19 @@ def _workspace_paths(root, layout):
     }
 
 
+def _apply_discovery(paths):
+    """Repoint roadmap/sprint_queue at an existing document when one is discoverable,
+    so the conventional seed is never written beside a roadmap that already exists.
+    Returns (roadmap_found, queue_found)."""
+    roadmap = _discover_roadmap(paths["docs"])
+    queue = _discover_sprint_queue(paths["docs"])
+    if roadmap:
+        paths["roadmap"] = roadmap
+    if queue:
+        paths["sprint_queue"] = queue
+    return bool(roadmap), bool(queue)
+
+
 def _ensure_dir(path, created):
     if not os.path.isdir(path):
         os.makedirs(path, exist_ok=True)
@@ -178,6 +367,7 @@ def _ensure_dir(path, created):
 
 def _ensure_file(path, content, created):
     if not os.path.exists(path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
         created.append(path)
@@ -186,6 +376,7 @@ def _ensure_file(path, content, created):
 def _ensure_copy(src, dst, created):
     """Copy only if the destination is absent (preserves user content)."""
     if not os.path.exists(dst) and os.path.exists(src):
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.copyfile(src, dst)
         created.append(dst)
 
@@ -228,6 +419,7 @@ def _refresh_copy(src, dst, created):
         shutil.copyfile(src, dst)
         created.append(dst + " (refreshed)")
     else:
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.copyfile(src, dst)
         created.append(dst)
 
@@ -251,9 +443,10 @@ def _rel(root, path):
     return os.path.relpath(path, root).replace("\\", "/")
 
 
-def _write_layout_manifest(root, layout, paths, created):
+def _write_layout_manifest(root, layout, paths, created, adopted=False):
     data = {
         "layout": layout,
+        "adopted": bool(adopted),
         "documentationRoot": _rel(root, paths["docs"]),
         "paths": {
             "governance": _rel(root, paths["governance"]),
@@ -300,15 +493,14 @@ def _migrate_to_canonical(root, paths, created):
     _merge_dir_missing(os.path.join(v, "audits"), paths["outside_audits"], created)
 
 
-def preflight(root, mode="create", quiet=False, layout="auto"):
-    record_root()  # always — the plugin-root bridge for skill bodies
-    if mode == "detect" and not _is_project(root):
-        _say(quiet, "virtuoso: no Virtuoso/ workspace here — skipping "
-                    "(run /virtuoso-init to create one).")
-        return []
-    layout = _resolve_layout(root, layout)
+def _vendor_scripts(paths, created):
+    for src in VENDOR_SCRIPTS:
+        _refresh_copy(src, os.path.join(paths["scripts"], os.path.basename(src)), created)
+
+
+def _build_full(root, layout, created):
+    """Build/heal the complete documentation tree for the chosen layout."""
     paths = _workspace_paths(root, layout)
-    created = []
     for d in [
         paths["workspace"],
         paths["scripts"],
@@ -327,6 +519,10 @@ def preflight(root, mode="create", quiet=False, layout="auto"):
     if layout == "canonical":
         _migrate_to_canonical(root, paths, created)
 
+    # Repoint at an existing roadmap/queue (under any name) before seeding, so we never
+    # write a parallel Roadmap.md beside a roadmap the project already maintains.
+    _apply_discovery(paths)
+
     _ensure_file(os.path.join(paths["workspace"], ".virtuoso"), "virtuoso-workspace\n", created)
     _ensure_file(paths["roadmap"], ROADMAP_SEED, created)
     _ensure_file(paths["lessons"], LESSONS_SEED, created)
@@ -336,29 +532,148 @@ def preflight(root, mode="create", quiet=False, layout="auto"):
         _ensure_file(paths["workflow_reference"], WORKFLOW_REF_FALLBACK, created)
     # User data — never clobber:
     _ensure_copy(TEMPLATE_XLSX, paths["sprint_queue"], created)
-    # Plugin-managed scripts — vendor into the workspace for workspace-relative calls:
-    for src in VENDOR_SCRIPTS:
-        _refresh_copy(src, os.path.join(paths["scripts"], os.path.basename(src)), created)
-    _write_layout_manifest(root, layout, paths, created)
+    _vendor_scripts(paths, created)
+    _write_layout_manifest(root, layout, paths, created, adopted=False)
+    return paths
 
+
+def _build_thin(root, created):
+    """Adopt an established, un-markered project: write only the Virtuoso/ control dir whose
+    manifest points at the discovered existing roadmap/queue. No doc tree is scaffolded and
+    no roadmap is seeded."""
+    paths = _workspace_paths(root, "plugin-only")
+    _apply_discovery(paths)
+    _ensure_dir(paths["workspace"], created)
+    _ensure_dir(paths["scripts"], created)
+    _ensure_file(os.path.join(paths["workspace"], ".virtuoso"), "virtuoso-workspace\n", created)
+    _vendor_scripts(paths, created)
+    _write_layout_manifest(root, "plugin-only", paths, created, adopted=True)
+    return paths
+
+
+def _heal(root, created):
+    """Re-run the appropriate builder for a marker-present project (thin stays thin)."""
+    if _read_adopted(root):
+        return _build_thin(root, created)
+    return _build_full(root, _resolve_layout(root, "auto"), created)
+
+
+def _report(created, root, layout, quiet):
     if created:
         _say(quiet, "virtuoso: layout=%s; created/updated %d item(s):" % (layout, len(created)))
         for c in created:
-            _say(quiet, "  + " + os.path.relpath(c.split(" (refreshed)")[0], root)
-                 + (" (refreshed)" if c.endswith("(refreshed)") else "")
-                 + (" (migrated)" if c.endswith("(migrated)") else ""))
+            base = c.split(" (refreshed)")[0].split(" (migrated)")[0]
+            suffix = ""
+            if c.endswith("(refreshed)"):
+                suffix = " (refreshed)"
+            elif c.endswith("(migrated)"):
+                suffix = " (migrated)"
+            _say(quiet, "  + " + os.path.relpath(base, root) + suffix)
     else:
         _say(quiet, "virtuoso: layout=%s; workspace already complete — nothing to do." % layout)
+
+
+def preflight(root, mode="create", quiet=False, layout="auto"):
+    record_root()  # always — the plugin-root bridge for skill bodies
+
+    if mode == "adopt":
+        return adopt(root, quiet)
+
+    if mode == "detect":
+        if _is_project(root):
+            created = _heal(root, created=[])
+            _say(quiet, "virtuoso-status: ready")
+            _report(created, root, _resolve_layout(root, "auto"), quiet)
+            return created
+        if _is_adoptable(root):
+            _say(quiet, "virtuoso-status: adoptable")
+            _say(quiet, "virtuoso: an established documentation tree exists here but has no "
+                        "Virtuoso/ marker - run with --mode adopt (or /virtuoso-init).")
+            return []
+        _say(quiet, "virtuoso-status: none")
+        _say(quiet, "virtuoso: no Virtuoso/ workspace here — skipping "
+                    "(run /virtuoso-init to create one).")
+        return []
+
+    # mode == "create"
+    layout = _resolve_layout(root, layout)
+    created = []
+    _build_full(root, layout, created)
+    _report(created, root, layout, quiet)
     return created
+
+
+def adopt(root, quiet=False):
+    """Non-destructively bring a project under Virtuoso management (see module docstring)."""
+    record_root()
+    created = []
+    if _is_project(root):
+        _heal(root, created)
+        _say(quiet, "virtuoso-status: ready")
+        _report(created, root, _resolve_layout(root, "auto"), quiet)
+        return created
+    if _is_adoptable(root):
+        paths = _build_thin(root, created)
+        roadmap_rel = _rel(root, paths["roadmap"]) if os.path.exists(paths["roadmap"]) else ""
+        _say(quiet, "virtuoso-status: adopted roadmap=%s" % roadmap_rel)
+        _say(quiet, "virtuoso: adopted the existing documentation tree in place - wrote the "
+                    "Virtuoso/ control marker pointing at your existing roadmap; nothing was "
+                    "moved or duplicated.")
+        _report(created, root, "plugin-only (adopted)", quiet)
+        return created
+    _say(quiet, "virtuoso-status: none")
+    _say(quiet, "virtuoso: no Virtuoso/ workspace and no established documentation tree here - "
+                "run /virtuoso-init to create one.")
+    return []
+
+
+def check_roadmap(path):
+    """Integrity guard for a roadmap about to be rewritten. Returns an exit code:
+    0 ok, 2 warn (empty / oversize), 3 fail (missing / null bytes / not UTF-8)."""
+    if not path or not os.path.isfile(path):
+        print("roadmap-integrity: fail (missing: %s)" % path)
+        return 3
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except OSError as exc:
+        print("roadmap-integrity: fail (unreadable: %s)" % exc)
+        return 3
+
+    size = len(data)
+    fail, warn = [], []
+    if b"\x00" in data:
+        fail.append("null-bytes")
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        fail.append("not-utf-8")
+    if not data.strip():
+        warn.append("empty")
+    if size > ROADMAP_OVERSIZE_BYTES:
+        warn.append("oversize:%d-bytes(>%d)" % (size, ROADMAP_OVERSIZE_BYTES))
+
+    if fail:
+        print("roadmap-integrity: fail (%s) size=%d" % (", ".join(fail + warn), size))
+        return 3
+    if warn:
+        print("roadmap-integrity: warn (%s) size=%d" % (", ".join(warn), size))
+        return 2
+    print("roadmap-integrity: ok size=%d" % size)
+    return 0
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=os.getcwd())
-    ap.add_argument("--mode", choices=["create", "detect"], default="create")
+    ap.add_argument("--mode", choices=["create", "detect", "adopt"], default="create")
     ap.add_argument("--layout", choices=LAYOUTS, default="auto")
+    ap.add_argument("--check-roadmap", dest="check_roadmap", default=None,
+                    help="Integrity-check a roadmap file and exit (0 ok / 2 warn / 3 fail).")
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
+    if a.check_roadmap is not None:
+        sys.exit(check_roadmap(a.check_roadmap))
     preflight(a.root, a.mode, a.quiet, a.layout)
 
 

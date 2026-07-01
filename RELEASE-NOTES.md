@@ -1,5 +1,40 @@
 # Virtuoso Release Notes
 
+## v1.1.6 (2026-06-30)
+
+### Added
+
+- **Adopt an established project in place.** The preflight gained `--mode adopt`: when a
+  project already maintains its own documentation tree (`Project Documentation/` or
+  `2. Project Documentation/` with a `1 governance` / `2 operational` subtree) but has no
+  `Virtuoso/` marker, `adopt` lays down only a thin `Virtuoso/` control dir whose
+  `workspace-layout.json` **points at the existing roadmap** (under any name, e.g.
+  `GoG_Roadmap.md`). Nothing is moved or duplicated, and no parallel `Roadmap.md` is
+  seeded. It prints a parseable `virtuoso-status: ready|adopted|none` line.
+- **Roadmap discovery.** Both `adopt` and `create` now discover an existing roadmap and
+  sprint-queue anywhere under the documentation root (preferring the live, non-archived
+  copy with roadmap structural markers) and record those real paths in the manifest,
+  instead of assuming `1 governance/Roadmap.md`.
+- **Roadmap integrity guard.** `--check-roadmap PATH` sanity-checks a roadmap before a
+  heavyweight rewrite and exits `0` ok / `2` warn (empty or unusually large) / `3` fail
+  (null bytes, non-UTF-8, or missing). `/roadmap-review` runs it as a pre-rewrite gate and
+  stops on a corrupt roadmap rather than rewriting it.
+
+### Changed
+
+- **Governance gate skills now adopt instead of bailing.** `roadmap-review`,
+  `roadmap-status`, `next-pointer`, `pointer-closeout`, `mid-dispatch-decision`, and
+  `3rd-party-audit` call `--mode adopt` and branch on the printed status, so an
+  established project is brought under management in place rather than reporting "no
+  workspace" and routing to `/virtuoso-init` (which would have scaffolded a parallel tree).
+- `virtuoso-init` documents adoption and its `create` flow is now adoption-aware (points
+  at an existing roadmap rather than seeding a new one).
+
+### Fixed
+
+- **No more parallel roadmap.** An established roadmap kept under a non-default name or in
+  `2 operational/` is no longer shadowed by a freshly seeded `1 governance/Roadmap.md`.
+
 ## v1.1.5 (2026-06-30)
 
 ### Added

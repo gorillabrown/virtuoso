@@ -98,6 +98,24 @@ Virtuoso/
 SessionStart hook runs preflight in `auto` mode, so it preserves whichever layout was
 selected during `/virtuoso-init`.
 
+### Adopting an existing project
+
+If a project already maintains its own documentation tree — a `Project Documentation/` or
+`2. Project Documentation/` directory with a `1 governance` / `2 operational` subtree and
+its own roadmap under any name (e.g. `GoG_Roadmap.md`) — the governance skills **adopt it in
+place** rather than scaffolding a parallel structure. On first run they invoke preflight
+`--mode adopt`, which:
+
+- discovers the project's existing roadmap and sprint-queue (preferring the live file over a
+  fresh `/virtuoso-init` seed, a backup/snapshot copy, or an archived review), and
+- writes only a thin `Virtuoso/` control dir (`.virtuoso`, `workspace-layout.json`, vendored
+  `scripts/`) whose manifest **points at those existing files**.
+
+Nothing is moved or duplicated and no parallel `Roadmap.md` is seeded. A project with no
+discoverable roadmap is routed to `/virtuoso-init` instead, which seeds one. Before its
+destructive rewrite, `/roadmap-review` also runs a `--check-roadmap` integrity gate and
+stops on a corrupt roadmap (null bytes, non-UTF-8) rather than rewriting it.
+
 ## Roadmap planning cockpit
 
 Virtuoso includes a read-only static planning cockpit generator. It treats `Roadmap.md`
@@ -124,9 +142,11 @@ is required for a standard plugin workspace.
 Three ways the workspace stays healthy:
 
 1. **`/virtuoso-init`** — explicit setup/repair.
-2. **Inline preflight** — every governance skill checks/creates it before running.
+2. **Inline preflight** — every governance skill runs `--mode adopt` before starting: it
+   heals an existing workspace, adopts an established project in place, or routes a bare
+   project to `/virtuoso-init`.
 3. **SessionStart hook** — auto-heals an *existing* Virtuoso project (a no-op in unrelated
-   folders, so it never litters directories you open by chance).
+   folders, so it never litters directories you open by chance; it never adopts unattended).
 
 The hook also records the plugin's install path to `~/.virtuoso/plugin-root`, and preflight
 vendors its scripts into `Virtuoso/scripts/`. This lets skills locate bundled scripts
