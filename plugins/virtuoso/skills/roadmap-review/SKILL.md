@@ -107,7 +107,7 @@ Stub  →  Full spec  →  Dispatch-ready  →  Close-out
 ```
 
 This skill produces **dispatch-ready full specs** in the roadmap
-document, plus parallel entries in `sprint-queue.xlsx` Catalog tab.
+document, plus parallel entries in `sprint-catalog.csv`.
 
 **Note on the legacy term "skeleton":** the section heading
 `## Active & Remaining Sprint Skeletons` is preserved for backward
@@ -225,7 +225,11 @@ For any sprint touching calibration:
 2. **Roadmap document is canonical.** All other docs are inputs;
    the project's roadmap document is the single source of truth and
    the home of dispatch-ready full specs for the next 5 sprints.
-   Default filename `Roadmap.md`. Companion: `sprint-queue.xlsx`.
+   Default filename `Roadmap.md`. Companion: `sprint-catalog.csv` —
+   the authoritative sprint catalog. A `sprint-queue.xlsx` may also
+   exist as a generated, human-facing report (Dashboard tab driven by
+   Power Query against the CSV); it is written by `build_sprint_queue.py`,
+   never read back, and never edited directly by any skill.
 3. **Archive-forward discipline.** The active roadmap holds
    dispatch-ready full specs for the next 5 sprints, stubs for
    sprints beyond position 5, plus a one-line entry per completed
@@ -233,7 +237,7 @@ For any sprint touching calibration:
    to a dated archive file at sprint close-out.
 4. **Active section is uncompleted-only.** Hard invariant.
 5. **Conveyor belt sequencing.** Dependency-first → risk-first
-   tiebreaker → eat-the-frog second tiebreaker. The Catalog tab
+   tiebreaker → eat-the-frog second tiebreaker. sprint-catalog.csv
    mirrors via the `Seq` column.
 6. **Eager-spec buffer is mandatory at 5.** Each run replenishes to
    5 dispatch-ready full specs.
@@ -256,8 +260,8 @@ For any sprint touching calibration:
 13. **AskUserQuestion only.** 2+ alternatives, one tagged
     [RECOMMENDED], escape hatch.
 14. **Orchestrate, don't reimplement.** Where existing skills
-    handle a sub-task well (`write-spec`, `roadmap-update`, the
-    xlsx skill), invoke them.
+    handle a sub-task well (`write-spec`, `roadmap-update`), invoke
+    them.
 
 ## Inputs
 
@@ -267,8 +271,8 @@ For any sprint touching calibration:
 3. Git log of the roadmap document if version-controlled
 4. All existing close-out files (e.g., `CloseOut.SK-XX.YYYY-MM-DD.md`)
 5. Any existing dated archive files
-6. `sprint-queue.xlsx` if it exists — Dashboard + Catalog tabs. Use
-   the xlsx skill (anthropic-skills:xlsx) for read/write mechanics.
+6. `sprint-catalog.csv` if it exists — the authoritative sprint
+   catalog. Read/write it as a plain CSV, not a spreadsheet mechanic.
 7. **Project codebase** — required for Phase D.3 rubric verification
    (grep, code reads, schema queries).
 
@@ -284,7 +288,7 @@ Saved to a `roadmap-reviews/` subfolder in the project:
 Plus, updated in place:
 - The roadmap document (dispatch-ready full specs in buffer; stubs
   beyond; Completed Work Summary table grown; Standing Rules updated)
-- `sprint-queue.xlsx` Catalog tab
+- `sprint-catalog.csv`
 - A new dated archive file if the length ceiling was crossed
 
 ---
@@ -302,9 +306,13 @@ Persist as `roadmap_doc: <filename>` in frontmatter.
 If a finish-line target is missing, AskUserQuestion to establish
 it. DO NOT proceed without one.
 
-### 0.3 Locate or create sprint-queue.xlsx
-If missing, AskUserQuestion to create from the canonical template.
-Persist as `sprint_queue_doc: <filename>`.
+### 0.3 Locate or create sprint-catalog.csv
+If missing, AskUserQuestion to create it — a fresh CSV with just the
+header row (Seq, Sprint Code, Phase, Stage, Title, LOE, Dependencies,
+Implementation Status, Written Status, Branch, Date Started, Date
+Completed, Close-Out File, Description, Notes) — seeded from the
+active section of the roadmap if one exists. Persist as
+`sprint_catalog_doc: <filename>` (default `sprint-catalog.csv`).
 
 ### 0.4 Migrate legacy structure
 Detect and migrate older structures to the canonical form. Show
@@ -316,7 +324,7 @@ migration plan via AskUserQuestion before applying.
 
 Goal: enforce archive-forward discipline. Move completed sprints to
 the Completed Work Summary table; migrate full content to the
-current dated archive file. Mirror changes in the Catalog tab.
+current dated archive file. Mirror changes in sprint-catalog.csv.
 
 ### A.1 Read everything
 Inventory every sprint and its claimed status.
@@ -334,8 +342,8 @@ For each sprint migrated:
 2. Move the full content (entire `#### SK-XX — Title` block
    including amendments) to the current dated archive file.
 3. Remove the full content from the active roadmap.
-4. Update the Catalog row: flip Implementation Status, clear Seq,
-   populate Date Completed and Close-Out File.
+4. Update the row in sprint-catalog.csv: flip Implementation Status,
+   clear Seq, populate Date Completed and Close-Out File.
 5. For dissolved/superseded sprints, add to `## Disposition of
    Superseded Branches`.
 
@@ -384,7 +392,7 @@ Dependency → risk → eat-the-frog.
 
 ### C.5 Render the plan
 Write `YYYY-MM-DD-plan.md`. Update the roadmap's Active section and
-the Catalog tab.
+sprint-catalog.csv.
 
 ### C.6 Checkpoint
 AskUserQuestion.
@@ -484,7 +492,7 @@ AskUserQuestion for misalignments.
 **D.4.6 Render the lessons-applied report.** Write
 `YYYY-MM-DD-lessons-applied.md`.
 
-### D.5 Integrate specs into the roadmap and sprint-queue.xlsx
+### D.5 Integrate specs into the roadmap and sprint-catalog.csv
 
 **D.5.1 Resolve filenames.**
 
@@ -518,35 +526,48 @@ At correct Phase → Stage → Sprint position, replacing prior stubs.
 Mid-dispatch amendments append as `##### Mid-Dispatch Amendment —
 YYYY-MM-DD` sub-sections.
 
-**D.5.4 Update sprint-queue.xlsx (Catalog tab).**
+**D.5.4 Update sprint-catalog.csv.**
 
-Sprint data lives on the **`DATA.sprint-catalog`** sheet (Excel table
-`sprint_catalog`). Column layout (A–T):
-A=Priority\*, B=Seq, C=Sprint Code, D=Phase, E=Stage, F=Title, G=LOE,
-H=Dependencies, I=Implementation Status, J=Written Status, K=Branch,
-L=Date Started, M=Date Completed, N=Close-Out File, O=Description, P=Notes,
-Q=Done?\*, R=PhaseRank\*, S=SizeRank\*, T=SortKey\*.
+The catalog is a plain CSV with a header row and 15 columns:
+Seq, Sprint Code, Phase, Stage, Title, LOE, Dependencies,
+Implementation Status, Written Status, Branch, Date Started, Date
+Completed, Close-Out File, Description, Notes.
 
-`\*` = formula-driven computed columns — do **not** hand-write them (the Excel
-table auto-fills them; `Priority` auto-ranks the conveyor belt from `SortKey`).
-`Description` (O) and `Notes` (P) are plain text columns — write the one-liner and
-any notes directly in the Catalog row.
+Unlike the old Excel table, there are no formula-driven computed
+columns (Priority, Done?, PhaseRank, SizeRank, SortKey no longer
+exist) — `Seq` alone encodes conveyor-belt order, and this skill is
+responsible for keeping it correct (renumber `Seq` for every row
+whenever the sequence changes; there's no auto-rank to lean on).
 
-For each newly written full spec, set on the `DATA.sprint-catalog` row:
+For each newly written full spec, set on the catalog row:
 - `Seq`: conveyor-belt position
 - `Sprint Code`, `Title`, `Phase`, `Stage`, `LOE`, `Dependencies`: from the spec
 - `Implementation Status`: `Queued`
 - `Written Status`: `Full Spec`
 - `Branch`: from spec
+- `Description`: the one-line description
+- `Notes`: any notes
 
-Write the one-line description in `Description` (O) and any notes in `Notes` (P).
-Status/LOE vocabularies live on the `Variables` sheet. After
-editing the Catalog headlessly (without Excel), run
-`python <scripts>/recalc.py <sprintQueue>` to refresh KPIs, resolving both values from
-`Virtuoso/workspace-layout.json`.
+Read/write the CSV as a plain CSV (standard row parsing) — this is
+not a spreadsheet mechanic. There is no recalc step: any KPIs
+downstream skills need are computed catalog-direct from this file at
+read time.
+
+**Optional: regenerate the human-facing sprint-queue.xlsx report.**
+If the project has a companion `sprint-queue.xlsx`, after saving the
+CSV you may regenerate it for human viewing:
+
+    python <scripts>/build_sprint_queue.py <sprintCatalogCsv> <sprintQueue>
+
+This writes the workbook's Catalog data from the CSV so it opens
+correctly in Excel; the Dashboard tab's KPI cells are formulas /
+Power Query against the data and recompute live when a human opens
+the workbook — they are never force-written by this skill. Never read
+the xlsx back into this skill's logic; the CSV is the only input any
+skill trusts.
 
 **D.5.5 Reconcile.**
-Roadmap active section and Catalog tab match; positions 1-5 are
+Roadmap active section and sprint-catalog.csv match; positions 1-5 are
 `Full Spec`; positions 6+ are `Stub`; Completed Work Summary has
 one-line entries only; Standing Rules reflects the checklist.
 
@@ -566,16 +587,22 @@ Write `YYYY-MM-DD-phase-brief.md`:
   with the rubric items that blocked
 
 ### D.7 Regenerate the planning cockpit
-The roadmap and `sprint-queue.xlsx` were just updated, so refresh the read-only planning
+The roadmap and `sprint-catalog.csv` were just updated, so refresh the read-only planning
 cockpit so it reflects the new state. Run from the project root:
 
     python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/generate_cockpit.py" --root .
 
 The launcher pins its own import root, so it runs from any working directory and for both a
 cloned repo and an installed plugin. It reads `Virtuoso/workspace-layout.json` to locate the
-roadmap and sprint-queue and writes `Virtuoso/reports/planning-cockpit.html`. It never
-modifies the roadmap or the spreadsheet — if they disagree it surfaces the drift in the
-report instead. Note the output path for the final summary.
+roadmap and sprint catalog and writes `Virtuoso/reports/planning-cockpit.html`. It never
+modifies the roadmap or the catalog — if they disagree it surfaces the drift in the report
+instead. Note the output path for the final summary.
+
+**Known gap:** the cockpit generator (`tools/roadmap_visualizer/workbook.py`) currently reads
+its sprint data from `sprint-queue.xlsx` via openpyxl, not from `sprint-catalog.csv`. Until
+that script is migrated to read the CSV, its output can reflect the same stale Power-Query
+cache this skill no longer trusts elsewhere — treat the cockpit's sprint-level figures as
+secondary to the CSV-computed figures reported directly by /roadmap-status and /next-pointer.
 
 ### D.8 Final summary to user
 Present:
@@ -646,40 +673,43 @@ loe_unit: t-shirt
 last_review: YYYY-MM-DD
 finish_line: ""
 roadmap_doc: Roadmap.md
-sprint_queue_doc: sprint-queue.xlsx
+sprint_catalog_doc: sprint-catalog.csv
 -->
 ```
 
-## Sprint queue spreadsheet structure
+## Sprint catalog CSV structure
 
-The workbook has **three sheets**:
+`sprint-catalog.csv` is the authoritative source of truth for sprint data — a plain
+CSV with a header row and 15 columns:
 
-### Dashboard
-- **Project Info** (B4–B8).
-- **Pipeline Status** (B11–B18): Total, Completed, Blocked, Queued, In Flight,
-  Dissolved, Superseded, % Complete (by count). `Completed*` matches dated variants
-  (e.g. `Completed 2026-06-29`).
-- **Effort & Progress** (B21–B26): LOE remaining, LOE completed, Total LOE,
-  **% Complete (by LOE)**, Sprints remaining, Avg sprint size. The "Effort by LOE"
-  helper (D10:H20) defines LOE points: XS 0.5, XS-S 0.75, S 1, S-M 2, M 3, M-L 5,
-  L 8, XL 20.
-- **Next Up — Active Queue** (A28–F41): auto-ranked from the Catalog `Priority`
-  column (XLOOKUP).
-- **Status Distribution** doughnut chart.
-- Buffer health, full-specs-queued, and phase progress are **not** Dashboard cells —
-  compute them from the Catalog (see /roadmap-status and /next-pointer).
+Seq, Sprint Code, Phase, Stage, Title, LOE, Dependencies, Implementation Status,
+Written Status, Branch, Date Started, Date Completed, Close-Out File, Description,
+Notes.
 
-### DATA.sprint-catalog
-Excel Table `sprint_catalog`, 20 columns A–T (layout in D.5.4). Five are
-formula-driven computed columns (Priority, Done?, PhaseRank, SizeRank, SortKey).
+There are no formula-driven computed columns (no Priority, Done?, PhaseRank,
+SizeRank, SortKey) — `Seq` alone encodes conveyor-belt order, and this skill
+maintains it directly (see D.5.4). Status vocabulary: Implementation Status ∈
+{Blocked, Queued, In Flight, Completed (or `Completed <date>`), Dissolved,
+Superseded}; Written Status ∈ {Stub (or empty), Full Spec}. LOE sizes are
+XS/XS-S/S/S-M/M/M-L/L/XL (points 0.5/0.75/1/2/3/5/8/20).
 
-### Variables
-Lookup tables — Status vocabulary, Phase→PhaseRank, LOE→size weight. Editing these
-re-ranks the conveyor belt via the `Priority` column.
+All KPIs (totals, % complete, buffer health, phase progress) are computed
+catalog-direct from this file at read time by /roadmap-status and /next-pointer —
+there is no cache and nothing to recalc.
 
-All Dashboard scalar KPIs are formula-driven and recompute live in Excel. For a
-headless refresh, run `python <scripts>/recalc.py <sprintQueue>`, resolving both values
-from `Virtuoso/workspace-layout.json`.
+## Optional generated report: sprint-queue.xlsx
+
+A project may also keep a `sprint-queue.xlsx` as a human-facing report — nicer to
+browse in Excel, with a Dashboard tab (Pipeline Status, Effort & Progress, a Status
+Distribution chart) typically fed by Power Query pointed at `sprint-catalog.csv`.
+This workbook is **write-only from this skill's perspective**: regenerate it
+(D.5.4) if it exists, but never read it back and never treat its Dashboard as a
+KPI source — Power Query only refreshes when a human opens the workbook in Excel,
+so a workbook left unopened can show numbers that silently contradict each other
+and the CSV. If a report ever needs its cells confirmed, direct the user to open it
+in Excel and let it refresh; do not force-write its Dashboard cells via openpyxl (a
+prior version of this workflow did that via `recalc.py`, which fights Power Query's
+own refresh and is no longer used).
 
 ---
 

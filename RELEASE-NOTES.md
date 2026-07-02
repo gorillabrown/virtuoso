@@ -1,5 +1,34 @@
 # Virtuoso Release Notes
 
+## v1.2.0 (2026-07-02)
+
+### Changed
+
+- **`sprint-catalog.csv` is now the source of truth for sprint/KPI data**, replacing
+  `sprint-queue.xlsx`'s Dashboard + Catalog tabs across `/roadmap-status`,
+  `/next-pointer`, `/roadmap-review`, and `/virtuoso-init`. All KPIs (totals, %
+  complete, buffer health, phase progress) are computed catalog-direct from the CSV
+  at read time — there is no cache to go stale, and no `recalc.py` step to run.
+  Root cause: a companion xlsx's Dashboard tab is fed by Power Query, which only
+  recomputes when a human opens the workbook in Excel; force-writing it headlessly
+  via openpyxl (the old `recalc.py` path) fights that refresh and produces
+  internally-contradictory cached values.
+- `sprint-queue.xlsx` is now optional and, where a project keeps one, strictly a
+  generated, human-facing report — written from the CSV via `build_sprint_queue.py`,
+  never read back by any skill.
+- `/virtuoso-init` seeds new workspaces with `sprint-catalog.csv` (header row only)
+  instead of the `sprint-queue.xlsx` template.
+- `pointer-closeout` documents the CSV as the authoritative catalog location, with
+  `sprint-queue.xlsx` / `sprint-queue.md` named only as legacy/optional companions.
+
+### Known gap
+
+- `tools/roadmap_visualizer/workbook.py` (feeding the planning-cockpit generator)
+  still reads `sprint-queue.xlsx` via openpyxl rather than `sprint-catalog.csv`;
+  migrating it is tracked as follow-up work. Until then, treat the cockpit's
+  sprint-level figures as secondary to the CSV-computed figures reported directly
+  by `/roadmap-status` and `/next-pointer`.
+
 ## v1.1.7 (2026-06-30)
 
 ### Added

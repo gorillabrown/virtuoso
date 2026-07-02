@@ -57,8 +57,15 @@ truth for paths in later skills. The documentation tree contains:
 - `Roadmap.md` — the canonical roadmap (seed; flesh out via /roadmap-review). If the
   project already has a roadmap under another name, the manifest points at that file
   instead and no seed is written.
-- `sprint-queue.xlsx` — Dashboard + Catalog (from the bundled template; ships with a few
-  clearly-labeled example rows that /roadmap-review replaces)
+- `sprint-catalog.csv` — the authoritative sprint catalog (header row only; seeded
+  with rows by /roadmap-review from the active section of the roadmap). Every skill
+  reads and writes this CSV — it is never generated from or read back from a
+  spreadsheet.
+- `sprint-queue.xlsx` (optional) — a human-facing report, not a workspace file this
+  script seeds by default. If a project wants one, generate it from
+  `sprint-catalog.csv` via `build_sprint_queue.py`; its Dashboard tab is meant to be
+  driven by Power Query against the CSV and refreshed by opening the workbook in
+  Excel — no skill reads it back or force-writes its cells.
 - `SpecRetro.Lessons_Learned.md` — running lessons catalog
 - `WORKFLOW_REFERENCE.md` — index mapping legacy section numbers to skills
 - `roadmap-reviews/` (+ `checkins/`), `Close-Outs/`, `Issues/`

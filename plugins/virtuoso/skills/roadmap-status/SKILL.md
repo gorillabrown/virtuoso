@@ -6,10 +6,11 @@ description: |
   status", or "check roadmap status". DO NOT auto-trigger on
   conversational mentions of status, progress, or "where do things
   stand" — this is a deliberate ritual, not a casual status answer.
-  Reads the current state, pulls KPIs from the sprint-queue.xlsx
-  Dashboard tab, enforces archive-forward discipline by migrating any
+  Reads the current state, computes KPIs directly from
+  sprint-catalog.csv (catalog-direct — no cached Dashboard to trust
+  or distrust), enforces archive-forward discipline by migrating any
   shipped sprints lingering in active skeletons to the Completed Work
-  Summary table (and keeps the Catalog tab in sync), reports a fast
+  Summary table (and keeps the catalog CSV in sync), reports a fast
   Axios-style briefing with bracketed sprint IDs and LEDE-first
   bullets, and optionally executes small (under 5 min) recommended edits.
   Lightweight sibling of /roadmap-review — use that when full
@@ -38,9 +39,8 @@ Axios-style bullets: bracketed sprint ID, then a LEDE that says the
 news, then optional sub-bullets with supporting detail. ~5-10
 minutes. No replanning, no spec authoring. Cleanup duty: enforces
 archive-forward discipline by migrating any shipped sprints that
-linger in `## Active & Remaining Sprint Skeletons`, and keeps the
-`sprint-queue.xlsx` Catalog tab in sync with the canonical roadmap
-document.
+linger in `## Active & Remaining Sprint Skeletons`, and keeps
+`sprint-catalog.csv` in sync with the canonical roadmap document.
 
 ## When to use
 
@@ -93,9 +93,9 @@ Stub  →  Full spec  →  Close-out
 (TBD)    (in roadmap)  (post-completion)
 ```
 
-This skill **reads** the roadmap and the `sprint-queue.xlsx`
-Dashboard + Catalog tabs. It does not write full specs or stubs.
-Its only write actions are small cleanup migrations.
+This skill **reads** the roadmap and `sprint-catalog.csv`. It does
+not write full specs or stubs. Its only write actions are small
+cleanup migrations.
 
 **Note on the legacy term "skeleton":** the section heading
 `## Active & Remaining Sprint Skeletons` is preserved for backward
@@ -114,15 +114,19 @@ compatibility.
    `## Active & Remaining Sprint Skeletons` for any sprint that has
    actually shipped. Stragglers get auto-recommended for migration
    in Phase 2 — always <5 min edits.
-5. **sprint-queue.xlsx stays in sync.** When a sprint moves out of
-   active, its Catalog row is updated (Implementation Status flipped
+5. **sprint-catalog.csv stays in sync.** When a sprint moves out of
+   active, its catalog row is updated (Implementation Status flipped
    to `Completed` / `Dissolved`, Seq cleared, Date Completed
    populated, Close-Out File pointer recorded). Both views reflect
    the same reality after Phase 2.
-6. **Dashboard is the canonical KPI source.** Pull pre-computed KPIs
-   from the Dashboard tab (load with `data_only=True`). Catalog
-   reads are only for things Dashboard can't capture (temporal
-   window signals, sync reconciliation).
+6. **sprint-catalog.csv is the canonical KPI source.** All KPIs are
+   computed directly (catalog-direct) from the CSV — there is no
+   cached Dashboard to trust or distrust. If a companion
+   `sprint-queue.xlsx` report exists, it is a generated, human-facing
+   view only; never read it back, and never treat its Dashboard tab
+   as authoritative (its Power Query cache only refreshes when a
+   human opens it in Excel, so it can silently go stale/contradictory —
+   the CSV numbers are always the ground truth).
 7. **Read, don't restructure.** Beyond cleanup, this skill never
    re-sequences, generates new specs, or changes phase boundaries.
 8. **Two-phase hard ceiling.** Phase 2 only executes <5 min edits.
@@ -195,15 +199,16 @@ If no, rewrite.
 
 1. The project's roadmap document — specifically `## Active &
    Remaining Sprint Skeletons` and `## Completed Work Summary`
-2. `sprint-queue.xlsx`:
-   - **Dashboard tab** for pre-computed KPIs (read with
-     `data_only=True`) — primary source for buffer health, %
-     complete, phase progress, totals, and category counts. See
-     Phase 1.3a for the cell map.
-   - **Catalog tab** for row-level reads needed by the cleanup
-     scan, sync check, and window-specific signals (Date Completed
-     in window, recently added rows, etc.) — see Phase 1.3b.
-   - Use the xlsx skill (anthropic-skills:xlsx) for mechanics.
+2. `sprint-catalog.csv` — the single source of truth for sprint
+   data. Used for:
+   - **KPI computation** — buffer health, % complete, phase
+     progress, totals, and category counts, all computed
+     catalog-direct. See Phase 1.3a.
+   - **Row-level reads** needed by the cleanup scan, sync check, and
+     window-specific signals (Date Completed in window, recently
+     added rows, etc.) — see Phase 1.3b.
+   - Read/write it as a plain CSV (standard library / pandas-style
+     row parsing) — this is not a spreadsheet mechanic.
 3. Most recent file in `roadmap-reviews/` — baseline
 4. Most recent file in `roadmap-reviews/checkins/` — baseline
 5. Recent git log (last 7 days)
@@ -213,9 +218,9 @@ If no, rewrite.
 
 1. Axios-style bulleted briefing in chat
 2. Saved file: `roadmap-reviews/checkins/YYYY-MM-DD-status.md`
-3. (If Phase 2 runs) Direct edits to the roadmap document AND the
-   Catalog tab — most commonly, migrating a shipped sprint out of
-   active
+3. (If Phase 2 runs) Direct edits to the roadmap document AND
+   sprint-catalog.csv — most commonly, migrating a shipped sprint out
+   of active
 
 ---
 
@@ -230,52 +235,47 @@ If no, rewrite.
 Look at `## Active & Remaining Sprint Skeletons` for a `(current)`
 marker. If ambiguous, AskUserQuestion.
 
-### 1.3 Pull KPIs from Dashboard + read window signals
+### 1.3 Compute KPIs from sprint-catalog.csv + read window signals
 
-**1.3a Read pre-computed KPIs from the Dashboard tab.**
-Use the xlsx skill and load with `data_only=True` to get cached
-values. Read these cells:
+**1.3a Compute KPIs catalog-direct from sprint-catalog.csv.**
+Read the CSV (columns: Seq, Sprint Code, Phase, Stage, Title, LOE,
+Dependencies, Implementation Status, Written Status, Branch, Date
+Started, Date Completed, Close-Out File, Description, Notes) and
+compute:
 
-| Cell | KPI |
+| KPI | How |
 |---|---|
-| B11 | Total sprints |
-| B12 | Completed |
-| B13 | Blocked |
-| B14 | Queued |
-| B15 | In Flight |
-| B16 | Dissolved |
-| B17 | Superseded |
-| B18 | % Complete (by count) |
-| B21 | LOE remaining (points) |
-| B22 | LOE completed (points) |
-| B23 | Total LOE (points, excl. dissolved) |
-| B24 | **% Complete (by LOE)** — primary progress metric |
-| B25 | Sprints remaining |
-| B26 | Avg sprint size (points) |
+| Total sprints | row count |
+| Completed | rows where Implementation Status matches `Completed*` |
+| Blocked | rows where Implementation Status = `Blocked` |
+| Queued | rows where Implementation Status = `Queued` |
+| In Flight | rows where Implementation Status = `In Flight` |
+| Dissolved | rows where Implementation Status = `Dissolved` |
+| Superseded | rows where Implementation Status = `Superseded` |
+| % Complete (by count) | Completed ÷ (Total − Dissolved − Superseded) |
+| LOE remaining (points) | sum LOE points for rows not done (not Completed/Dissolved/Superseded) |
+| LOE completed (points) | sum LOE points for Completed rows |
+| Total LOE (points, excl. dissolved/superseded) | remaining + completed |
+| **% Complete (by LOE)** — primary progress metric | completed points ÷ total points |
+| Sprints remaining | Blocked + Queued + In Flight |
+| Avg sprint size (points) | total points ÷ (Total − Dissolved − Superseded) |
+| **Full specs queued** | rows where Implementation Status = `Queued` AND Written Status = `Full Spec` |
+| **Buffer health** | from full-specs-queued count: ≥5 Healthy, ≥3 Running low, ≥1 Critical, else Empty |
+| **Phase progress** | rows where Phase = the current phase (total / completed / remaining) |
 
-Sprint data lives on the **`DATA.sprint-catalog`** sheet (Excel table
-`sprint_catalog`, columns A–T; see the layout in /roadmap-review). Status
-vocabulary includes **`Superseded`** and **`Pivot`**, and a completed sprint may
-read `Completed` or `Completed <date>` (match `Completed*`). LOE sizes are
+Status vocabulary includes **`Superseded`** and **`Pivot`**, and a completed sprint
+may read `Completed` or `Completed <date>` (match `Completed*`). LOE sizes are
 XS/XS-S/S/S-M/M/M-L/L/XL (points 0.5/0.75/1/2/3/5/8/20).
 
-**No longer on the Dashboard — compute these from the Catalog:**
-- **Full specs queued** = rows where Implementation Status = `Queued` AND Written
-  Status = `Full Spec`.
-- **Buffer health** from that count: ≥5 Healthy, ≥3 Running low, ≥1 Critical, else Empty.
-- **Phase progress** = rows where Phase = the current phase (total / completed / remaining).
+There is no cache to refresh — every figure is derived from the CSV as it stands
+right now. If a companion `sprint-queue.xlsx` exists and its Dashboard tab shows
+different numbers, that's a stale Power Query cache (it only recomputes when a
+human opens the workbook in Excel) — note the discrepancy if asked, but the
+figures computed here from the CSV are authoritative.
 
-Prefer the cached Dashboard values (B11–B26) for the scalar KPIs — Excel keeps them
-live. For a headless refresh after editing the Catalog without Excel, run
-`python <scripts>/recalc.py <sprintQueue>`, resolving both values from
-`Virtuoso/workspace-layout.json`.
-
-If Dashboard cells return stale or missing values, compute from the Catalog and flag
-the staleness as a recommendation (run recalc).
-
-**1.3b Read window-specific signals from the Catalog tab.**
-The Dashboard doesn't capture temporal information; the Catalog
-does (via Date Started, Date Completed). Read:
+**1.3b Read window-specific signals from sprint-catalog.csv.**
+The CSV captures temporal information via Date Started and Date
+Completed. Read:
 - Sprints with Date Completed within the window → recently shipped
 - Sprints added (new rows) during the window — flag sideways adds
 - Sprints at the head of active (low Seq, Implementation Status =
@@ -294,12 +294,12 @@ signals:
 Any sprint with completion signals but still in active is a
 **straggler**. Auto-recommendation in 1.4.
 
-**1.3d Sync check between roadmap and sprint-queue.xlsx Catalog.**
-- Sprints in roadmap's active section but missing from Catalog →
+**1.3d Sync check between roadmap and sprint-catalog.csv.**
+- Sprints in roadmap's active section but missing from the CSV →
   flag for sync
-- Catalog rows with Implementation Status = `Queued` but absent
+- CSV rows with Implementation Status = `Queued` but absent
   from the roadmap's active section → flag for sync (likely stale)
-- Catalog `Seq` order doesn't match roadmap's active sequence →
+- CSV `Seq` order doesn't match roadmap's active sequence →
   flag for sync
 
 Mismatches generate auto-recommendations.
@@ -316,7 +316,7 @@ bullet must obey the writing rules above.
 - [Plain-language sentence about anything stuck.]
 - [Plain-language sentence about anything sideways.]
 - [Plain-language sentence about pace.]
-- [Plain-language sentence about buffer health — computed from the Catalog
+- [Plain-language sentence about buffer health — computed from sprint-catalog.csv
   (full specs queued = Implementation Status `Queued` ∧ Written Status `Full Spec`;
   ≥5 Healthy / ≥3 Running low / ≥1 Critical / else Empty); mention N full specs of 5
   if not "Healthy".]
@@ -336,9 +336,9 @@ bullet must obey the writing rules above.
 
 ### Where we stand
 - **Current phase ([Phase Name]):** X% of work remaining.
-  *(computed from the Catalog: completed-in-phase ÷ sprints-in-phase; X = 1 − that ratio)*
+  *(computed from sprint-catalog.csv: completed-in-phase ÷ sprints-in-phase; X = 1 − that ratio)*
 - **Finish line:** Y% of work remaining by LOE; N sprints remaining.
-  *(sourced from Dashboard B24 and B25; Y = 1 − B24)*
+  *(computed catalog-direct from sprint-catalog.csv: Y = 1 − % Complete by LOE)*
 
 ### Health read
 - **[On Track / Watch Closely / Concerns]** — one plain-language
@@ -354,10 +354,9 @@ bullet must obey the writing rules above.
 - Coming-up: from the head of active skeletons going forward.
 - Stragglers become auto-recommendations:
   `- [SPRINT-ID] **Migrate from active skeletons to Completed Work
-  Summary in both the roadmap document and the sprint-queue.xlsx
-  Catalog tab.**`
+  Summary in both the roadmap document and sprint-catalog.csv.**`
 - Sync mismatches become auto-recommendations:
-  `- [SPRINT-ID] **Reconcile sprint-queue.xlsx Catalog with the
+  `- [SPRINT-ID] **Reconcile sprint-catalog.csv with the
   roadmap — [specific drift].**`
 - If zero recommendations: `- _No recommendations — status quo
   holds._`
@@ -397,35 +396,37 @@ For each approved recommendation:
      `## Completed Work Summary`.
   2. Remove the full skeleton/spec block from
      `## Active & Remaining Sprint Skeletons`.
-  3. In `sprint-queue.xlsx` Catalog tab: flip Implementation Status
+  3. In `sprint-catalog.csv`: flip Implementation Status
      from `Queued`/`In Flight` to `Completed` (or `Dissolved`),
      clear `Seq`, populate `Date Completed`, populate `Close-Out
      File`.
-  4. Run `python <scripts>/recalc.py <sprintQueue>` to refresh
-     Dashboard KPIs.
 
-  All four edits count as one logical migration; <5 min.
+  All three edits count as one logical migration; <5 min. KPIs are
+  computed catalog-direct on the next read — there is no cache to
+  refresh.
 
-- **Sync reconciliation** (Catalog drift):
-  - Catalog row for already-completed sprint → flip Implementation
+- **Sync reconciliation** (catalog drift):
+  - CSV row for already-completed sprint → flip Implementation
     Status to `Completed`, clear Seq.
   - Missing row for an active skeleton → add row with appropriate
     Implementation Status, Written Status, Seq.
   - Order mismatch → renumber `Seq` column to match roadmap's
     active sequence.
-  - Recalc after.
 
-- **Status updates** → edit the roadmap; mirror in Catalog if it
+- **Status updates** → edit the roadmap; mirror in the CSV if it
   changes a column value.
 
 - **Dependency or context notes** → edit roadmap or relevant
-  close-out file. Catalog Notes may also receive a short note.
+  close-out file. The CSV's Notes column may also receive a short note.
 
 - **Risk flags** → append to roadmap `## Notes` or relevant Phase
   section header.
 
-Use the xlsx skill (anthropic-skills:xlsx) for all Catalog tab
-read/write mechanics.
+Read/write `sprint-catalog.csv` as a plain CSV — this is a text file,
+not a spreadsheet mechanic. If a companion `sprint-queue.xlsx` report
+exists, do not write to it here; it is regenerated (via
+`/roadmap-review` or `build_sprint_queue.py`) from the CSV, not edited
+directly.
 
 **Hard ceiling enforcement:** if any single recommendation balloons
 past >5 min of editing or affects >2 sprints, STOP. Roll back
@@ -433,7 +434,7 @@ partial changes for that recommendation and tell the user to run
 /roadmap-review for that one. Others can still proceed.
 
 ### 2.2 Confirm and close
-Show the diff in BOTH the roadmap doc and Catalog tab.
+Show the diff in BOTH the roadmap doc and sprint-catalog.csv.
 AskUserQuestion:
 - (A) Approve — close [RECOMMENDED]
 - (B) Roll back

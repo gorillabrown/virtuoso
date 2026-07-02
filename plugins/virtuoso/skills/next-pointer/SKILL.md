@@ -36,7 +36,7 @@ judgment calls, **completes every pre-flight check** (or elevates it
 as a question) so nothing is left dangling, then prints:
 
 1. **Plain-language summary** of what's next
-2. **Roadmap KPIs** (sourced from the Dashboard tab)
+2. **Roadmap KPIs** (computed catalog-direct from `sprint-catalog.csv`)
 3. **Sprint Pointer** in a code box, including a complete **git
    reconciliation protocol** the CLI implementer runs as step 0
 
@@ -139,7 +139,7 @@ These terms are used precisely throughout this skill.
 - **Buffer** — The next 5 sprints. /roadmap-review keeps it at 5.
 - **Scope** — What's included in / excluded from a sprint.
 - **Conveyor belt** — The sequenced list of all uncompleted sprints
-  in the roadmap's active section, mirrored in `sprint-queue.xlsx`.
+  in the roadmap's active section, mirrored in `sprint-catalog.csv`.
 
 ## Operating principles
 
@@ -153,10 +153,10 @@ These terms are used precisely throughout this skill.
 3. **Writes are permitted to enrich the head spec AND to complete
    pre-flight checks for this dispatch.** The skill may edit the
    roadmap document to add verified file:line refs, test names,
-   constants; recalc the `sprint-queue.xlsx` Dashboard; and advance
-   the head sprint's own Catalog row to reflect reality (e.g. a merged
-   wave). It does NOT re-sequence, add new sprints, or modify other
-   sprints' skeletons — that is /roadmap-review's job.
+   constants; and advance the head sprint's own row in
+   `sprint-catalog.csv` to reflect reality (e.g. a merged wave). It
+   does NOT re-sequence, add new sprints, or modify other sprints'
+   skeletons — that is /roadmap-review's job.
 4. **Hard halt on stub head.** If the sprint at the head has
    Written Status ≠ `Full Spec`, STOP and tell the user to run
    /roadmap-review. No partial dispatch.
@@ -200,9 +200,9 @@ These terms are used precisely throughout this skill.
     divergence rather than forcing.
 13. **Pre-flight checks are completed, not just reported.** This is the
     rule that gates the verdict. Every pre-flight check must end ☑ —
-    either already satisfied, or **completed by Cowork now** (recalc
-    the Dashboard, advance the head's Catalog row, embed/repair the
-    recipe, re-verify git), or **explicitly accepted by the user**.
+    either already satisfied, or **completed by Cowork now** (advance
+    the head's row in sprint-catalog.csv, embed/repair the recipe,
+    re-verify git), or **explicitly accepted by the user**.
     A check Cowork cannot close by itself is **elevated as an
     AskUserQuestion**, not deferred to a later /roadmap-status. **Never
     print "Ready to dispatch" with a bare ☐ check** — a dangling ☐
@@ -345,12 +345,12 @@ as step 0. Verify all four guarantees are expressed:
 
 1. The project's roadmap document (filename from `roadmap_doc`
    frontmatter; default `Roadmap.md`)
-2. `sprint-queue.xlsx`:
-   - **Dashboard tab** for pre-computed KPIs (read with
-     `data_only=True`)
-   - **Catalog tab** for the head sprint's metadata and
+2. `sprint-catalog.csv` — the single source of truth:
+   - KPIs are computed catalog-direct from its rows (see Phase 1.4)
+   - Row-level reads for the head sprint's metadata and
      prerequisite status
-   - Use the xlsx skill (anthropic-skills:xlsx) for mechanics
+   - Read/write it as a plain CSV — this is not a spreadsheet
+     mechanic
 3. Most recent file in `roadmap-reviews/` — for "last review"
    timestamp
 4. Most recent assessment file — for pace read
@@ -373,8 +373,8 @@ as step 0. Verify all four guarantees are expressed:
 4. If Phase 3 edited the spec: a verified read of git state and a
    handoff for the enrichment commit (Phase 3.5) — Cowork never runs
    the commit itself
-5. Possibly: pre-flight completions (Phase 3.6) — a recalced Dashboard
-   and/or the head sprint's Catalog row advanced to reflect reality, so
+5. Possibly: pre-flight completions (Phase 3.6) — the head sprint's
+   row in sprint-catalog.csv advanced to reflect reality, so
    no pre-flight check is left dangling
 6. Possibly: AskUserQuestion(s) for any pre-flight check that needs a
    decision before it can be closed
@@ -459,7 +459,7 @@ dispatch blocker, surfaced the same way as a failed prerequisite.
 ## Phase 1 — READ AND IDENTIFY
 
 ### 1.1 Determine the head sprint
-Read the `sprint-queue.xlsx` Catalog tab. Filter rows where
+Read `sprint-catalog.csv`. Filter rows where
 `Implementation Status = "Queued"` or `"In Flight"`. Sort by `Seq`
 ascending. The first row is the head sprint.
 
@@ -477,39 +477,32 @@ Read the roadmap document and find the head sprint's block under
 its Phase → Stage → Sprint heading. Parse all 7 structural fields
 and the Implementation Detail sub-section.
 
-### 1.4 Pull KPIs from Dashboard
-Read with `data_only=True`. Source cells:
+### 1.4 Compute KPIs from sprint-catalog.csv
+All KPIs are computed catalog-direct — there is no Dashboard cache
+to read or refresh.
 
-Sprint data lives on the **`DATA.sprint-catalog`** sheet (table `sprint_catalog`).
-
-**From the Dashboard** (`data_only=True`):
-| KPI | Cell |
-|---|---|
-| % Complete (by LOE) | B24 |
-| LOE remaining (points) | B21 |
-| Sprints to finish line (sprints remaining) | B25 |
-| Avg sprint size (points) | B26 |
-
-**Computed from the Catalog** (no longer on the Dashboard in this workbook):
 | KPI | How |
 |---|---|
+| % Complete (by LOE) | completed LOE points ÷ total LOE points |
+| LOE remaining (points) | sum LOE points for rows not done |
+| Sprints to finish line (sprints remaining) | count rows where Implementation Status ∈ {Blocked, Queued, In Flight} |
+| Avg sprint size (points) | total LOE points ÷ effective sprint count |
 | Fully specced sprints remaining (incl. this one) | count rows where Implementation Status `Queued` ∧ Written Status `Full Spec` |
 | Buffer health | from that count → ≥5 Healthy / ≥3 Running low / ≥1 Critical / else Empty |
 | Sprints to end of current phase | count rows where Phase = current phase and not done |
 
-Compute "% remaining by LOE" = 1 − B24.
+Compute "% remaining by LOE" = 1 − % Complete (by LOE).
 
 Last /roadmap-review = mtime of most recent file in
 `roadmap-reviews/`.
 
 Pace = read from most recent assessment file's pace verdict.
 
-If Dashboard cells appear stale (empty/`None` because formulas were
-never recalced after manual Catalog edits), compute the KPIs directly
-from the Catalog now so the figures you report are correct — and do
-NOT leave "Dashboard stale" as a dangling ☐. Closing it is a Phase 3.6
-pre-flight item: recalc the workbook (don't just flag it). Carry the
-Catalog-direct figures forward as authoritative in the meantime.
+If a companion `sprint-queue.xlsx` report exists and its Dashboard
+tab disagrees with these figures, that's a stale Power Query cache
+(it only refreshes when a human opens the workbook in Excel) — do
+not read it back or try to reconcile it. The CSV-computed figures
+above are always authoritative; there is nothing to recalc.
 
 ### 1.5 Identify applicable Standing Rules
 Read the roadmap's `### Standing Rules All Skeletons Inherit`
@@ -706,20 +699,16 @@ For each check, classify and act:
    blocked*: AskUserQuestion (hold vs. the alternative-dispatch path).
 3. **Spec committed to `main`** — Phase 3.5. Externally blocked on a
    non-author commit → handoff; Not ready until verified on HEAD.
-4. **KPIs accurate / Dashboard fresh** — if the Dashboard cache is
-   stale, **recalc it now** (auto-completable). Mechanic: run the bundled
-   recalc script — `python <scripts>/recalc.py <sprintQueue>`, resolving both values from
-   `Virtuoso/workspace-layout.json`
-   — then reload and confirm the cells populate. (The recalc engine always
-   ships with the plugin, so there is no "no engine" fallback.) Do not leave a
-   bare "Dashboard stale ☐".
-5. **Catalog reflects reality** — if the head's row is behind reality
-   (e.g. a merged wave not recorded), **advance the head sprint's own
-   row** (auto-completable when the correct state is unambiguous). If
-   representing it correctly needs a judgment (how to show a partially
-   complete wave-decomposed sprint in one row) → AskUserQuestion. Do
-   not leave a bare "Catalog housekeeping ☐" or punt it to
-   /roadmap-status.
+4. **KPIs accurate** — always satisfied by construction: KPIs are
+   computed catalog-direct from `sprint-catalog.csv` at read time, so
+   there is no cache that can go stale. Mark ☑.
+5. **Catalog reflects reality** — if the head's row in
+   `sprint-catalog.csv` is behind reality (e.g. a merged wave not
+   recorded), **advance the head sprint's own row** (auto-completable
+   when the correct state is unambiguous). If representing it
+   correctly needs a judgment (how to show a partially complete
+   wave-decomposed sprint in one row) → AskUserQuestion. Do not leave
+   a bare "Catalog housekeeping ☐" or punt it to /roadmap-status.
 6. **Serialization clear** — verify (read-only, per project Git
    Workflow) that the worktree set is canonical-only and **no branch
    for this sprint is already in flight**. An in-flight branch means a
@@ -829,17 +818,16 @@ can't be closed, the verdict is "Not ready" and that item is named.)*
 - [☑] Dispatch-readiness rubric passed (11/11; R1 re-confirmed vs current HEAD)
 - [☑] Prerequisites met
 - [☑] Spec committed to `main` ([sha]) and present in the trunk roadmap
-- [☑] KPIs accurate (Dashboard recalced — or user-accepted Catalog-direct)
+- [☑] KPIs accurate (computed catalog-direct from sprint-catalog.csv)
 - [☑] Catalog reflects reality (head row advanced for any merged wave)
 - [☑] Working tree clean; worktree canonical-only; no in-flight branch for this sprint (serialization clear)
 - [☑] Git reconciliation recipe embedded in the pointer (R11) — the
   implementer's step-0 worktree reconciliation lives in that recipe
 
 [If any check above could NOT be driven to ☑ — a pending prerequisite,
-an uncommitted enrichment, a stale Dashboard with no recalc engine, an
-in-flight branch — DO NOT print this list as all-☑. Show the open item
-as ☐, append its handoff / the AskUserQuestion you raised, and set the
-bottom line to "Not ready."]
+an uncommitted enrichment, an in-flight branch — DO NOT print this
+list as all-☑. Show the open item as ☐, append its handoff / the
+AskUserQuestion you raised, and set the bottom line to "Not ready."]
 
 [Ready to dispatch — every pre-flight check is ☑; the CLI agent can
 implement this spec without judgment calls.] | [Not ready — [the named
@@ -866,8 +854,8 @@ Before sending the output:
    "Ready" with the spec still uncommitted.
 9. **Did Phase 3.6 drive every pre-flight check to ☑ or elevate it?**
    Scan the pre-dispatch list: under a "Ready" verdict there are **no
-   ☐ items at all**. Any ☐ (Dashboard stale, Catalog housekeeping,
-   prereq pending, enrichment uncommitted, branch in flight) means
+   ☐ items at all**. Any ☐ (Catalog housekeeping, prereq pending,
+   enrichment uncommitted, branch in flight) means
    either complete it now, or flip the verdict to "Not ready" and name
    it — never "noted, non-blocking" under "Ready." The implementer's
    step-0 reconciliation is the embedded recipe, not a checkbox.
@@ -1016,14 +1004,14 @@ run /next-pointer again.
 
 ---
 
-## Edge case: No sprint-queue.xlsx
+## Edge case: No sprint-catalog.csv
 
 ```
-# Cannot Dispatch — Sprint Queue Spreadsheet Missing
+# Cannot Dispatch — Sprint Catalog Missing
 
 ## Required action
 
-Run **/roadmap-review** — it will create `sprint-queue.xlsx` from
+Run **/roadmap-review** — it will create `sprint-catalog.csv` from
 the active section of the roadmap.
 ```
 

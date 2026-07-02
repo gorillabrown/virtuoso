@@ -216,8 +216,10 @@ belt forward by exactly one position:
 - Adjust timelines if the sprint revealed scope was larger or smaller than expected
 
 **Where updates land (Wave 2, after confirmation):**
-- The project's roadmap file (roadmap.md or equivalent) and the sprint queue
-  (sprint-queue.md / sprint-queue.xlsx or equivalent)
+- The project's roadmap file (roadmap.md or equivalent) and the sprint catalog
+  (`sprint-catalog.csv`, or `sprint-queue.md` for older/simpler projects) — the
+  authoritative catalog is always the CSV where one exists; a companion
+  `sprint-queue.xlsx` is a generated report only and is never edited directly here
 - Show the user the diff summary: what was retired, what was elevated, and why
 
 **When to skip the discretionary items:** if the sprint produced no findings that affect
