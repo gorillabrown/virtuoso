@@ -393,6 +393,67 @@ def test_detect_quiet_never_adopts_established_tree(tmp_path):
     assert not (tmp_path / "Virtuoso").exists()
 
 
+def test_governance_readme_written_on_create_and_registers_roadmap(tmp_path):
+    _run(tmp_path, "create")
+    readme = tmp_path / "Virtuoso.Governance.Readme.md"
+    assert readme.is_file()
+    text = readme.read_text(encoding="utf-8")
+    # It is the authority and states the no-parallel rule.
+    assert "governance registry" in text.lower()
+    assert "never create" in text.lower()
+    # It registers the seeded roadmap as present.
+    assert "Project Documentation/1 governance/Roadmap.md" in text
+    assert "✅ registered" in text
+    # Manifest mirrors the same path.
+    m = _manifest(tmp_path)
+    assert m["paths"]["governanceReadme"] == "Virtuoso.Governance.Readme.md"
+
+
+def test_governance_readme_is_idempotent(tmp_path):
+    _run(tmp_path, "create")
+    readme = tmp_path / "Virtuoso.Governance.Readme.md"
+    first = readme.read_text(encoding="utf-8")
+    _run(tmp_path, "create")
+    assert readme.read_text(encoding="utf-8") == first  # deterministic; no churn on re-run
+
+
+def test_adopts_project_with_docs_governance_layout_in_place(tmp_path):
+    # A Blurby-shaped project: a live roadmap under docs/governance and NO Project
+    # Documentation tree. Adoption must register the real roadmap and never seed a rival.
+    gov = tmp_path / "docs" / "governance"
+    gov.mkdir(parents=True)
+    (gov / "ROADMAP.md").write_text(
+        "# Blurby Roadmap\n## Completed Work Summary\n## Active & Remaining Sprint Skeletons\n"
+        "Finish Line\n",
+        encoding="utf-8",
+    )
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0
+    assert "virtuoso-status: adopted" in out
+    m = _manifest(tmp_path)
+    assert m["paths"]["roadmap"] == "docs/governance/ROADMAP.md", m["paths"]["roadmap"]
+    # No parallel default Roadmap.md anywhere, and no scaffolded Project Documentation tree.
+    assert not (tmp_path / "Project Documentation").exists()
+    roadmaps = sorted(p.name for p in tmp_path.rglob("*.md") if "roadmap" in p.name.lower())
+    assert roadmaps == ["ROADMAP.md"], roadmaps
+    # The registry points at the real file.
+    readme = (tmp_path / "Virtuoso.Governance.Readme.md").read_text(encoding="utf-8")
+    assert "docs/governance/ROADMAP.md" in readme
+
+
+def test_adopts_project_with_root_roadmap_in_place(tmp_path):
+    # A live roadmap at the project root, no documentation tree at all.
+    (tmp_path / "ROADMAP.md").write_text(
+        "# Root Roadmap\n## Completed Work Summary\n## Active & Remaining Sprint Skeletons\n",
+        encoding="utf-8",
+    )
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0
+    assert "virtuoso-status: adopted" in out
+    m = _manifest(tmp_path)
+    assert m["paths"]["roadmap"] == "ROADMAP.md", m["paths"]["roadmap"]
+
+
 def test_heal_with_missing_manifest_discovers_roadmap_and_seeds_no_parallel(tmp_path):
     # Marker dir present but no manifest: heal must still discover the real roadmap and not
     # seed a parallel one.

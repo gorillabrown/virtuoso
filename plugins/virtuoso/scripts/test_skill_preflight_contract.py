@@ -36,6 +36,18 @@ def test_gate_skills_adopt_rather_than_detect():
     assert missing_adopt == [], f"gate skills not using --mode adopt: {missing_adopt}"
 
 
+def test_gate_skills_reference_governance_registry_first():
+    """Every gate skill must resolve documents through the project-root governance registry
+    (`Virtuoso.Governance.Readme.md`) so it defers to existing docs instead of scaffolding a
+    parallel/competing governance tree."""
+    missing = []
+    for name in GATE_SKILLS:
+        text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+        if "Virtuoso.Governance.Readme.md" not in text:
+            missing.append(name)
+    assert missing == [], f"gate skills not referencing the governance registry: {missing}"
+
+
 def test_no_skill_uses_superseded_detect_mode():
     offenders = []
     for skill in (ROOT / "skills").glob("*/SKILL.md"):

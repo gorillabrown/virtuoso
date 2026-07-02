@@ -1,6 +1,6 @@
 {
   "name": "virtuoso",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Cowork governance & dispatch suite: roadmap planning, sprint execution discipline, close-outs, mid-dispatch decisions, audits, and doc hygiene — with a self-healing per-project workspace.",
   "author": { "name": "Evan Brown", "email": "evan@heyevanbrown.com" },
   "homepage": "https://github.com/gorillabrown/virtuoso",

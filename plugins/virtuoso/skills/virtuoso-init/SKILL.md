@@ -51,8 +51,19 @@ If the user does not choose, use option 1.
 Then report to the user what was created vs. what already existed (the script prints
 this), which layout was selected, and where the workspace lives.
 
-The script writes `Virtuoso/workspace-layout.json`; use that manifest as the source of
-truth for paths in later skills. The documentation tree contains:
+The script writes two coupled outputs that record where governance lives:
+
+- **`Virtuoso.Governance.Readme.md`** (project root) — the **governance registry**, the
+  human-readable authority every skill reads first. It lists each required document role
+  (roadmap, sprint catalog, lessons, close-outs, issues, reviews, outside audits) and the
+  actual path it resolves to, marking each present or not-present. For an established project
+  it registers the files that already exist (wherever they live — `docs/governance/`,
+  `2. Project Documentation/`, the root); it never seeds an empty template beside a document
+  that already exists, and skills never create a parallel doc for a role already registered.
+- **`Virtuoso/workspace-layout.json`** — the machine-readable mirror of the same paths, used
+  where a skill needs a resolved path programmatically.
+
+The documentation tree contains:
 
 - `Roadmap.md` — the canonical roadmap (seed; flesh out via /roadmap-review). If the
   project already has a roadmap under another name, the manifest points at that file

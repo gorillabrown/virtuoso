@@ -131,6 +131,64 @@ WORKFLOW_REF_FALLBACK = (
     "§16 (3rd-party audit) -> the `3rd-party-audit` skill.\n"
 )
 
+# The governance registry: the project-root authority every skill reads first to resolve
+# where each governance document lives. Regenerated (idempotently) on every create/adopt/heal.
+GOVERNANCE_README = "Virtuoso.Governance.Readme.md"
+
+# (machine key -> human label) for the registry table, and (machine key -> _workspace_paths
+# key) so the same resolved paths back both the readme and the manifest.
+GOVERNANCE_ROLES = [
+    ("roadmap", "Roadmap"),
+    ("sprintCatalog", "Sprint catalog (CSV — source of truth)"),
+    ("sprintQueue", "Sprint queue (xlsx — optional generated report)"),
+    ("lessons", "Lessons / retrospective"),
+    ("closeOuts", "Close-outs (directory)"),
+    ("issues", "Issues (directory)"),
+    ("roadmapReviews", "Roadmap reviews (directory)"),
+    ("outsideAudits", "Outside audits (directory)"),
+    ("reference", "Reference (directory)"),
+]
+_ROLE_PATHKEY = {
+    "roadmap": "roadmap", "sprintCatalog": "sprint_catalog", "sprintQueue": "sprint_queue",
+    "lessons": "lessons", "closeOuts": "close_outs", "issues": "issues",
+    "roadmapReviews": "roadmap_reviews", "outsideAudits": "outside_audits",
+    "reference": "reference",
+}
+GOVERNANCE_README_TEMPLATE = """# Virtuoso Governance Registry
+
+**This file is the authority.** It is the single source of truth for where this project's
+governance documents live. Every Virtuoso skill (`/roadmap-review`, `/roadmap-status`,
+`/next-pointer`, `/pointer-closeout`, `/mid-dispatch-decision`, `/3rd-party-audit`) resolves
+the roadmap, sprint catalog, lessons log, close-outs, issues, and review artifacts through the
+registry below — and **never creates a parallel or competing document for a role already
+registered here.**
+
+Register the project's real files wherever they actually live (e.g. `docs/governance/ROADMAP.md`).
+When a document already exists, this registry points at it; nothing is copied, moved, or seeded
+beside it. `Virtuoso/workspace-layout.json` is the machine-readable mirror of the same paths.
+
+## Required documents
+
+| Role | Path | Status |
+|------|------|--------|
+{table}
+
+## Rules for skills
+
+1. **Resolve every governance document through this registry** before reading or writing.
+2. **Never create a new document for a role already registered** — open and edit the
+   registered file in place.
+3. If a required role is `⬜ not present` and the work needs it, **register the project's
+   existing file** (preferred) or create one **and register it here** — never leave a rival
+   unregistered or seed an empty template beside a real document.
+4. If the registry and the files on disk diverge, **fix the registry** (repoint the path to
+   the existing document) — do not fork a rival.
+
+<!-- virtuoso-governance-registry
+{machine}
+-->
+"""
+
 
 def _home():
     return os.environ.get("VIRTUOSO_HOME") or os.path.expanduser("~")
@@ -200,16 +258,13 @@ def _project_doc_root(root):
 
 
 def _is_adoptable(root):
-    """An un-markered project with an established documentation tree AND a discoverable live
-    roadmap, which we can adopt in place. A tree with no live roadmap routes to /virtuoso-init
-    (which seeds one) rather than adopting and pointing the manifest at a file that does not
-    exist."""
+    """An un-markered project with a discoverable live roadmap (in a Project Documentation
+    tree, a docs/ tree, or at the root), which we can adopt in place. A project with no live
+    roadmap routes to /virtuoso-init (which seeds one) rather than adopting and pointing the
+    manifest at a file that does not exist."""
     if _is_project(root):
         return False
-    docs = _established_doc_root(root)
-    if not docs:
-        return False
-    return _discover_roadmap(docs) is not None
+    return _discover_roadmap_anywhere(root) is not None
 
 
 def _walk_docs(doc_root):
@@ -242,45 +297,89 @@ def _has_backup_name(path):
     return bool(_BACKUP_NAME_RE.search(stem))
 
 
-def _discover_roadmap(doc_root):
-    """Find the project's LIVE roadmap (any *roadmap*.md name). Archived copies (under
-    roadmap-reviews/, 3 temp/, etc.) are excluded outright; an untouched virtuoso-init seed and
-    backup/snapshot copies are demoted below any real roadmap; ties break on recency then size.
-    Returns an absolute path or None when no live roadmap exists."""
-    cands = [
+def _roadmap_score(p):
+    """Rank a roadmap candidate: real roadmaps (structural markers, recently edited) outrank
+    a fresh virtuoso-init seed and backup/snapshot copies; ties break on recency then size."""
+    try:
+        with open(p, "rb") as f:
+            head = f.read(16384)
+    except OSError:
+        head = b""
+    structural = sum(1 for m in _ROADMAP_MARKERS if m in head)
+    try:
+        mtime = os.path.getmtime(p)
+    except OSError:
+        mtime = 0
+    try:
+        size = os.path.getsize(p)
+    except OSError:
+        size = 0
+    return (
+        0 if _looks_like_seed(p) else 1,   # fresh seed placeholder sinks below any real roadmap
+        0 if _has_backup_name(p) else 1,   # OLD/backup/copy snapshots sink
+        structural,                         # real roadmaps carry structural markers
+        mtime,                              # most recently edited wins
+        size,                               # final tiebreak
+    )
+
+
+def _roadmap_candidates(base, recursive=True):
+    """Absolute paths of *roadmap*.md files under base — walked recursively, or (when
+    recursive=False) only the files sitting directly in base (used for a shallow root scan so
+    we never walk an entire repository looking for a root-level ROADMAP.md)."""
+    if not base or not os.path.isdir(base):
+        return []
+    if recursive:
+        pairs = list(_walk_docs(base))
+    else:
+        pairs = [(base, [f for f in os.listdir(base)
+                         if os.path.isfile(os.path.join(base, f))])]
+    return [
         os.path.join(dirpath, fn)
-        for dirpath, files in _walk_docs(doc_root)
+        for dirpath, files in pairs
         for fn in files
         if fn.lower().endswith(".md") and "roadmap" in fn.lower()
     ]
-    live = [p for p in cands if not _is_archived(p, doc_root)]
+
+
+def _discover_roadmap(doc_root):
+    """Find the project's LIVE roadmap under doc_root (any *roadmap*.md name). Archived copies
+    (under roadmap-reviews/, 3 temp/, etc.) are excluded outright; an untouched virtuoso-init
+    seed and backup/snapshot copies are demoted below any real roadmap; ties break on recency
+    then size. Returns an absolute path or None when no live roadmap exists."""
+    live = [p for p in _roadmap_candidates(doc_root, recursive=True)
+            if not _is_archived(p, doc_root)]
     if not live:
         return None
+    live.sort(key=_roadmap_score, reverse=True)
+    return live[0]
 
-    def score(p):
-        try:
-            with open(p, "rb") as f:
-                head = f.read(16384)
-        except OSError:
-            head = b""
-        structural = sum(1 for m in _ROADMAP_MARKERS if m in head)
-        try:
-            mtime = os.path.getmtime(p)
-        except OSError:
-            mtime = 0
-        try:
-            size = os.path.getsize(p)
-        except OSError:
-            size = 0
-        return (
-            0 if _looks_like_seed(p) else 1,   # fresh seed placeholder sinks below any real roadmap
-            0 if _has_backup_name(p) else 1,   # OLD/backup/copy snapshots sink
-            structural,                         # real roadmaps carry structural markers
-            mtime,                              # most recently edited wins
-            size,                               # final tiebreak
-        )
 
-    live.sort(key=score, reverse=True)
+def _discover_roadmap_anywhere(root):
+    """Find the project's live roadmap across common layouts, not just a Project Documentation
+    tree: an established doc-root candidate (recursive), a docs/ or docs/governance tree
+    (recursive), and root-level *roadmap*.md files (shallow). This lets an established project
+    whose governance lives outside a Project Documentation folder — e.g. a root ROADMAP.md plus
+    docs/governance/ — be adopted in place and registered, instead of being seeded over with a
+    parallel empty template. Returns an absolute path or None."""
+    cands = []
+    est = _established_doc_root(root)
+    if est:
+        cands += _roadmap_candidates(est, recursive=True)
+    for extra in ("docs", os.path.join("docs", "governance")):
+        cands += _roadmap_candidates(os.path.join(root, extra), recursive=True)
+    cands += _roadmap_candidates(root, recursive=False)
+    seen, live = set(), []
+    for p in cands:
+        ap = os.path.abspath(p)
+        if ap in seen:
+            continue
+        seen.add(ap)
+        if not _is_archived(p, root):
+            live.append(p)
+    if not live:
+        return None
+    live.sort(key=_roadmap_score, reverse=True)
     return live[0]
 
 
@@ -343,6 +442,8 @@ def _workspace_paths(root, layout):
         "lessons": os.path.join(governance, "SpecRetro.Lessons_Learned.md"),
         "workflow_reference": os.path.join(reference, "WORKFLOW_REFERENCE.md"),
         "sprint_queue": os.path.join(operational, "sprint-queue.xlsx"),
+        "sprint_catalog": os.path.join(operational, "sprint-catalog.csv"),
+        "governance_readme": os.path.join(root, GOVERNANCE_README),
     }
 
 
@@ -456,14 +557,31 @@ def _write_layout_manifest(root, layout, paths, created, adopted=False):
             "reference": _rel(root, paths["reference"]),
             "roadmap": _rel(root, paths["roadmap"]),
             "sprintQueue": _rel(root, paths["sprint_queue"]),
+            "sprintCatalog": _rel(root, paths["sprint_catalog"]),
             "lessons": _rel(root, paths["lessons"]),
             "workflowReference": _rel(root, paths["workflow_reference"]),
             "closeOuts": _rel(root, paths["close_outs"]),
             "issues": _rel(root, paths["issues"]),
             "scripts": _rel(root, paths["scripts"]),
+            "governanceReadme": _rel(root, paths["governance_readme"]),
         },
     }
     _refresh_text(_layout_manifest(root), json.dumps(data, indent=2) + "\n", created)
+
+
+def _write_governance_readme(root, paths, created):
+    """Render the project-root governance registry — the authority skills read first. Lists
+    each required document role and its resolved path, marking present vs. absent. Content is
+    deterministic (no timestamp) so re-runs stay idempotent."""
+    rows, machine = [], []
+    for key, label in GOVERNANCE_ROLES:
+        ap = paths[_ROLE_PATHKEY[key]]
+        rel = _rel(root, ap)
+        status = "✅ registered" if os.path.exists(ap) else "⬜ not present"
+        rows.append("| %s | `%s` | %s |" % (label, rel, status))
+        machine.append("%s: %s" % (key, rel))
+    body = GOVERNANCE_README_TEMPLATE.format(table="\n".join(rows), machine="\n".join(machine))
+    _refresh_text(paths["governance_readme"], body, created)
 
 
 def _migrate_to_canonical(root, paths, created):
@@ -533,8 +651,37 @@ def _build_full(root, layout, created):
     # User data — never clobber:
     _ensure_copy(TEMPLATE_XLSX, paths["sprint_queue"], created)
     _vendor_scripts(paths, created)
+    _write_governance_readme(root, paths, created)
     _write_layout_manifest(root, layout, paths, created, adopted=False)
     return paths
+
+
+def _anchor_adopted_paths(paths, home):
+    """For a project adopted outside a Project Documentation tree, anchor the non-roadmap role
+    paths to the discovered roadmap's own directory (the governance home) instead of the
+    plugin default — so no registered path points into a Project Documentation tree that does
+    not exist. An existing lessons/retro file already sitting in that home is registered as-is;
+    otherwise a sensible default basename is anchored there (marked "not present", never
+    created)."""
+    for key, base in (
+        ("lessons", "SpecRetro.Lessons_Learned.md"),
+        ("sprint_catalog", "sprint-catalog.csv"),
+        ("close_outs", "Close-Outs"),
+        ("issues", "Issues"),
+        ("roadmap_reviews", "roadmap-reviews"),
+        ("outside_audits", "Outside Audits"),
+        ("reference", "Reference"),
+    ):
+        paths[key] = os.path.join(home, base)
+    if not os.path.exists(paths["sprint_queue"]):
+        paths["sprint_queue"] = os.path.join(home, "sprint-queue.xlsx")
+    if os.path.isdir(home):
+        for fn in sorted(os.listdir(home)):
+            low = fn.lower()
+            full = os.path.join(home, fn)
+            if os.path.isfile(full) and low.endswith(".md") and ("lesson" in low or "retro" in low):
+                paths["lessons"] = full
+                break
 
 
 def _build_thin(root, created):
@@ -542,11 +689,24 @@ def _build_thin(root, created):
     manifest points at the discovered existing roadmap/queue. No doc tree is scaffolded and
     no roadmap is seeded."""
     paths = _workspace_paths(root, "plugin-only")
-    _apply_discovery(paths)
+    found_rm, _found_q = _apply_discovery(paths)
+    if not found_rm:
+        # The project keeps its roadmap outside a Project Documentation tree (root ROADMAP.md,
+        # docs/governance, …). Point the registry at the real file rather than a phantom path,
+        # and anchor the other roles to that same governance home.
+        rm = _discover_roadmap_anywhere(root)
+        if rm:
+            paths["roadmap"] = rm
+            paths["docs"] = os.path.dirname(rm)
+            q = _discover_sprint_queue(os.path.dirname(rm))
+            if q:
+                paths["sprint_queue"] = q
+            _anchor_adopted_paths(paths, os.path.dirname(rm))
     _ensure_dir(paths["workspace"], created)
     _ensure_dir(paths["scripts"], created)
     _ensure_file(os.path.join(paths["workspace"], ".virtuoso"), "virtuoso-workspace\n", created)
     _vendor_scripts(paths, created)
+    _write_governance_readme(root, paths, created)
     _write_layout_manifest(root, "plugin-only", paths, created, adopted=True)
     return paths
 

@@ -1,5 +1,34 @@
 # Virtuoso Release Notes
 
+## v1.2.1 (2026-07-02)
+
+### Added
+
+- **Governance registry — `Virtuoso.Governance.Readme.md`.** A new project-root authority
+  that maps every required governance role (roadmap, sprint catalog, lessons, close-outs,
+  issues, reviews, outside audits) to its *actual* path in whatever layout the project uses,
+  marking each present or absent. The preflight engine generates it idempotently on
+  create/adopt/heal, and `Virtuoso/workspace-layout.json` is its machine-readable mirror.
+
+### Changed
+
+- **All six governance gate skills now read the registry first.** `/roadmap-status`,
+  `/next-pointer`, `/roadmap-review`, `/pointer-closeout`, `/mid-dispatch-decision`, and
+  `/3rd-party-audit` resolve every document through `Virtuoso.Governance.Readme.md`, defer to
+  the paths it lists, and **never create a parallel or competing document for a role already
+  registered.** On registry/disk divergence the rule is to repoint the registry, not fork a
+  rival. A contract test enforces that every gate skill references the registry.
+
+### Fixed
+
+- **Established projects are no longer seeded over with an empty roadmap.** Preflight
+  discovery previously recognized only `Project Documentation/` trees, so a project whose
+  governance lives elsewhere (a root `ROADMAP.md`, a `docs/governance/` tree) was treated as
+  bare and given a fresh empty template — which the skills then tried to reconcile against the
+  real roadmap, improvising parallel plumbing. Discovery now finds the live roadmap across
+  root, `docs/`, and `docs/governance/` layouts, adopts the project in place, and anchors
+  every registry role to the real governance home instead of a phantom default path.
+
 ## v1.2.0 (2026-07-02)
 
 ### Changed
