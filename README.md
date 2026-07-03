@@ -139,6 +139,7 @@ so it produced a duplicate slash entry alongside `/virtuoso:<name>`.)
 | Skill | Slash | Purpose |
 |-------|-------|---------|
 | `virtuoso` | — | Multi-step execution discipline for sprints |
+| `epic` | `/virtuoso:epic` | Launch materials for goal-scale, multi-session autonomous runs |
 | `roadmap-review` | `/virtuoso:roadmap-review` | Heavyweight roadmap recalibration |
 | `roadmap-status` | `/virtuoso:roadmap-status` | Lightweight roadmap pulse check |
 | `next-pointer` | `/virtuoso:next-pointer` | Finalize + dispatch the next sprint |
