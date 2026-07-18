@@ -734,6 +734,7 @@ def build_curated_fixture(root):
             "workflowReference": CURATED_WORKFLOW_REF_REL,
             "closeOuts": CURATED_CLOSE_OUTS_REL,
             "issues": CURATED_ISSUES_REL,
+            "roadmapReviews": CURATED_ROADMAP_REVIEWS_REL,
             "scripts": "Virtuoso/scripts",
             "governanceReadme": "Virtuoso.Governance.Readme.md",
             "epics": CURATED_EPICS_REL,
@@ -1236,4 +1237,142 @@ def test_gog_facsimile_damaged_readme_heals_from_manifest(tmp_path):
     assert not fx["default_lessons_stub_path"].exists(), (
         "heal seeded/created a lessons stub at the plugin's default path even though lessons "
         "is registered at the real curated path"
+    )
+
+
+# ---------------------------------------------------------------------------
+# SK-02 / R10: readme-only roles (roadmapReviews, documentationRoot) must round-trip through
+# the manifest instead of being re-defaulted by the next regeneration. Live repro (twice on
+# 2026-07-18): the manifest schema could not carry roadmapReviews at all, so the manifest-first
+# overlay fallback silently dropped a curated readme-only value on every subsequent heal.
+# ---------------------------------------------------------------------------
+
+def test_roadmap_reviews_registration_round_trips_through_manifest(tmp_path):
+    """RED-first (the live regression): simulate a pre-migration project -- an existing manifest
+    whose schema pre-dates roadmapReviews entirely (the key is simply absent from its "paths"
+    dict, exactly like every manifest written by the unfixed code), while the governance readme
+    carries a curated, non-default roadmapReviews repoint in its machine block (the readme is
+    the only carrier before migration). Two further regenerations must (1) migrate the curated
+    readme-only value into the manifest the first time it's observed, and (2) never re-default
+    it afterward once the manifest carries it."""
+    _run(tmp_path, "create")
+
+    default_rel = "Project Documentation/2 operational/roadmap-reviews"
+    curated_rel = "roadmap-reviews"  # curated repoint: project root, not the computed default
+    (tmp_path / curated_rel).mkdir()
+
+    # Pre-migration manifest: ensure roadmapReviews is absent entirely, exactly as every
+    # manifest written by the unfixed code would have it (the schema simply never emitted the
+    # key) -- unconditional so this fixture setup is valid whether or not the manifest writer
+    # has already been fixed to emit it.
+    manifest_path = tmp_path / "Virtuoso" / "workspace-layout.json"
+    manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest_data["paths"].pop("roadmapReviews", None)
+    manifest_path.write_text(json.dumps(manifest_data, indent=2) + "\n", encoding="utf-8")
+
+    # The readme is the only carrier of the curated repoint before migration.
+    readme_path = tmp_path / "Virtuoso.Governance.Readme.md"
+    text = readme_path.read_text(encoding="utf-8")
+    assert ("roadmapReviews: " + default_rel) in text  # sanity: default value present pre-edit
+    assert ("| Roadmap reviews (directory) | `" + default_rel + "` | ✅ registered |") in text
+    text = text.replace("roadmapReviews: " + default_rel, "roadmapReviews: " + curated_rel)
+    text = text.replace(
+        "| Roadmap reviews (directory) | `" + default_rel + "` | ✅ registered |",
+        "| Roadmap reviews (directory) | `" + curated_rel + "` | ✅ registered |",
+    )
+    readme_path.write_text(text, encoding="utf-8")
+
+    # First regeneration: the curated readme-only value must be migrated into the manifest.
+    _run(tmp_path, "detect")
+    m = _manifest(tmp_path)
+    assert m["paths"].get("roadmapReviews") == curated_rel, (
+        "curated roadmapReviews value from the readme was not carried into the manifest: "
+        + str(m["paths"].get("roadmapReviews"))
+    )
+
+    # Second regeneration: now that the manifest carries it, it must not be re-defaulted.
+    _run(tmp_path, "detect")
+    m2 = _manifest(tmp_path)
+    assert m2["paths"].get("roadmapReviews") == curated_rel, (
+        "roadmapReviews value was re-defaulted by a subsequent regeneration: "
+        + str(m2["paths"].get("roadmapReviews"))
+    )
+    readme_after = readme_path.read_text(encoding="utf-8")
+    assert ("roadmapReviews: " + curated_rel) in readme_after, (
+        "readme machine block was re-defaulted by a subsequent regeneration"
+    )
+
+
+def _build_custom_documentation_root_fixture(root):
+    """A markered, ADOPTED (thin) project whose manifest curates "documentationRoot" as a
+    folder name that is NOT one of DOC_ROOT_CANDIDATES ("Project Documentation" /
+    "2. Project Documentation") -- so _project_doc_root's discovery pass finds no established
+    candidate on disk and falls back to the plugin's own default ("Project Documentation",
+    which does not even exist here). Every known role is registered under the custom root so
+    _apply_registry_overlay/_apply_discovery short-circuit and never touch paths["docs"]
+    itself -- isolating documentationRoot preservation as the only thing under test. Returns
+    {root, custom_doc_root_rel}."""
+    root = Path(root)
+    custom_doc_root_rel = "GoG Docs"
+    docs = root / custom_doc_root_rel
+    docs.mkdir(parents=True, exist_ok=True)
+    (docs / "GoG_Roadmap.md").write_text(
+        "# GoG Roadmap\n## Completed Work Summary\n## Active & Remaining Sprint Skeletons\n",
+        encoding="utf-8",
+    )
+    (docs / "sprint-queue.xlsx").write_bytes(b"PK\x03\x04 stub workbook")
+
+    virtuoso = root / "Virtuoso"
+    (virtuoso / "scripts").mkdir(parents=True, exist_ok=True)
+    (virtuoso / ".virtuoso").write_text("virtuoso-workspace\n", encoding="utf-8")
+
+    manifest_data = {
+        "layout": "plugin-only",
+        "adopted": True,
+        "documentationRoot": custom_doc_root_rel,
+        "paths": {
+            "roadmap": custom_doc_root_rel + "/GoG_Roadmap.md",
+            "sprintQueue": custom_doc_root_rel + "/sprint-queue.xlsx",
+            "sprintCatalog": custom_doc_root_rel + "/sprint-catalog.csv",
+            "lessons": custom_doc_root_rel + "/SpecRetro.Lessons_Learned.md",
+            "closeOuts": custom_doc_root_rel + "/Close-Outs",
+            "issues": custom_doc_root_rel + "/Issues",
+            "roadmapReviews": custom_doc_root_rel + "/roadmap-reviews",
+            "outsideAudits": custom_doc_root_rel + "/Outside Audits",
+            "reference": custom_doc_root_rel + "/Reference",
+            "scripts": "Virtuoso/scripts",
+            "governanceReadme": "Virtuoso.Governance.Readme.md",
+        },
+    }
+    (virtuoso / "workspace-layout.json").write_text(
+        json.dumps(manifest_data, indent=2) + "\n", encoding="utf-8"
+    )
+    return {"root": root, "custom_doc_root_rel": custom_doc_root_rel}
+
+
+def test_documentation_root_preserved_on_regeneration(tmp_path):
+    """SK-02 / R10: an existing manifest's curated documentationRoot must be preserved verbatim
+    across regeneration, not recomputed from _project_doc_root's discovery pass -- which would
+    silently fall back to the plugin's own default candidate name ("Project Documentation")
+    instead of the project's real, custom-named documentation root, even though nothing on
+    disk actually changed. Two further regenerations must leave it untouched."""
+    fx = _build_custom_documentation_root_fixture(tmp_path)
+
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0, out
+    m = _manifest(tmp_path)
+    assert m["documentationRoot"] == fx["custom_doc_root_rel"], (
+        "documentationRoot was recomputed instead of preserved: " + m["documentationRoot"]
+    )
+    # sanity: the plugin's own default candidate was never discovered/created here
+    assert not (tmp_path / "Project Documentation").exists()
+
+    # A second regeneration (detect-triggered heal) must not drift it either.
+    rc2, out2 = _run_capture(
+        "--root", str(tmp_path), "--mode", "detect", "--quiet", root=tmp_path
+    )
+    assert rc2 == 0, out2
+    m2 = _manifest(tmp_path)
+    assert m2["documentationRoot"] == fx["custom_doc_root_rel"], (
+        "documentationRoot drifted on a second regeneration: " + m2["documentationRoot"]
     )

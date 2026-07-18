@@ -315,15 +315,29 @@ def _assert_registry_mirror(root):
 
 def _read_registry_overlay(root):
     """Registry-authoritative resolution order (R2): parse workspace-layout.json's "paths"
-    dict; else parse the governance readme's machine block; else None so the caller falls back
-    to today's discovery/defaults behavior as a last resort. Returns {key: relative path
-    string} covering both known roles and unrecognized project-custom keys, or None."""
-    paths = _read_manifest(root).get("paths")
-    if isinstance(paths, dict) and paths:
-        overlay = {k: v for k, v in paths.items() if isinstance(v, str)}
-        if overlay:
-            return overlay
-    return _read_registry_from_readme(root)
+    dict as the base overlay, then per-key merge (SK-02 / R10) -- for any KNOWN governance role
+    (_KNOWN_PATHKEY) that the manifest overlay is missing (e.g. roadmapReviews before its first
+    post-migration write, or any future role added to the schema), consult the governance
+    readme's machine block before falling back to a computed default. The manifest wins
+    outright once it carries a key; before a key migrates into the manifest schema, the readme
+    is its only carrier and must not be clobbered by the next regeneration. Falls back to the
+    readme's overlay wholesale when the manifest has no "paths" at all (e.g. reconstruction
+    after the manifest is deleted). Returns {key: relative path string} covering both known
+    roles and unrecognized project-custom keys, or None when neither source has anything."""
+    manifest_paths = _read_manifest(root).get("paths")
+    manifest_overlay = {}
+    if isinstance(manifest_paths, dict):
+        manifest_overlay = {k: v for k, v in manifest_paths.items() if isinstance(v, str)}
+    readme_overlay = _read_registry_from_readme(root)
+    if not manifest_overlay:
+        return readme_overlay
+    if readme_overlay:
+        merged = dict(manifest_overlay)
+        for key, rel in readme_overlay.items():
+            if key in _KNOWN_PATHKEY and key not in merged:
+                merged[key] = rel
+        return merged
+    return manifest_overlay
 
 
 def _apply_registry_overlay(root, paths, overlay):
@@ -661,10 +675,19 @@ def _rel(root, path):
 
 
 def _write_layout_manifest(root, layout, paths, created, custom_paths=None, adopted=False):
+    # SK-02 / R10: an existing manifest's documentationRoot is preserved verbatim rather than
+    # recomputed on every regeneration. _project_doc_root's discovery pass falls back to the
+    # plugin's own default candidate name whenever a project's real doc root isn't one of
+    # DOC_ROOT_CANDIDATES, which would otherwise silently clobber a curated custom value.
+    existing_doc_root = _read_manifest(root).get("documentationRoot")
+    documentation_root = (
+        existing_doc_root if isinstance(existing_doc_root, str) and existing_doc_root
+        else _rel(root, paths["docs"])
+    )
     data = {
         "layout": layout,
         "adopted": bool(adopted),
-        "documentationRoot": _rel(root, paths["docs"]),
+        "documentationRoot": documentation_root,
         "paths": {
             "governance": _rel(root, paths["governance"]),
             "operational": _rel(root, paths["operational"]),
@@ -678,6 +701,7 @@ def _write_layout_manifest(root, layout, paths, created, custom_paths=None, adop
             "workflowReference": _rel(root, paths["workflow_reference"]),
             "closeOuts": _rel(root, paths["close_outs"]),
             "issues": _rel(root, paths["issues"]),
+            "roadmapReviews": _rel(root, paths["roadmap_reviews"]),
             "scripts": _rel(root, paths["scripts"]),
             "governanceReadme": _rel(root, paths["governance_readme"]),
         },
