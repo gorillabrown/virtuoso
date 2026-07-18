@@ -125,3 +125,17 @@ No external hard deadline. The forcing function is the **live race window**: eve
 - **Phase C — days 1–5 post-A:** soak with containment armed; then R10–R13 reconciliation and stand-down. R9 rides along with Phase A or B, whichever is convenient.
 
 Scope guard: any addition to this spec should displace something or extend the soak — the P0 set is the minimum that ends the clobber class; everything else is hygiene layered behind it.
+
+## Amendment — 2026-07-18
+
+**Status:** Implemented and released (v1.3.1, commits `09f59d1` and `c47c23a`). Recorded here for the historical record; this amendment supersedes the R2 and R8 text above, which predates the owner's mid-sprint removal decision.
+
+**What changed, verbatim (commit `09f59d1`, "Scope amendment (owner decision, mid-sprint)"):**
+
+> Scope amendment (owner decision, mid-sprint): canonical layout and its migration subsystem removed entirely; detect now auto-scaffolds only a new project root (empty or .git-only directory). Stored legacy "canonical" manifests degrade gracefully to plugin-only semantics.
+
+**Effect on R2 (Registry-authoritative overlay in `_build_full` and `_build_thin`):** the resolution order in R2 (manifest → readme machine block → regenerate-as-last-resort) stands, but the "regenerate" fallback no longer has a `canonical` layout to resolve into — `plugin-only` is the only layout `_resolve_layout` can produce. A workspace whose stored manifest still carries `"layout": "canonical"` (written before this amendment) is treated as unset and falls back to `plugin-only` rather than erroring or attempting migration. `--layout canonical` is no longer an accepted CLI value; the script hard-rejects it at argparse (`LAYOUTS = ("auto", "plugin-only")`).
+
+**Effect on R8 (Release v1.3.1):** the release R8 describes is the same release that shipped this scope amendment — the canonical-layout removal and the empty-dir-only auto-scaffold behavior went out under v1.3.1, not a later version. R8's text, written before the mid-sprint amendment, should be read as covering this expanded scope.
+
+**Downstream consequence (SK-04):** the ~10 `SKILL.md` files that documented the removed "canonical layout" choice (e.g., `/virtuoso-init`'s former two-option layout prompt) were cleaned up under sprint SK-04, dispatched separately from this PRD's implementation sprint.
