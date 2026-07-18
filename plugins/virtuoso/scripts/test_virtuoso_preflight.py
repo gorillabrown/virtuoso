@@ -1,8 +1,14 @@
-import hashlib, json, os, subprocess, sys
+import hashlib, importlib.util, json, os, subprocess, sys
 from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, "virtuoso_preflight.py")
+
+# Imported directly (not just invoked via subprocess) so the SK-01 mirror-invariant tests can
+# reuse the production readme-parsing logic and role-key schema instead of re-deriving them.
+_vp_spec = importlib.util.spec_from_file_location("virtuoso_preflight", SCRIPT)
+vp = importlib.util.module_from_spec(_vp_spec)
+_vp_spec.loader.exec_module(vp)
 
 DOC_DIRS = [
     "Project Documentation/1 governance",
@@ -758,6 +764,92 @@ def build_curated_fixture(root):
     }
 
 
+# ---------------------------------------------------------------------------
+# SK-01: registry mirror invariant + GoG-facsimile fixture. The readme is hand-damaged to the
+# v1.3.0 signature while the manifest stays correct/curated -- proving a single heal converges
+# the readme to the manifest exactly, without touching real user content (SR-3: a real-sized
+# lessons file at the curated path the damaged readme fails to name).
+# ---------------------------------------------------------------------------
+
+# The plugin's default lessons stub path -- the exact "1 governance/" location a v1.3.0-era
+# readme pointed the lessons role at, before GoG's own curated Lessons Catalog was registered.
+_V1_3_0_LESSONS_STUB_REL = CURATED_DOC_ROOT + "/1 governance/SpecRetro.Lessons_Learned.md"
+
+# The v1.3.0-signature machine block: the 9 known roles only (the epics/roadmapArchives
+# project-custom-role feature postdates this signature -- R2), with roadmap repointed at the
+# archive snapshot and lessons repointed at the plugin's default stub instead of the curated
+# catalog. Every other role matches the correct/curated ground truth verbatim.
+_V1_3_0_ROLE_ROWS = [
+    ("Roadmap", CURATED_ARCHIVE_REL, "✅ registered"),
+    ("Sprint catalog (CSV — source of truth)", CURATED_SPRINT_CATALOG_REL, "✅ registered"),
+    ("Sprint queue (xlsx — optional generated report)", CURATED_SPRINT_QUEUE_REL, "✅ registered"),
+    ("Lessons / retrospective", _V1_3_0_LESSONS_STUB_REL, "⬜ not present"),
+    ("Close-outs (directory)", CURATED_CLOSE_OUTS_REL, "✅ registered"),
+    ("Issues (directory)", CURATED_ISSUES_REL, "✅ registered"),
+    ("Roadmap reviews (directory)", CURATED_ROADMAP_REVIEWS_REL, "✅ registered"),
+    ("Outside audits (directory)", CURATED_OUTSIDE_AUDITS_REL, "✅ registered"),
+    ("Reference (directory)", CURATED_REFERENCE_REL, "✅ registered"),
+]
+_V1_3_0_MACHINE_PAIRS = [
+    ("roadmap", CURATED_ARCHIVE_REL),
+    ("sprintCatalog", CURATED_SPRINT_CATALOG_REL),
+    ("sprintQueue", CURATED_SPRINT_QUEUE_REL),
+    ("lessons", _V1_3_0_LESSONS_STUB_REL),
+    ("closeOuts", CURATED_CLOSE_OUTS_REL),
+    ("issues", CURATED_ISSUES_REL),
+    ("roadmapReviews", CURATED_ROADMAP_REVIEWS_REL),
+    ("outsideAudits", CURATED_OUTSIDE_AUDITS_REL),
+    ("reference", CURATED_REFERENCE_REL),
+    # no "epics" / "roadmapArchives" -- absent in the v1.3.0 signature (predates R2).
+]
+
+_GOG_FACSIMILE_LESSONS_MIN_BYTES = 1024 * 1024  # SR-3: a real-sized (>=1 MB) lessons file
+
+
+def build_gog_facsimile(root):
+    """GoG-facsimile fixture (SK-01): reuses build_curated_fixture's CORRECT, complete manifest
+    (curated custom paths incl. epics/roadmapArchives) but hand-damages the governance readme
+    to the v1.3.0 signature that predates it: roadmap repointed at the archive snapshot,
+    lessons repointed at the plugin's default stub path, and both project-custom keys entirely
+    absent. Also inflates the real lessons file (at the CURATED path the damaged readme fails
+    to name) past 1 MB per SR-3, so a heal that repairs the registry without touching real user
+    content is provably distinguishable from one that doesn't.
+
+    Returns build_curated_fixture's dict plus: 'lessons_path' (absolute), 'default_lessons_
+    stub_path' (absolute; expected to stay absent), 'correct_readme_bytes' and
+    'correct_manifest_bytes' (the pre-damage, manifest-matching ground truth a single heal is
+    expected to reconstruct byte-for-byte).
+    """
+    fx = build_curated_fixture(root)
+    root = Path(root)
+
+    correct_readme_bytes = fx["readme_path"].read_bytes()
+    correct_manifest_bytes = fx["manifest_path"].read_bytes()
+
+    # Inflate the real lessons file at its curated (correct) path past 1 MB (SR-3) -- content
+    # is asserted preserved after heal, not just size, so pad rather than truncate/replace.
+    lessons_path = root / fx["lessons_rel"]
+    lessons_text = _LESSONS_CATALOG_TEXT
+    pad_needed = _GOG_FACSIMILE_LESSONS_MIN_BYTES - len(lessons_text.encode("utf-8"))
+    if pad_needed > 0:
+        lessons_text += "\n<!-- SR-3 padding -->\n" + ("x" * pad_needed)
+    lessons_path.write_text(lessons_text, encoding="utf-8")
+    assert lessons_path.stat().st_size >= _GOG_FACSIMILE_LESSONS_MIN_BYTES
+
+    # Hand-damage the readme to the v1.3.0 signature -- same template, different table/machine.
+    damaged_readme = _CURATED_README_TEMPLATE.format(
+        table="\n".join("| %s | `%s` | %s |" % row for row in _V1_3_0_ROLE_ROWS),
+        machine="\n".join("%s: %s" % pair for pair in _V1_3_0_MACHINE_PAIRS),
+    )
+    fx["readme_path"].write_text(damaged_readme, encoding="utf-8")
+
+    fx["lessons_path"] = lessons_path
+    fx["default_lessons_stub_path"] = root / _V1_3_0_LESSONS_STUB_REL
+    fx["correct_readme_bytes"] = correct_readme_bytes
+    fx["correct_manifest_bytes"] = correct_manifest_bytes
+    return fx
+
+
 def _hash_walk(root, exclude_top=(".virtuoso",)):
     """Recursive content+structure snapshot of a directory tree: {relative file path -> sha256
     of its bytes}, plus the set of every relative directory path -- so both content drift and
@@ -1078,3 +1170,70 @@ def test_registered_but_missing_path_kept_and_marked_not_present(tmp_path):
 
     # Still never seeded/created -- heal only registers, it does not conjure content (R3).
     assert not (tmp_path / fx["registered_roadmap_rel"]).exists()
+
+
+# ---------------------------------------------------------------------------
+# SK-01: registry mirror invariant -- the readme's machine block must parse to exactly the
+# manifest's path mapping after every regenerating run; a GoG-facsimile fixture proves a
+# single heal converges a damaged readme to the manifest without touching real user content.
+# ---------------------------------------------------------------------------
+
+def test_readme_machine_block_mirrors_manifest_after_every_write(tmp_path):
+    """SK-01: after every regenerating run (create, adopt-triggered heal, detect-triggered
+    heal), the readme's machine block must parse to exactly the manifest's path mapping for
+    every role _ROLE_PATHKEY knows about -- the invariant _assert_registry_mirror enforces
+    internally right after each writer pair in _build_full/_build_thin."""
+    build_curated_fixture(tmp_path)
+
+    for mode_args in (
+        ("--mode", "create"),
+        ("--mode", "adopt"),
+        ("--mode", "detect", "--quiet"),
+    ):
+        rc, out = _run_capture("--root", str(tmp_path), *mode_args, root=tmp_path)
+        assert rc == 0, out
+
+        overlay = vp._read_registry_from_readme(str(tmp_path)) or {}
+        manifest_paths = json.loads(
+            (tmp_path / "Virtuoso" / "workspace-layout.json").read_text(encoding="utf-8")
+        )["paths"]
+        expected = {k: v for k, v in manifest_paths.items() if k in vp._ROLE_PATHKEY}
+        assert expected, "sanity: manifest carried no known governance roles to compare"
+        for key, rel in expected.items():
+            assert overlay.get(key) == rel, (
+                "mode=%s role=%s readme=%r manifest=%r"
+                % (mode_args, key, overlay.get(key), rel)
+            )
+
+
+def test_gog_facsimile_damaged_readme_heals_from_manifest(tmp_path):
+    """SK-01 Done-when 3: a GoG-facsimile fixture -- correct/curated manifest, readme hand-
+    damaged to the v1.3.0 signature (roadmap -> archive, lessons -> default stub, custom keys
+    absent) -- must converge to the manifest in a SINGLE heal, and the real (>=1 MB per SR-3)
+    lessons file living at the curated path the damaged readme fails to name must be left
+    completely untouched (size and content)."""
+    fx = build_gog_facsimile(tmp_path)
+
+    lessons_before = fx["lessons_path"].read_bytes()
+    assert len(lessons_before) >= _GOG_FACSIMILE_LESSONS_MIN_BYTES  # sanity: fixture as specced
+    damaged_readme_before = fx["readme_path"].read_bytes()
+    assert damaged_readme_before != fx["correct_readme_bytes"], (
+        "fixture bug: hand-damaged readme is not actually different from the correct one"
+    )
+
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0, out
+
+    assert fx["readme_path"].read_bytes() == fx["correct_readme_bytes"], (
+        "one heal did not converge the damaged readme to exactly the manifest's registry"
+    )
+    assert fx["manifest_path"].read_bytes() == fx["correct_manifest_bytes"], (
+        "heal rewrote the already-correct manifest"
+    )
+    assert fx["lessons_path"].read_bytes() == lessons_before, (
+        "heal touched the real lessons file's content"
+    )
+    assert not fx["default_lessons_stub_path"].exists(), (
+        "heal seeded/created a lessons stub at the plugin's default path even though lessons "
+        "is registered at the real curated path"
+    )
