@@ -10,6 +10,16 @@ description: >
   When in doubt, use this skill — misallocated effort is invisible waste.
 ---
 
+<!-- virtuoso-shared-contract v1 -->
+**Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
+
+- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
+- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
+- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
+- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
+- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
+- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+
 # Effort Levels — Sprint Dispatch Sizing
 
 This skill helps Cowork select the right effort level when authoring dispatch specs.
@@ -132,6 +142,12 @@ Use only when getting the answer right matters enough to justify the cost and la
 **What max doesn't fix:** max improves reasoning depth but doesn't override model
 capability limits. If the problem requires information the model doesn't have (proprietary
 APIs, runtime context it can't see), more thinking won't fill that gap.
+
+**Budget vs. method.** Max buys thinking capacity; it does not supply a procedure for
+spending it. On the analytical problems above — the mysterious bug, the architecture call,
+the risky refactor — pair it with `/ultrathink`, the protocol that converts the budget into
+structured depth (assumption archaeology first, then multi-dimensional analysis, then a
+validation pass). Max on its own is a larger budget with no method; set the two together.
 
 ---
 
