@@ -287,6 +287,32 @@ def _read_registry_from_readme(root):
     return overlay or None
 
 
+def _assert_registry_mirror(root):
+    """Post-write invariant (SK-01): after any run that regenerates the registry, the governance
+    readme's machine block must parse to exactly the manifest's path mapping for every known
+    governance role. Compares _read_registry_from_readme's parsed overlay against
+    workspace-layout.json's "paths", filtered to the roles _ROLE_PATHKEY maps -- manifest-only
+    structural keys (governance/operational/temp/...) and project-custom roles (R2) are out of
+    scope for this specific check. On any mismatch, raises with BOTH mappings so the divergence
+    is diagnosable -- this never silently writes a "repaired" second pass."""
+    manifest_paths = _read_manifest(root).get("paths")
+    if not isinstance(manifest_paths, dict):
+        manifest_paths = {}
+    expected = {k: v for k, v in manifest_paths.items() if k in _ROLE_PATHKEY}
+    if not expected:
+        return  # nothing this check can verify (e.g. manifest carries no known roles yet)
+    readme_overlay = _read_registry_from_readme(root) or {}
+    mismatched = [k for k, v in expected.items() if readme_overlay.get(k) != v]
+    if mismatched:
+        readme_side = {k: readme_overlay.get(k) for k in sorted(expected)}
+        manifest_side = {k: expected[k] for k in sorted(expected)}
+        raise RuntimeError(
+            "registry mirror invariant violated: readme machine block does not match "
+            "manifest paths for role(s) %s\n  readme:   %s\n  manifest: %s"
+            % (sorted(mismatched), readme_side, manifest_side)
+        )
+
+
 def _read_registry_overlay(root):
     """Registry-authoritative resolution order (R2): parse workspace-layout.json's "paths"
     dict; else parse the governance readme's machine block; else None so the caller falls back
@@ -742,6 +768,7 @@ def _build_full(root, layout, created, allow_seed=True):
     _vendor_scripts(paths, created)
     _write_governance_readme(root, paths, created, custom_paths)
     _write_layout_manifest(root, layout, paths, created, custom_paths, adopted=False)
+    _assert_registry_mirror(root)
     return paths
 
 
@@ -799,6 +826,7 @@ def _build_thin(root, created):
     _vendor_scripts(paths, created)
     _write_governance_readme(root, paths, created, custom_paths)
     _write_layout_manifest(root, "plugin-only", paths, created, custom_paths, adopted=True)
+    _assert_registry_mirror(root)
     return paths
 
 
