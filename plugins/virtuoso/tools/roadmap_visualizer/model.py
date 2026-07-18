@@ -16,7 +16,6 @@ class WorkspacePaths:
 
 @dataclass(frozen=True)
 class SprintRow:
-    priority: str
     seq: int | None
     code: str
     phase: str
@@ -32,8 +31,6 @@ class SprintRow:
     close_out_file: str
     description: str
     notes: str
-    done: bool
-    sort_key: str
 
 
 @dataclass(frozen=True)

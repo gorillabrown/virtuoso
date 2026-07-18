@@ -20,7 +20,6 @@ def _queue_rows(rows: list[SprintRow]) -> list[SprintRow]:
         key=lambda row: (
             row.seq is None,
             row.seq or 999999,
-            row.priority,
             row.code,
         ),
     )

@@ -1,12 +1,11 @@
+import csv
 import json
 from pathlib import Path
 
 import pytest
-from openpyxl import Workbook
 
 
 CATALOG_HEADERS = [
-    "Priority",
     "Seq",
     "Sprint Code",
     "Phase",
@@ -22,31 +21,16 @@ CATALOG_HEADERS = [
     "Close-Out File",
     "Description",
     "Notes",
-    "Done?",
-    "PhaseRank",
-    "SizeRank",
-    "SortKey",
 ]
 
 
-def make_workbook(path, rows):
-    wb = Workbook()
-    dashboard = wb.active
-    dashboard.title = "Dashboard"
-    dashboard["B11"] = len(rows)
-    dashboard["B12"] = sum(1 for row in rows if str(row[8]).startswith("Completed"))
-    dashboard["B13"] = sum(1 for row in rows if row[8] == "Blocked")
-    dashboard["B14"] = sum(1 for row in rows if row[8] == "Queued")
-    dashboard["B15"] = sum(1 for row in rows if row[8] == "In Flight")
-    dashboard["B21"] = 3
-    dashboard["B22"] = 0
-    dashboard["B23"] = 3
-    dashboard["B24"] = 0
-    catalog = wb.create_sheet("DATA.sprint-catalog")
-    catalog.append(CATALOG_HEADERS)
-    for row in rows:
-        catalog.append(row)
-    wb.save(path)
+def write_catalog_csv(path, rows):
+    """Write a sprint-catalog.csv with the 15-column schema (no computed columns)."""
+    with open(path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(CATALOG_HEADERS)
+        for row in rows:
+            writer.writerow(row)
 
 
 def test_model_jsonable_handles_paths_and_nested_dataclasses():
@@ -78,7 +62,6 @@ def test_model_jsonable_handles_paths_and_nested_dataclasses():
         ),
         sprints=[
             SprintRow(
-                priority="1",
                 seq=1,
                 code="SK-001",
                 phase="Phase 1",
@@ -94,8 +77,6 @@ def test_model_jsonable_handles_paths_and_nested_dataclasses():
                 close_out_file="",
                 description="",
                 notes="",
-                done=False,
-                sort_key="1",
             )
         ],
         dashboard={"total": 1},
@@ -233,15 +214,14 @@ def test_workspace_loader_resolves_manifest_paths(tmp_path):
     assert paths.reports == tmp_path / "Virtuoso" / "reports"
 
 
-def test_workbook_parser_reads_catalog_rows_and_dashboard(tmp_path):
-    from tools.roadmap_visualizer.workbook import read_workbook
+def test_catalog_parser_reads_rows_from_csv(tmp_path):
+    from tools.roadmap_visualizer.workbook import read_catalog
 
-    queue = tmp_path / "sprint-queue.xlsx"
-    make_workbook(
-        queue,
+    catalog = tmp_path / "sprint-catalog.csv"
+    write_catalog_csv(
+        catalog,
         [
             [
-                "1",
                 1,
                 "SK-001",
                 "Phase 1",
@@ -257,15 +237,11 @@ def test_workbook_parser_reads_catalog_rows_and_dashboard(tmp_path):
                 "",
                 "A sprint ready for dispatch.",
                 "",
-                False,
-                1,
-                4,
-                1,
             ]
         ],
     )
 
-    rows, dashboard = read_workbook(queue)
+    rows, dashboard = read_catalog(catalog)
 
     assert len(rows) == 1
     assert rows[0].code == "SK-001"
@@ -273,8 +249,76 @@ def test_workbook_parser_reads_catalog_rows_and_dashboard(tmp_path):
     assert rows[0].dependencies == ["SK-000", "SK-BASE"]
     assert rows[0].implementation_status == "Queued"
     assert rows[0].written_status == "Full Spec"
-    assert dashboard["total"] == 1
-    assert dashboard["queued"] == 1
+    assert dashboard == {}
+
+
+def test_catalog_parser_accepts_sprint_queue_path_and_reads_sibling_csv(tmp_path):
+    """read_catalog is fed workspace.sprint_queue (the xlsx path); it must resolve
+    the sibling sprint-catalog.csv rather than opening the workbook."""
+    from tools.roadmap_visualizer.workbook import read_catalog
+
+    queue = tmp_path / "sprint-queue.xlsx"
+    write_catalog_csv(
+        tmp_path / "sprint-catalog.csv",
+        [
+            [
+                1,
+                "SK-001",
+                "Phase 1",
+                "Stage 1",
+                "First sprint",
+                "M",
+                "",
+                "Queued",
+                "Full Spec",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ]
+        ],
+    )
+
+    rows, dashboard = read_catalog(queue)
+
+    assert len(rows) == 1
+    assert rows[0].code == "SK-001"
+    assert dashboard == {}
+
+
+def test_catalog_parser_skips_rows_without_sprint_code(tmp_path):
+    from tools.roadmap_visualizer.workbook import read_catalog
+
+    catalog = tmp_path / "sprint-catalog.csv"
+    write_catalog_csv(
+        catalog,
+        [
+            ["", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+            [
+                2,
+                "SK-002",
+                "Phase 1",
+                "Stage 1",
+                "Second sprint",
+                "S",
+                "",
+                "Queued",
+                "Stub",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ],
+        ],
+    )
+
+    rows, _ = read_catalog(catalog)
+
+    assert [row.code for row in rows] == ["SK-002"]
 
 
 def test_roadmap_parser_extracts_active_completed_and_full_spec_codes(tmp_path):
@@ -307,7 +351,7 @@ One-line stub only.
 
 <!-- Frontmatter:
 roadmap_doc: Roadmap.md
-sprint_queue_doc: sprint-queue.xlsx
+sprint_catalog_doc: sprint-catalog.csv
 -->
 """,
         encoding="utf-8",
@@ -338,7 +382,6 @@ def test_health_summary_treats_roadmap_as_source_of_truth():
     )
     rows = [
         SprintRow(
-            priority="1",
             seq=1,
             code="SK-002",
             phase="Phase 1",
@@ -354,11 +397,8 @@ def test_health_summary_treats_roadmap_as_source_of_truth():
             close_out_file="",
             description="",
             notes="",
-            done=False,
-            sort_key="1",
         ),
         SprintRow(
-            priority="2",
             seq=2,
             code="SK-003",
             phase="Phase 1",
@@ -374,8 +414,6 @@ def test_health_summary_treats_roadmap_as_source_of_truth():
             close_out_file="",
             description="",
             notes="",
-            done=False,
-            sort_key="2",
         ),
     ]
 
@@ -408,7 +446,6 @@ def test_health_summary_proceeds_when_queue_has_aligned_full_spec_sprint():
     )
     rows = [
         SprintRow(
-            priority="1",
             seq=1,
             code="SK-001",
             phase="Phase 1",
@@ -424,8 +461,6 @@ def test_health_summary_proceeds_when_queue_has_aligned_full_spec_sprint():
             close_out_file="",
             description="",
             notes="",
-            done=False,
-            sort_key="1",
         )
     ]
 
@@ -453,7 +488,6 @@ def test_health_summary_flags_status_drift_from_queue_mirror():
     )
     rows = [
         SprintRow(
-            priority="1",
             seq=1,
             code="SK-001",
             phase="Phase 1",
@@ -469,11 +503,8 @@ def test_health_summary_flags_status_drift_from_queue_mirror():
             close_out_file="",
             description="",
             notes="",
-            done=True,
-            sort_key="1",
         ),
         SprintRow(
-            priority="2",
             seq=2,
             code="SK-000",
             phase="Phase 0",
@@ -489,8 +520,6 @@ def test_health_summary_flags_status_drift_from_queue_mirror():
             close_out_file="",
             description="",
             notes="",
-            done=False,
-            sort_key="2",
         ),
     ]
 
@@ -547,11 +576,10 @@ Build the static visualizer.
 """,
         encoding="utf-8",
     )
-    make_workbook(
-        queue,
+    write_catalog_csv(
+        queue.with_name("sprint-catalog.csv"),
         [
             [
-                "1",
                 1,
                 "SK-001",
                 "Phase 1",
@@ -567,10 +595,6 @@ Build the static visualizer.
                 "",
                 "",
                 "",
-                False,
-                1,
-                4,
-                1,
             ]
         ],
     )
@@ -622,11 +646,10 @@ Build the static visualizer.
 """,
         encoding="utf-8",
     )
-    make_workbook(
-        queue,
+    write_catalog_csv(
+        queue.with_name("sprint-catalog.csv"),
         [
             [
-                "1",
                 1,
                 "SK-001",
                 "Phase 1",
@@ -642,10 +665,6 @@ Build the static visualizer.
                 "",
                 "",
                 "",
-                False,
-                1,
-                4,
-                1,
             ]
         ],
     )
@@ -683,13 +702,11 @@ Build the static visualizer.
 """,
         encoding="utf-8",
     )
-    make_workbook(
-        queue,
+    queue.write_bytes(b"")  # presence is enough for workspace path resolution
+    write_catalog_csv(
+        queue.with_name("sprint-catalog.csv"),
         [
-            [
-                "1", 1, "SK-001", "Phase 1", "Stage 1", "Build visualizer", "M", "",
-                "Queued", "Full Spec", "", "", "", "", "", "", False, 1, 4, 1,
-            ]
+            [1, "SK-001", "Phase 1", "Stage 1", "Build visualizer", "M", "", "Queued", "Full Spec", "", "", "", "", "", ""],
         ],
     )
 
@@ -702,7 +719,9 @@ Build the static visualizer.
     assert "SK-001" in html
 
 
-def test_health_summary_flags_dashboard_cache_staleness():
+def test_health_summary_dashboard_staleness_is_skipped_when_no_dashboard():
+    """The catalog CSV carries no cached KPIs, so summarize_health's dashboard-staleness
+    check is inert by default (no dashboard argument, matching read_catalog's `{}`)."""
     from pathlib import Path
 
     from tools.roadmap_visualizer.health import summarize_health
@@ -718,21 +737,15 @@ def test_health_summary_flags_dashboard_cache_staleness():
     )
     rows = [
         SprintRow(
-            priority="1", seq=1, code="SK-001", phase="Phase 1", stage="Stage 1",
+            seq=1, code="SK-001", phase="Phase 1", stage="Stage 1",
             title="Build visualizer", loe="M", dependencies=[],
             implementation_status="Queued", written_status="Full Spec",
             branch="", date_started="", date_completed="", close_out_file="",
-            description="", notes="", done=False, sort_key="1",
+            description="", notes="",
         )
     ]
-    # Catalog has 1 queued; the cached Dashboard says 5 -> stale.
-    dashboard = {"total": 1, "queued": 5, "in_flight": 0, "blocked": 0, "completed": 0}
 
-    health = summarize_health(roadmap, rows, dashboard)
+    health = summarize_health(roadmap, rows, {})
 
-    assert any(
-        finding.startswith("Dashboard cache stale: queued")
-        for finding in health.drift_findings
-    )
-    assert health.drift_count >= 1
-    assert health.recommendation == "Run recalc.py: the sprint-queue Dashboard cache is stale."
+    assert health.drift_count == 0
+    assert health.recommendation == "Proceed: queue is aligned."

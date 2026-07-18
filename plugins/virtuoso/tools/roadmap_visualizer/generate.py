@@ -7,14 +7,14 @@ from .health import summarize_health
 from .model import PlanningModel
 from .render import render_html
 from .roadmap import parse_roadmap
-from .workbook import read_workbook
+from .workbook import read_catalog
 from .workspace import load_workspace
 
 
 def build_model(root: Path | str) -> PlanningModel:
     workspace = load_workspace(root)
     roadmap = parse_roadmap(workspace.roadmap)
-    rows, dashboard = read_workbook(workspace.sprint_queue)
+    rows, dashboard = read_catalog(workspace.sprint_queue)
     health = summarize_health(roadmap, rows, dashboard)
     return PlanningModel(
         workspace=workspace,
