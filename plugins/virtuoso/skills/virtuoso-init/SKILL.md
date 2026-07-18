@@ -4,8 +4,8 @@ description: >
   Initialize or repair the Virtuoso workspace for a project. Use when setting up the
   virtuoso plugin in a new project, when a governance skill reports a missing workspace,
   or when the user says "virtuoso init", "set up virtuoso", "create the roadmap workspace",
-  or "initialize virtuoso". Offers a layout choice, creates the selected documentation
-  tree plus the Virtuoso plugin workspace, and never overwrites user content.
+  or "initialize virtuoso". Creates the plugin-only documentation tree (the only
+  supported layout) plus the Virtuoso plugin workspace, and never overwrites user content.
 ---
 
 # Virtuoso Init
@@ -24,32 +24,24 @@ usually do **not** want a fresh scaffold. The governance skills detect this and 
 duplicated and no parallel `Roadmap.md` is seeded. Prefer adoption for an established
 project; reach for the create flow below only to (re)build a documentation tree.
 
-Both `create` flows below are also adoption-aware: when a roadmap already exists anywhere
+The `create` flow below is also adoption-aware: when a roadmap already exists anywhere
 under the documentation root, the manifest points at it instead of seeding a new one.
 
-## Layout Choice
+## Layout
 
-Before running the script, ask the user which layout they want:
+Plugin-only is the only supported layout: project documentation stays in the project root
+under `Project Documentation/`; `Virtuoso/` only holds plugin-managed files such as the
+marker, layout manifest, and vendored scripts. (A previously offered "canonical" layout —
+moving documentation into `Virtuoso/Project Documentation/` — was removed; the script now
+hard-rejects `--layout canonical` at argparse, and a workspace with a legacy `"layout":
+"canonical"` value recorded in `workspace-layout.json` falls back to plugin-only.)
 
-1. **Plugin-only Virtuoso folder** — keep project documentation in the project root under
-   `Project Documentation/`; `Virtuoso/` only holds plugin-managed files such as the marker,
-   layout manifest, and vendored scripts. This is the default and lowest-risk option.
-2. **Canonical Virtuoso layout** — move documentation into
-   `Virtuoso/Project Documentation/`, with existing documentation migrated non-destructively
-   when the destination is free.
-
-If the user does not choose, use option 1.
-
-**Run option 1:**
+**Run:**
 
     python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/virtuoso_preflight.py" --root . --mode create --layout plugin-only
 
-**Run option 2:**
-
-    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/virtuoso_preflight.py" --root . --mode create --layout canonical
-
 Then report to the user what was created vs. what already existed (the script prints
-this), which layout was selected, and where the workspace lives.
+this) and where the workspace lives.
 
 The script writes two coupled outputs that record where governance lives:
 
