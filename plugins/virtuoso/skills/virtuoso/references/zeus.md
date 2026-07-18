@@ -327,9 +327,9 @@ Inserts between TEST and VERIFY. Skip entirely if the project has no such gate.
 - Report per-target PASS / MARGINAL / FAIL.
 
 > *Illustrative example (one project's instance — not part of the generic protocol):* a
-> fight-simulation project dispatches a calibration specialist to run N=1,200 × 3 seeds and
-> checks outcome-distribution bands (Decision/KO/TKO/Sub/Draw) defined in that project's
-> own reference. Your project supplies its own specialist, tiers, and targets.
+> simulation-heavy project dispatches a calibration specialist to run N=1,200 × 3 seeds and
+> checks outcome-distribution bands (Standard/Immediate/Official/Special/NoResult) defined in
+> that project's own reference. Your project supplies its own specialist, tiers, and targets.
 
 **Gate output:**
 ```

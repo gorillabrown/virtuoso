@@ -600,14 +600,22 @@ The cross-system implementer handles implementation tasks that span multiple sub
 
 ## Domain Specializations
 
-When dispatched for domain-specific work, read the relevant reference file FIRST:
+When dispatched for domain-specific work, read the project's relevant reference file FIRST.
+
+These reference files are **project-supplied, not shipped with the plugin** — a fresh project
+may have none. Discover them rather than assuming: look under `.claude/agents/references/`,
+then under the documentation root registered in the project's governance readme. If no
+reference file covers the domain, proceed with the investigation method below and record what
+you learned in agent memory so the next dispatch starts warmer.
+
+Typical shape of such a table, once a project defines one:
 
 | Domain | Reference File | When to Read |
 |--------|---------------|-------------|
-| Engine Forensics | `.claude/agents/references/engine-forensics.md` | Fight engine bugs, FAA/FRA/FRO pipeline tracing, subsystem interaction |
-| Fight Audit | `.claude/agents/references/fight-audit.md` | Sample fight output QA, statistical review, MMA realism checks |
-| Engagement Analysis | `.claude/agents/references/engagement-analysis.md` | Personality expression evaluation, engagement rhythm KPIs |
-| Temporal Fabric | `.claude/agents/references/temporal-fabric.md` | 300-slot timeline QA, pacing KPIs, action duration analysis |
+| Engine forensics | `<references>/engine-forensics.md` | Core-engine defects, pipeline tracing, subsystem interaction |
+| Output audit | `<references>/output-audit.md` | Sample-output QA, statistical review, plausibility checks |
+| Behavioral analysis | `<references>/behavioral-analysis.md` | Behavior-expression evaluation, interaction-rhythm KPIs |
+| Temporal analysis | `<references>/temporal-analysis.md` | Timeline QA, pacing KPIs, duration analysis |
 
 Read the reference file, then apply the investigation or implementation method from above to the domain-specific task.
 

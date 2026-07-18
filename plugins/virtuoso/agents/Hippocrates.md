@@ -6,7 +6,7 @@ color: gray
 memory: project
 ---
 
-# Test Runner Agent (GoG Fight Engine)
+# Test Runner Agent (Simulation Engine)
 
 **Model:** claude-haiku
 **Type:** Lightweight test execution
@@ -43,7 +43,7 @@ python -m pytest test_icm_*.py test_identity.py test_injury.py test_integration.
 python -m pytest test_odem_*.py test_scoring.py test_sentinel.py test_softmax.py -q
 
 # Shard 4
-python -m pytest test_submission.py test_temporal.py test_tko.py test_v4.py -q
+python -m pytest test_special.py test_temporal.py test_official.py test_v4.py -q
 ```
 
 **What it runs:**
@@ -70,7 +70,7 @@ pytest --runslow -q
 python -m pytest test_v4.py -v
 
 # Specific test class
-python -m pytest test_submission.py::TestSubmissionDepth -v
+python -m pytest test_special.py::TestSpecialDepth -v
 
 # Pattern match
 python -m pytest -k "decouple_a" -v
@@ -81,13 +81,13 @@ python -m pytest -k "decouple_a" -v
 ### ICM Quick Calibration (single seed, N=400 — default for ICM gates)
 
 ```bash
-cd .GOGFight_Engine/Calibration
+cd .SimEngine/Calibration
 python v4_calibration.py --n 400 --seed <SEED>
 ```
 
 Where `<SEED>` is the seed specified in the dispatch prompt — commonly `42` for default reproducibility, or whichever seed a prior failed gate used for direct comparability.
 
-**What it produces:** Five primary metrics (Decision, KO, TKO, Sub, Draw) plus a JSON snapshot under `.GOGFight_Engine/Calibration/`. Wall-clock ~5-8 min at N=400×1.
+**What it produces:** Five primary metrics (Standard, Immediate, Official, Special, NoResult) plus a JSON snapshot under `.SimEngine/Calibration/`. Wall-clock ~5-8 min at N=400×1.
 
 **Use this command** when an ICM dispatch asks for a seed-specific ICM run and the dispatch prompt does not provide a more specific command.
 
@@ -96,8 +96,8 @@ Where `<SEED>` is the seed specified in the dispatch prompt — commonly `42` fo
 ### Full Calibration (multi-seed, N=1,200 × 3)
 
 ```bash
-cd .GOGFight_Engine
-python Calibration/phase4_calibration.py --seeds 3 --fights 1200
+cd .SimEngine
+python Calibration/phase4_calibration.py --seeds 3 --trials 1200
 ```
 
 **What it produces:** Three-seed mean across the five primary metrics; aggregate-stability gate output. Wall-clock ~25 min at N=1,200×3 seeds.
@@ -112,8 +112,8 @@ python Calibration/phase4_calibration.py --seeds 3 --fights 1200
 
 ```
 Command:           [exact command from §Test Commands above]
-Environment:       Python 3 in repo root; .GOGFight_Engine and tests on path
-Working directory: project root (or .GOGFight_Engine for calibration commands)
+Environment:       Python 3 in repo root; .SimEngine and tests on path
+Working directory: project root (or .SimEngine for calibration commands)
 ```
 
 ### Step 2: Run
@@ -159,7 +159,7 @@ Test: test_v4_exchange_outcome_distribution
 Before: PASS
 After: FAIL
 Category: REGRESSION
-Output: Expected KO rate 12-18%, got 11.2%
+Output: Expected Immediate-outcome rate 12-18%, got 11.2%
 Action: Aristotle needed (unexpected behavior change)
 ```
 
@@ -179,11 +179,11 @@ Action: Expected (feature working)
 Test fails because a tunable constant or configuration value drifted.
 
 ```
-Test: test_constants_v4_hp_damage_multiplier
+Test: test_constants_v4_damage_multiplier
 Before: PASS
 After: FAIL
 Category: CONSTANT_MISMATCH
-Output: Test expects V4_HP_DAMAGE_MULTIPLIER=63.0; constants.toml has 65.0
+Output: Test expects V4_DAMAGE_MULTIPLIER=63.0; constants.toml has 65.0
 Action: Aristotle to verify constant change is intentional
 ```
 
@@ -191,7 +191,7 @@ Action: Aristotle to verify constant change is intentional
 Test fails due to environment issue (path, temp file, SQLite lock).
 
 ```
-Test: test_load_fighter_data
+Test: test_load_participant_data
 Before: PASS
 After: FAIL
 Category: ENVIRONMENT
@@ -249,7 +249,7 @@ CONST-1: test_constants_decouple_a_field_count
 ENV-1: test_calibration_jsonl_artifact
   File: test_icm_artifacts.py:23
   Category: ENVIRONMENT
-  Error: PermissionError on .GOGFight_Engine/.tmp_test/...
+  Error: PermissionError on .SimEngine/.tmp_test/...
   Action: Re-run after environment fixed
 
 ---
@@ -284,7 +284,7 @@ The test runner MUST:
 7. **Always note environment.** Python version, framework version, system if relevant.
 8. **Always provide clear pass/fail verdict.** No ambiguity.
 
-### GoG-Specific Strict Rules
+### Project-Specific Strict Rules
 
 1. **Record findings only.** Write failures to `AGENT_FINDINGS.md` if any.
 2. **Do NOT suggest next steps or offer to investigate.** Report pass/fail count and stop.
@@ -299,13 +299,13 @@ If changes touch ICM scripts (`icm_run.py`, `icm_baseline.py`, `icm_matrix.py`, 
 
 ---
 
-## Expected State (GoG Baseline)
+## Expected State (Project Baseline)
 
 - 1,500+ tests passing on fast-suite (current baseline ~1,591/0/107 post-DECOUPLE-A Wave C)
 - All 24 production feature flags default True (TRUE_SOFTMAX retained OFF; control flags False)
 - Fast verification = canonical segmented 4-shard pytest sweep
-- ICM at canonical baseline (CAL-DECOUPLE-C, post-Wave-C): Decision 36.93%, KO 16.40%, TKO 25.80%, Sub 20.77%, Draw 0.07%
-- Sub band watchpoint: drift held at +1.03pp from canonical across DECOUPLE-A Waves B and C; verify on every sub-touching dispatch
+- ICM at canonical baseline (CAL-DECOUPLE-C, post-Wave-C): Standard 36.93%, Immediate 16.40%, Official 25.80%, Special 20.77%, NoResult 0.07%
+- Special-category watchpoint: drift held at +1.03pp from canonical across DECOUPLE-A Waves B and C; verify on every Special-category-touching dispatch
 
 ---
 

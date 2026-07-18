@@ -297,7 +297,7 @@ Plus, updated in place:
 
 ### 0.1 Locate the roadmap document
 If `Roadmap.md` exists in the project root, use it. Otherwise look
-for a project-named variant (e.g., `gog_roadmap.md`). If ambiguous,
+for a project-named variant (e.g., `<project-name>_roadmap.md`). If ambiguous,
 AskUserQuestion.
 
 Persist as `roadmap_doc: <filename>` in frontmatter.
@@ -515,7 +515,7 @@ At correct Phase → Stage → Sprint position, replacing prior stubs.
 
 ##### Implementation detail
 - **Edit sites:** `engine_core.py:968-970`, ...
-- **Tests:** `test_identity.py::test_per_fighter_instinct_invariant`
+- **Tests:** `test_identity.py::test_per_participant_trait_invariant`
 - **Constants:** ...
 - **Branch:** `sk-xx-wave-a` from clean main
 - **Commit hygiene:** explicit-stage; no destructive flags

@@ -17,7 +17,7 @@ read and write.
 
 If the project **already maintains an established documentation tree** — a
 `Project Documentation/` or `2. Project Documentation/` directory with a `1 governance` /
-`2 operational` subtree and its own roadmap (under any name, e.g. `GoG_Roadmap.md`) — you
+`2 operational` subtree and its own roadmap (under any name, e.g. `<ProjectName>_Roadmap.md`) — you
 usually do **not** want a fresh scaffold. The governance skills detect this and run
 `--mode adopt`, which lays down only a thin `Virtuoso/` control marker whose
 `workspace-layout.json` **points at the existing roadmap**; nothing is moved or
