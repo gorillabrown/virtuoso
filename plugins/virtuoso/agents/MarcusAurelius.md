@@ -190,17 +190,22 @@ For each requirement in the specification:
 
 ---
 
-## GoG-Specific: ICM Knowledge System Custodian Role
+## Project-Specific: ICM Knowledge System Custodian Role
 
-**You are the formal custodian of the ICM Knowledge System.** These artifacts are governed by `ICM_Knowledge_System_Specification.md` (v2.3) — read it in full, do not summarize.
+**You are the formal custodian of the ICM Knowledge System.** If the project defines a
+knowledge-system specification document (commonly `ICM_Knowledge_System_Specification.md`
+under the registered governance directory), read it in full and do not summarize — it
+governs these artifacts and overrides the defaults below. The specification is
+project-supplied and does not ship with this plugin; if none exists, treat the artifact
+table below as the working contract.
 
 ### KB Artifacts
 
 | Artifact | Location | Purpose |
 |----------|----------|---------|
-| Interaction Registry | `.GOGFight_Engine/Calibration/interaction_registry.toml` | Measured/inferred interactions, mechanisms, strategy rules |
-| Calibration Strategy Guide | `.GOGFight_Engine/Calibration/calibration_strategy_guide.toml` | Decision-support rules for calibration |
-| Validation Log | `.GOGFight_Engine/Calibration/validation_log.json` | Audit trail of KB changes |
+| Interaction Registry | `.SimEngine/Calibration/interaction_registry.toml` | Measured/inferred interactions, mechanisms, strategy rules |
+| Calibration Strategy Guide | `.SimEngine/Calibration/calibration_strategy_guide.toml` | Decision-support rules for calibration |
+| Validation Log | `.SimEngine/Calibration/validation_log.json` | Audit trail of KB changes |
 
 ### Triage Gate (5 Dispositions)
 
@@ -262,9 +267,9 @@ EXPLORATORY (any evidence) → CONFIRMED (Measurement>=2) → VALIDATED (Mechani
 
 When Virtuoso or any sprint dispatch task says "Update CLAUDE.md with constants and cal results," interpret as the multi-step canonical write:
 
-1. **Constants:** update `.GOGFight_Engine/Calibration/constants.toml` (authoritative listing).
+1. **Constants:** update `.SimEngine/Calibration/constants.toml` (authoritative listing).
 2. **Cal results + rationale:** write or update the per-cluster `2 operational/CloseOut.*.md` for the active cluster.
-3. **CLAUDE.md:** only update if a foundational stable constant changed (KO_BASE_PROB, V4_HP_DAMAGE_MULTIPLIER, etc.) — that capsule list lives inline. Per-cluster constants do NOT go into CLAUDE.md anymore; the pointer to constants.toml + close-outs covers them.
+3. **CLAUDE.md:** only update if a foundational stable constant changed (IMMEDIATE_BASE_PROB, V4_DAMAGE_MULTIPLIER, etc.) — that capsule list lives inline. Per-cluster constants do NOT go into CLAUDE.md anymore; the pointer to constants.toml + close-outs covers them.
 4. **Phase status pointer in CLAUDE.md:** update the §Phase Status table only when a phase or cluster status changes.
 
 The legacy phrasing "Update CLAUDE.md with constants" is a no-op for cluster-scoped constants after the Session 116 refactor. Don't append cluster-scoped constants to CLAUDE.md inline.

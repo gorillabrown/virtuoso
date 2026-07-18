@@ -913,11 +913,11 @@ new initiatives, then /roadmap-review to plan and spec.
 If Phase 2 surfaces a structural gap that Cowork cannot resolve
 via investigation, halt printing and AskUserQuestion. Example:
 
-> The full spec for SK-FU12-E defers Decision 12 (which submission
+> The full spec for SK-FU12-E defers Decision 12 (which secondary
 > sub-channel to gate on) to the implementer. The CLI agent should
 > not be making this call. Pick:
-> - (A) Gate on the closer-submission channel only [RECOMMENDED]
-> - (B) Gate on both closer and inverted-submission channels
+> - (A) Gate on the primary sub-channel only [RECOMMENDED]
+> - (B) Gate on both the primary and inverted sub-channels
 > - (C) Pause — let me investigate offline and update the spec
 >   manually
 > - (D) Escalate to /roadmap-review

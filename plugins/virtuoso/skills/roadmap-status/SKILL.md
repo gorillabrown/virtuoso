@@ -161,30 +161,30 @@ diagnostic protocol now in force for every future calibration
 failure.**"
 
 ### Rule 4 — Use complete sentences, never fragments
-❌ "[SK-FU12-RESOLUTION] **B6 hybrid revert; Sub gate cleared at
+❌ "[SK-FU12-RESOLUTION] **B6 hybrid revert; Secondary gate cleared at
 20.90%.**"
 
-✓ "[SK-FU12-RESOLUTION] **The broken submission-finish gate is
+✓ "[SK-FU12-RESOLUTION] **The broken secondary-finish gate is
 fixed.** Reverting to a clean baseline cleared it at 20.9%, inside
 the target band; the rest of the calibration cluster is unblocked."
 
 ### Rule 5 — Translate or paraphrase acronyms in the LEDE
-❌ "[SK-FLASH-SUB-SYM] **Added Sub-INT flash mult; ref overshot at
+❌ "[SK-FLASH-CAL-SYM] **Added Sec-INT flash mult; ref overshot at
 70, retuned to 60.**"
 
-✓ "[SK-FLASH-SUB-SYM] **Submission specialists now get a finish
-bonus comparable to strikers, finally evening out the two finish
-channels.** An initial multiplier value overshot the target band
-and was tuned down."
+✓ "[SK-FLASH-CAL-SYM] **Secondary-channel specialists now get a finish
+bonus comparable to primary-channel specialists, finally evening out
+the two finish channels.** An initial multiplier value overshot the
+target band and was tuned down."
 
 ### Rule 6 — Coming-up bullets follow the same format
-❌ "[SK-FU12-E] **Wire Instinct + RT into submission finish-threat
+❌ "[SK-FU12-E] **Wire Instinct + RT into secondary finish-threat
 bonus.**"
 
 ✓ "[SK-FU12-E] **Wires the Instinct and Risk Tolerance attributes
-into the submission finish-bonus calculation, so high-instinct,
-high-risk-tolerance fighters get a bigger reward for committed
-submission attempts.**"
+into the secondary-channel finish-bonus calculation, so high-instinct,
+high-risk-tolerance participants get a bigger reward for committed
+secondary-channel attempts.**"
   - *Adaptation: validation calibration runs with two random seeds
     instead of one to reduce noise variance.*
 

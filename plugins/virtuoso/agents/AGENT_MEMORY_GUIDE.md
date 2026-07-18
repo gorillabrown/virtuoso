@@ -1,6 +1,6 @@
 # Shared Agent Memory Guide
 
-All GoG agents use a persistent, file-based memory system at:
+All agents in this project use a persistent, file-based memory system at:
 `<project-root>/.claude/agent-memory/{agent-name}/`
 
 ## Memory Types
@@ -35,10 +35,12 @@ type: {{user|feedback|project|reference}}
 - Check for existing memory before creating duplicates
 
 ## ICM Knowledge System Reference
-- **Governing spec**: `2. Project Documentation/1 governance/ICM_Knowledge_System_Specification.md` (v2.3)
-- **Interaction Registry**: `.GOGFight_Engine/Calibration/interaction_registry.toml`
-- **Calibration Strategy Guide**: `.GOGFight_Engine/Calibration/calibration_strategy_guide.toml`
-- **Validation Log**: `.GOGFight_Engine/Calibration/validation_log.json`
+- **Governing spec** (project-supplied; not shipped with the plugin): resolve
+  `ICM_Knowledge_System_Specification.md` under the governance directory registered in the
+  project's governance readme. If the project defines no such spec, the defaults below apply.
+- **Interaction Registry**: `.SimEngine/Calibration/interaction_registry.toml`
+- **Calibration Strategy Guide**: `.SimEngine/Calibration/calibration_strategy_guide.toml`
+- **Validation Log**: `.SimEngine/Calibration/validation_log.json`
 - **Custodian**: MarcusAurelius (executes triage gate, maintains all 3 artifacts)
 
 ## Bash Execution Rule

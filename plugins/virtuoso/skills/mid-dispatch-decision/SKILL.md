@@ -859,5 +859,5 @@ any inline edit to a file the in-flight worktree might also touch at close-out.
 
 See [references/example-sk01b.md](references/example-sk01b.md) for a full
 walkthrough of the SK-01B calibration drift decision (Type 1a — advance with
-pre-authorized full-cal). The example uses GoG-specific agent names; adapt
+pre-authorized full-cal). The example uses project-specific agent names; adapt
 agent references to your project's roster.

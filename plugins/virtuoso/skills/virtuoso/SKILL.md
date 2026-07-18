@@ -29,7 +29,7 @@ the desired title is:
 `[SPRINT-ID] — [short dispatch name]`
 
 Examples:
-- `KOKORO-DEEPEN-2 — Chunk Timing Narration`
+- `NARR-DEEPEN-2 — Chunk Timing Narration`
 - `POSTV2-REVIEW-1 — Review Closeout`
 - `SPRINT-QUEUE-MIGRATE — Workbook Queue Transition`
 
@@ -397,7 +397,7 @@ owned files/modules, and the success criteria. Avoid copying large source blocks
 the prompt. Example:
 
 ```
-Good: "Modify calc_defense_effectiveness() in engine/fro.py — change WEIGHT from
+Good: "Modify calc_defense_effectiveness() in engine/scoring.py — change WEIGHT from
 3.0 to 2.0. Run tests after to confirm no regression."
 
 Bad: [200 lines of inlined source code, data structure definitions, and API docs
