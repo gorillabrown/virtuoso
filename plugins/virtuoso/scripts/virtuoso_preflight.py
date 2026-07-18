@@ -14,8 +14,12 @@ Modes:
 
 Layouts:
   plugin-only  keep project documentation outside Virtuoso/ under Project Documentation/.
-  canonical    keep project documentation under Virtuoso/Project Documentation/.
   auto         reuse the recorded layout, or default to plugin-only for new workspaces.
+
+New projects:
+  detect (the SessionStart hook path) auto-scaffolds the standard plugin-only workspace when
+  the target root is a brand-new project directory -- no entries at all, or only a `.git`
+  entry. A non-empty, unmarkered directory stays fully inert under detect either way.
 
 Integrity:
   --check-roadmap PATH   sanity-check a roadmap before a heavyweight rewrite. Exits 0 (ok),
@@ -31,7 +35,7 @@ User content (Roadmap.md, sprint-queue.xlsx, lessons) is never overwritten; an e
 roadmap under any name is discovered and pointed at rather than re-seeded. Usage:
 
     python virtuoso_preflight.py --root <dir> [--mode create|detect|adopt]
-        [--layout auto|plugin-only|canonical] [--quiet]
+        [--layout auto|plugin-only] [--quiet]
     python virtuoso_preflight.py --check-roadmap <path>
 """
 import argparse
@@ -53,7 +57,7 @@ TEMPLATE_XLSX = os.path.join(
 )
 WORKFLOW_REF_TEMPLATE = os.path.join(PLUGIN_ROOT, "assets", "WORKFLOW_REFERENCE.template.md")
 
-LAYOUTS = ("auto", "plugin-only", "canonical")
+LAYOUTS = ("auto", "plugin-only")
 DOC_ROOT_CANDIDATES = ("Project Documentation", "2. Project Documentation")
 DOC_SUBDIRS = {
     "governance": "1 governance",
@@ -154,6 +158,18 @@ _ROLE_PATHKEY = {
     "roadmapReviews": "roadmap_reviews", "outsideAudits": "outside_audits",
     "reference": "reference",
 }
+# The manifest tracks a handful of structural keys that have no GOVERNANCE_ROLES/readme row
+# (they're locations, not documents skills resolve by role). Combined with _ROLE_PATHKEY this
+# is the full set of registry keys the plugin already understands -- anything else found in a
+# parsed registry is a project-custom role (R2).
+_MANIFEST_ONLY_PATHKEY = {
+    "governance": "governance", "operational": "operational", "temp": "temp",
+    "workflowReference": "workflow_reference", "scripts": "scripts",
+    "governanceReadme": "governance_readme",
+}
+_KNOWN_PATHKEY = dict(_ROLE_PATHKEY)
+_KNOWN_PATHKEY.update(_MANIFEST_ONLY_PATHKEY)
+
 GOVERNANCE_README_TEMPLATE = """# Virtuoso Governance Registry
 
 **This file is the authority.** It is the single source of truth for where this project's
@@ -188,6 +204,13 @@ beside it. `Virtuoso/workspace-layout.json` is the machine-readable mirror of th
 {machine}
 -->
 """
+
+# Machine block: a fenced comment holding one "key: relative/path" line per role, verbatim-
+# parseable so a corrupt/missing manifest can be reconstructed from it (R2 last criterion).
+_MACHINE_BLOCK_RE = re.compile(r"<!--\s*virtuoso-governance-registry\s*\n(.*?)\n-->", re.DOTALL)
+_MACHINE_LINE_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*):\s*(.+)$")
+# camelCase word boundary, used to derive a human label for an unrecognized registry key.
+_CAMEL_BOUNDARY_RE = re.compile(r"(?<!^)(?=[A-Z])")
 
 
 def _home():
@@ -229,13 +252,82 @@ def _read_manifest(root):
 
 
 def _read_recorded_layout(root):
+    """A manifest recording anything other than "plugin-only" -- including a legacy
+    "canonical" value from before canonical layout was removed, or any other unrecognized
+    value -- is treated as unset and falls back to the plugin-only default (_resolve_layout).
+    Registry-authoritative: content stays wherever it's registered; nothing migrates."""
     layout = _read_manifest(root).get("layout")
-    return layout if layout in ("plugin-only", "canonical") else None
+    return layout if layout == "plugin-only" else None
 
 
 def _read_adopted(root):
     """True when the recorded workspace was laid down by a thin adopt (heal stays thin)."""
     return bool(_read_manifest(root).get("adopted"))
+
+
+def _read_registry_from_readme(root):
+    """Parse the virtuoso-governance-registry machine block out of the governance readme.
+    Returns {key: relative path} or None when the readme is absent or has no parseable block."""
+    try:
+        with open(os.path.join(root, GOVERNANCE_README), "r", encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return None
+    m = _MACHINE_BLOCK_RE.search(text)
+    if not m:
+        return None
+    overlay = {}
+    for line in m.group(1).splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        lm = _MACHINE_LINE_RE.match(line)
+        if lm:
+            overlay[lm.group(1)] = lm.group(2).strip()
+    return overlay or None
+
+
+def _read_registry_overlay(root):
+    """Registry-authoritative resolution order (R2): parse workspace-layout.json's "paths"
+    dict; else parse the governance readme's machine block; else None so the caller falls back
+    to today's discovery/defaults behavior as a last resort. Returns {key: relative path
+    string} covering both known roles and unrecognized project-custom keys, or None."""
+    paths = _read_manifest(root).get("paths")
+    if isinstance(paths, dict) and paths:
+        overlay = {k: v for k, v in paths.items() if isinstance(v, str)}
+        if overlay:
+            return overlay
+    return _read_registry_from_readme(root)
+
+
+def _apply_registry_overlay(root, paths, overlay):
+    """Override computed-default paths with the registry's curated values (R2). A known key
+    (readme role or manifest-structural key) overrides the matching paths[...] entry outright
+    -- registered-but-missing-on-disk paths are kept as-is, never re-guessed (R4). Anything
+    else is an unrecognized project-custom role, returned separately (in the overlay's own
+    order) so callers can round-trip it verbatim into both regenerated outputs."""
+    custom = {}
+    if not overlay:
+        return custom
+    for key, rel in overlay.items():
+        pathkey = _KNOWN_PATHKEY.get(key)
+        if pathkey:
+            paths[pathkey] = os.path.join(root, rel)
+        else:
+            custom[key] = rel
+    return custom
+
+
+def _derive_label(key, abs_path):
+    """Human label for an unrecognized (project-custom) registry key, used for its readme row
+    (R2: "readme rows with a derived label"): split camelCase into words, sentence-case them,
+    and mark directories -- "roadmapArchives" -> "Roadmap archives (directory)",
+    "epics" -> "Epics"."""
+    spaced = _CAMEL_BOUNDARY_RE.sub(" ", key)
+    label = spaced[:1].upper() + spaced[1:].lower()
+    if os.path.isdir(abs_path):
+        label += " (directory)"
+    return label
 
 
 def _resolve_layout(root, requested):
@@ -265,6 +357,19 @@ def _is_adoptable(root):
     if _is_project(root):
         return False
     return _discover_roadmap_anywhere(root) is not None
+
+
+def _is_new_project_root(root):
+    """True when `root` is a brand-new project directory: no entries at all, or only a `.git`
+    entry (a freshly-initialized repo with no other content yet). There is nothing here detect
+    could clobber, so a new project auto-scaffolds the standard plugin-only workspace even from
+    detect (the SessionStart hook path) -- a non-empty, unmarkered directory stays fully inert
+    under detect either way."""
+    try:
+        entries = set(os.listdir(root))
+    except OSError:
+        return False
+    return entries <= {".git"}
 
 
 def _walk_docs(doc_root):
@@ -419,7 +524,7 @@ def _discover_sprint_queue(doc_root):
 
 def _workspace_paths(root, layout):
     v = os.path.join(root, "Virtuoso")
-    docs = os.path.join(v, "Project Documentation") if layout == "canonical" else _project_doc_root(root)
+    docs = _project_doc_root(root)
     governance = os.path.join(docs, DOC_SUBDIRS["governance"])
     operational = os.path.join(docs, DOC_SUBDIRS["operational"])
     temp = os.path.join(docs, DOC_SUBDIRS["temp"])
@@ -447,17 +552,22 @@ def _workspace_paths(root, layout):
     }
 
 
-def _apply_discovery(paths):
+def _apply_discovery(paths, overlay=None):
     """Repoint roadmap/sprint_queue at an existing document when one is discoverable,
     so the conventional seed is never written beside a roadmap that already exists.
-    Returns (roadmap_found, queue_found)."""
-    roadmap = _discover_roadmap(paths["docs"])
-    queue = _discover_sprint_queue(paths["docs"])
+    A role the registry already has (R2) is never handed to discovery -- a structurally-
+    richer archive must never outrank a curated registration. Returns (roadmap_found,
+    queue_found), where "found" also covers "already registered"."""
+    overlay = overlay or {}
+    roadmap_registered = "roadmap" in overlay
+    queue_registered = "sprintQueue" in overlay
+    roadmap = None if roadmap_registered else _discover_roadmap(paths["docs"])
+    queue = None if queue_registered else _discover_sprint_queue(paths["docs"])
     if roadmap:
         paths["roadmap"] = roadmap
     if queue:
         paths["sprint_queue"] = queue
-    return bool(roadmap), bool(queue)
+    return (roadmap_registered or bool(roadmap)), (queue_registered or bool(queue))
 
 
 def _ensure_dir(path, created):
@@ -482,39 +592,19 @@ def _ensure_copy(src, dst, created):
         created.append(dst)
 
 
-def _move_missing(src, dst, created):
-    """Move src to dst only when dst is absent. Existing destinations always win."""
-    if not os.path.exists(src) or os.path.exists(dst):
-        return
-    os.makedirs(os.path.dirname(dst), exist_ok=True)
-    shutil.move(src, dst)
-    created.append(dst + " (migrated)")
-
-
-def _merge_dir_missing(src, dst, created):
-    """Move missing children from src into dst without overwriting conflicts."""
-    if not os.path.isdir(src):
-        return
-    os.makedirs(dst, exist_ok=True)
-    for name in os.listdir(src):
-        s = os.path.join(src, name)
-        d = os.path.join(dst, name)
-        if os.path.isdir(s) and os.path.isdir(d):
-            _merge_dir_missing(s, d, created)
-        elif not os.path.exists(d):
-            shutil.move(s, d)
-            created.append(d + " (migrated)")
-
-
 def _refresh_copy(src, dst, created):
-    """Copy plugin-managed files, overwriting only when content differs."""
+    """Copy plugin-managed files, overwriting only when content differs. Comparison normalizes
+    \\r\\n -> \\n on both sides first (R5), so a destination that differs from the plugin's
+    copy only by line-ending convention (e.g. a CRLF-committed vendored script vs the plugin's
+    LF source) is left alone -- never treated as drift."""
     if not os.path.exists(src):
         return
     if os.path.exists(dst):
         try:
             with open(src, "rb") as a, open(dst, "rb") as b:
-                if a.read() == b.read():
-                    return
+                a_data, b_data = a.read(), b.read()
+            if a_data == b_data or a_data.replace(b"\r\n", b"\n") == b_data.replace(b"\r\n", b"\n"):
+                return
         except OSError:
             pass
         shutil.copyfile(src, dst)
@@ -544,7 +634,7 @@ def _rel(root, path):
     return os.path.relpath(path, root).replace("\\", "/")
 
 
-def _write_layout_manifest(root, layout, paths, created, adopted=False):
+def _write_layout_manifest(root, layout, paths, created, custom_paths=None, adopted=False):
     data = {
         "layout": layout,
         "adopted": bool(adopted),
@@ -566,13 +656,17 @@ def _write_layout_manifest(root, layout, paths, created, adopted=False):
             "governanceReadme": _rel(root, paths["governance_readme"]),
         },
     }
+    # R2: round-trip project-custom registry keys verbatim, after the known roles.
+    for key, rel in (custom_paths or {}).items():
+        data["paths"][key] = rel
     _refresh_text(_layout_manifest(root), json.dumps(data, indent=2) + "\n", created)
 
 
-def _write_governance_readme(root, paths, created):
+def _write_governance_readme(root, paths, created, custom_paths=None):
     """Render the project-root governance registry — the authority skills read first. Lists
     each required document role and its resolved path, marking present vs. absent. Content is
-    deterministic (no timestamp) so re-runs stay idempotent."""
+    deterministic (no timestamp) so re-runs stay idempotent. Project-custom registry keys
+    (R2) are appended after the known roles, with a derived label."""
     rows, machine = [], []
     for key, label in GOVERNANCE_ROLES:
         ap = paths[_ROLE_PATHKEY[key]]
@@ -580,35 +674,14 @@ def _write_governance_readme(root, paths, created):
         status = "✅ registered" if os.path.exists(ap) else "⬜ not present"
         rows.append("| %s | `%s` | %s |" % (label, rel, status))
         machine.append("%s: %s" % (key, rel))
+    for key, rel in (custom_paths or {}).items():
+        ap = os.path.join(root, rel)
+        status = "✅ registered" if os.path.exists(ap) else "⬜ not present"
+        label = _derive_label(key, ap)
+        rows.append("| %s | `%s` | %s |" % (label, rel, status))
+        machine.append("%s: %s" % (key, rel))
     body = GOVERNANCE_README_TEMPLATE.format(table="\n".join(rows), machine="\n".join(machine))
     _refresh_text(paths["governance_readme"], body, created)
-
-
-def _migrate_to_canonical(root, paths, created):
-    """Move legacy/root documentation into the canonical tree when destinations are free."""
-    v = paths["workspace"]
-    for doc_root in [os.path.join(root, name) for name in DOC_ROOT_CANDIDATES]:
-        if os.path.abspath(doc_root) == os.path.abspath(paths["docs"]):
-            continue
-        _merge_dir_missing(os.path.join(doc_root, DOC_SUBDIRS["governance"]), paths["governance"], created)
-        _merge_dir_missing(os.path.join(doc_root, DOC_SUBDIRS["operational"]), paths["operational"], created)
-        _merge_dir_missing(os.path.join(doc_root, DOC_SUBDIRS["temp"]), paths["temp"], created)
-        _merge_dir_missing(os.path.join(doc_root, DOC_SUBDIRS["outside_audits"]), paths["outside_audits"], created)
-        _merge_dir_missing(os.path.join(doc_root, DOC_SUBDIRS["reference"]), paths["reference"], created)
-
-    _move_missing(os.path.join(root, "Roadmap.md"), paths["roadmap"], created)
-    _move_missing(os.path.join(root, "SpecRetro.Lessons_Learned.md"), paths["lessons"], created)
-    _move_missing(os.path.join(root, "sprint-queue.xlsx"), paths["sprint_queue"], created)
-    _move_missing(os.path.join(root, "WORKFLOW_REFERENCE.md"), paths["workflow_reference"], created)
-
-    _move_missing(os.path.join(v, "Roadmap.md"), paths["roadmap"], created)
-    _move_missing(os.path.join(v, "SpecRetro.Lessons_Learned.md"), paths["lessons"], created)
-    _move_missing(os.path.join(v, "sprint-queue.xlsx"), paths["sprint_queue"], created)
-    _move_missing(os.path.join(v, "WORKFLOW_REFERENCE.md"), paths["workflow_reference"], created)
-    _merge_dir_missing(os.path.join(v, "roadmap-reviews"), paths["roadmap_reviews"], created)
-    _merge_dir_missing(os.path.join(v, "Close-Outs"), paths["close_outs"], created)
-    _merge_dir_missing(os.path.join(v, "Issues"), paths["issues"], created)
-    _merge_dir_missing(os.path.join(v, "audits"), paths["outside_audits"], created)
 
 
 def _vendor_scripts(paths, created):
@@ -616,9 +689,22 @@ def _vendor_scripts(paths, created):
         _refresh_copy(src, os.path.join(paths["scripts"], os.path.basename(src)), created)
 
 
-def _build_full(root, layout, created):
-    """Build/heal the complete documentation tree for the chosen layout."""
+def _build_full(root, layout, created, allow_seed=True):
+    """Build/heal the complete documentation tree for the chosen layout. `allow_seed=False`
+    (heal/adopt, R3) skips writing template content for any role the registry doesn't already
+    cover -- seeding a fresh document is a `create`-mode-only act; heal/adopt just leaves a
+    genuinely missing role reported as "not present" (R4) instead of guessing at it."""
     paths = _workspace_paths(root, layout)
+
+    # Registry-authoritative overlay (R2) resolves FIRST, before anything else touches disk --
+    # a curated registry's paths (known roles and project-custom ones alike) win over freshly
+    # computed defaults for every downstream step: the scaffolding loop and discovery.
+    overlay = _read_registry_overlay(root)
+    custom_paths = _apply_registry_overlay(root, paths, overlay)
+
+    # Directory scaffolding loop must run on the overlay-resolved paths, or a directory role
+    # registered at a non-default path still gets a phantom empty directory conjured at the
+    # unused computed-default location.
     for d in [
         paths["workspace"],
         paths["scripts"],
@@ -634,25 +720,28 @@ def _build_full(root, layout, created):
     ]:
         _ensure_dir(d, created)
 
-    if layout == "canonical":
-        _migrate_to_canonical(root, paths, created)
-
     # Repoint at an existing roadmap/queue (under any name) before seeding, so we never
-    # write a parallel Roadmap.md beside a roadmap the project already maintains.
-    _apply_discovery(paths)
+    # write a parallel Roadmap.md beside a roadmap the project already maintains. A role the
+    # overlay already covers is never handed to discovery.
+    _apply_discovery(paths, overlay)
 
     _ensure_file(os.path.join(paths["workspace"], ".virtuoso"), "virtuoso-workspace\n", created)
-    _ensure_file(paths["roadmap"], ROADMAP_SEED, created)
-    _ensure_file(paths["lessons"], LESSONS_SEED, created)
-    if os.path.exists(WORKFLOW_REF_TEMPLATE):
-        _ensure_copy(WORKFLOW_REF_TEMPLATE, paths["workflow_reference"], created)
-    else:
-        _ensure_file(paths["workflow_reference"], WORKFLOW_REF_FALLBACK, created)
-    # User data — never clobber:
-    _ensure_copy(TEMPLATE_XLSX, paths["sprint_queue"], created)
+    if allow_seed:
+        if not overlay or "roadmap" not in overlay:
+            _ensure_file(paths["roadmap"], ROADMAP_SEED, created)
+        if not overlay or "lessons" not in overlay:
+            _ensure_file(paths["lessons"], LESSONS_SEED, created)
+        if not overlay or "workflowReference" not in overlay:
+            if os.path.exists(WORKFLOW_REF_TEMPLATE):
+                _ensure_copy(WORKFLOW_REF_TEMPLATE, paths["workflow_reference"], created)
+            else:
+                _ensure_file(paths["workflow_reference"], WORKFLOW_REF_FALLBACK, created)
+        # User data — never clobber:
+        if not overlay or "sprintQueue" not in overlay:
+            _ensure_copy(TEMPLATE_XLSX, paths["sprint_queue"], created)
     _vendor_scripts(paths, created)
-    _write_governance_readme(root, paths, created)
-    _write_layout_manifest(root, layout, paths, created, adopted=False)
+    _write_governance_readme(root, paths, created, custom_paths)
+    _write_layout_manifest(root, layout, paths, created, custom_paths, adopted=False)
     return paths
 
 
@@ -689,7 +778,9 @@ def _build_thin(root, created):
     manifest points at the discovered existing roadmap/queue. No doc tree is scaffolded and
     no roadmap is seeded."""
     paths = _workspace_paths(root, "plugin-only")
-    found_rm, _found_q = _apply_discovery(paths)
+    overlay = _read_registry_overlay(root)
+    custom_paths = _apply_registry_overlay(root, paths, overlay)
+    found_rm, _found_q = _apply_discovery(paths, overlay)
     if not found_rm:
         # The project keeps its roadmap outside a Project Documentation tree (root ROADMAP.md,
         # docs/governance, …). Point the registry at the real file rather than a phantom path,
@@ -706,16 +797,19 @@ def _build_thin(root, created):
     _ensure_dir(paths["scripts"], created)
     _ensure_file(os.path.join(paths["workspace"], ".virtuoso"), "virtuoso-workspace\n", created)
     _vendor_scripts(paths, created)
-    _write_governance_readme(root, paths, created)
-    _write_layout_manifest(root, "plugin-only", paths, created, adopted=True)
+    _write_governance_readme(root, paths, created, custom_paths)
+    _write_layout_manifest(root, "plugin-only", paths, created, custom_paths, adopted=True)
     return paths
 
 
 def _heal(root, created):
-    """Re-run the appropriate builder for a marker-present project (thin stays thin)."""
+    """Re-run the appropriate builder for a marker-present project (thin stays thin). Mutates
+    `created` in place; callers must not rely on the return value for that (R1) -- heal/adopt
+    never seeds (R3: allow_seed=False), so on an already-curated, complete project this is a
+    true no-op."""
     if _read_adopted(root):
         return _build_thin(root, created)
-    return _build_full(root, _resolve_layout(root, "auto"), created)
+    return _build_full(root, _resolve_layout(root, "auto"), created, allow_seed=False)
 
 
 def _report(created, root, layout, quiet):
@@ -734,6 +828,10 @@ def _report(created, root, layout, quiet):
 
 
 def preflight(root, mode="create", quiet=False, layout="auto"):
+    # Checked before record_root()'s own write touches `root` -- relevant when VIRTUOSO_HOME is
+    # sandboxed to `root` itself (tests do this); in real usage record_root() writes under the
+    # user's actual home directory, never under `root`, so this ordering doesn't matter there.
+    is_new_root = _is_new_project_root(root)
     record_root()  # always — the plugin-root bridge for skill bodies
 
     if mode == "adopt":
@@ -741,7 +839,11 @@ def preflight(root, mode="create", quiet=False, layout="auto"):
 
     if mode == "detect":
         if _is_project(root):
-            created = _heal(root, created=[])
+            # R1: `created` must be the mutated list, never _heal()'s return value (that's the
+            # builder's `paths` dict, not a change log -- assigning it here silently corrupted
+            # both the report below and this function's return value).
+            created = []
+            _heal(root, created)
             _say(quiet, "virtuoso-status: ready")
             _report(created, root, _resolve_layout(root, "auto"), quiet)
             return created
@@ -750,6 +852,14 @@ def preflight(root, mode="create", quiet=False, layout="auto"):
             _say(quiet, "virtuoso: an established documentation tree exists here but has no "
                         "Virtuoso/ marker - run with --mode adopt (or /virtuoso-init).")
             return []
+        if is_new_root:
+            # A brand-new project (nothing here to clobber) auto-scaffolds even from detect.
+            layout = _resolve_layout(root, "auto")
+            created = []
+            _build_full(root, layout, created, allow_seed=True)
+            _say(quiet, "virtuoso-status: created")
+            _report(created, root, layout, quiet)
+            return created
         _say(quiet, "virtuoso-status: none")
         _say(quiet, "virtuoso: no Virtuoso/ workspace here — skipping "
                     "(run /virtuoso-init to create one).")
@@ -758,7 +868,7 @@ def preflight(root, mode="create", quiet=False, layout="auto"):
     # mode == "create"
     layout = _resolve_layout(root, layout)
     created = []
-    _build_full(root, layout, created)
+    _build_full(root, layout, created, allow_seed=True)
     _report(created, root, layout, quiet)
     return created
 
