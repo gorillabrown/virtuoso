@@ -2,7 +2,8 @@
 
 Modes:
   create  build/heal the selected workspace layout, write the marker, report.
-  detect  act only if <root>/Virtuoso (or its marker) already exists; else report status.
+  detect  act only if <root>/Virtuoso (or its marker) already exists, or if root is a
+          brand-new empty-dir project (auto-scaffolds then); else report status only.
   adopt   non-destructively bring an *established* project under Virtuoso management:
           if a Virtuoso/ marker exists -> heal; else if the project already has a
           documentation tree (Project Documentation/ or 2. Project Documentation/ with a
@@ -82,7 +83,7 @@ _ROADMAP_MARKERS = (
 # Directory segments (relative to the documentation root) that mark archived / non-canonical
 # copies; discovery excludes roadmaps/queues living under them from being treated as live.
 _ARCHIVE_SEGMENTS = (
-    "roadmap-reviews", "checkins", "close-outs", "archive", "audits",
+    "roadmap-reviews", "checkins", "close-outs", "archive", "archives", "0 archive", "audits",
     "3 temp", "4 outside audits", "5 reference",
 )
 # An untouched virtuoso-init seed carries this exact line in its head; matching the whole
@@ -562,7 +563,7 @@ def _discover_sprint_queue(doc_root):
     return live[0]
 
 
-def _workspace_paths(root, layout):
+def _workspace_paths(root):
     v = os.path.join(root, "Virtuoso")
     docs = _project_doc_root(root)
     governance = os.path.join(docs, DOC_SUBDIRS["governance"])
@@ -744,7 +745,7 @@ def _build_full(root, layout, created, allow_seed=True):
     (heal/adopt, R3) skips writing template content for any role the registry doesn't already
     cover -- seeding a fresh document is a `create`-mode-only act; heal/adopt just leaves a
     genuinely missing role reported as "not present" (R4) instead of guessing at it."""
-    paths = _workspace_paths(root, layout)
+    paths = _workspace_paths(root)
 
     # Registry-authoritative overlay (R2) resolves FIRST, before anything else touches disk --
     # a curated registry's paths (known roles and project-custom ones alike) win over freshly
@@ -828,7 +829,7 @@ def _build_thin(root, created):
     """Adopt an established, un-markered project: write only the Virtuoso/ control dir whose
     manifest points at the discovered existing roadmap/queue. No doc tree is scaffolded and
     no roadmap is seeded."""
-    paths = _workspace_paths(root, "plugin-only")
+    paths = _workspace_paths(root)
     overlay = _read_registry_overlay(root)
     custom_paths = _apply_registry_overlay(root, paths, overlay)
     found_rm, _found_q = _apply_discovery(paths, overlay)
@@ -868,12 +869,8 @@ def _report(created, root, layout, quiet):
     if created:
         _say(quiet, "virtuoso: layout=%s; created/updated %d item(s):" % (layout, len(created)))
         for c in created:
-            base = c.split(" (refreshed)")[0].split(" (migrated)")[0]
-            suffix = ""
-            if c.endswith("(refreshed)"):
-                suffix = " (refreshed)"
-            elif c.endswith("(migrated)"):
-                suffix = " (migrated)"
+            base = c.split(" (refreshed)")[0]
+            suffix = " (refreshed)" if c.endswith("(refreshed)") else ""
             _say(quiet, "  + " + os.path.relpath(base, root) + suffix)
     else:
         _say(quiet, "virtuoso: layout=%s; workspace already complete — nothing to do." % layout)

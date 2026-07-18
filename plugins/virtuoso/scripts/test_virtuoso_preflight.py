@@ -334,6 +334,29 @@ def test_discovery_prefers_live_roadmap_over_archived(tmp_path):
     assert m["paths"]["roadmap"] == "Project Documentation/2 operational/Live_Roadmap.md", m["paths"]["roadmap"]
 
 
+def test_archive_plural_segments_excluded_from_discovery(tmp_path):
+    # GoG uses "archives/" (plural). A structurally-richer decoy roadmap sitting there must NOT
+    # outrank the live roadmap in 2 operational -- the PRD R9 discovery hazard for an
+    # unregistered project (no Virtuoso/ marker, no registry overlay yet). The decoy filename
+    # deliberately avoids any _BACKUP_NAME_TOKENS ("archive" is not one) so the only thing that
+    # can save the live roadmap is _ARCHIVE_SEGMENTS excluding the "archives" directory segment.
+    op = tmp_path / "Project Documentation" / "2 operational"
+    op.mkdir(parents=True)
+    (op / "Live_Roadmap.md").write_text(
+        "# Live Roadmap\n## Completed Work Summary\n## Active & Remaining Sprint Skeletons\n",
+        encoding="utf-8",
+    )
+    (op / "archives").mkdir()
+    (op / "archives" / "GoG_Roadmap_Archive_2026-07-10.md").write_text(
+        "# Archived Snapshot\n## Finish Line\n## Completed Work Summary\n"
+        "## Active & Remaining Sprint Skeletons\n",
+        encoding="utf-8",
+    )
+    _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    m = _manifest(tmp_path)
+    assert m["paths"]["roadmap"] == "Project Documentation/2 operational/Live_Roadmap.md", m["paths"]["roadmap"]
+
+
 def test_discovery_not_fooled_by_codename_containing_backup_substring(tmp_path):
     # "Gold" must NOT be read as an "old" backup; the real marker-rich roadmap still wins
     # over a markerless decoy even though backup-rank sits above structural markers.
