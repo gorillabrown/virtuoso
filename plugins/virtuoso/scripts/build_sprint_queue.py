@@ -1,7 +1,13 @@
 """Build sprint-queue.xlsx template with Dashboard + Catalog tabs.
 
-Writes sprint-queue.xlsx next to this script.
+Usage: build_sprint_queue.py [catalog_csv] [output_xlsx]
+
+Writes the workbook to output_xlsx (resolved against the current working
+directory), or next to this script when no output path is given. catalog_csv
+is accepted for CLI compatibility but not yet read — the Catalog tab is
+populated with example rows.
 """
+import argparse
 import os
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -11,9 +17,20 @@ from openpyxl.chart.label import DataLabelList
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.worksheet.datavalidation import DataValidation
 
-# Self-locating output path — script writes the xlsx next to itself
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(SCRIPT_DIR, "sprint-queue.xlsx")
+
+parser = argparse.ArgumentParser(
+    description="Build the sprint-queue.xlsx template (Dashboard + Catalog tabs).")
+parser.add_argument(
+    "catalog", nargs="?",
+    help="sprint catalog CSV (reserved; not yet read — example rows are written)")
+parser.add_argument(
+    "output", nargs="?",
+    help="output xlsx path (default: sprint-queue.xlsx next to this script)")
+args = parser.parse_args()
+
+OUT = os.path.abspath(args.output) if args.output else os.path.join(
+    SCRIPT_DIR, "sprint-queue.xlsx")
 
 # === Styles ===
 FONT_NAME = "Arial"
