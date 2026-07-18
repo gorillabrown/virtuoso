@@ -3,6 +3,16 @@ name: governance-sweep
 description: "Self-contained governance & operational document sweep for any project — directory structure via readme.md authority, orphan detection, stale-content and dead-reference scans, cross-doc consistency, archival candidates, and optional agent-roster checks. Runs in three gated phases: (1) read-only discovery that lists every issue and asks clarifying questions, (2) a complete work list presented for your approval, (3) implementation that performs the approved changes with backups and verification. Use when the user says 'governance sweep', 'doc cleanup', 'audit the docs', 'clean up the docs', 'organize the documents', 'check for stale references', 'are the docs consistent', 'doc hygiene', 'sync the docs', 'archive old content', 'find dead references', 'what files are orphaned', or wants to enforce a readme-based hierarchy, consolidate scattered files, or move outdated content to archive."
 ---
 
+<!-- virtuoso-shared-contract v1 -->
+**Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
+
+- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
+- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
+- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
+- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
+- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
+- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+
 # Governance Sweep
 
 Structured sweep of all governance and operational documents in a project. Works on any
@@ -210,6 +220,13 @@ save the work list to `governance-sweep-worklist.<date>.md` for later.
 ## Phase 3 — Implementation
 
 Execute the approved actions. **This is the only phase that changes files.**
+
+If the approved work list runs past a handful of actions, execute this phase under
+`/virtuoso`'s task-plan discipline. Phase 3 is a long sequential run across many files where
+the failure mode is silent partial completion — a group skipped, or its Step 2 verification
+never actually performed. The A → G ordering below is already the task plan; virtuoso keeps it
+honest across a long tool-call sequence by tracking each group to done and narrating what
+landed.
 
 ### Step 0 — Back up
 

@@ -11,6 +11,16 @@ description: >
   audit steps are coordinated from the planning surface.
 ---
 
+<!-- virtuoso-shared-contract v1 -->
+**Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
+
+- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
+- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
+- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
+- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
+- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
+- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+
 # 3rd Party Audit Process
 
 ## Preflight — workspace check (run first)
@@ -266,6 +276,13 @@ The report should cover:
 ### Actions
 
 1. **Read the full audit report** (D2)
+
+   An external report arrives with borrowed authority — it was commissioned and paid for, so
+   its findings read as settled. Before assigning dispositions, consider `/adversarial-review`
+   over the report itself, particularly where a finding would drive expensive remediation or a
+   roadmap rewrite. The **Reject** disposition below is only credible if the reasoning was
+   actually tested: an adversarial pass is what makes "we disagree" defensible rather than
+   merely defensive.
 
 2. **For every major finding, assign a disposition:**
 

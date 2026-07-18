@@ -3,6 +3,16 @@ name: git-handoff
 description: "LEGACY / MANUAL ONLY. Use only when the user explicitly asks for the old Cowork browser-sandbox git handoff packet. This skill does not apply to Codex Desktop, Codex CLI, Claude Code CLI, local PowerShell, or any native/local execution environment with normal repository access. Do not auto-trigger this skill for sprint closeout, branch creation, commits, merges, pushes, status checks, dirty worktrees, or dispatch gates. In Codex/CLI contexts, run the needed git commands directly using the project's normal safety rules: inspect state, stage explicit files, avoid destructive commands unless explicitly requested, commit intentionally, merge/push when the sprint spec authorizes it."
 ---
 
+<!-- virtuoso-shared-contract v1 -->
+**Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
+
+- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
+- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
+- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
+- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
+- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
+- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+
 # Git Handoff
 
 Legacy fallback for the old Cowork browser sandbox only. It is no longer a general project rule.

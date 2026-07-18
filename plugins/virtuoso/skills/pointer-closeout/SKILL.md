@@ -7,6 +7,16 @@ description: >
   interpreted, dispositioned, saved to files, and folded back into roadmap/governance work.
 ---
 
+<!-- virtuoso-shared-contract v1 -->
+**Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
+
+- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
+- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
+- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
+- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
+- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
+- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+
 # Pointer Close-Out
 
 ## Preflight — workspace check (run first)
@@ -244,6 +254,19 @@ pointer-closeout finishes.
 
 Wave 1's *Recommend* line names a direction in prose only (no code box). Wave 2 ends
 at persistence — no dispatch pointer.
+
+## Optional Adversarial Pass — Offer Before Persisting
+
+Before Wave 2 persists anything, offer the user an adversarial pass over this close-out
+itself — `/adversarial-review` on the drafted report and retrospective. A close-out is a
+document that makes claims (what shipped, what the findings mean) and proposes actions
+(dispositions, roadmap edits), which is exactly the shape that skill is built to stress-test.
+Offer it when the close-out carries something the project will inherit unexamined: a lesson
+being promoted to a standing rule, a sprint declared complete on partial evidence, or a
+roadmap edit that retires scope. Skip the offer for routine close-outs — a clean sprint with
+mechanical findings does not need red-teaming, and a reflexive offer trains the user to
+decline it. If the pass runs, fold its blocking concerns into the findings table before
+persisting; the close-out is not final until they are resolved or explicitly accepted.
 
 ## Persistence — Final Step of Wave 2
 
