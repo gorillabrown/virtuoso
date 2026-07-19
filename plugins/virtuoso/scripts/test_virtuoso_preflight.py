@@ -1640,9 +1640,9 @@ def test_is_ephemeral_plugin_root_detects_session_snapshot_shape():
     a bare "rpm" segment with no session marker, and ordinary dev-tree / marketplace-cache
     installs -- is treated as durable."""
     stable_cases = [
-        r"C:\Users\estra\.claude\plugins\cache\virtuoso-marketplace\virtuoso\1.3.4",
+        r"C:\Users\example\.claude\plugins\cache\virtuoso-marketplace\virtuoso\1.3.4",  # validate-ok: shape fixture
         "/home/user/.claude/plugins/cache/virtuoso-marketplace/virtuoso/1.3.4",
-        r"C:\Users\estra\Projects\Virtuoso\virtuoso.dev\plugins\virtuoso",
+        r"C:\Users\example\Projects\Virtuoso\virtuoso.dev\plugins\virtuoso",  # validate-ok: shape fixture
         "/some/path/with/rpm/but/no/session/marker",
         "/home/user/local-agent-mode-sessions/uuid-1234/other/plugin_virtuoso",
         "",
@@ -1651,7 +1651,7 @@ def test_is_ephemeral_plugin_root_detects_session_snapshot_shape():
         assert vp._is_ephemeral_plugin_root(p) is False, p
 
     ephemeral_cases = [
-        r"C:\Users\estra\AppData\Roaming\Claude\local-agent-mode-sessions\427fb427\rpm\plugin_virtuoso",
+        r"C:\Users\example\AppData\Roaming\Claude\local-agent-mode-sessions\427fb427\rpm\plugin_virtuoso",  # validate-ok: shape fixture
         "/home/user/.config/Claude/local-agent-mode-sessions/427fb427-uuid/rpm/plugin_virtuoso",
         "/a/b/LOCAL-AGENT-MODE-SESSIONS/c/RPM/d",  # case-insensitive
     ]

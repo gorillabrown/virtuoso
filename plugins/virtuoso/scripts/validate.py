@@ -2,7 +2,8 @@
 """Structural validator for the virtuoso plugin. Exit 0 = all checks pass.
 
 Checks: skill frontmatter (name == folder), manifest JSON validity + key fields,
-no absolute C:\\ paths, no dangling WORKFLOW_REFERENCE.md section refs, no
+no absolute C:\\ paths (lines marked `validate-ok:` are exempt), no dangling
+WORKFLOW_REFERENCE.md section refs, no
 ${CLAUDE_PLUGIN_ROOT}/ path-uses inside skill bodies (hooks/MCP only), and a
 1:1 command<->skill mapping. Run from anywhere: paths are resolved from __file__.
 """
@@ -79,7 +80,11 @@ def main():
                 t = open(full, encoding="utf-8").read()
             except (OSError, UnicodeDecodeError):
                 continue
-            if "C:\\Users" in t:
+            # Line-level scan so deliberate path-SHAPE fixtures (e.g. the PF-04
+            # ephemerality test vectors) can opt out with a `validate-ok:` marker;
+            # an accidental machine-path leak on any unmarked line still fails.
+            if any("C:\\Users" in ln and "validate-ok:" not in ln
+                   for ln in t.splitlines()):
                 abs_hits.append(rel)
             if rel.startswith("skills/") and "WORKFLOW_REFERENCE.md §" in t:
                 ref_hits.append(rel)
