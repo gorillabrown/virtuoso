@@ -5,7 +5,7 @@
   "plugins": [
     {
       "name": "virtuoso",
-      "version": "1.3.5",
+      "version": "1.3.6",
       "source": "./plugins/virtuoso",
       "description": "Cowork governance & dispatch suite — 15 skills for roadmap planning, sprint execution discipline, goal-scale epics, close-outs, audits, and doc hygiene, with a self-healing workspace."
     }
