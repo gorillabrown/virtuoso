@@ -222,6 +222,10 @@ beside it. `Virtuoso/workspace-layout.json` is the machine-readable mirror of th
    unregistered or seed an empty template beside a real document.
 4. If the registry and the files on disk diverge, **fix the registry** (repoint the path to
    the existing document) — do not fork a rival.
+5. **To deregister a role, remove it from BOTH this file and `Virtuoso/workspace-layout.json`
+   in the same edit.** Deleting it from only one side is not durable — the next heal restores
+   it from whichever side still carries it (that is the registry round-trip working as
+   designed, not a bug).
 
 <!-- virtuoso-governance-registry
 {machine}
@@ -486,13 +490,18 @@ def _assert_registry_mirror(root):
 
 def _read_registry_overlay(root):
     """Registry-authoritative resolution order (R2): parse workspace-layout.json's "paths"
-    dict as the base overlay, then per-key merge (SK-02 / R10) -- for any KNOWN governance role
-    (_KNOWN_PATHKEY) that the manifest overlay is missing (e.g. roadmapReviews before its first
-    post-migration write, or any future role added to the schema), consult the governance
-    readme's machine block before falling back to a computed default. The manifest wins
-    outright once it carries a key; before a key migrates into the manifest schema, the readme
-    is its only carrier and must not be clobbered by the next regeneration. Falls back to the
-    readme's overlay wholesale when the manifest has no "paths" at all (e.g. reconstruction
+    dict as the base overlay, then per-key merge (SK-02 / R10) -- for ANY key the manifest
+    overlay is missing (a known governance role in _KNOWN_PATHKEY, e.g. roadmapReviews before
+    its first post-migration write; or an unrecognized project-custom role a user registered
+    only in the readme's machine block, per its own Rules for skills, R2/PF-09) -- consult the
+    governance readme's machine block before falling back to a computed default. The manifest
+    wins outright once it carries a key; before a key migrates into the manifest schema, the
+    readme is its only carrier and must not be clobbered by the next regeneration -- this holds
+    equally for known roles and project-custom ones (PF-09: the earlier known-roles-only guard
+    silently dropped a readme-only custom role on the very next heal). A custom key that is
+    later promoted into _KNOWN_PATHKEY transitions to known-role semantics by construction --
+    no special-casing is needed here, since this merge treats both alike already. Falls back to
+    the readme's overlay wholesale when the manifest has no "paths" at all (e.g. reconstruction
     after the manifest is deleted). Returns {key: relative path string} covering both known
     roles and unrecognized project-custom keys, or None when neither source has anything."""
     manifest_paths = _read_manifest(root).get("paths")
@@ -505,7 +514,13 @@ def _read_registry_overlay(root):
     if readme_overlay:
         merged = dict(manifest_overlay)
         for key, rel in readme_overlay.items():
-            if key in _KNOWN_PATHKEY and key not in merged:
+            if key not in merged:
+                # Value SANITY (absolute paths, root-escaping traversal, archive-pointing
+                # registrations) is deliberately NOT enforced here -- that class predates
+                # this merge (the manifest-reconstruction branch and known-role repoints
+                # admit the same values) and belongs to PF-07's fail-loud validation, which
+                # will reject such values on EVERY branch with a diagnosable error instead
+                # of silently refusing a back-fill on one. Recorded at PF-09 SR-1.
                 merged[key] = rel
         return merged
     return manifest_overlay
