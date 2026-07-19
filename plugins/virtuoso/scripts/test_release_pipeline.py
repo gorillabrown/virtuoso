@@ -70,6 +70,17 @@ def test_update_registry_is_atomic_and_backed_up(tmp_path, monkeypatch):
     assert any(".bak-" in n for n in names), "a timestamped backup must exist"
 
 
+def test_porcelain_paths_immune_to_first_line_strip():
+    """Regression for the v1.3.6 attempt-1 tripwire false positive: a whole-blob .strip()
+    ate the first line's leading status space and shifted the fixed slice. The parser must
+    produce identical paths whether a line leads with ' M ', 'M  ', or '?? '."""
+    out = " M .claude-plugin/marketplace.json\n M plugins/virtuoso/.claude-plugin/plugin.json\n"
+    assert rp._porcelain_paths(out) == {".claude-plugin/marketplace.json",
+                                        "plugins/virtuoso/.claude-plugin/plugin.json"}
+    assert rp._porcelain_paths("?? new-file.txt\nA  staged.txt\n") == {"new-file.txt", "staged.txt"}
+    assert rp._porcelain_paths("") == set()
+
+
 def test_tripwire_derivation_matches_bump_config():
     # Calls the REAL derivation (SR-1 loop 2: an inline re-implementation would let the
     # actual code regress unnoticed).

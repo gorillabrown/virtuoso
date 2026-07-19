@@ -191,6 +191,14 @@ def gate_regen_diff(installed_root, allow):
 
 # --- steps 3-4: bump + git -----------------------------------------------------------------
 
+def _porcelain_paths(stdout):
+    """Paths from `git status --porcelain` output. Slices each LINE's fixed 2-char status +
+    separator individually — never .strip() the whole blob first: that eats the FIRST line's
+    leading status space and shifts the slice, mangling `.claude-plugin/...` into
+    `claude-plugin/...` (the pipeline's first real-run bug, v1.3.6 attempt 1, 2026-07-19)."""
+    return {ln[2:].strip() for ln in stdout.splitlines() if ln.strip()}
+
+
 def _expected_release_files():
     """The tripwire set, DERIVED from bump_version.py's own config rather than hardcoded —
     if the declared-file list ever grows, the tripwire tracks it instead of contradicting
@@ -216,11 +224,12 @@ def do_bump_and_push(target, notes):
         raise Gate("bump did not report in-sync at %s:\n%s" % (target, p.stdout.strip()[-400:]))
     say("[bump] all declared files in sync at %s" % target)
 
-    st = run(["git", "status", "--porcelain"]).stdout.strip().splitlines()
+    actual = _porcelain_paths(run(["git", "status", "--porcelain"]).stdout)
     expected = _expected_release_files()
-    actual = {ln[3:].strip() for ln in st}
     if actual != expected:
-        raise Gate("tripwire: dirty set %s != expected %s" % (sorted(actual), sorted(expected)))
+        raise Gate("tripwire: dirty set %s != expected %s\nNOTE: the version bump already "
+                   "wrote the declared files — `git checkout -- <them>` to restore before "
+                   "re-running." % (sorted(actual), sorted(expected)))
     run(["git", "add", PLUGIN_JSON, MARKETPLACE_JSON])
     msg = "chore(release): v%s — %s" % (target, notes or "release")
     run(["git", "commit", "-m", msg])
