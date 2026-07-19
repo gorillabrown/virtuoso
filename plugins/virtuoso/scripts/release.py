@@ -21,14 +21,15 @@ Steps (real run):
   4  git         explicit-stage exactly those two files; chore(release) commit; push main
   5  deploy      marketplace clone pull --ff-only (version must match target);
                  cache/<ver> installed fresh from the clone
-  6  registry    installed_plugins.json updated ONLY after shape validation, with a
-                 timestamped backup written beside it first; .last-update-check refreshed
-  7  sweep       SR-5 from THIS process (the harness's own filesystem view): normalized
+  6  sweep       SR-5 from THIS process (the harness's own filesystem view): normalized
                  writer hash equal across repo / clone / cache-target; bridge state
                  reported. Per-session snapshots are named UNVERIFIABLE (no local process
                  shares that subtree's view) -- the restart instruction is the mitigation.
-  8  verify      the INSTALLED copy runs a fixture battery: create, then a second run that
+  7  verify      the INSTALLED copy runs a fixture battery: create, then a second run that
                  must report nothing to do with byte-identical output
+  8  registry    LAST, only after sweep+verify pass: installed_plugins.json updated after
+                 shape validation, atomically (write-beside + os.replace), with a
+                 timestamped backup written first; .last-update-check refreshed
 Exit codes: 0 all gates passed; 1 a gate failed (message names it); 2 usage error.
 
 Dry-run performs 1, 2, 7 and 8 against the current installed version and writes NOTHING.
@@ -190,6 +191,25 @@ def gate_regen_diff(installed_root, allow):
 
 # --- steps 3-4: bump + git -----------------------------------------------------------------
 
+def _expected_release_files():
+    """The tripwire set, DERIVED from bump_version.py's own config rather than hardcoded —
+    if the declared-file list ever grows, the tripwire tracks it instead of contradicting
+    it (SR-1 review). Config paths are PLUGIN-relative (marketplace.json via "../../");
+    git porcelain is repo-relative with forward slashes — resolve then relativize. Falls
+    back to the known pair if the config is unreadable: the tripwire only ever blocks, so
+    a stale fallback fails safe. A module-level function so tests exercise THIS code, not
+    a hand-copied formula (SR-1 loop 2)."""
+    try:
+        with open(os.path.join(PLUGIN, ".version-bump.json"), encoding="utf-8") as f:
+            declared = json.load(f)["files"]
+        return {
+            os.path.relpath(os.path.normpath(os.path.join(PLUGIN, d["path"])), REPO).replace("\\", "/")
+            for d in declared
+        }
+    except (OSError, ValueError, KeyError, TypeError):
+        return {"plugins/virtuoso/.claude-plugin/plugin.json", ".claude-plugin/marketplace.json"}
+
+
 def do_bump_and_push(target, notes):
     p = run([sys.executable, os.path.join(SCRIPTS, "bump_version.py"), target], check=False)
     if p.returncode != 0 or "All declared files in sync at %s" % target not in p.stdout:
@@ -197,21 +217,7 @@ def do_bump_and_push(target, notes):
     say("[bump] all declared files in sync at %s" % target)
 
     st = run(["git", "status", "--porcelain"]).stdout.strip().splitlines()
-    # Tripwire set is DERIVED from bump_version.py's own config, not hardcoded — if the
-    # declared-file list ever grows, the tripwire tracks it instead of contradicting it
-    # (SR-1 review). Falls back to the known pair if the config is unreadable: the tripwire
-    # only ever blocks, so a stale fallback fails safe.
-    try:
-        with open(os.path.join(PLUGIN, ".version-bump.json"), encoding="utf-8") as f:
-            declared = json.load(f)["files"]
-        # Config paths are PLUGIN-relative (marketplace.json via "../../"); git porcelain
-        # is repo-relative with forward slashes — resolve then relativize.
-        expected = {
-            os.path.relpath(os.path.normpath(os.path.join(PLUGIN, d["path"])), REPO).replace("\\", "/")
-            for d in declared
-        }
-    except (OSError, ValueError, KeyError, TypeError):
-        expected = {"plugins/virtuoso/.claude-plugin/plugin.json", ".claude-plugin/marketplace.json"}
+    expected = _expected_release_files()
     actual = {ln[3:].strip() for ln in st}
     if actual != expected:
         raise Gate("tripwire: dirty set %s != expected %s" % (sorted(actual), sorted(expected)))
@@ -266,21 +272,27 @@ def _validated_registry():
 
 def update_registry(target, cache_dir):
     data, e = _validated_registry()
-    backup = REGISTRY + ".bak-" + time.strftime("%Y%m%d-%H%M%S")
-    shutil.copyfile(REGISTRY, backup)
-    e["installPath"] = cache_dir
-    e["version"] = target
-    e["lastUpdated"] = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + ".000Z"
-    body = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
-    # Atomic: write beside, then os.replace() — a crash mid-write must never leave the
-    # machine-wide registry truncated (SR-1 review CRITICAL). Same-directory replace is
-    # atomic on both POSIX and Windows.
-    tmp = REGISTRY + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(body)
-    os.replace(tmp, REGISTRY)
-    with open(LAST_UPDATE_CHECK, "w", encoding="utf-8") as f:
-        f.write(str(int(time.time() * 1000)))
+    # Gate-wrapped like deploy_cache (SR-1 loop 2): an OSError here must surface through
+    # the progress-aware report, not as a bare traceback that says nothing about whether
+    # main was released — this is the step people most need legibility on. The atomic
+    # write-beside + os.replace means REGISTRY's content is intact either way.
+    try:
+        backup = REGISTRY + ".bak-" + time.strftime("%Y%m%d-%H%M%S")
+        shutil.copyfile(REGISTRY, backup)
+        e["installPath"] = cache_dir
+        e["version"] = target
+        e["lastUpdated"] = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + ".000Z"
+        body = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+        tmp = REGISTRY + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(body)
+        os.replace(tmp, REGISTRY)
+        with open(LAST_UPDATE_CHECK, "w", encoding="utf-8") as f:
+            f.write(str(int(time.time() * 1000)))
+    except OSError as exc:
+        raise Gate("registry update failed (%r). The atomic write means %s is either the "
+                   "previous or the new content, never truncated; verify it, then resume "
+                   "with --redeploy." % (exc, os.path.basename(REGISTRY)))
     # Prune old backups, newest 5 kept — they accumulate one per release otherwise.
     baks = sorted(f for f in os.listdir(os.path.dirname(REGISTRY))
                   if f.startswith(os.path.basename(REGISTRY) + ".bak-"))
@@ -399,7 +411,9 @@ def main():
             say("[redeploy] resuming deploy/verify for already-released v%s" % a.version)
         else:
             do_bump_and_push(a.version, a.notes)
-        progress.append("released-to-main")
+        # Same state either way (preflight proved main==origin at target), but the failure
+        # report distinguishes "pushed in THIS run" from "verified as already released".
+        progress.append("released-to-main" if not a.redeploy else "release-verified-preexisting")
         cache_dir = deploy_cache(a.version)
         progress.append("cache-installed")
         sweep(cache_dir)
@@ -412,8 +426,10 @@ def main():
         return 0
     except Gate as exc:
         say("\nGATE FAILURE:\n%s" % exc)
-        if "released-to-main" in progress:
-            say("\nSTATE: main IS RELEASED (bump commit pushed). Completed: %s." % ", ".join(progress))
+        if "released-to-main" in progress or "release-verified-preexisting" in progress:
+            how = ("bump commit pushed in this run" if "released-to-main" in progress
+                   else "already released prior to this run")
+            say("\nSTATE: main IS RELEASED (%s). Completed: %s." % (how, ", ".join(progress)))
             if "registry-updated" in progress:
                 say("The registry was already updated — investigate before trusting the install.")
             else:

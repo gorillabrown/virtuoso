@@ -71,11 +71,27 @@ def test_update_registry_is_atomic_and_backed_up(tmp_path, monkeypatch):
 
 
 def test_tripwire_derivation_matches_bump_config():
-    with open(os.path.join(rp.PLUGIN, ".version-bump.json"), encoding="utf-8") as f:
-        declared = json.load(f)["files"]
-    derived = {
-        os.path.relpath(os.path.normpath(os.path.join(rp.PLUGIN, d["path"])), rp.REPO).replace("\\", "/")
-        for d in declared
-    }
-    assert derived == {"plugins/virtuoso/.claude-plugin/plugin.json",
-                       ".claude-plugin/marketplace.json"}, derived
+    # Calls the REAL derivation (SR-1 loop 2: an inline re-implementation would let the
+    # actual code regress unnoticed).
+    assert rp._expected_release_files() == {"plugins/virtuoso/.claude-plugin/plugin.json",
+                                            ".claude-plugin/marketplace.json"}
+
+
+def test_update_registry_survives_replace_failure(tmp_path, monkeypatch):
+    """Fault injection for the atomicity contract: if os.replace fails, the original
+    registry bytes must be intact and the error must surface as a Gate (so the pipeline's
+    progress-aware report runs), never a bare OSError."""
+    reg = _write_registry(tmp_path, {"installPath": str(tmp_path), "version": "1.3.5"})
+    original = open(reg, "rb").read()
+    monkeypatch.setattr(rp, "REGISTRY", reg)
+    monkeypatch.setattr(rp, "LAST_UPDATE_CHECK", str(tmp_path / ".last-update-check"))
+
+    def boom(_src, _dst):
+        raise OSError("simulated sharing violation")
+    monkeypatch.setattr(rp.os, "replace", boom)
+    try:
+        rp.update_registry("1.3.6", str(tmp_path / "cache" / "1.3.6"))
+        raise AssertionError("a failing os.replace must raise Gate")
+    except rp.Gate as exc:
+        assert "registry update failed" in str(exc)
+    assert open(reg, "rb").read() == original, "original registry bytes must survive"
