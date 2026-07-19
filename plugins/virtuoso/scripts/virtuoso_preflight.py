@@ -29,8 +29,12 @@ Integrity:
 
 Always records the plugin root to ``<home>/.virtuoso/plugin-root`` so skill bodies
 can locate bundled scripts without relying on ${CLAUDE_PLUGIN_ROOT} (which does not
-resolve inside skill/command markdown — only in hooks/MCP). It also vendors the
-bundled scripts into ``Virtuoso/scripts/`` so skills can call them workspace-relative.
+resolve inside skill/command markdown — only in hooks/MCP). Resolves a stable,
+installed root instead of the running script's own location whenever that location
+looks like an ephemeral per-session snapshot (PF-04; see record_root()), so the
+machine-global bridge never gets poisoned by one session's frozen copy. It also
+vendors the bundled scripts into ``Virtuoso/scripts/`` so skills can call them
+workspace-relative.
 
 User content (Roadmap.md, sprint-queue.xlsx, lessons) is never overwritten; an existing
 roadmap under any name is discovered and pointed at rather than re-seeded. Usage:
@@ -47,6 +51,16 @@ import shutil
 import sys
 
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# PF-04: where Claude Code records this machine's installed plugin roots (marketplace
+# installs). record_root() consults this to resolve a STABLE root when PLUGIN_ROOT itself
+# looks like an ephemeral per-session snapshot. A module-level constant (rather than computed
+# inline) so tests can point it at a fixture file and never depend on -- or touch -- this
+# machine's real install state.
+INSTALLED_PLUGINS_JSON = os.path.join(
+    os.path.expanduser("~"), ".claude", "plugins", "installed_plugins.json"
+)
+_VIRTUOSO_MARKETPLACE_KEY = "virtuoso@virtuoso-marketplace"
 
 # Bundled scripts vendored into the workspace so skills invoke them workspace-relative.
 VENDOR_SCRIPTS = [
@@ -237,16 +251,136 @@ def _detect_line_ending(path):
     return "\r\n" if crlf > bare else "\n"
 
 
+def _is_ephemeral_plugin_root(path):
+    """True when `path` structurally looks like a frozen per-session snapshot (a local-agent-
+    mode session's own copy under an `rpm` runtime segment) rather than a durable install --
+    the dev tree or the plugin marketplace cache. This is a DENYLIST, deliberately: it
+    recognizes only the one snapshot shape observed in production (PF-04) and treats anything
+    else -- including an unrelated "rpm" segment with no session marker -- as durable. See
+    record_root() for the failure-direction rationale: an allowlist of "known-stable" shapes
+    would leave any unanticipated but perfectly legitimate install layout unable to update the
+    bridge at all, which breaks I3 ("never leave the bridge pointing somewhere broken") far more
+    broadly than this denylist's narrower miss (an unrecognized ephemeral shape slips through
+    and the bug persists for that one shape) ever could."""
+    norm = (path or "").replace("\\", "/").lower()
+    if "local-agent-mode-sessions" not in norm:
+        return False
+    segments = [s for s in norm.split("/") if s]
+    return "rpm" in segments
+
+
+def _is_valid_plugin_root(path):
+    """True when `path` is a directory that actually carries scripts/virtuoso_preflight.py --
+    the I3 guard consulted before ever recording a candidate root into the bridge.
+
+    Type-guarded on purpose: `path` can come straight out of installed_plugins.json, which this
+    module does not own and cannot assume is well-formed. A truthy non-string there (an int, a
+    list, `true`) would make os.path.join raise TypeError, and TypeError is not what record_root's
+    OSError handler catches -- so it would escape and abort the whole preflight run for every
+    project on the machine. Refusing a malformed value is always correct here: the worst case is
+    "no stable candidate", which the caller already handles."""
+    if not isinstance(path, str) or not path:
+        return False
+    try:
+        return os.path.isfile(os.path.join(path, "scripts", "virtuoso_preflight.py"))
+    except (OSError, ValueError):
+        return False
+
+
+def _resolve_installed_plugin_root():
+    """The stable, installed plugin root recorded by Claude Code's plugin marketplace (PF-04 /
+    I1), validated by the presence of scripts/virtuoso_preflight.py (I3). Returns the absolute
+    installPath, or None when installed_plugins.json is missing/unparseable, doesn't carry the
+    expected shape, or its installPath doesn't actually resolve to a valid plugin root. Never
+    raises -- any failure here just means "no stable candidate available"."""
+    try:
+        with open(INSTALLED_PLUGINS_JSON, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        install_path = data["plugins"][_VIRTUOSO_MARKETPLACE_KEY][0]["installPath"]
+        # Validation stays INSIDE the try: it touches os.path with a value this module does not
+        # own. Leaving it outside let a non-string installPath raise TypeError past record_root's
+        # OSError handler and abort the entire run (SR-1 review, 2026-07-19).
+        return install_path if _is_valid_plugin_root(install_path) else None
+    except (OSError, ValueError, TypeError, KeyError, IndexError):
+        return None
+
+
 def record_root():
-    """Record the plugin root so skill bodies can locate bundled scripts. Non-fatal. Preserves
-    the bridge file's own existing line ending (PF-01 / C2) instead of imposing the platform
-    default on every invocation; a brand-new bridge file still gets the platform default."""
+    """Record the plugin root so skill bodies can locate bundled scripts. Non-fatal (I5): any
+    failure below leaves the previous bridge state untouched and never raises into the caller.
+
+    PF-04: PLUGIN_ROOT is "wherever this script happens to live" -- for a local-agent session
+    that is a frozen per-session snapshot, and recording it unconditionally turns this single
+    machine-global bridge into a last-writer-wins race across every project on the machine
+    (SRL-005: a session that outlives a plugin upgrade repoints every OTHER project at its own
+    stale copy). The candidate actually recorded is resolved with this precedence:
+      1. PLUGIN_ROOT itself, whenever it does not look like an ephemeral session snapshot (I1)
+         -- zero behavior change for ordinary installs and dev-tree runs; this is the common
+         case, since _is_ephemeral_plugin_root is False for virtually every real invocation.
+      2. Otherwise, the *installed* root from installed_plugins.json, when it resolves and
+         genuinely carries scripts/virtuoso_preflight.py (I1, I3).
+      3. Otherwise, the existing bridge's own current value, when IT is still a valid plugin
+         root -- never downgrade a working bridge to the ephemeral snapshot just because
+         nothing better resolved on this particular run (I6).
+      4. Otherwise, PLUGIN_ROOT after all -- a working ephemeral bridge beats a broken one (I4).
+    Every branch above is either self-consistent by construction (PLUGIN_ROOT always carries
+    this very script at scripts/virtuoso_preflight.py, by definition of how it's computed) or
+    explicitly validated against that same file, so the bridge can never end up pointing at a
+    path lacking it (I3).
+
+    Also preserves the bridge file's own existing line ending (PF-01 / C2) instead of imposing
+    the platform default on every invocation, and skips the write entirely when the resolved
+    content would be byte-identical to what's already on disk (I2) -- both the mtime churn and
+    the write syscall are avoided, not just "no logical change"."""
     try:
         d = os.path.join(_home(), ".virtuoso")
         os.makedirs(d, exist_ok=True)
         path = os.path.join(d, "plugin-root")
+
+        try:
+            with open(path, "rb") as f:
+                existing_raw = f.read()
+        except OSError:
+            existing_raw = None
+        existing_path = (
+            existing_raw.decode("utf-8", errors="replace").strip()
+            if existing_raw is not None else None
+        )
+
+        if not _is_ephemeral_plugin_root(PLUGIN_ROOT):
+            candidate = PLUGIN_ROOT
+        else:
+            # Precedence when the running copy is ephemeral. The order below is DELIBERATE and
+            # was reviewed (SR-1, 2026-07-19); `test_record_root_installed_wins_over_existing_bridge`
+            # asserts it so it can't drift into an untested side effect.
+            #
+            # installed_plugins.json outranks a still-valid existing bridge on purpose: it is the
+            # authoritative record of what is actually installed, whereas the bridge is a derived
+            # cache of unknown provenance (anyone, including a past ephemeral session, may have
+            # written it). Preferring the existing bridge instead would freeze it at the old
+            # version dir after every upgrade -- the old dir stays on disk and stays "valid", so
+            # the bridge would never advance. That is a worse and more common failure than the
+            # converse.
+            #
+            # ACCEPTED RESIDUAL RISK: if installed_plugins.json is itself momentarily stale (points
+            # at an older version dir that still exists), this downgrades a newer, correct bridge.
+            # Bounded -- both paths are validated, so I3 holds and skills keep working -- and it
+            # self-corrects the moment installed_plugins.json is accurate again.
+            installed = _resolve_installed_plugin_root()
+            if installed:
+                candidate = installed
+            elif _is_valid_plugin_root(existing_path):
+                candidate = existing_path        # I6: never downgrade a good value to ephemeral
+            else:
+                candidate = PLUGIN_ROOT          # I4: a working ephemeral bridge beats a broken one
+
+        content = candidate + "\n"
         eol = _detect_line_ending(path)
-        content = PLUGIN_ROOT + "\n"
+        actual_eol = eol if eol is not None else os.linesep
+        new_bytes = content.replace("\n", actual_eol).encode("utf-8")
+        if existing_raw is not None and new_bytes == existing_raw:
+            return  # I2: unchanged -- skip the write, no mtime churn
+
         if eol is None:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(content)

@@ -1592,3 +1592,304 @@ def test_detect_line_ending_edge_cases(tmp_path):
 
     missing = tmp_path / "does_not_exist.txt"
     assert vp._detect_line_ending(str(missing)) is None, "nonexistent file must not raise"
+
+
+# ---------------------------------------------------------------------------
+# PF-04: stop the plugin-root bridge from tracking session snapshots. See Roadmap.md
+# "#### PF-04" (Phase 4 -- Preflight Write Discipline). record_root() writes PLUGIN_ROOT --
+# literally "wherever this script happens to live" -- into the single machine-global
+# <home>/.virtuoso/plugin-root bridge every skill in every project resolves the writer
+# through. For a local-agent session PLUGIN_ROOT is a FROZEN per-session snapshot, so every
+# session start repoints the shared bridge at its own snapshot, last-writer-wins across every
+# project on the machine (SRL-005). These tests call vp.record_root() directly (not via
+# subprocess) so vp.PLUGIN_ROOT and vp.INSTALLED_PLUGINS_JSON can be monkeypatched to simulate
+# an ephemeral running location and an injectable install-record lookup, without ever reading
+# or writing this machine's real ~/.virtuoso/plugin-root or ~/.claude/plugins/
+# installed_plugins.json.
+# ---------------------------------------------------------------------------
+
+def _make_valid_plugin_root(base):
+    """Build a directory that satisfies vp._is_valid_plugin_root: <base>/scripts/
+    virtuoso_preflight.py exists (content is irrelevant, only presence is checked)."""
+    base = Path(base)
+    scripts = base / "scripts"
+    scripts.mkdir(parents=True, exist_ok=True)
+    (scripts / "virtuoso_preflight.py").write_text("# stub for PF-04 fixtures\n", encoding="utf-8")
+    return base
+
+
+def _write_installed_plugins_json(path, install_path, key="virtuoso@virtuoso-marketplace"):
+    """Fixture shape mirrors the real installed_plugins.json: {"plugins": {key: [{"installPath":
+    ...}]}} -- vp.INSTALLED_PLUGINS_JSON is monkeypatched to point here, never the real file."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"version": 1, "plugins": {key: [{"installPath": str(install_path)}]}}),
+        encoding="utf-8",
+    )
+
+
+def _bridge_path(home):
+    return Path(home) / ".virtuoso" / "plugin-root"
+
+
+def test_is_ephemeral_plugin_root_detects_session_snapshot_shape():
+    """Direct unit test of the ephemerality helper in isolation (test 6). Denylist by design
+    (see vp.record_root()'s docstring for the rationale): only the observed local-agent-mode-
+    sessions/.../rpm/... snapshot shape is recognized as ephemeral; everything else -- including
+    a bare "rpm" segment with no session marker, and ordinary dev-tree / marketplace-cache
+    installs -- is treated as durable."""
+    stable_cases = [
+        r"C:\Users\estra\.claude\plugins\cache\virtuoso-marketplace\virtuoso\1.3.4",
+        "/home/user/.claude/plugins/cache/virtuoso-marketplace/virtuoso/1.3.4",
+        r"C:\Users\estra\Projects\Virtuoso\virtuoso.dev\plugins\virtuoso",
+        "/some/path/with/rpm/but/no/session/marker",
+        "/home/user/local-agent-mode-sessions/uuid-1234/other/plugin_virtuoso",
+        "",
+    ]
+    for p in stable_cases:
+        assert vp._is_ephemeral_plugin_root(p) is False, p
+
+    ephemeral_cases = [
+        r"C:\Users\estra\AppData\Roaming\Claude\local-agent-mode-sessions\427fb427\rpm\plugin_virtuoso",
+        "/home/user/.config/Claude/local-agent-mode-sessions/427fb427-uuid/rpm/plugin_virtuoso",
+        "/a/b/LOCAL-AGENT-MODE-SESSIONS/c/RPM/d",  # case-insensitive
+    ]
+    for p in ephemeral_cases:
+        assert vp._is_ephemeral_plugin_root(p) is True, p
+
+
+def test_record_root_prefers_installed_over_ephemeral_snapshot(tmp_path, monkeypatch):
+    """PF-04 test 1 / I1: ephemeral PLUGIN_ROOT + a valid installed copy -> the bridge ends up
+    containing the INSTALLED path, not the session snapshot. This is the core fix: the
+    SessionStart hook's own frozen copy must never poison the machine-global bridge when a
+    stable alternative can be resolved from installed_plugins.json."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("VIRTUOSO_HOME", str(home))
+
+    ephemeral = _make_valid_plugin_root(
+        tmp_path / "local-agent-mode-sessions" / "sess-uuid" / "rpm" / "plugin_virtuoso"
+    )
+    monkeypatch.setattr(vp, "PLUGIN_ROOT", str(ephemeral))
+
+    installed = _make_valid_plugin_root(tmp_path / "installed" / "virtuoso" / "1.3.4")
+    installed_json = tmp_path / "installed_plugins.json"
+    _write_installed_plugins_json(installed_json, installed)
+    monkeypatch.setattr(vp, "INSTALLED_PLUGINS_JSON", str(installed_json))
+
+    vp.record_root()
+
+    bridge = _bridge_path(home)
+    assert bridge.is_file()
+    assert bridge.read_text(encoding="utf-8").strip() == str(installed)
+    assert str(ephemeral) not in bridge.read_text(encoding="utf-8")
+
+
+def test_record_root_keeps_valid_existing_bridge_when_nothing_resolves(tmp_path, monkeypatch):
+    """PF-04 test 2 / I6: ephemeral PLUGIN_ROOT + no resolvable installed copy + a valid existing
+    bridge -> the bridge is left UNCHANGED (never downgraded from a working stable pointer to
+    the ephemeral snapshot just because nothing better resolved this particular run)."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("VIRTUOSO_HOME", str(home))
+
+    ephemeral = _make_valid_plugin_root(
+        tmp_path / "local-agent-mode-sessions" / "sess-uuid" / "rpm" / "plugin_virtuoso"
+    )
+    monkeypatch.setattr(vp, "PLUGIN_ROOT", str(ephemeral))
+    # No installed_plugins.json at all -- nothing resolvable.
+    monkeypatch.setattr(vp, "INSTALLED_PLUGINS_JSON", str(tmp_path / "does-not-exist.json"))
+
+    existing_valid = _make_valid_plugin_root(tmp_path / "existing-valid-root")
+    bridge = _bridge_path(home)
+    bridge.parent.mkdir(parents=True)
+    bridge.write_bytes((str(existing_valid) + "\n").encode("utf-8"))
+
+    bytes_before = bridge.read_bytes()
+    mtime_before = bridge.stat().st_mtime_ns
+
+    vp.record_root()
+
+    assert bridge.read_bytes() == bytes_before, "a still-valid existing bridge was rewritten"
+    assert bridge.stat().st_mtime_ns == mtime_before, "a still-valid existing bridge was touched"
+
+
+def test_record_root_falls_back_to_running_copy_when_nothing_else_resolves(tmp_path, monkeypatch):
+    """PF-04 test 3 / I4: ephemeral PLUGIN_ROOT + nothing resolvable + no existing bridge (first
+    run) -> the bridge ends up valid, pointing at the running (ephemeral) copy -- a working
+    ephemeral bridge beats a broken/missing one. Also covers the "invalid existing bridge"
+    half of test 3: a stale bridge pointing at a path that no longer carries
+    scripts/virtuoso_preflight.py must not be trusted either, and the same ephemeral fallback
+    applies."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("VIRTUOSO_HOME", str(home))
+
+    ephemeral = _make_valid_plugin_root(
+        tmp_path / "local-agent-mode-sessions" / "sess-uuid" / "rpm" / "plugin_virtuoso"
+    )
+    monkeypatch.setattr(vp, "PLUGIN_ROOT", str(ephemeral))
+    monkeypatch.setattr(vp, "INSTALLED_PLUGINS_JSON", str(tmp_path / "does-not-exist.json"))
+
+    bridge = _bridge_path(home)
+    assert not bridge.exists()  # sanity: no existing bridge at all
+
+    vp.record_root()
+
+    assert bridge.is_file()
+    assert bridge.read_text(encoding="utf-8").strip() == str(ephemeral)
+
+    # Now the invalid-existing-bridge half: point the bridge at a path that does NOT carry
+    # scripts/virtuoso_preflight.py (e.g. a plugin dir that was since removed/upgraded away).
+    invalid_root = tmp_path / "no-longer-a-real-plugin-root"
+    invalid_root.mkdir()
+    bridge.write_bytes((str(invalid_root) + "\n").encode("utf-8"))
+
+    vp.record_root()
+
+    assert bridge.read_text(encoding="utf-8").strip() == str(ephemeral), (
+        "an invalid existing bridge should not block the ephemeral fallback"
+    )
+
+
+def test_record_root_records_stable_plugin_root_normally(tmp_path, monkeypatch):
+    """PF-04 test 4: an ordinary, stable PLUGIN_ROOT (dev tree / marketplace cache -- not a
+    session snapshot) is recorded exactly as before -- no behavior change for ordinary installs,
+    even when installed_plugins.json also happens to resolve to something else."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("VIRTUOSO_HOME", str(home))
+
+    stable = _make_valid_plugin_root(tmp_path / "dev-tree" / "plugins" / "virtuoso")
+    monkeypatch.setattr(vp, "PLUGIN_ROOT", str(stable))
+    other = _make_valid_plugin_root(tmp_path / "installed" / "virtuoso" / "1.3.4")
+    installed_json = tmp_path / "installed_plugins.json"
+    _write_installed_plugins_json(installed_json, other)
+    monkeypatch.setattr(vp, "INSTALLED_PLUGINS_JSON", str(installed_json))
+
+    vp.record_root()
+
+    bridge = _bridge_path(home)
+    assert bridge.read_text(encoding="utf-8").strip() == str(stable), (
+        "a non-ephemeral PLUGIN_ROOT must be recorded as-is, never overridden by "
+        "installed_plugins.json"
+    )
+
+
+def test_record_root_skips_write_when_content_unchanged(tmp_path, monkeypatch):
+    """PF-04 test 5 / I2: once the bridge already holds the resolved candidate's value,
+    record_root() must not write at all -- assert BOTH mtime and raw bytes are identical across
+    a second call, not just that the logical value is unchanged (also guards against needless
+    mtime churn on this machine-global file)."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("VIRTUOSO_HOME", str(home))
+    stable = _make_valid_plugin_root(tmp_path / "dev-tree" / "plugins" / "virtuoso")
+    monkeypatch.setattr(vp, "PLUGIN_ROOT", str(stable))
+    monkeypatch.setattr(vp, "INSTALLED_PLUGINS_JSON", str(tmp_path / "does-not-exist.json"))
+
+    vp.record_root()
+    bridge = _bridge_path(home)
+    assert bridge.is_file()
+    bytes_before = bridge.read_bytes()
+    mtime_before = bridge.stat().st_mtime_ns
+
+    vp.record_root()
+
+    assert bridge.read_bytes() == bytes_before, "unchanged content was rewritten"
+    assert bridge.stat().st_mtime_ns == mtime_before, "unchanged content still touched mtime"
+
+def test_resolve_installed_plugin_root_survives_non_string_install_path(tmp_path, monkeypatch):
+    """SR-1 review (2026-07-19), CRITICAL: a truthy non-string installPath made os.path.join
+    raise TypeError, which record_root's `except OSError` does NOT catch -- so it escaped and
+    aborted the entire preflight run for every project on the machine. installed_plugins.json is
+    not ours; we cannot assume it is well-formed. Refusing a malformed value is always correct:
+    the worst case is "no stable candidate", which the caller already handles."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("VIRTUOSO_HOME", str(home))
+    ephemeral = _make_valid_plugin_root(
+        tmp_path / "local-agent-mode-sessions" / "uuid" / "rpm" / "plugin_x"
+    )
+    monkeypatch.setattr(vp, "PLUGIN_ROOT", str(ephemeral))
+
+    for bad in (12345, ["a", "list"], True, {"a": "dict"}):
+        bad_json = tmp_path / ("bad_%s.json" % type(bad).__name__)
+        bad_json.write_text(
+            json.dumps({"plugins": {"virtuoso@virtuoso-marketplace": [{"installPath": bad}]}}),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(vp, "INSTALLED_PLUGINS_JSON", str(bad_json))
+
+        assert vp._resolve_installed_plugin_root() is None, (
+            "malformed installPath %r must resolve to None, not raise" % (bad,)
+        )
+        vp.record_root()  # must not raise
+        assert vp._is_valid_plugin_root(_bridge_path(home).read_text(encoding="utf-8").strip()), (
+            "I3: bridge must still point somewhere valid after a malformed installPath %r" % (bad,)
+        )
+
+
+def test_resolve_installed_plugin_root_survives_malformed_json(tmp_path, monkeypatch):
+    """Resolution must degrade to None -- never raise -- for every shape of unusable file."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("VIRTUOSO_HOME", str(home))
+    ephemeral = _make_valid_plugin_root(
+        tmp_path / "local-agent-mode-sessions" / "uuid" / "rpm" / "plugin_y"
+    )
+    monkeypatch.setattr(vp, "PLUGIN_ROOT", str(ephemeral))
+
+    cases = {
+        "syntax.json": "{ this is not json",
+        "empty.json": "",
+        "wrong_shape.json": json.dumps({"plugins": {}}),
+        "not_a_list.json": json.dumps({"plugins": {"virtuoso@virtuoso-marketplace": {}}}),
+        "empty_list.json": json.dumps({"plugins": {"virtuoso@virtuoso-marketplace": []}}),
+        "no_key.json": json.dumps({"plugins": {"other@marketplace": [{"installPath": "/x"}]}}),
+    }
+    for name, content in cases.items():
+        f = tmp_path / name
+        f.write_text(content, encoding="utf-8")
+        monkeypatch.setattr(vp, "INSTALLED_PLUGINS_JSON", str(f))
+        assert vp._resolve_installed_plugin_root() is None, "%s must resolve to None" % name
+        vp.record_root()  # must not raise
+
+    missing = tmp_path / "does_not_exist.json"
+    monkeypatch.setattr(vp, "INSTALLED_PLUGINS_JSON", str(missing))
+    assert vp._resolve_installed_plugin_root() is None, "absent file must resolve to None"
+
+
+def test_record_root_installed_wins_over_existing_bridge(tmp_path, monkeypatch):
+    """Asserts the DELIBERATE precedence flagged by SR-1 review (2026-07-19): when the running
+    copy is ephemeral, installed_plugins.json outranks a still-valid existing bridge.
+
+    Rationale, recorded here so it cannot drift into an untested side effect: the manifest is the
+    authoritative record of what is installed; the bridge is a derived cache anyone (including a
+    past ephemeral session) may have written. Preferring the existing bridge would freeze it at
+    the old version dir after every upgrade, since that dir stays on disk and stays valid.
+    The accepted residual risk is the converse -- a momentarily stale manifest downgrades a newer
+    bridge -- which is bounded (both validated, so I3 holds) and self-corrects."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("VIRTUOSO_HOME", str(home))
+
+    ephemeral = _make_valid_plugin_root(
+        tmp_path / "local-agent-mode-sessions" / "uuid" / "rpm" / "plugin_z"
+    )
+    monkeypatch.setattr(vp, "PLUGIN_ROOT", str(ephemeral))
+
+    newer_in_bridge = _make_valid_plugin_root(tmp_path / "cache" / "virtuoso" / "1.3.5")
+    manifest_says = _make_valid_plugin_root(tmp_path / "cache" / "virtuoso" / "1.3.4")
+
+    bridge = _bridge_path(home)
+    bridge.parent.mkdir(parents=True, exist_ok=True)
+    bridge.write_text(str(newer_in_bridge) + chr(10), encoding="utf-8")
+
+    installed_json = tmp_path / "installed_plugins.json"
+    _write_installed_plugins_json(installed_json, manifest_says)
+    monkeypatch.setattr(vp, "INSTALLED_PLUGINS_JSON", str(installed_json))
+
+    vp.record_root()
+
+    got = bridge.read_text(encoding="utf-8").strip()
+    assert got == str(manifest_says), (
+        "installed_plugins.json must win over an existing bridge value; got %r" % got
+    )
+    assert "local-agent-mode-sessions" not in got, "I1: never the ephemeral snapshot"
