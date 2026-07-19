@@ -7,7 +7,9 @@ bridge, and two releases shipped on red CI because the local flow ran pytest but
 validate.py. Every gate below traces to one of those.
 
 Usage:
-    python release.py X.Y.Z [--notes "..."] [--allow-regen-diff] [--yes]
+    python release.py X.Y.Z [--notes "..."] [--allow-regen-diff]
+    python release.py X.Y.Z --redeploy     # resume deploy/verify after main was already
+                                           # released (bump+push done) but a later gate failed
     python release.py --dry-run            # all read-only gates vs the CURRENT state
 
 Steps (real run):
@@ -67,11 +69,16 @@ class Gate(Exception):
 
 
 def say(msg):
-    print(msg, flush=True)
+    # Defensive: a UnicodeEncodeError from print() under a strict console codepage must
+    # never abort the pipeline (SR-1 review: imagine it firing on the line AFTER push).
+    try:
+        print(msg, flush=True)
+    except UnicodeEncodeError:
+        print(msg.encode("ascii", "replace").decode("ascii"), flush=True)
 
 
-def run(cmd, cwd=REPO, check=True):
-    p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+def run(cmd, cwd=REPO, check=True, timeout=600):
+    p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
     if check and p.returncode != 0:
         raise Gate("command failed (%d): %s\n%s" % (p.returncode, " ".join(cmd),
                                                     (p.stderr or p.stdout).strip()[:800]))
@@ -90,14 +97,19 @@ def current_version():
 
 # --- step 1: preflight ---------------------------------------------------------------------
 
-def gate_preflight(target):
+def gate_preflight(target, redeploy=False):
     # Cheap usage gates first — a malformed target should fail in milliseconds, not after
-    # a full suite run.
+    # a full suite run. --redeploy INVERTS the equality gate: it resumes a release whose
+    # bump+push already landed, so the target must EQUAL the repo's current version.
     if target is not None:
         if not _VERSION_RE.match(target):
             raise Gate("target version %r is not X.Y.Z" % target)
-        if target == current_version():
-            raise Gate("target version %s equals the current version" % target)
+        if redeploy and target != current_version():
+            raise Gate("--redeploy resumes the CURRENT version (%s), not %s"
+                       % (current_version(), target))
+        if not redeploy and target == current_version():
+            raise Gate("target version %s equals the current version (already released? "
+                       "resume an incomplete deploy with --redeploy)" % target)
 
     st = run(["git", "status", "--porcelain"]).stdout.strip()
     if st:
@@ -180,12 +192,26 @@ def gate_regen_diff(installed_root, allow):
 
 def do_bump_and_push(target, notes):
     p = run([sys.executable, os.path.join(SCRIPTS, "bump_version.py"), target], check=False)
-    if "All declared files in sync at %s" % target not in p.stdout:
+    if p.returncode != 0 or "All declared files in sync at %s" % target not in p.stdout:
         raise Gate("bump did not report in-sync at %s:\n%s" % (target, p.stdout.strip()[-400:]))
     say("[bump] all declared files in sync at %s" % target)
 
     st = run(["git", "status", "--porcelain"]).stdout.strip().splitlines()
-    expected = {"plugins/virtuoso/.claude-plugin/plugin.json", ".claude-plugin/marketplace.json"}
+    # Tripwire set is DERIVED from bump_version.py's own config, not hardcoded — if the
+    # declared-file list ever grows, the tripwire tracks it instead of contradicting it
+    # (SR-1 review). Falls back to the known pair if the config is unreadable: the tripwire
+    # only ever blocks, so a stale fallback fails safe.
+    try:
+        with open(os.path.join(PLUGIN, ".version-bump.json"), encoding="utf-8") as f:
+            declared = json.load(f)["files"]
+        # Config paths are PLUGIN-relative (marketplace.json via "../../"); git porcelain
+        # is repo-relative with forward slashes — resolve then relativize.
+        expected = {
+            os.path.relpath(os.path.normpath(os.path.join(PLUGIN, d["path"])), REPO).replace("\\", "/")
+            for d in declared
+        }
+    except (OSError, ValueError, KeyError, TypeError):
+        expected = {"plugins/virtuoso/.claude-plugin/plugin.json", ".claude-plugin/marketplace.json"}
     actual = {ln[3:].strip() for ln in st}
     if actual != expected:
         raise Gate("tripwire: dirty set %s != expected %s" % (sorted(actual), sorted(expected)))
@@ -206,9 +232,16 @@ def deploy_cache(target):
     if clone_ver != target:
         raise Gate("marketplace clone at %s, expected %s — push/pull mismatch" % (clone_ver, target))
     dst = os.path.join(CACHE, target)
-    if os.path.isdir(dst):
-        shutil.rmtree(dst)
-    shutil.copytree(os.path.join(CLONE, "plugins", "virtuoso"), dst)
+    try:
+        if os.path.isdir(dst):
+            # Only reachable on a retry/--redeploy after an earlier partial attempt.
+            shutil.rmtree(dst)
+        shutil.copytree(os.path.join(CLONE, "plugins", "virtuoso"), dst)
+    except OSError as exc:
+        # Registry has NOT been touched yet (it is updated last, after verification), so
+        # the machine still runs the previous version — state the fact.
+        raise Gate("cache install failed (%r). The registry still points at the previous "
+                   "version; remove the partial dir %s and resume with --redeploy." % (exc, dst))
     say("[deploy] cache installed: %s" % dst)
     return dst
 
@@ -239,10 +272,23 @@ def update_registry(target, cache_dir):
     e["version"] = target
     e["lastUpdated"] = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + ".000Z"
     body = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
-    with open(REGISTRY, "w", encoding="utf-8") as f:
+    # Atomic: write beside, then os.replace() — a crash mid-write must never leave the
+    # machine-wide registry truncated (SR-1 review CRITICAL). Same-directory replace is
+    # atomic on both POSIX and Windows.
+    tmp = REGISTRY + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         f.write(body)
+    os.replace(tmp, REGISTRY)
     with open(LAST_UPDATE_CHECK, "w", encoding="utf-8") as f:
         f.write(str(int(time.time() * 1000)))
+    # Prune old backups, newest 5 kept — they accumulate one per release otherwise.
+    baks = sorted(f for f in os.listdir(os.path.dirname(REGISTRY))
+                  if f.startswith(os.path.basename(REGISTRY) + ".bak-"))
+    for old in baks[:-5]:
+        try:
+            os.remove(os.path.join(os.path.dirname(REGISTRY), old))
+        except OSError:
+            pass
     say("[registry] %s -> %s (backup: %s)" % (PLUGIN_KEY, target, os.path.basename(backup)))
 
 
@@ -320,33 +366,61 @@ def main():
                     help="read-only gates against the current state; writes nothing")
     ap.add_argument("--notes", default="", help="release-note line for the commit message")
     ap.add_argument("--allow-regen-diff", action="store_true")
+    ap.add_argument("--redeploy", action="store_true",
+                    help="resume deploy/verify for the CURRENT (already bumped+pushed) version")
     a = ap.parse_args()
 
     if not a.dry_run and not a.version:
         ap.error("a target version is required unless --dry-run")
+    if a.dry_run and a.redeploy:
+        ap.error("--dry-run and --redeploy are mutually exclusive")
+
+    # `progress` makes the failure report honest: "ABORTED" must never imply "nothing
+    # happened" once main has been pushed (SR-1 review CRITICAL). Ordering note: the
+    # registry is updated LAST, after sweep+verify — a deploy the pipeline itself flags as
+    # suspect must never become the active install target.
+    progress = []
     try:
-        cur = gate_preflight(None if a.dry_run else a.version)
+        cur = gate_preflight(None if a.dry_run else a.version, redeploy=a.redeploy)
         _data, entry = _validated_registry()
         installed_root = entry["installPath"]
         if not os.path.isfile(os.path.join(installed_root, WRITER_REL)):
             raise Gate("registry installPath lacks the writer: %s" % installed_root)
         say("[registry] installed %s at %s" % (entry["version"], installed_root))
+        progress.append("preflight")
         gate_regen_diff(installed_root, a.allow_regen_diff)
+        progress.append("regen-diff")
         if a.dry_run:
             sweep(installed_root, dry_run=True)
             verify_installed(installed_root)
             say("\nDRY-RUN COMPLETE: every gate green against version %s. Nothing written." % cur)
             return 0
-        do_bump_and_push(a.version, a.notes)
+        if a.redeploy:
+            say("[redeploy] resuming deploy/verify for already-released v%s" % a.version)
+        else:
+            do_bump_and_push(a.version, a.notes)
+        progress.append("released-to-main")
         cache_dir = deploy_cache(a.version)
-        update_registry(a.version, cache_dir)
+        progress.append("cache-installed")
         sweep(cache_dir)
         verify_installed(cache_dir)
+        progress.append("verified")
+        update_registry(a.version, cache_dir)
+        progress.append("registry-updated")
         say("\nRELEASE v%s COMPLETE. Remember: restart the app to propagate session snapshots."
             % a.version)
         return 0
     except Gate as exc:
-        say("\nRELEASE ABORTED — gate failure:\n%s" % exc)
+        say("\nGATE FAILURE:\n%s" % exc)
+        if "released-to-main" in progress:
+            say("\nSTATE: main IS RELEASED (bump commit pushed). Completed: %s." % ", ".join(progress))
+            if "registry-updated" in progress:
+                say("The registry was already updated — investigate before trusting the install.")
+            else:
+                say("The registry still points at the PREVIOUS version; the machine keeps "
+                    "working. Resume with: release.py %s --redeploy" % (a.version or ""))
+        else:
+            say("\nSTATE: nothing was released. Completed: %s." % (", ".join(progress) or "none"))
         return 1
 
 
