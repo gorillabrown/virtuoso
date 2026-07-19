@@ -145,6 +145,11 @@ def _writer_outputs(writer, label):
             for fn in files:
                 full = os.path.join(dirpath, fn)
                 rel = os.path.relpath(full, td).replace("\\", "/")
+                # The bridge records the RUNNING writer's own location (PF-04), so it
+                # differs whenever two different installs are compared -- identity, not
+                # output. Excluding it keeps this gate about what the writer PRODUCES.
+                if rel == ".virtuoso/plugin-root":
+                    continue
                 out[rel] = norm_sha(full)
     return out
 
