@@ -91,6 +91,14 @@ def current_version():
 # --- step 1: preflight ---------------------------------------------------------------------
 
 def gate_preflight(target):
+    # Cheap usage gates first — a malformed target should fail in milliseconds, not after
+    # a full suite run.
+    if target is not None:
+        if not _VERSION_RE.match(target):
+            raise Gate("target version %r is not X.Y.Z" % target)
+        if target == current_version():
+            raise Gate("target version %s equals the current version" % target)
+
     st = run(["git", "status", "--porcelain"]).stdout.strip()
     if st:
         raise Gate("working tree not clean:\n" + st)
@@ -121,12 +129,6 @@ def gate_preflight(target):
         raise Gate("bump_version.py --check failed:\n" + p.stdout.strip()[-400:])
     cur = current_version()
     say("[preflight] versions in sync at %s" % cur)
-
-    if target is not None:
-        if not _VERSION_RE.match(target):
-            raise Gate("target version %r is not X.Y.Z" % target)
-        if target == cur:
-            raise Gate("target version %s equals the current version" % target)
     return cur
 
 
