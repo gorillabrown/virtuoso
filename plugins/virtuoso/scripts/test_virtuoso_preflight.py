@@ -483,7 +483,10 @@ def test_heal_with_missing_manifest_discovers_roadmap_and_seeds_no_parallel(tmp_
     op = _seed_established_tree(tmp_path, doc_root="Project Documentation", roadmap_name="Custom_Roadmap.md")
     rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
     assert rc == 0
-    assert "virtuoso-status: ready" in out
+    # PF-02/D4: this heal genuinely writes the marker, vendor scripts, readme, and manifest
+    # from scratch (bare Virtuoso/ dir, no prior manifest) -- truthful status is `healed`, not
+    # `ready` (which is reserved for a run that wrote nothing).
+    assert "virtuoso-status: healed" in out, out
     m = _manifest(tmp_path)
     assert m["paths"]["roadmap"] == "Project Documentation/2 operational/Custom_Roadmap.md", m["paths"]["roadmap"]
     assert not (op / "Roadmap.md").exists()
@@ -1893,3 +1896,131 @@ def test_record_root_installed_wins_over_existing_bridge(tmp_path, monkeypatch):
         "installed_plugins.json must win over an existing bridge value; got %r" % got
     )
     assert "local-agent-mode-sessions" not in got, "I1: never the ephemeral snapshot"
+
+
+# ---------------------------------------------------------------------------
+# PF-02 -- Mutation honesty: `writes: N` line + truthful status (audit RDM-01/D-02/D-04/
+# PRE-07, spec repaired 2026-07-19). See "#### PF-02" in Roadmap.md Phase 4 for the
+# authoritative Decision/Definition blocks these tests are anchored to.
+# ---------------------------------------------------------------------------
+
+def _writes_line_value(out):
+    """Pull the integer N out of a `writes: N` line found anywhere in `out`, or None if the
+    line is absent. Deliberately NOT a regex over the whole blob -- line-based so a stray
+    substring match elsewhere in the output can't produce a false positive."""
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("writes: "):
+            return int(line[len("writes: "):])
+    return None
+
+
+def test_hook_path_emits_exactly_writes_zero_on_settled_tree(tmp_path):
+    """PF-02 done-when 1 (audit RDM-01): the SessionStart hook's EXACT invocation
+    (--mode detect --quiet) against an already-settled, curated tree must emit exactly
+    `writes: 0` and NOTHING else. The `writes:` line is deliberately exempt from --quiet --
+    it IS the machine contract -- but every other line (`_say`-guarded) must stay suppressed,
+    so stdout must be exactly this one line."""
+    _run(tmp_path, "create")  # settle a full, curated plugin-only workspace first
+
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "detect", "--quiet", root=tmp_path)
+
+    assert rc == 0
+    assert out == "writes: 0\n", "expected exactly 'writes: 0\\n', got %r" % out
+
+
+def test_writes_count_matches_independent_raw_byte_diff(tmp_path):
+    """PF-02 done-when 2 (audit D-02): perturb a settled tree (drop the "issues" role key from
+    the manifest so heal must notice the drift and rewrite the manifest back), then verify the
+    printed `writes: N` equals an INDEPENDENT raw-byte before/after diff computed by THIS test
+    (never trust the production `created` list's own shape). Also verifies the plugin-root
+    bridge -- machine state, not project state -- is excluded from the count even when it is
+    forced to actually change during the run, and that a heal which truly wrote something
+    reports `virtuoso-status: healed`, never `ready` (D4)."""
+    _run(tmp_path, "create")  # settle a full, curated plugin-only workspace first
+
+    # Force the bridge to actually change on the next run, so its exclusion is a real assertion
+    # rather than a vacuous one (a non-ephemeral PLUGIN_ROOT would otherwise skip the rewrite
+    # entirely once the bridge already matches -- I2 -- leaving nothing to prove exclusion of).
+    bridge_path = tmp_path / ".virtuoso" / "plugin-root"
+    bridge_path.write_text("garbage-value-not-a-real-plugin-root\n", encoding="utf-8")
+    bridge_before = bridge_path.read_bytes()
+
+    # Perturb: drop a known-role manifest key. The registry readme still carries it, so heal
+    # must rewrite the manifest back to include it -- a genuine, deterministic single-file write.
+    manifest_path = tmp_path / "Virtuoso" / "workspace-layout.json"
+    manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    del manifest_data["paths"]["issues"]
+    manifest_path.write_text(json.dumps(manifest_data, indent=2) + "\n", encoding="utf-8")
+
+    before_files, _before_dirs = _hash_walk(tmp_path)  # excludes ".virtuoso" (the bridge) by default
+
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0
+
+    after_files, _after_dirs = _hash_walk(tmp_path)
+
+    changed_or_created = sum(1 for rel, h in after_files.items() if before_files.get(rel) != h)
+    assert changed_or_created > 0, "perturbation should have forced at least one real write"
+
+    reported = _writes_line_value(out)
+    assert reported is not None, "no `writes: N` line in output: %r" % out
+    assert reported == changed_or_created, (
+        "reported writes %d != independent raw-byte diff %d" % (reported, changed_or_created)
+    )
+
+    # The bridge really did change during this run...
+    bridge_after = bridge_path.read_bytes()
+    assert bridge_after != bridge_before, (
+        "expected record_root() to overwrite the corrupted bridge during this run"
+    )
+    # ...yet it must never be counted toward `writes:` (D-02: machine state, not project state).
+    assert ".virtuoso/plugin-root" not in after_files, (
+        "the bridge must never appear in a --root-scoped project-file accounting"
+    )
+
+    assert "virtuoso-status: healed" in out, out
+    assert "virtuoso-status: ready" not in out, out
+
+
+def test_settled_heal_still_reports_ready_and_nothing_to_do(tmp_path):
+    """PF-02 done-when 3 (harness contract, audit TST-02/D-11): a non-quiet adopt heal on an
+    already-settled tree must keep the EXACT 'nothing to do' phrasing the external exercise
+    harness string-matches, keep the truthful `virtuoso-status: ready` (nothing was written),
+    and additionally emit `writes: 0` -- purely additive, never displacing the existing text."""
+    _run(tmp_path, "create")  # settle a full, curated plugin-only workspace first
+
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+
+    assert rc == 0
+    assert "virtuoso-status: ready" in out, out
+    assert "nothing to do" in out, out
+    assert "writes: 0" in out, out
+
+
+def test_record_root_called_once_per_adopt_invocation(tmp_path, monkeypatch):
+    """PF-02 opportunistic dedupe (audit PRE-07/D-15): preflight() dispatching --mode adopt to
+    adopt() must record the plugin-root bridge exactly ONCE per invocation. Current code calls
+    record_root() directly in preflight() and then again inside adopt() -- this must fail
+    against that double-call code and pass once the duplicate is dropped. adopt() must still
+    call record_root() itself (it is a public function, callable directly)."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("VIRTUOSO_HOME", str(home))
+
+    calls = []
+    real_record_root = vp.record_root
+
+    def _counting_record_root():
+        calls.append(1)
+        return real_record_root()
+
+    monkeypatch.setattr(vp, "record_root", _counting_record_root)
+
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+
+    vp.preflight(str(project_root), mode="adopt", quiet=True)
+
+    assert len(calls) == 1, (
+        "record_root() called %d time(s) via preflight(mode='adopt'); want exactly 1" % len(calls)
+    )

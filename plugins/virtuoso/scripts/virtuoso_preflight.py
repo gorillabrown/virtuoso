@@ -36,6 +36,13 @@ machine-global bridge never gets poisoned by one session's frozen copy. It also
 vendors the bundled scripts into ``Virtuoso/scripts/`` so skills can call them
 workspace-relative.
 
+Output contract (PF-02): every preflight/adopt invocation ends with a machine-readable
+``writes: N`` line — N = files under --root whose raw bytes were created or changed
+(directories and the machine-global plugin-root bridge are excluded). This line is EXEMPT
+from --quiet: it is the contract the SessionStart hook and other tools parse, and ``ready``
+in the ``virtuoso-status:`` line implies ``writes: 0`` — a heal that wrote reports
+``healed`` instead (D4: never say ready after mutating).
+
 User content (Roadmap.md, sprint-queue.xlsx, lessons) is never overwritten; an existing
 roadmap under any name is discovered and pointed at rather than re-seeded. Usage:
 
@@ -1053,6 +1060,26 @@ def _heal(root, created):
     return _build_full(root, _resolve_layout(root, "auto"), created, allow_seed=False)
 
 
+def _count_writes(created):
+    """Count of `created` entries that are actual files on disk right now (D-02 / audit
+    definition of a "write"): directories -- appended only by `_ensure_dir` -- do NOT count;
+    a "(refreshed)" rewrite DOES, once the suffix is stripped. Anchored to what is actually a
+    file on disk, not to which helper produced the entry or its suffix convention, so this can
+    never silently drift out of sync with `_ensure_file`'s / `_ensure_copy`'s /
+    `_refresh_copy`'s / `_refresh_text`'s append sites. The plugin-root bridge
+    (`~/.virtuoso/plugin-root`, written by record_root()) is excluded by construction -- it is
+    machine state, not project state, and never goes through `created` at all: record_root()
+    maintains that file independently of any builder's change log."""
+    seen = set()
+    for entry in created:
+        path = entry[:-len(" (refreshed)")] if entry.endswith(" (refreshed)") else entry
+        # De-dup by path (SR-1 nit): no current call path appends the same file twice in
+        # one run, but the count must not silently inflate if a future one does.
+        if path not in seen and os.path.isfile(path):
+            seen.add(path)
+    return len(seen)
+
+
 def _report(created, root, layout, quiet):
     if created:
         _say(quiet, "virtuoso: layout=%s; created/updated %d item(s):" % (layout, len(created)))
@@ -1065,14 +1092,18 @@ def _report(created, root, layout, quiet):
 
 
 def preflight(root, mode="create", quiet=False, layout="auto"):
+    # PRE-07 / audit D-15: routed to adopt() BEFORE record_root() runs below, so a
+    # --mode adopt invocation records the plugin-root bridge exactly once -- inside adopt()
+    # itself, which also calls record_root() when invoked directly (it is a public function) --
+    # instead of once here and once again inside adopt().
+    if mode == "adopt":
+        return adopt(root, quiet)
+
     # Checked before record_root()'s own write touches `root` -- relevant when VIRTUOSO_HOME is
     # sandboxed to `root` itself (tests do this); in real usage record_root() writes under the
     # user's actual home directory, never under `root`, so this ordering doesn't matter there.
     is_new_root = _is_new_project_root(root)
     record_root()  # always — the plugin-root bridge for skill bodies
-
-    if mode == "adopt":
-        return adopt(root, quiet)
 
     if mode == "detect":
         if _is_project(root):
@@ -1081,13 +1112,22 @@ def preflight(root, mode="create", quiet=False, layout="auto"):
             # both the report below and this function's return value).
             created = []
             _heal(root, created)
-            _say(quiet, "virtuoso-status: ready")
+            writes = _count_writes(created)
+            # D4: `ready` must not be printed when this run actually wrote something.
+            _say(quiet, "virtuoso-status: healed" if writes else "virtuoso-status: ready")
             _report(created, root, _resolve_layout(root, "auto"), quiet)
+            # RDM-01: `writes:` is EXEMPT from --quiet -- it IS the machine contract (the
+            # SessionStart hook runs --mode detect --quiet, where _say suppresses everything
+            # else), so it is printed via plain `print`, never `_say`. Printed after _report so
+            # the harness's "nothing to do" string-match (TST-02) stays intact; this line is
+            # purely additive.
+            print("writes: %d" % writes)
             return created
         if _is_adoptable(root):
             _say(quiet, "virtuoso-status: adoptable")
             _say(quiet, "virtuoso: an established documentation tree exists here but has no "
                         "Virtuoso/ marker - run with --mode adopt (or /virtuoso-init).")
+            print("writes: 0")
             return []
         if is_new_root:
             # A brand-new project (nothing here to clobber) auto-scaffolds even from detect.
@@ -1096,10 +1136,12 @@ def preflight(root, mode="create", quiet=False, layout="auto"):
             _build_full(root, layout, created, allow_seed=True)
             _say(quiet, "virtuoso-status: created")
             _report(created, root, layout, quiet)
+            print("writes: %d" % _count_writes(created))
             return created
         _say(quiet, "virtuoso-status: none")
         _say(quiet, "virtuoso: no Virtuoso/ workspace here — skipping "
                     "(run /virtuoso-init to create one).")
+        print("writes: 0")
         return []
 
     # mode == "create"
@@ -1107,6 +1149,7 @@ def preflight(root, mode="create", quiet=False, layout="auto"):
     created = []
     _build_full(root, layout, created, allow_seed=True)
     _report(created, root, layout, quiet)
+    print("writes: %d" % _count_writes(created))
     return created
 
 
@@ -1116,8 +1159,12 @@ def adopt(root, quiet=False):
     created = []
     if _is_project(root):
         _heal(root, created)
-        _say(quiet, "virtuoso-status: ready")
+        writes = _count_writes(created)
+        # D4: `ready` must not be printed when this run actually wrote something.
+        _say(quiet, "virtuoso-status: healed" if writes else "virtuoso-status: ready")
         _report(created, root, _resolve_layout(root, "auto"), quiet)
+        # RDM-01: exempt from --quiet, printed after _report -- see preflight()'s matching path.
+        print("writes: %d" % writes)
         return created
     if _is_adoptable(root):
         paths = _build_thin(root, created)
@@ -1127,10 +1174,12 @@ def adopt(root, quiet=False):
                     "Virtuoso/ control marker pointing at your existing roadmap; nothing was "
                     "moved or duplicated.")
         _report(created, root, "plugin-only (adopted)", quiet)
+        print("writes: %d" % _count_writes(created))
         return created
     _say(quiet, "virtuoso-status: none")
     _say(quiet, "virtuoso: no Virtuoso/ workspace and no established documentation tree here - "
                 "run /virtuoso-init to create one.")
+    print("writes: 0")
     return []
 
 
