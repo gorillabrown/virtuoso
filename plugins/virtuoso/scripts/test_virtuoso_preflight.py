@@ -660,6 +660,10 @@ beside it. `Virtuoso/workspace-layout.json` is the machine-readable mirror of th
    unregistered or seed an empty template beside a real document.
 4. If the registry and the files on disk diverge, **fix the registry** (repoint the path to
    the existing document) — do not fork a rival.
+5. **To deregister a role, remove it from BOTH this file and `Virtuoso/workspace-layout.json`
+   in the same edit.** Deleting it from only one side is not durable — the next heal restores
+   it from whichever side still carries it (that is the registry round-trip working as
+   designed, not a bug).
 
 <!-- virtuoso-governance-registry
 {machine}
@@ -995,6 +999,170 @@ def test_heal_preserves_curated_registry_and_custom_roles(tmp_path):
     )
     assert m2["paths"].get("roadmapArchives") == fx2["roadmap_archives_rel"], (
         "reconstructed manifest did not recover the roadmapArchives custom role"
+    )
+
+
+# ---------------------------------------------------------------------------
+# PF-09 (audit PRE-01, CRITICAL): custom-role registry round-trip. A project-custom role
+# registered in the governance readme's machine block ONLY -- exactly what the readme's own
+# Rules for skills ("register it here") tell a user to do -- must survive the next
+# regeneration. Pre-fix, _read_registry_overlay's merge guard back-fills a readme-only key
+# into the manifest overlay ONLY when it is already a recognized role (`key in _KNOWN_PATHKEY`),
+# so an unrecognized project-custom key is silently dropped from BOTH files on the very next
+# heal, and _assert_registry_mirror passes vacuously (it is scoped to _ROLE_PATHKEY, so a
+# custom key's disappearance from both sides is invisible to it).
+# ---------------------------------------------------------------------------
+
+
+def _insert_machine_line(readme_text, key, rel):
+    """Insert a new "key: rel" line into an existing governance readme's machine block, exactly
+    as a user following the readme's own Rules for skills would -- appended just before the
+    closing "-->", leaving the human-readable table and everything else untouched."""
+    anchor = "\n-->"
+    idx = readme_text.rindex(anchor)
+    return readme_text[:idx] + ("\n%s: %s" % (key, rel)) + readme_text[idx:]
+
+
+def _remove_role_from_readme(readme_text, key, label, rel, status="✅ registered"):
+    """Remove both the human-table row and the machine-block line for one registry role,
+    simulating a user deregistering it from the readme (the new Rule 5) by hand."""
+    table_row = "\n| %s | `%s` | %s |" % (label, rel, status)
+    machine_line = "\n%s: %s" % (key, rel)
+    assert table_row in readme_text, "fixture bug: expected table row not found: %r" % table_row
+    assert machine_line in readme_text, "fixture bug: expected machine line not found: %r" % machine_line
+    return readme_text.replace(table_row, "", 1).replace(machine_line, "", 1)
+
+
+def test_custom_role_readme_only_registration_survives_heal(tmp_path):
+    """Audit PRE-01 reproduction, verbatim: build the curated fixture, settle it with one adopt
+    run, then register a brand-new project-custom role ("myDocs") in the readme's machine block
+    ONLY -- the manifest never learns of it directly. One further adopt heal must back-fill it
+    into the manifest, keep it in the readme's machine block, and render a derived-label row for
+    it in the human table -- without touching the role's own marker file. Expected to FAIL
+    against unmodified code (the _KNOWN_PATHKEY guard drops "myDocs" because it is not a
+    recognized role)."""
+    fx = build_curated_fixture(tmp_path)
+    rc0, _out0 = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc0 == 0  # settle: the curated fixture starts already-healthy/idempotent
+
+    root = Path(fx["root"])
+    docs_special = root / "docs-special"
+    docs_special.mkdir()
+    marker_path = docs_special / "NOTE.md"
+    marker_path.write_text("# docs-special\n\nmarker content.\n", encoding="utf-8")
+    marker_bytes_before = marker_path.read_bytes()
+
+    readme_text = fx["readme_path"].read_text(encoding="utf-8")
+    readme_text = _insert_machine_line(readme_text, "myDocs", "docs-special")
+    fx["readme_path"].write_text(readme_text, encoding="utf-8")
+    # The manifest is untouched -- this is a readme-machine-block-only registration.
+
+    rc, _out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0
+
+    m = json.loads(fx["manifest_path"].read_text(encoding="utf-8"))
+    assert m["paths"].get("myDocs") == "docs-special", (
+        "readme-only custom role registration was dropped from the manifest on heal: "
+        + repr(m["paths"].get("myDocs"))
+    )
+
+    readme_after = fx["readme_path"].read_text(encoding="utf-8")
+    assert "myDocs: docs-special" in readme_after, (
+        "readme-only custom role registration was dropped from the readme's own machine block"
+    )
+    assert "| My docs (directory) | `docs-special` | ✅ registered |" in readme_after, (
+        "readme human table did not render a derived-label row for the readme-only custom role"
+    )
+
+    assert marker_path.read_bytes() == marker_bytes_before, "heal touched the marker file's content"
+
+
+def test_custom_role_deregistration_from_both_files_sticks(tmp_path):
+    """Removing a custom role from BOTH files in one edit (the readme's new Rule 5) must stick --
+    heal must not resurrect it from either side, since neither side carries it anymore."""
+    fx = build_curated_fixture(tmp_path)
+    rc0, _out0 = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc0 == 0
+
+    manifest_data = json.loads(fx["manifest_path"].read_text(encoding="utf-8"))
+    assert manifest_data["paths"].pop("epics") == fx["epics_rel"]
+    fx["manifest_path"].write_text(json.dumps(manifest_data, indent=2) + "\n", encoding="utf-8")
+
+    readme_text = fx["readme_path"].read_text(encoding="utf-8")
+    readme_text = _remove_role_from_readme(readme_text, "epics", "Epics", fx["epics_rel"])
+    fx["readme_path"].write_text(readme_text, encoding="utf-8")
+
+    rc, _out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0
+
+    m = json.loads(fx["manifest_path"].read_text(encoding="utf-8"))
+    assert "epics" not in m["paths"], "deregistered custom role resurrected in the manifest"
+
+    readme_after = fx["readme_path"].read_text(encoding="utf-8")
+    assert "epics:" not in readme_after, (
+        "deregistered custom role resurrected in the readme machine block"
+    )
+    assert "| Epics |" not in readme_after, (
+        "deregistered custom role resurrected in the readme human table"
+    )
+
+
+def test_custom_role_divergent_values_manifest_wins_and_readme_repaired(tmp_path):
+    """PF-09 SR-1 finding 2: a custom key present in BOTH files with DIFFERENT values is
+    outside _assert_registry_mirror's scope (that stays _ROLE_PATHKEY-only by design), so the
+    resolution order itself must be pinned: the manifest wins, and the next heal rewrites the
+    readme to match -- silently, coherently, and convergently. Without this test the
+    divergence-repair behavior was real but unasserted."""
+    fx = build_curated_fixture(tmp_path)
+    rc0, _out0 = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc0 == 0
+
+    # Diverge: readme says one thing, manifest another, for the custom key "epics".
+    readme_text = fx["readme_path"].read_text(encoding="utf-8")
+    fx["readme_path"].write_text(
+        readme_text.replace("epics: %s" % fx["epics_rel"], "epics: WRONG/divergent-epics"),
+        encoding="utf-8")
+
+    rc, _out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0
+    manifest_data = json.loads(fx["manifest_path"].read_text(encoding="utf-8"))
+    assert manifest_data["paths"]["epics"] == fx["epics_rel"], "manifest must win"
+    healed = fx["readme_path"].read_text(encoding="utf-8")
+    assert "epics: %s" % fx["epics_rel"] in healed, "readme repaired to the manifest value"
+    assert "WRONG/divergent-epics" not in healed
+
+    rc2, out2 = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc2 == 0 and "writes: 0" in out2, "divergence repair must converge"
+
+
+def test_custom_role_manifest_only_deletion_resurrects_from_readme(tmp_path):
+    """Documented residual (PF-09, accepted until PF-05 ships an opt-out mechanism): deleting a
+    custom role from the manifest ONLY (the readme still carries it) is not a durable
+    deregistration -- one heal restores it FROM THE README, with its curated value, not a
+    re-derived default. That is the round-trip fix working as designed, not a bug. Pre-fix, the
+    _KNOWN_PATHKEY guard already dropped custom keys from every regeneration regardless of which
+    file changed, so this manifest-only deletion of "epics" was NOT restored -- this test fails
+    pre-fix for exactly that reason (part of this sprint's RED evidence)."""
+    fx = build_curated_fixture(tmp_path)
+    rc0, _out0 = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc0 == 0
+
+    manifest_data = json.loads(fx["manifest_path"].read_text(encoding="utf-8"))
+    assert manifest_data["paths"].pop("epics") == fx["epics_rel"]
+    fx["manifest_path"].write_text(json.dumps(manifest_data, indent=2) + "\n", encoding="utf-8")
+    # readme is untouched -- it still carries "epics" in both its table and machine block.
+
+    rc, _out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0
+
+    m = json.loads(fx["manifest_path"].read_text(encoding="utf-8"))
+    assert m["paths"].get("epics") == fx["epics_rel"], (
+        "manifest-only deletion of a custom role was not restored from the readme on heal: "
+        + repr(m["paths"].get("epics"))
+    )
+    readme_after = fx["readme_path"].read_text(encoding="utf-8")
+    assert ("epics: " + fx["epics_rel"]) in readme_after, (
+        "readme's own copy of the custom role should have been left alone"
     )
 
 
