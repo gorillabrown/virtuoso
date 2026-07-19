@@ -1399,3 +1399,196 @@ def test_documentation_root_preserved_on_regeneration(tmp_path):
     assert m2["documentationRoot"] == fx["custom_doc_root_rel"], (
         "documentationRoot drifted on a second regeneration: " + m2["documentationRoot"]
     )
+
+
+# ---------------------------------------------------------------------------
+# PF-01: line-ending preservation (C2) + semantic-difference manifest writes (C1 residual).
+# See Roadmap.md "#### PF-01" (Phase 4 -- Preflight Write Discipline) and the worked reference
+# soak-check.py::check_line_ending_preservation, which this section's tests mirror.
+# ---------------------------------------------------------------------------
+
+def _force_eol(data, eol):
+    """Normalize `data`'s line endings to exactly `eol` (b"\\n" or b"\\r\\n") throughout."""
+    normalized = data.replace(b"\r\n", b"\n")
+    if eol == b"\n":
+        return normalized
+    return normalized.replace(b"\n", b"\r\n")
+
+
+def test_refresh_text_preserves_lf_line_endings(tmp_path):
+    """PF-01 / C2: a registry file that is pure LF, given a GENUINE content change (not just a
+    settled no-op), comes back with CRLF=0 -- _refresh_text must preserve the file's own line
+    ending on write instead of letting Python's text-mode write impose the platform default.
+    The writer early-outs on a settled tree and never opens the files at all, so this forces a
+    real rewrite first by dropping a known role key from the manifest (mirrors
+    soak-check.py::check_line_ending_preservation, the worked reference for this exact check) --
+    a test that never triggers a write would prove only that an untouched file keeps its bytes."""
+    build_curated_fixture(tmp_path)
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0, out  # settle first
+
+    readme = tmp_path / "Virtuoso.Governance.Readme.md"
+    manifest = tmp_path / "Virtuoso" / "workspace-layout.json"
+
+    # Force pure LF -- the condition that exposes the defect.
+    for p in (readme, manifest):
+        p.write_bytes(_force_eol(p.read_bytes(), b"\n"))
+
+    # Force a genuine rewrite: drop a known role key from the manifest. `pre_heal` snapshots
+    # the state right before healing -- for the manifest that's the DROPPED-key text, which is
+    # guaranteed to differ from whatever the writer regenerates (restoring the key), so
+    # "rewritten" is detected by construction rather than by luck of whether the final bytes
+    # happen to match some earlier snapshot (on a platform whose default already matches the
+    # target convention, comparing against the ORIGINAL settled snapshot would risk a false
+    # "no rewrite happened" here even though a write syscall did occur).
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    assert "sprintCatalog" in data["paths"], "sanity: fixture carries the role we plan to drop"
+    data["paths"].pop("sprintCatalog")
+    manifest.write_bytes(_force_eol(json.dumps(data, indent=2).encode("utf-8") + b"\n", b"\n"))
+    pre_heal = {p: p.read_bytes() for p in (readme, manifest)}
+
+    rc2, out2 = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc2 == 0, out2
+
+    post_heal = {p: p.read_bytes() for p in (readme, manifest)}
+    assert post_heal[manifest] != pre_heal[manifest], (
+        "heal did not rewrite the manifest even though a role key was dropped -- this test "
+        "proves nothing"
+    )
+
+    rewritten = [p for p in (readme, manifest) if post_heal[p] != pre_heal[p]]
+    for p in rewritten:
+        crlf = post_heal[p].count(b"\r\n")
+        assert crlf == 0, "%s came back with CRLF=%d after an LF-in rewrite" % (p.name, crlf)
+
+
+def test_refresh_text_preserves_crlf_line_endings(tmp_path):
+    """PF-01 / C2: a registry file that is pure CRLF, given a genuine content change, stays
+    CRLF -- the mirror-image of test_refresh_text_preserves_lf_line_endings, forcing the
+    opposite starting convention so the fix is proven direction-agnostic rather than
+    coincidentally matching whatever the test-running platform's default happens to be."""
+    build_curated_fixture(tmp_path)
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc == 0, out
+
+    readme = tmp_path / "Virtuoso.Governance.Readme.md"
+    manifest = tmp_path / "Virtuoso" / "workspace-layout.json"
+
+    for p in (readme, manifest):
+        p.write_bytes(_force_eol(p.read_bytes(), b"\r\n"))
+
+    # See test_refresh_text_preserves_lf_line_endings for why "rewritten" is detected against
+    # the pre-heal (dropped-key) snapshot rather than the original settled one.
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    assert "sprintCatalog" in data["paths"], "sanity: fixture carries the role we plan to drop"
+    data["paths"].pop("sprintCatalog")
+    manifest.write_bytes(_force_eol(json.dumps(data, indent=2).encode("utf-8") + b"\n", b"\r\n"))
+    pre_heal = {p: p.read_bytes() for p in (readme, manifest)}
+
+    rc2, out2 = _run_capture("--root", str(tmp_path), "--mode", "adopt", root=tmp_path)
+    assert rc2 == 0, out2
+
+    post_heal = {p: p.read_bytes() for p in (readme, manifest)}
+    assert post_heal[manifest] != pre_heal[manifest], (
+        "heal did not rewrite the manifest even though a role key was dropped -- this test "
+        "proves nothing"
+    )
+
+    rewritten = [p for p in (readme, manifest) if post_heal[p] != pre_heal[p]]
+    for p in rewritten:
+        body = post_heal[p]
+        crlf = body.count(b"\r\n")
+        bare = body.count(b"\n") - crlf
+        assert bare == 0, "%s came back with bare LF=%d after a CRLF-in rewrite" % (p.name, bare)
+
+
+def test_settled_crlf_tree_is_not_rewritten(tmp_path):
+    """Anti-regression guard for the PF-01 trap: making _refresh_text's COMPARISON line-ending-
+    aware (instead of only the write) would make every settled CRLF tree compare unequal
+    against the plain-\\n `content` string and rewrite on EVERY invocation -- the exact opposite
+    of this sprint's goal. A settled CRLF workspace, run twice, must have IDENTICAL mtimes and
+    raw bytes. This must PASS before AND after the PF-01 change; if it ever fails, the churn
+    regression described in the PF-01 spec has been introduced."""
+    _run_capture("--root", str(tmp_path), "--mode", "create", root=tmp_path)
+    readme = tmp_path / "Virtuoso.Governance.Readme.md"
+    manifest = tmp_path / "Virtuoso" / "workspace-layout.json"
+
+    for p in (readme, manifest):
+        p.write_bytes(_force_eol(p.read_bytes(), b"\r\n"))
+    stat_before = {p: p.stat().st_mtime_ns for p in (readme, manifest)}
+    bytes_before = {p: p.read_bytes() for p in (readme, manifest)}
+
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "create", root=tmp_path)
+    assert rc == 0, out
+
+    for p in (readme, manifest):
+        assert p.stat().st_mtime_ns == stat_before[p], (
+            "%s was rewritten (mtime changed) on a settled CRLF tree" % p.name
+        )
+        assert p.read_bytes() == bytes_before[p], (
+            "%s was rewritten (bytes changed) on a settled CRLF tree" % p.name
+        )
+
+
+def test_reordered_manifest_produces_no_write(tmp_path):
+    """PF-01 / C1 residual: a manifest whose keys are merely in a DIFFERENT ORDER from what the
+    writer would generate -- same role->path mapping -- must produce ZERO writes. Intended
+    consequence (do not "fix" it): the reordered manifest STAYS reordered on disk; not churning
+    is worth more than canonical key order. SK-01's _assert_registry_mirror compares dicts and
+    is order-insensitive, so it must still pass."""
+    _run_capture("--root", str(tmp_path), "--mode", "create", root=tmp_path)
+    manifest = tmp_path / "Virtuoso" / "workspace-layout.json"
+
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    reordered = dict(reversed(list(data.items())))
+    reordered["paths"] = dict(reversed(list(data["paths"].items())))
+    assert reordered == data  # sanity: semantically identical, order differs
+    reordered_text = json.dumps(reordered, indent=2) + "\n"
+    assert reordered_text != json.dumps(data, indent=2) + "\n"  # sanity: text actually differs
+    manifest.write_text(reordered_text, encoding="utf-8")
+
+    stat_before = manifest.stat().st_mtime_ns
+    bytes_before = manifest.read_bytes()
+
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "create", root=tmp_path)
+    assert rc == 0, out
+
+    assert manifest.stat().st_mtime_ns == stat_before, (
+        "reordered manifest was rewritten (mtime changed) though semantically identical"
+    )
+    assert manifest.read_bytes() == bytes_before, (
+        "reordered manifest was rewritten (bytes changed) though semantically identical"
+    )
+
+    # SK-01's mirror invariant must still hold despite the on-disk key reordering.
+    vp._assert_registry_mirror(str(tmp_path))
+
+
+def test_detect_line_ending_edge_cases(tmp_path):
+    """PF-01: lock in _detect_line_ending's edge-case contract directly.
+
+    SR-1 review (Plato, 2026-07-19) found these behaviours correct but covered only
+    indirectly, via pure-LF/pure-CRLF fixtures -- so a future refactor could silently flip
+    the tie-break or break mixed-ending detection with the suite still green. On a
+    persistence surface that is not good enough: the whole point of PF-01 is that this
+    function decides how users' governance files get rewritten.
+    """
+    cases = [
+        (b"", None, "empty file: nothing to infer"),
+        (b"no newline at all", None, "single line, no terminator"),
+        (b"a\nb\nc\n", "\n", "pure LF"),
+        (b"a\r\nb\r\nc\r\n", "\r\n", "pure CRLF"),
+        (b"a\r\nb\n", "\n", "exact tie resolves to LF (documented, arbitrary)"),
+        (b"a\r\nb\r\nc\n", "\r\n", "mixed, CRLF majority"),
+        (b"a\nb\nc\r\n", "\n", "mixed, LF majority"),
+        (b"a\rb\rc\r", None, "CR-only (classic Mac): invisible to the vote, falls back"),
+    ]
+    for i, (body, expected, why) in enumerate(cases):
+        p = tmp_path / ("case_%d.txt" % i)
+        p.write_bytes(body)
+        assert vp._detect_line_ending(str(p)) == expected, (
+            "%s -- %r should detect %r" % (why, body, expected)
+        )
+
+    missing = tmp_path / "does_not_exist.txt"
+    assert vp._detect_line_ending(str(missing)) is None, "nonexistent file must not raise"
