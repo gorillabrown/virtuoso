@@ -218,13 +218,41 @@ def _home():
     return os.environ.get("VIRTUOSO_HOME") or os.path.expanduser("~")
 
 
+def _detect_line_ending(path):
+    """The dominant line ending already used by `path` on disk: "\r\n", "\n", or None when the
+    file does not exist / is unreadable / carries no newline at all (nothing to infer from).
+    Mixed-ending files resolve to whichever convention is more common (an exact tie favors
+    "\n"). Callers use this to preserve a rewritten file's OWN line ending instead of letting
+    Python's text-mode write impose the platform default (PF-01 / C2) -- a settled tree's
+    equality comparison stays LF-normalized (see _refresh_text); only the WRITE consults this."""
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+    except OSError:
+        return None
+    crlf = raw.count(b"\r\n")
+    bare = raw.count(b"\n") - crlf
+    if crlf == 0 and bare == 0:
+        return None
+    return "\r\n" if crlf > bare else "\n"
+
+
 def record_root():
-    """Record the plugin root so skill bodies can locate bundled scripts. Non-fatal."""
+    """Record the plugin root so skill bodies can locate bundled scripts. Non-fatal. Preserves
+    the bridge file's own existing line ending (PF-01 / C2) instead of imposing the platform
+    default on every invocation; a brand-new bridge file still gets the platform default."""
     try:
         d = os.path.join(_home(), ".virtuoso")
         os.makedirs(d, exist_ok=True)
-        with open(os.path.join(d, "plugin-root"), "w", encoding="utf-8") as f:
-            f.write(PLUGIN_ROOT + "\n")
+        path = os.path.join(d, "plugin-root")
+        eol = _detect_line_ending(path)
+        content = PLUGIN_ROOT + "\n"
+        if eol is None:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+        else:
+            with open(path, "w", encoding="utf-8", newline=eol) as f:
+                f.write(content)
     except OSError:
         pass
 
@@ -657,6 +685,13 @@ def _refresh_copy(src, dst, created):
 
 
 def _refresh_text(path, content, created):
+    """Write `content` to `path` only when it differs from the current content. The equality
+    comparison stays LF-normalized (universal-newline text read) so a settled tree of EITHER
+    line-ending convention is never churned -- do NOT make this comparison line-ending-aware
+    (PF-01 trap: that would make every settled CRLF tree compare unequal against the plain-\\n
+    `content` string and rewrite on every single invocation, the opposite of this sprint's
+    goal). Only the WRITE preserves the file's existing line ending (C2); a brand-new file
+    keeps today's platform-default behaviour."""
     current = None
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -666,8 +701,13 @@ def _refresh_text(path, content, created):
     if current == content:
         return
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(content)
+    eol = _detect_line_ending(path) if current is not None else None
+    if eol is None:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+    else:
+        with open(path, "w", encoding="utf-8", newline=eol) as f:
+            f.write(content)
     created.append(path + (" (refreshed)" if current is not None else ""))
 
 
@@ -680,7 +720,8 @@ def _write_layout_manifest(root, layout, paths, created, custom_paths=None, adop
     # recomputed on every regeneration. _project_doc_root's discovery pass falls back to the
     # plugin's own default candidate name whenever a project's real doc root isn't one of
     # DOC_ROOT_CANDIDATES, which would otherwise silently clobber a curated custom value.
-    existing_doc_root = _read_manifest(root).get("documentationRoot")
+    existing_manifest = _read_manifest(root)
+    existing_doc_root = existing_manifest.get("documentationRoot")
     documentation_root = (
         existing_doc_root if isinstance(existing_doc_root, str) and existing_doc_root
         else _rel(root, paths["docs"])
@@ -710,6 +751,12 @@ def _write_layout_manifest(root, layout, paths, created, custom_paths=None, adop
     # R2: round-trip project-custom registry keys verbatim, after the known roles.
     for key, rel in (custom_paths or {}).items():
         data["paths"][key] = rel
+    # PF-01 / C1 residual: a manifest that differs from `data` only by KEY ORDER (same
+    # role->path mapping, at any nesting level) must not be rewritten at all. Plain dict
+    # equality is already order-insensitive, so this is the whole check -- a reordered manifest
+    # intentionally STAYS reordered on disk; not churning is worth more than canonical key order.
+    if existing_manifest and existing_manifest == data:
+        return
     _refresh_text(_layout_manifest(root), json.dumps(data, indent=2) + "\n", created)
 
 
