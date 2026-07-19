@@ -138,6 +138,7 @@ loe_unit: t-shirt
 finish_line: ""
 roadmap_doc: Roadmap.md
 sprint_queue_doc: sprint-queue.xlsx
+sprint_catalog_doc: sprint-catalog.csv
 -->
 """
 
@@ -854,6 +855,12 @@ def _write_layout_manifest(root, layout, paths, created, custom_paths=None, adop
     # recomputed on every regeneration. _project_doc_root's discovery pass falls back to the
     # plugin's own default candidate name whenever a project's real doc root isn't one of
     # DOC_ROOT_CANDIDATES, which would otherwise silently clobber a curated custom value.
+    #
+    # INFORMATIONAL-ONLY for now (audit PRE-05/D-08, 2026-07-19): nothing reads this key back --
+    # _workspace_paths recomputes the docs root from DOC_ROOT_CANDIDATES alone, so a custom
+    # documentationRoot is faithfully RECORDED but does not steer path computation. Do not
+    # trust it as authoritative until PF-06 either consults it in _workspace_paths or
+    # explicitly re-affirms this comment.
     existing_manifest = _read_manifest(root)
     existing_doc_root = existing_manifest.get("documentationRoot")
     documentation_root = (

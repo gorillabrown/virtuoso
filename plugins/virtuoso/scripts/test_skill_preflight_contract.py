@@ -64,7 +64,15 @@ def test_roadmap_review_wires_the_integrity_gate():
 
 
 def test_session_start_hook_uses_detect_not_adopt():
-    """The unattended SessionStart hook must stay non-writing (detect), never adopt."""
+    """The unattended SessionStart hook must use detect, never adopt.
+
+    Wording corrected 2026-07-19 (audit PRE-03/D-04, docstring-only — assertions unchanged,
+    owner-authorized): detect is NOT "non-writing". It is an idempotent-on-settled WRITER —
+    it heals drifted markered trees, auto-scaffolds brand-new roots, and always writes the
+    plugin-root bridge. What this test actually guarantees is only that the hook avoids
+    adopt-mode's broader behaviours. A genuinely read-only mode does not exist yet; that is
+    PF-03 (`check`), which will amend this test's assertions under the sign-off recorded in
+    the Roadmap's PF-03 spec."""
     import json
 
     cfg = json.loads((ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))
