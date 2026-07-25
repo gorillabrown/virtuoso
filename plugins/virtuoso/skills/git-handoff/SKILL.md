@@ -62,37 +62,76 @@ For normal Codex/CLI sprint execution, do the git work directly:
 
 ---
 
-## Legacy Handoff Packet Template
+## Legacy Handoff Packet — Output Contract
 
-Use this only when the user explicitly requests a handoff.
+Use this only when the user explicitly requests a handoff. The packet has exactly two
+parts, in this order, and **the CLI prompt block is the deliverable — it prints LAST and
+nothing follows it.**
 
-### Diagnosis
+### Part 1 — Diagnosis (for the human, brief)
 
-One short paragraph explaining the repo state and why a handoff packet was requested.
+One short paragraph: repo state, what already happened in this sandbox, why the handoff is
+needed (no network, mount limits, etc.). Optionally a compact files-to-sync list. No
+command fences here — every command belongs inside the prompt block below, so there is
+exactly one thing to copy.
 
-### Files To Sync
+### Part 2 — The CLI prompt (ONE fenced block, copy/paste-complete)
 
-- `path/to/file1` - what changed
-- `path/to/file2` - what changed
+Print a single ```text fence containing a complete prompt addressed to a **fresh Claude
+Code CLI session with zero context**. The user pastes it verbatim; the CLI agent must be
+able to act safely with nothing else. Never split it across fences — one fence, one copy.
+Write commands as plain indented lines inside the fence (no nested code fences — they
+would break the block).
 
-### Stage And Commit
+The prompt MUST carry, in order:
 
-```powershell
-git add "path/to/file1"
-git add "path/to/file2"
-git status
-git commit -m "<message>"
-```
+1. **Role + repo:** one line — "You are finishing a git handoff in <absolute repo path>."
+2. **What already happened:** the exact state this sandbox left behind — e.g. "commit
+   `<sha>` (parent `<sha>`) already exists on local `<branch>`, touching exactly:
+   <files>." State plainly which steps are ALREADY DONE.
+3. **What remains:** the precise state-changing steps left (usually verify-and-push only).
+4. **Prohibitions, explicit:** whatever re-doing would corrupt — e.g. "Do NOT re-stage or
+   re-commit (that duplicates the commit). No force-push, no reset/clean/restore; preserve
+   unrelated dirty files." Tailor to the actual situation; never omit this section.
+5. **Ordered steps, each with its expected output:** verification reads first (`git log -1
+   --oneline` → "expect: <sha> <subject>"), then the state-changing command(s), then
+   post-verification. Every expectation is concrete — a SHA, a file list, a count.
+6. **Stop condition:** "If ANY expectation above does not match, STOP before the next
+   state-changing command and report the mismatch verbatim — do not improvise a repair."
+7. **Optional cleanup** clearly marked optional, with what each command removes.
+8. **Report-back format:** the 2–3 lines the CLI agent should return to the user when done
+   (final `git log -1 --oneline origin/<branch>`, `git status` summary), so the sandbox
+   session can confirm the handoff closed.
 
-### Push
+Skeleton (fill every `<...>` from the actual diagnosis; drop steps that do not apply):
 
-```powershell
-git push origin <branch>
-```
+```text
+You are finishing a git handoff in <absolute repo path>.
 
-### Verify
+ALREADY DONE (do not redo): <e.g. commit <sha> (parent <sha>) exists on local <branch>,
+touching exactly: <file list>. It was built and verified in a sandboxed session.>
 
-```powershell
-git status
-git log -1 --oneline
+REMAINING: <e.g. verify local state, push to origin, verify the push.>
+
+PROHIBITIONS: Do NOT re-stage or re-commit — that would duplicate <sha>. No force-push.
+No reset/clean/restore. Preserve unrelated dirty files in the working tree.
+
+STEPS — run in order; each expectation must match before the next state-changing command:
+1. cd "<absolute repo path>"
+2. git log -1 --oneline
+   expect: <shortsha> <subject line>
+3. git show --stat HEAD
+   expect: exactly <N> files — <file list>; parent <parent shortsha>
+4. git push origin <branch>
+5. git log -1 --oneline origin/<branch>
+   expect: same <shortsha>
+
+IF ANY EXPECTATION MISMATCHES: stop before the next state-changing command and report the
+mismatch verbatim. Do not improvise a repair.
+
+OPTIONAL CLEANUP (safe to skip): <e.g. git gc --prune=now — clears mount-orphaned
+.git scratch: <names>.>
+
+WHEN DONE, REPORT BACK: paste the output of `git log -1 --oneline origin/<branch>` and a
+one-line `git status` summary.
 ```
