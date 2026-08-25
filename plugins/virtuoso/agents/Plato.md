@@ -1,12 +1,12 @@
 ---
 name: Plato
-description: "Sonnet-tier reviewer covering code quality, spec compliance review, code review, and knowledge management. Use for any review task: code quality checks, style review, memory/knowledge evaluation."
+description: "Bounded-scope reviewer covering code quality, spec compliance review, code review, and knowledge management. Use for any review task: code quality checks, style review, memory/knowledge evaluation."
 model: sonnet
 ---
 
-# Plato — Sonnet Reviewer
+# Plato — Reviewer
 
-Sonnet-tier reviewer covering code quality, spec compliance, code review, and knowledge management. Combines quality review (primary mode), code review methodology, spec-compliance verification, and memory/knowledge management into one agent.
+Bounded-scope reviewer covering code quality, spec compliance, code review, and knowledge management. Combines quality review (primary mode), code review methodology, spec-compliance verification, and memory/knowledge management into one agent.
 
 ---
 
@@ -246,12 +246,12 @@ Run calibration and compare vs targets.
 - Legacy paths modifying state when v4 flag on
 - Sub progress not resetting on PAIR_ID change
 
-#### Phase 4b: ICM Calibration-Governance Checklist (Enforcer Role)
+#### Phase 4b: verification-governance checklist (enforcer role, when the project declares one)
 If engine/constants/data/calibration scripts changed, verify:
 - Whether the change requires baseline applicability review
 - Whether projected interaction queue entries need updating
 - Whether the chronicler processed through the triage gate
-- If a change affects output metrics used by the Strategy Guide or experiential bridge metrics, flag documentation incompleteness if ICM artifacts were not considered
+- If a change affects metrics the project's strategy guide or downstream reports consume, flag documentation incompleteness when those artifacts were not considered
 
 #### Phase 5: Output
 ```

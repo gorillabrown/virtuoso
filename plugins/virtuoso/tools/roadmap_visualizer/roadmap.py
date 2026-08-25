@@ -6,7 +6,21 @@ from pathlib import Path
 from .model import RoadmapSnapshot
 
 
+#: A work-item identifier as it appears in a roadmap heading or table. Deliberately
+#: generic: two or more segments joined by hyphens (``SK-01``, ``ITEM-1``, ``ENG-1234-A``).
 SPRINT_CODE_RE = r"\b[A-Z][A-Z0-9]+(?:-[A-Z0-9]+)+\b"
+
+#: Headings the parser accepts for each logical section. Projects that renamed a
+#: section (or never used the legacy "Skeletons" wording) are read correctly
+#: without any configuration.
+COMPLETED_SECTION_TITLES = ("Completed Work Summary", "Completed Work", "Completed")
+ACTIVE_SECTION_TITLES = (
+    "Active & Remaining Work",
+    "Active & Remaining Sprint Skeletons",
+    "Active and Remaining Work",
+    "Active Work",
+    "Active",
+)
 
 _SPRINT_CODE_PATTERN = re.compile(SPRINT_CODE_RE)
 _HEADING_PATTERN = re.compile(r"^(#{2,6})\s+(.+?)\s*$", re.MULTILINE)
@@ -29,7 +43,7 @@ def parse_roadmap(path: Path | str) -> RoadmapSnapshot:
 
 
 def _completed_codes(text: str) -> list[str]:
-    section = _section_body(text, "Completed Work Summary")
+    section = _first_section(text, COMPLETED_SECTION_TITLES)
     codes: list[str] = []
     for line in section.splitlines():
         if not line.lstrip().startswith("|"):
@@ -87,7 +101,7 @@ def _frontmatter(text: str) -> dict[str, str]:
 
 
 def _active_sprint_blocks(text: str) -> list[tuple[int, str, str]]:
-    section = _section_body(text, "Active & Remaining Sprint Skeletons")
+    section = _first_section(text, ACTIVE_SECTION_TITLES)
     headings = list(_HEADING_PATTERN.finditer(section))
     blocks: list[tuple[int, str, str]] = []
 
@@ -100,6 +114,15 @@ def _active_sprint_blocks(text: str) -> list[tuple[int, str, str]]:
         blocks.append((len(match.group(1)), heading, section[body_start:body_end]))
 
     return blocks
+
+
+def _first_section(text: str, titles) -> str:
+    """The body of the first section whose heading matches one of ``titles``."""
+    for title in titles:
+        body = _section_body(text, title)
+        if body:
+            return body
+    return ""
 
 
 def _section_body(text: str, title: str) -> str:

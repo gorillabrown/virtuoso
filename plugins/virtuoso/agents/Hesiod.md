@@ -18,7 +18,7 @@ Read the project's **KPI framework document** FIRST and COMPLETELY. It defines e
 
 - The profile-weighting and action-gating feature flags must both be ON
 - One sample entity per profile must exist in the project's entity store
-- Identity wiring in the engine must be complete
+- The subject wiring under test must be complete
 
 ## Evaluation Methodology
 
@@ -78,7 +78,7 @@ Then for each WARN or FAIL, write a finding with:
 - Actual value vs target
 - The tuning recommendation from the framework document's tuning section
 
-Write findings to the project's agent findings document (`AGENT_FINDINGS.md`; resolve its location from the project's documentation readme) under a new `## Behavioral KPI Monitor (BKM)` section.
+Write findings to the project's registered findings document (resolve it through the registry) under a new `## Behavioral KPI Monitor (BKM)` section.
 
 ## Key Inputs
 
@@ -87,21 +87,21 @@ Resolve each of these to a real path on first contact with a project and record 
 - The **KPI framework document** — canonical KPI spec, benchmarks, grading criteria
 - The **identity hierarchy spec** — where behavior profiles are defined
 - The **data-access layer** — entity loading, sample-entity generation, shared action IDs
-- The **engine entry point** — the simulation runner
+- The **entry point** — the runner the project declares
 - The **models module** — entity, per-record result, and category definitions
 - The **entity store** — sample entity data
 - The **constants module** — feature flags and tuning constants
 
-## ICM Knowledge System Integration (Validator Role)
+## Knowledge-system integration (validator role)
 
-You are a **Validator** in the ICM Knowledge System. You emit structured evidence for MarcusAurelius to consume. You do NOT write the registry directly. If the project defines a knowledge-system specification document, follow it.
+Where the project declares a knowledge system, you are a **validator** in it. You emit structured evidence for MarcusAurelius to consume. You do NOT write the registry directly. If the project defines a knowledge-system specification document, follow it.
 
-### ICM Evidence Block (append to BKM findings when relevant)
+### Evidence block (append to findings when relevant)
 
-When reporting BKM findings, state whether the result is merely a behavioral KPI issue or evidence relevant to an ICM object. For ICM-relevant findings, include:
+When reporting BKM findings, state whether the result is merely a behavioral KPI issue or evidence relevant to a knowledge-system object. For knowledge-relevant findings, include:
 
 ```
-### ICM Evidence
+### Evidence
 - **Context cluster:** [which profile(s) / pairing(s) tested]
 - **Affected experiential target:** [profile distinctiveness / success-path pursuit / outcome variety / none]
 - **Portability upgrade support:** [Yes — observed across N profiles / No — single profile only]
@@ -112,7 +112,7 @@ When reporting BKM findings, state whether the result is merely a behavioral KPI
 
 ## Important Notes
 
-- This agent is READ-ONLY. Do not modify engine code, constants, or data.
+- This agent is READ-ONLY. Do not modify source code, constants, or data.
 - You MAY write temporary analysis scripts into the project's calibration directory for data collection.
 - Focus on MEASURING behavior, not explaining it. State the numbers, compare to targets, assign grades.
 - If a KPI cannot be measured (e.g., a missing data field), report it as UNMEASURABLE with an explanation. Do not substitute a proxy metric.

@@ -5,47 +5,64 @@ description: |
   (~30-45 min). ONLY runs when the user types "/roadmap-review",
   "run roadmap review", or "perform roadmap review". DO NOT
   auto-trigger on conversational mentions of roadmaps, planning,
-  sprints, phases, or specs — those belong to other skills. When
-  invoked: establishes or updates the project's roadmap document,
-  migrates completed work to the Completed Work Summary table (full
-  content moves to a dated archive file), assesses progress and scope
-  discipline, replans macro/micro steps, sequences remaining work as
-  a conveyor belt under a Phase → Stage hierarchy, replenishes the
-  eager-spec buffer to 5 dispatch-ready full specs (mandatory) via
-  write-spec — each spec must pass the Dispatch-Readiness Rubric so
-  a lower-model CLI implementer cannot fail — reviews lessons
-  learned, and produces a phase brief.
+  work items, phases, or specs — those belong to other skills. When
+  invoked: reconciles the roadmap document against the project's
+  configured work register through its provider, migrates completed
+  work to the terminal record, assesses progress and scope
+  discipline, replans and re-sequences remaining work, replenishes
+  the dispatch buffer to the size the project's policy declares —
+  each specification passing the shared versioned readiness rubric —
+  reviews lessons learned, and produces a phase brief.
 ---
 
-<!-- virtuoso-shared-contract v1 -->
+<!-- virtuoso-shared-contract v2 -->
 **Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
 
-- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
-- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
-- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
-- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
-- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
-- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+- **Registry resolution** — `Virtuoso/workspace-layout.json` is the authority; `Virtuoso.Governance.Readme.md` is its synchronized human view. Resolve every document, work item, and permission through the registry. Never hardcode a path, never fall back to a conventional one, and never infer authority from a role's name. Full contract: the plugin's `references/registry-contract.md`.
+- **Read-only preflight** — session start and any "where am I" check runs `--mode check`, which performs **zero project writes**. Adoption, creation, and repair are separate operations, each explicitly invoked.
+- **Providers** — work items come from the configured work-register provider (local file, spreadsheet, connector-backed task manager, issue tracker, database, or read-only snapshot). Negotiate capabilities before planning work; never open a register file directly. The live work register, the append-only terminal ledger, and any compatibility export are three different roles.
+- **Provenance** — every derived figure cites its provider, source, and snapshot time. A figure whose inputs are missing is reported as *not computable* with the missing inputs named, never approximated.
+- **Git** — behaviour is `policy.git`, not a fixed rule of this plugin. See `references/git-policy.md`. Under every policy: inspect first, stage exact paths, preserve unrelated work, no destructive flags, no force-push without explicit authorization.
+- **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (v1.0 — 8 universal checks plus the project's declared extensions). No skill restates it in its own words.
+- **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
+- **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
+- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 # Roadmap Review
 
-## Preflight — workspace check (run first)
+## Preflight — read-only registry check (run first)
 
-This skill operates on the project's Virtuoso workspace. Before anything else, bring the project under management non-destructively:
+Resolve the plugin through its launcher, then run the **read-only** check. It performs
+discovery and validation with zero project writes.
 
-    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/virtuoso_preflight.py" --root . --mode adopt
+**Unix-like shell**
 
-`adopt` never moves or duplicates anything. Read the `virtuoso-status:` line it prints and branch:
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode check
 
-- `ready` — a `Virtuoso/` workspace already exists (it was healed if needed); continue.
-- `adopted roadmap=<path>` — the project already had an established documentation tree (e.g. `Project Documentation/` or `2. Project Documentation/`) with its own roadmap, so a thin `Virtuoso/` control marker was written that points at that existing roadmap. Tell the user it was adopted in place — nothing was moved or duplicated — then continue.
-- `none` — there is no workspace and no documentation tree to adopt (treat a missing `~/.virtuoso/plugin-root` the same way). Stop this skill and route the user to `/virtuoso-init`, which builds the plugin-only `Project Documentation/` layout (the only layout the workspace scaffolder supports).
+**Windows PowerShell**
 
-**Governance authority — read `Virtuoso.Governance.Readme.md` first.** The project-root `Virtuoso.Governance.Readme.md` is the single source of truth for where every governance document lives (roadmap, sprint catalog, lessons, close-outs, issues, review artifacts). Resolve each document you need through its registry and **defer to the paths it lists**, whatever layout the project uses (e.g. `docs/governance/ROADMAP.md`, `2. Project Documentation/…`, or the plugin default). `Virtuoso/workspace-layout.json` is the machine-readable mirror of the same paths. **Never create a parallel or competing document for a role the registry already lists** — open and edit the registered file in place. If the registry and the files on disk diverge (a registered path is an empty stub while the project's real document lives elsewhere), fix the **registry** — repoint it to the existing document and tell the user — do **not** seed or fork a rival. If `Virtuoso.Governance.Readme.md` is missing, run `/virtuoso-init` to generate it by registering the project's existing governance documents (it seeds a new file only for a role that genuinely has none).
+    & "$HOME/.virtuoso/bin/virtuoso.ps1" virtuoso_preflight --root . --mode check
 
-**Integrity gate.** This ceremony rewrites the roadmap in place, so before migrating or rewriting anything, verify the resolved roadmap is sound (substitute the `paths.roadmap` value from the manifest):
+Add `--json` when you want the structured result (status, writes, findings, and the full
+resolved role table). Read the `virtuoso-status:` line and branch:
 
-    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/virtuoso_preflight.py" --check-roadmap "<paths.roadmap>"
+- `ready` — the registry is valid. Continue.
+- `warning` — usable; surface the findings to the user and continue. Warnings are not blockers.
+- `repair-needed` — **STOP.** Run `--mode repair` to produce the preview, show the user the
+  proposed paths, semantic changes, files affected, and backup location, and apply it only
+  with `--apply` after they approve.
+- `adoptable` — the project has governance documents but is not registered. Offer
+  `--mode adopt`: it registers what exists, in place. Nothing is moved, duplicated, or rewritten.
+- `none` — no registry and nothing to adopt. Route the user to `/virtuoso-init`.
+- `failed` — report the error verbatim and stop.
+
+If neither launcher resolves, report that the plugin could not be located and stop. Do not
+guess a path.
+
+**Governance authority.** Resolve every document you need through the registry
+(`references/registry-contract.md`). Never create a parallel document for a registered role;
+never write to a role whose `allowedWriters` does not name this ceremony; never treat a
+`mirror`, `report`, `archive`, or `unknown` role as truth.
 
 Read the `roadmap-integrity:` line. On `fail` (null bytes, non-UTF-8, or missing — exit 3), STOP and report the corruption to the user; do not migrate or rewrite a corrupt roadmap. On `warn` (empty or unusually large — exit 2), surface it and confirm with the user before proceeding. On `ok`, continue.
 
@@ -53,20 +70,75 @@ Read the `roadmap-integrity:` line. On `fail` (null bytes, non-UTF-8, or missing
 Heavyweight, periodic recalibration of an entire project. The ceremony
 you run when you need to know — with confidence — where the project
 has been, where it's going, and what to dispatch next.
+### Resolve the work register before Phase 0
+
+This ceremony reads and (where policy permits) writes work items. It does that
+through the configured provider, never by opening a file directly.
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor roadmap-review provider
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor roadmap-review items --all --json
+
+Read the provider description and **negotiate capabilities up front**:
+
+| To do this | You need |
+|---|---|
+| read the pipeline at all | `list-active`, `read-status` |
+| re-sequence the conveyor belt | `read-sequence` **and** `write-status` on a sequence field |
+| replenish the dispatch buffer | `store-spec-link` (or inline specs — see policy) |
+| record completion in Phase A | `record-completion` |
+
+If a capability you need is missing, say so plainly and adjust the plan before
+starting. Example: a project whose register is a read-only snapshot can still get
+Phases A–C as a *report*, but Phase D cannot write status back — offer the report
+and stop, rather than starting and failing halfway.
+
+**Three roles, not one.** The live work register (`workRegister`), the append-only
+terminal ledger (`terminalLedger`), and any compatibility export (`sprintCatalog`,
+`sprintQueue`) are separate. This ceremony writes to the live register when its
+`allowedWriters` names `roadmap-review`; it appends corrections to the terminal
+ledger only when `policy.terminalLedger.correctionWriters` permits it; and it
+regenerates exports only via their registered generator.
+
+**If the project has no `workRegister` role,** the provider layer serves a
+registered legacy `sprintCatalog` **read-only** through the compatibility adapter
+and says so. In that state, run Phases A–C as analysis and offer to register a
+`workRegister` role before doing anything that mutates.
+
+### Read the project's policy before planning
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . roles --json
+
+The manifest's `policy` block governs the shape of the plan. Nothing below is a
+fixed number or a required structure:
+
+| Policy | What it controls | Default |
+|---|---|---|
+| `roadmap.dispatchBuffer` | how many dispatch-ready specifications to carry | 5 (0 disables eager specification) |
+| `roadmap.eagerSpec` | whether to specify ahead at all | true |
+| `roadmap.hierarchy` | grouping levels, e.g. `["phase","stage"]`, `["milestone"]`, or `[]` | `["phase","stage"]` |
+| `roadmap.lanes` | parallel lanes, if the project uses them | none |
+| `roadmap.specStorage` | `inline` (in the roadmap), `files` (one per item), or `external` | inline |
+| `roadmap.lengthCeilingLines` | when to snapshot and trim | 2000 |
+| `roadmap.effortScale` | size → points for effort-weighted metrics | generic t-shirt scale |
+| `standingRules.ids` | the project's inheritable rule identifiers | none — never hardcode one |
+| `issues.targets` | where a blocker is written: `local`, `external`, or both | `["local"]` |
+
+A project with a flat backlog and no phases is fully supported: `hierarchy: []`
+means do not invent a phase layer to hang items from.
 
 ## When to use
 
 Run this skill when:
-- A phase has just closed
+- A phase or milestone has just closed
 - The roadmap feels stale, drifted, or inaccurate
 - You're prepping for a leadership or stakeholder checkpoint
 - You're returning to a project after a gap and need to resync
 - You suspect scope creep and want to verify
 
 Do NOT use this skill for:
-- Routine sprint planning (use sprint-planning instead)
-- Single-spec authoring (use write-spec instead)
-- Weekly status updates (use stakeholder-update or /roadmap-status)
+- Routine single-item planning
+- Single-specification authoring (use `write-spec`)
+- Weekly status updates (use `/roadmap-status`)
 
 ## Invocation
 
@@ -75,657 +147,488 @@ Manual only. The user must explicitly type one of:
 - "run roadmap review"
 - "perform roadmap review"
 
-If you (Claude) infer this skill from context without an explicit
-invocation, STOP. Confirm with the user before proceeding.
+If you infer this skill from context without an explicit invocation, STOP and
+confirm with the user before proceeding.
 
 ## Glossary
 
-These terms are used precisely throughout this skill.
+- **Work item** — a discrete unit of work with clear acceptance criteria. The
+  atomic dispatch unit. Identified by whatever id the project's register uses.
+- **Group / lane** — optional grouping levels, named by `policy.roadmap.hierarchy`
+  and `policy.roadmap.lanes`. A project may use neither.
+- **Stub** — a placeholder item: id, title, and optionally a one-line gist.
+- **Specification** — an item card with full structural fields plus implementation
+  detail. It lives wherever `policy.roadmap.specStorage` says.
+- **Dispatch-ready** — a specification that passes the shared readiness rubric.
+- **Dispatch** — sending an item to the implementation agent.
+- **Dispatch buffer** — the number of dispatch-ready specifications carried ahead
+  of the head of the conveyor belt. Size is `policy.roadmap.dispatchBuffer`.
 
-- **Sprint** — A discrete unit of work (1-5 days, S-M t-shirt) with
-  clear acceptance criteria. The atomic dispatch unit. Identified
-  by a code like `SK-XX`.
-- **Phase** — A coherent shippable chunk containing multiple
-  sprints, with a clear theme, goal, and exit criteria.
-- **Stage** — Optional sub-grouping within a phase.
-- **Stub** — A placeholder sprint card with just code, title, and
-  optionally a one-line gist. Items beyond the eager-spec buffer of
-  5 sit as stubs.
-- **Full spec** — A sprint card with all 7 structural fields PLUS
-  implementation detail. Lives inline in the roadmap.
-- **Dispatch-ready full spec** — A full spec that has passed the
-  Dispatch-Readiness Rubric below. Every code reference is verified.
-  Every decision is made. No "TBD" remains. The CLI implementer can
-  execute without judgment calls.
-- **Dispatch** — The act of sending a sprint to the implementer.
-  The implementer reads the dispatch-ready full spec inline in the
-  roadmap and runs it.
-- **Scope** — What's included in / excluded from a sprint.
-- **Pointer** — A textual reference to where detail lives.
-
-### The progression of a sprint's content density
+### The progression of an item's content density
 
 ```
-Stub  →  Full spec  →  Dispatch-ready  →  Close-out
-(TBD)    (drafted)      (rubric passed)    (post-completion)
-                        ▲                  │
-                        │                  ▼
-                roadmap-review        One-line entry in
-                Phase D.3 applies     Completed Work Summary;
-                the rubric, then      full spec migrates to a
-                saves the spec        dated archive file
+Stub  →  Specification  →  Dispatch-ready  →  Close-out
+(gist)   (drafted)         (rubric passed)    (terminal record)
+                           ▲                  │
+                           │                  ▼
+                   roadmap-review        One record appended to the
+                   Phase D.3 applies     terminal ledger; the full
+                   the shared rubric     specification migrates to a
+                                         dated archive
 ```
-
-This skill produces **dispatch-ready full specs** in the roadmap
-document, plus parallel entries in `sprint-catalog.csv`.
-
-**Note on the legacy term "skeleton":** the section heading
-`## Active & Remaining Sprint Skeletons` is preserved for backward
-compatibility. In this skill's vocabulary, items in that section are
-either **stubs** or **dispatch-ready full specs**.
 
 ## Dispatch-Readiness Rubric
 
-Every full spec authored by Phase D.3 must pass these 10 checks
-before being saved inline in the roadmap. The rubric exists because
-the CLI agent that implements the spec is assumed to be a
-lower-capability model than Cowork (which authors the spec). Every
-decision, every code reference, every test, and every constant must
-be resolved upstream so the implementer cannot fail.
+**Do not restate the rubric here.** There is exactly one rubric, versioned, in
+the plugin's `references/readiness-rubric.md` (v1.0: eight universal checks U1–U8
+plus whatever the project declares in `policy.rubric.extensions`). Open it and
+apply it. `/next-pointer` applies the same file — that is the point.
 
-The same rubric is duplicated in `/next-pointer` as a just-in-time
-re-verification gate. Intentional self-containment for global skills.
-
-### Rubric R1 — Edit Sites
-For every `file:line` reference in the spec's Implementation Detail:
-- [ ] The file exists at that path.
-- [ ] The line number is current (grep / read to verify; line
-      numbers can shift after upstream sprints land).
-- [ ] The code at that line matches the spec's intent (the function
-      name / constant / structure mentioned in the spec is actually
-      there).
-- [ ] If line numbers have shifted, **update them inline in the
-      spec** before saving.
-
-### Rubric R2 — Test Names
-For every test mentioned in Done-when or Implementation Detail:
-- [ ] The test name is a full path:
-      `tests/test_module.py::test_function` (or test class form).
-- [ ] For new tests: the target file is explicit; the test function
-      name is explicit; the assertion content is explicit
-      ("assert f(X) == Y", not "verify it works").
-- [ ] For existing tests being modified: the current assertion is
-      quoted in the spec; the new assertion is quoted in the spec.
-- [ ] If any test reference is vague, **enrich the spec inline**.
-
-### Rubric R3 — Constants
-For every named constant in the spec:
-- [ ] The constant exists in the codebase (grep to confirm).
-- [ ] Current value is documented in the spec.
-- [ ] Target value (or removal directive) is explicit.
-- [ ] Constant's file location is named.
-- [ ] If any constant is unverified, **grep and add the verified
-      file:line + current value to the spec**.
-
-### Rubric R4 — Done-When Criteria
-For every Done-when bullet:
-- [ ] The criterion is **mechanically verifiable** — a shell
-      command, a test assertion, or a file-existence check that
-      returns true/false unambiguously.
-- [ ] No criterion requires human judgment ("looks right", "is
-      reasonable", "matches design intent" — all forbidden).
-- [ ] Each criterion's verification command is in the spec (e.g.,
-      `grep -c '<constant>' .` returns 0).
-- [ ] If a criterion is vague, **rewrite it inline to be
-      mechanical**.
-
-### Rubric R5 — Branch + Commit Hygiene
-- [ ] Branch name is explicit (e.g., `sk-fu12-e-wave-a`).
-- [ ] Source branch is explicit ("from clean main").
-- [ ] Commit hygiene rules referenced (CL-WF-01 clean-tree gate;
-      no `git add .` / `-A`; no destructive flags).
-- [ ] If missing, **add to the spec**.
-
-### Rubric R6 — Calibration Cadence (if applicable)
-For any sprint touching calibration:
-- [ ] Quick-cal config explicit: N value, seed count, deterministic
-      flag.
-- [ ] Full-cal escalation rule explicit: threshold (e.g., ">3pp on
-      any primary metric"), reference SRL (e.g., SRL-113).
-- [ ] Band check explicit: bands being measured, current values,
-      targets.
-- [ ] Pre-authorized halt conditions explicit (when to STOP and
-      escalate).
-- [ ] If missing, **enrich the spec**.
-
-### Rubric R7 — Edge Cases + Failure Modes
-- [ ] "If X fails, do Y" is explicit for each known failure mode.
-- [ ] Rollback plan stated (revert command, branch deletion, etc.).
-- [ ] Retry ceiling explicit (3 attempts max per wave is the
-      default).
-- [ ] If gaps exist, **enrich the spec**.
-
-### Rubric R8 — Prerequisites Verified
-- [ ] Every prerequisite is `Completed` in the Catalog OR
-      `Dissolved`/superseded with a documented disposition.
-- [ ] If a prerequisite is still `Queued` / `In Flight` /
-      `Blocked`, the spec must encode "wait for prereq X" or
-      sequencing must be revised in Phase C.
-
-### Rubric R9 — No Deferred Decisions
-- [ ] Search the spec for: "TBD", "to be decided", "decide later",
-      "ask Cowork", "consult", "verify with user".
-- [ ] If any of these appear, the decision must be resolved before
-      saving. If Cowork can resolve via investigation
-      (grep / DB query / file read), do it and update the spec. If
-      it requires user judgment, AskUserQuestion.
-
-### Rubric R10 — Source Citations
-- [ ] The Source line links to specific close-outs, audits, or
-      decision docs.
-- [ ] Citations include exact section anchors (e.g., "FAS-1 §9
-      Decision 10") where applicable.
-- [ ] If missing, **enrich the spec**.
+Report readiness as the five separate findings the rubric defines
+(specification, prerequisite, repository, external-register,
+execution-environment). Never blend them into one verdict.
 
 ## Operating principles
 
-1. **Iterative.** This skill doesn't need to produce a perfect plan
-   on the first run. Each invocation makes the roadmap more
-   accurate.
-2. **Roadmap document is canonical.** All other docs are inputs;
-   the project's roadmap document is the single source of truth and
-   the home of dispatch-ready full specs for the next 5 sprints.
-   Default filename `Roadmap.md`. Companion: `sprint-catalog.csv` —
-   the authoritative sprint catalog. A `sprint-queue.xlsx` may also
-   exist as a generated, human-facing report (Dashboard tab driven by
-   Power Query against the CSV); it is written by `build_sprint_queue.py`,
-   never read back, and never edited directly by any skill.
-3. **Archive-forward discipline.** The active roadmap holds
-   dispatch-ready full specs for the next 5 sprints, stubs for
-   sprints beyond position 5, plus a one-line entry per completed
-   sprint in the Completed Work Summary table. Full content migrates
-   to a dated archive file at sprint close-out.
-4. **Active section is uncompleted-only.** Hard invariant.
-5. **Conveyor belt sequencing.** Dependency-first → risk-first
-   tiebreaker → eat-the-frog second tiebreaker. sprint-catalog.csv
-   mirrors via the `Seq` column.
-6. **Eager-spec buffer is mandatory at 5.** Each run replenishes to
-   5 dispatch-ready full specs.
-7. **Dispatch-Readiness Rubric is non-negotiable.** A spec that
-   fails the rubric is not saved as a full spec. It's either
-   enriched until it passes, or left as a stub and flagged as a
+1. **Iterative.** Each invocation makes the plan more accurate. It does not need
+   to be perfect on the first run.
+2. **The registry decides what is authoritative.** The roadmap document is the
+   specification store; the work register is the live status authority. Which
+   file plays which role is declared, not assumed.
+3. **Archive-forward discipline.** The active roadmap holds dispatch-ready
+   specifications for the buffer, stubs beyond, and one line per completed item.
+   Full content migrates to a dated archive at close-out.
+4. **The active section is uncompleted-only.** Hard invariant.
+5. **Conveyor-belt sequencing.** Prerequisites first → risk-first tiebreaker →
+   hardest-first second tiebreaker. The register's sequence field mirrors it.
+6. **The dispatch buffer is policy.** Replenish to `policy.roadmap.dispatchBuffer`.
+   If it is 0, skip eager specification entirely and say so.
+7. **The rubric is non-negotiable.** A specification that fails it is not saved as
+   dispatch-ready. It is enriched until it passes, or left a stub and flagged as a
    buffer gap.
-8. **Cowork is the highest model in the pipeline.** All judgment,
-   investigation, and decision-making for spec authoring happens
-   here. The CLI implementer follows the recipe; it does not
-   improvise.
-9. **Standing Rules consolidate inheritable lessons.** A
-   `### Standing Rules All Skeletons Inherit` section in the
-   roadmap captures rules every sprint inherits.
-10. **Forward visibility minimum.** Always carry full specs or
-    stubs for at least 3 sprints ahead of dispatch.
-11. **Length ceiling.** Active roadmap targets ~2,000 lines. When
-    crossed, snapshot to a dated archive; trim stubs >3 sprints out.
-12. **Checkpoint between phases.** User confirms each phase.
-13. **AskUserQuestion only.** 2+ alternatives, one tagged
-    [RECOMMENDED], escape hatch.
-14. **Orchestrate, don't reimplement.** Where existing skills
-    handle a sub-task well (`write-spec`, `roadmap-update`), invoke
-    them.
+8. **Specifications are complete because incomplete ones cannot be executed** —
+   by anyone. Never justify rigor by claiming the implementer is a weaker model.
+9. **Standing rules consolidate inheritable lessons.** Their identifiers come from
+   `policy.standingRules.ids`; never invent or hardcode a rule id.
+10. **Forward visibility minimum.** Carry specifications or stubs for at least
+    three items ahead of dispatch, or the whole remaining backlog if it is shorter.
+11. **Length ceiling.** Honour `policy.roadmap.lengthCeilingLines`. When crossed,
+    snapshot to a dated archive and trim distant stubs.
+12. **Checkpoint between phases.** The user confirms each phase.
+13. **Bounded questions only.** Follow `references/actors-and-interaction.md`:
+    2–4 concrete options, one recommended, an escape hatch on consequential
+    decisions — structured when the host supports it, plain text when it does not.
+14. **Orchestrate, don't reimplement.** Where an existing skill handles a
+    sub-task well, invoke it.
 
 ## Inputs
 
-1. The roadmap document (creates if missing)
-2. All `.md` files in the project root and subfolders (close-outs,
-   retros, audit decisions, post-mortems, SRLs)
-3. Git log of the roadmap document if version-controlled
-4. All existing close-out files (e.g., `CloseOut.SK-XX.YYYY-MM-DD.md`)
-5. Any existing dated archive files
-6. `sprint-catalog.csv` if it exists — the authoritative sprint
-   catalog. Read/write it as a plain CSV, not a spreadsheet mechanic.
-7. **Project codebase** — required for Phase D.3 rubric verification
-   (grep, code reads, schema queries).
+1. The registry (`virtuoso_registry roles --json`) — the authority for every path.
+2. The roadmap document, resolved through the `roadmap` role.
+3. The work register, read through its provider.
+4. Close-outs, retrospectives, audits, and decision records, resolved through
+   their registered roles.
+5. The terminal ledger, for what is already final.
+6. The project codebase — required for Phase D.3 rubric verification.
 
 ## Outputs
 
-Saved to a `roadmap-reviews/` subfolder in the project:
+Written into the registered `roadmapReviews` directory:
 - `YYYY-MM-DD-audit.md` — Phase A diff
 - `YYYY-MM-DD-assessment.md` — Phase B opinion
-- `YYYY-MM-DD-plan.md` — Phase C decomposition tree
-- `YYYY-MM-DD-lessons-applied.md` — Phase D lessons-learned review
-- `YYYY-MM-DD-phase-brief.md` — Phase D upcoming-phase brief
+- `YYYY-MM-DD-plan.md` — Phase C decomposition
+- `YYYY-MM-DD-lessons-applied.md` — Phase D lessons review
+- `YYYY-MM-DD-phase-brief.md` — Phase D forward brief
 
-Plus, updated in place:
-- The roadmap document (dispatch-ready full specs in buffer; stubs
-  beyond; Completed Work Summary table grown; Standing Rules updated)
-- `sprint-catalog.csv`
-- A new dated archive file if the length ceiling was crossed
+Plus, updated in place where policy permits:
+- The roadmap document
+- The live work register, via its provider
+- A new dated archive if the length ceiling was crossed
+
+Every output states the provider, source, and snapshot time its figures came from.
 
 ---
 
 ## Phase 0 — INITIATE (only if needed)
 
-### 0.1 Locate the roadmap document
-If `Roadmap.md` exists in the project root, use it. Otherwise look
-for a project-named variant (e.g., `<project-name>_roadmap.md`). If ambiguous,
-AskUserQuestion.
+### 0.1 Confirm the roadmap role
 
-Persist as `roadmap_doc: <filename>` in frontmatter.
+Resolve the `roadmap` role. If it is registered but absent, **report that** — do
+not go looking for a similarly named file and do not seed a replacement. Offer
+either to point the role at the real document (a registry edit, previewed) or to
+create the document at the registered path.
 
 ### 0.2 Check for a finish line
-If a finish-line target is missing, AskUserQuestion to establish
-it. DO NOT proceed without one.
 
-### 0.3 Locate or create sprint-catalog.csv
-If missing, AskUserQuestion to create it — a fresh CSV with just the
-header row (Seq, Sprint Code, Phase, Stage, Title, LOE, Dependencies,
-Implementation Status, Written Status, Branch, Date Started, Date
-Completed, Close-Out File, Description, Notes) — seeded from the
-active section of the roadmap if one exists. Persist as
-`sprint_catalog_doc: <filename>` (default `sprint-catalog.csv`).
+If a finish-line target is missing, ask for one. Do not proceed without it.
 
-### 0.4 Migrate legacy structure
-Detect and migrate older structures to the canonical form. Show
-migration plan via AskUserQuestion before applying.
+### 0.3 Confirm the work register
+
+If no `workRegister` role is registered, ask which of these the project wants,
+and register it (the answer is a registry edit, previewed and approved — this
+ceremony does not decide authority on its own):
+
+- a local file the project already maintains (CSV or Markdown table),
+- a spreadsheet,
+- a connector-backed task manager, issue tracker, or database (registered as an
+  external identifier such as `monday:board/1234567890`),
+- a read-only snapshot, for reporting only.
+
+If a legacy `sprintCatalog` is being read through the compatibility adapter, say
+so explicitly in your report: it is a mirror, not the authority, and it cannot be
+written until a `workRegister` role exists.
+
+### 0.4 Legacy structure
+
+Detect older structures and show a migration plan before applying anything.
+Migration is conservative: an unrecognized legacy role stays unclassified rather
+than being promoted to writable or authoritative.
 
 ---
 
 ## Phase A — AUDIT (≈10 min)
 
-Goal: enforce archive-forward discipline. Move completed sprints to
-the Completed Work Summary table; migrate full content to the
-current dated archive file. Mirror changes in sprint-catalog.csv.
+Goal: enforce archive-forward discipline. Move completed work out of the active
+section, append its terminal record, and reconcile the register.
 
 ### A.1 Read everything
-Inventory every sprint and its claimed status.
+Inventory every item and its claimed status, from the register and the roadmap
+separately. Record where they disagree; do not silently pick a winner.
 
 ### A.2 Build a candidate completion/archive list
-Classify each sprint as Likely complete / Likely dissolved /
-Definitely live based on signals.
+Classify each item as *likely complete*, *likely dissolved*, or *definitely live*,
+citing the signal for each.
 
 ### A.3 Confirm with the user
-Batched 5 at a time, AskUserQuestion.
+Batched, 5 at a time, with the bounded-question protocol.
 
 ### A.4 Apply changes
-For each sprint migrated:
-1. Add a one-line entry to `## Completed Work Summary`.
-2. Move the full content (entire `#### SK-XX — Title` block
-   including amendments) to the current dated archive file.
-3. Remove the full content from the active roadmap.
-4. Update the row in sprint-catalog.csv: flip Implementation Status,
-   clear Seq, populate Date Completed and Close-Out File.
-5. For dissolved/superseded sprints, add to `## Disposition of
-   Superseded Branches`.
+For each item being retired:
+1. Append one record to the **terminal ledger** — but only if
+   `policy.terminalLedger.correctionWriters` names `roadmap-review`. If it does
+   not, list the records that need appending and route them to the close-out
+   ceremony instead. Terminal records are append-only: a correction is a *new*
+   record referencing the one it corrects. Never reorder, rewrite, or delete.
+2. Add its one-line entry to the roadmap's completed summary.
+3. Move its full content to the current dated archive.
+4. Remove the full content from the active roadmap.
+5. Update the item in the live register through the provider: set status, clear
+   the sequence, record the completion date and the evidence link. Pass the
+   `revision` you read so a concurrent change is refused rather than clobbered.
+6. Re-running this step must not duplicate anything: the provider's writes are
+   idempotent, and a terminal record that already exists is a no-op.
+
+If the register write succeeds but an external half fails, a recovery record is
+written under `Virtuoso/.recovery/`. Surface it; do not paper over it.
 
 ### A.5 Length-ceiling check
-If active roadmap >~2,000 lines, snapshot + trim.
+If the active roadmap exceeds `policy.roadmap.lengthCeilingLines`, snapshot and trim.
 
 ### A.6 Checkpoint
-Show the diff. AskUserQuestion: approve / roll back / pause.
+Show the diff. Ask: approve / roll back / pause.
 
 ---
 
 ## Phase B — ASSESS (≈10 min)
 
-### B.1 Compute % work remaining
-Sum LOE; divide; express as %.
+### B.1 Work remaining
 
-### B.2 Compute pace
-4-week trailing items/week. Compare to required. On / Behind /
-Ahead pace.
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . kpis --json
 
-### B.3 Score scope discipline
-Forward / Sideways / Backward deltas vs. prior review. Score =
-forward / (forward + sideways + backward). >80% healthy.
+Use the returned metrics. Each carries provenance. **A metric returned as
+`not computable` is reported as not computable, with its missing inputs named.**
+Never substitute an estimate, and never present a percentage the data cannot
+support.
+
+### B.2 Pace
+Trailing completion rate versus the rate the finish line requires. If completion
+dates are missing from the register, pace is not computable — say so.
+
+### B.3 Scope discipline
+Forward / sideways / backward deltas since the previous review. Score =
+forward / (forward + sideways + backward).
 
 ### B.4 Render the assessment
-Write `YYYY-MM-DD-assessment.md`.
+Write `YYYY-MM-DD-assessment.md` into the registered reviews directory, with the
+provenance block at the top.
 
 ### B.5 Checkpoint
-AskUserQuestion.
 
 ---
 
 ## Phase C — PLAN (≈15 min)
 
 ### C.1 Derive macro steps
-3-7 large outcome blocks.
+3–7 large outcome blocks.
 
-### C.2 Group macros into phases
-2-5 phases.
+### C.2 Group them
+Only if `policy.roadmap.hierarchy` declares grouping levels. With `hierarchy: []`,
+skip this step entirely — do not invent phases.
 
-### C.3 Decompose into micro-steps (sprint stubs)
-1-5 days each. Each becomes a `#### SK-XX — [Title]` heading.
+### C.3 Decompose into items
+Each becomes a stub in the roadmap and a row in the register.
 
 ### C.4 Sequence the conveyor belt
-Dependency → risk → eat-the-frog.
+Prerequisites → risk → hardest-first. Write the sequence back through the
+provider only if it supports `write-status` on the sequence field; otherwise
+produce the sequence as a recommendation and say why it was not written.
 
 ### C.5 Render the plan
-Write `YYYY-MM-DD-plan.md`. Update the roadmap's Active section and
-sprint-catalog.csv.
+Write `YYYY-MM-DD-plan.md`; update the roadmap's active section.
 
 ### C.6 Checkpoint
-AskUserQuestion.
 
 ---
 
 ## Phase D — DISPATCH (≈25 min)
 
-Goal: write dispatch-ready full specs for the next 5 sprints
-(mandatory replenishment), validate against lessons learned,
-integrate into the canonical files, and brief the upcoming phase.
+Goal: bring the dispatch buffer up to `policy.roadmap.dispatchBuffer`, validate
+against lessons learned, integrate, and brief.
 
 ### D.1 Identify the head of the conveyor belt
-First 5 sprints in `## Active & Remaining Sprint Skeletons`, in
-conveyor-belt order. May span phase boundaries.
 
-### D.2 Determine spec count (mandatory replenishment to 5)
-Eager-spec buffer target = 5. Replenish each run.
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . next
 
-**Compute the count:**
-1. Walk the conveyor belt from the head.
-2. Count sprints with dispatch-ready full specs already in place.
-3. **New full specs to write = 5 − already_dispatch_ready_count.**
-4. Target the next sprints in conveyor-belt order that currently
-   lack full content (i.e., are stubs).
+Then take the first *N* active items in sequence order, where *N* is the buffer size.
 
-**Edge cases:**
-- If active section has <5 uncompleted sprints, write specs for
-  all of them.
-- Phase boundaries are NOT a stopping condition.
-- If a hard dependency or unresolved decision blocks writing a
-  spec mid-buffer, stop at the block, flag in D.6, note the buffer
-  will fall short of 5.
+### D.2 Determine the specification count
 
-### D.3 Write the dispatch-ready full specs
+1. `target = policy.roadmap.dispatchBuffer` (default 5).
+2. If `target == 0` or `policy.roadmap.eagerSpec` is false: skip D.3 entirely.
+   Say that eager specification is disabled for this project and move to D.4.
+3. Walk the belt from the head; count items already dispatch-ready.
+4. `new specifications = target − already_ready`.
+5. Target the next items in sequence order that are still stubs.
 
-For each sprint in scope:
+Edge cases: fewer than *N* active items → specify all of them. Group boundaries
+are not a stopping condition. A hard blocker mid-buffer → stop there, flag it in
+D.6, and note the buffer will fall short.
 
-**D.3.1 Draft via write-spec.**
-Invoke `write-spec` with both structural inputs (the 7 fields) and
-implementation-detail inputs (edit sites, tests, constants, branch,
-commit hygiene, cal cadence). Source from upstream close-outs,
-constitutional docs, the Standing Rules section, dated archives.
+### D.3 Write the dispatch-ready specifications
 
-**D.3.2 Apply the Dispatch-Readiness Rubric (R1-R10).**
-Walk the rubric — see the section earlier in this skill — against
-the draft spec. For each item:
-- **PASS** → check and move on.
-- **CLOSABLE GAP** → resolve via investigation:
+For each item in scope:
 
-  | Gap type | How to close |
+**D.3.1 Draft.** Invoke `write-spec` with structural and implementation-detail
+inputs, sourced from close-outs, decision records, standing rules, and archives.
+
+**D.3.2 Apply the shared rubric.** Open `references/readiness-rubric.md` and walk
+U1–U8 plus the project's declared extensions. For each item:
+- **PASS** → move on.
+- **CLOSABLE GAP** → resolve by investigation:
+
+  | Gap | How to close |
   |---|---|
-  | Stale `file:line` | Grep + read; update line number inline. |
-  | Missing test name | Read test file; insert specific name + assertion. |
-  | Unverified constant | Grep; document current value + file location. |
-  | Vague Done-when | Rewrite as mechanical check (shell command / test assertion). |
-  | Missing branch | Apply `<sprint-id>-wave-<N>` convention. |
-  | Missing cal cadence | Look at precedent close-outs; apply project defaults. |
-  | Missing rollback | Standard pattern: revert wave commit, delete branch, re-baseline. |
-  | Missing edge case | Identify common failure modes; add "if X, do Y". |
-  | Missing source citation | Search and link. |
+  | Stale location reference | Read the source; correct it in place. |
+  | Vague test reference | Read the test file; insert the exact name and assertion. |
+  | Unverified constant | Search; record the current value and where it lives. |
+  | Non-mechanical acceptance criterion | Rewrite it as a command or assertion. |
+  | Missing branch plan | Apply `policy.git.branchNameTemplate`. |
+  | Missing failure handling | Enumerate the known failure modes; add "if X, do Y". |
+  | Missing rollback | State the revert path for this project's git policy. |
+  | Missing source citation | Find it and link it, with an anchor. |
+  | Missing project-extension detail | Consult the project's own precedent. |
 
-- **STRUCTURAL GAP** → AskUserQuestion or escalate to user. Do not
-  invent decisions.
+- **STRUCTURAL GAP** → ask the user. Do not invent decisions.
 
-**D.3.3 Re-audit.**
-Walk the rubric again. Max 2 enrichment passes. If a sprint still
-fails after 2 passes, STOP at that sprint — the spec is NOT saved;
-flag as a buffer gap in D.6; continue the buffer count from the
-next dispatchable sprint.
+**D.3.3 Re-audit.** Walk the rubric again. Two enrichment passes maximum. A
+specification still failing after two passes is NOT saved as dispatch-ready: flag
+it as a buffer gap in D.6 and continue from the next item.
 
-**D.3.4 Save the dispatch-ready spec.**
-Only when all 10 rubric items pass, save the full spec inline in
-the roadmap document at the correct Phase → Stage → Sprint
-position (D.5 handles placement mechanics).
+**D.3.4 Save.** Store the specification where `policy.roadmap.specStorage` says:
+
+- `inline` — in the roadmap document at the item's position.
+- `files` — one file per item under `policy.roadmap.specDirectory`, with the link
+  stored on the register item via `store-spec-link`.
+- `external` — in the external system, with the link stored the same way.
+
+If the provider lacks `store-spec-link` and storage is `files` or `external`,
+say so and record the links in the roadmap instead.
 
 ### D.4 Lessons-learned review
 
-**D.4.1 Gather lessons.** Scan project for `retro*.md`,
-`*lesson*.md`, `*post-mortem*.md`, `SRL-*.md`, `CL-*.md`,
-`*close-out*.md`, `CloseOut.*.md`, `*decision*.md`, `Audit*.md`.
+**D.4.1 Gather.** Read the registered `lessons` role, close-outs, audits, and
+decision records. Resolve each through the registry; do not scan the filesystem
+for lookalike names.
 
 **D.4.2 Build the checklist.** Deduped, grouped by theme.
 
-**D.4.3 Update the Standing Rules section.**
-- Present + current → verify wording
-- Missing → add with source ID
-- Superseded → update or remove
+**D.4.3 Update the standing rules.** Rules live where
+`policy.standingRules.source` says, and their identifiers come from
+`policy.standingRules.ids`. Present rules get their wording verified; missing ones
+are added with a source; superseded ones are updated or removed.
 
-**D.4.4 Review newly written specs.** For each spec from D.3, walk
-the lessons checklist. Update inline if a lesson applies and isn't
-embodied.
+**D.4.4 Review the new specifications** against the checklist; enrich inline.
 
-**D.4.5 Review existing full specs.** Walk same checklist.
-AskUserQuestion for misalignments.
+**D.4.5 Review existing specifications** against the same checklist; ask about
+misalignments.
 
-**D.4.6 Render the lessons-applied report.** Write
-`YYYY-MM-DD-lessons-applied.md`.
+**D.4.6 Render** `YYYY-MM-DD-lessons-applied.md`.
 
-### D.5 Integrate specs into the roadmap and sprint-catalog.csv
+### D.5 Integrate
 
-**D.5.1 Resolve filenames.**
+**D.5.1** Place specifications per `policy.roadmap.specStorage`.
 
-**D.5.2 Place full specs in the roadmap.**
-At correct Phase → Stage → Sprint position, replacing prior stubs.
-
-**D.5.3 Full spec placement format (canonical).**
+**D.5.2** Specification format (structural fields first, then implementation
+detail). Grouping headings appear only if `policy.roadmap.hierarchy` declares them:
 
 ```
-#### SK-XX — Sprint Title
+#### ITEM-ID — Item title
 
-- **What:** ...
-- **Why:** ...
-- **Prerequisites:** ...
+- **What:** …
+- **Why:** …
+- **Prerequisites:** …
 - **Done when:**
-    1. ...
-- **Effort:** ...
-- **Roster:** ...
-- **Source:** ...
+    1. … (mechanically verifiable)
+- **Effort:** …
+- **Owners:** … (roles from policy.actors)
+- **Source:** …
 
 ##### Implementation detail
-- **Edit sites:** `engine_core.py:968-970`, ...
-- **Tests:** `test_identity.py::test_per_participant_trait_invariant`
-- **Constants:** ...
-- **Branch:** `sk-xx-wave-a` from clean main
-- **Commit hygiene:** explicit-stage; no destructive flags
-- **Cal cadence:** ...
-- **Edge cases:** if X fails, do Y; rollback: ...
+- **Edit sites:** …
+- **Tests:** …
+- **Constants:** …
+- **Branch:** … from …
+- **Staging plan:** explicit paths, per policy.git
+- **Failure handling:** if X, do Y; rollback: …
+- **Project extensions:** … (only those policy.rubric.extensions declares)
 ```
 
-Mid-dispatch amendments append as `##### Mid-Dispatch Amendment —
-YYYY-MM-DD` sub-sections.
+Mid-dispatch amendments append as `##### Mid-Dispatch Amendment — YYYY-MM-DD`.
 
-**D.5.4 Update sprint-catalog.csv.**
+**D.5.3 Update the live work register.** Through the provider, for each newly
+specified item: sequence, title, group, lane, effort, prerequisites, status, the
+specification state, branch, description. Pass the `revision` you read.
 
-The catalog is a plain CSV with a header row and 15 columns:
-Seq, Sprint Code, Phase, Stage, Title, LOE, Dependencies,
-Implementation Status, Written Status, Branch, Date Started, Date
-Completed, Close-Out File, Description, Notes.
+Only write fields the provider reports it can write. Field *names* come from
+`policy.workRegister.fieldMappings`; status *words* come from
+`policy.workRegister.statusMappings`. Never assume a column is called
+"Implementation Status" or that "Queued" is the right word for this project.
 
-Unlike the old Excel table, there are no formula-driven computed
-columns (Priority, Done?, PhaseRank, SizeRank, SortKey no longer
-exist) — `Seq` alone encodes conveyor-belt order, and this skill is
-responsible for keeping it correct (renumber `Seq` for every row
-whenever the sequence changes; there's no auto-rank to lean on).
+**D.5.4 Regenerate exports (optional).** If the project registers a generated
+report role, regenerate it through its registered generator:
 
-For each newly written full spec, set on the catalog row:
-- `Seq`: conveyor-belt position
-- `Sprint Code`, `Title`, `Phase`, `Stage`, `LOE`, `Dependencies`: from the spec
-- `Implementation Status`: `Queued`
-- `Written Status`: `Full Spec`
-- `Branch`: from spec
-- `Description`: the one-line description
-- `Notes`: any notes
+    "$HOME/.virtuoso/bin/virtuoso" build_register_report --root . --role sprintQueue
 
-Read/write the CSV as a plain CSV (standard row parsing) — this is
-not a spreadsheet mechanic. There is no recalc step: any KPIs
-downstream skills need are computed catalog-direct from this file at
-read time.
+The generator refuses to write any role the project has not declared generated.
+A generated export is a presentation output: never read it back as truth, and
+never hand-edit it — regenerate it.
 
-**Optional: regenerate the human-facing sprint-queue.xlsx report.**
-If the project has a companion `sprint-queue.xlsx`, after saving the
-CSV you may regenerate it for human viewing:
-
-    python <scripts>/build_sprint_queue.py <sprintCatalogCsv> <sprintQueue>
-
-This writes the workbook's Catalog data from the CSV so it opens
-correctly in Excel; the Dashboard tab's KPI cells are formulas /
-Power Query against the data and recompute live when a human opens
-the workbook — they are never force-written by this skill. Never read
-the xlsx back into this skill's logic; the CSV is the only input any
-skill trusts.
-
-**D.5.5 Reconcile.**
-Roadmap active section and sprint-catalog.csv match; positions 1-5 are
-`Full Spec`; positions 6+ are `Stub`; Completed Work Summary has
-one-line entries only; Standing Rules reflects the checklist.
+**D.5.5 Reconcile.** The roadmap's active section and the live register agree;
+the first *N* items in sequence are dispatch-ready; later ones are stubs; the
+completed summary carries one line each; standing rules reflect the checklist.
 
 ### D.6 Write the phase brief
-Write `YYYY-MM-DD-phase-brief.md`:
-- Phase name(s) and goal(s)
-- Sprints in the buffer of 5, in sequence
+
+`YYYY-MM-DD-phase-brief.md`:
+- Group name(s) and goal(s), if the project uses grouping
+- The items in the buffer, in sequence, **by descriptive name first** with the
+  internal id secondary
 - Implementation-detail highlights
-- Rubric pass rate (10/10 for each spec in the buffer)
-- Lessons-applied summary
-- Dependencies into and out of the buffer
-- Exit criteria
-- Estimated buffer duration
-- Top 1-2 risks
-- **Buffer gaps:** any sprints that couldn't be authored as
-  dispatch-ready (rubric failed after 2 enrichment passes); list
-  with the rubric items that blocked
+- Rubric result per item, split into the rubric's five findings
+- Lessons applied
+- Prerequisites into and out of the buffer
+- Exit criteria and estimated buffer duration
+- Top 1–2 risks
+- **Buffer gaps** — items that could not be made dispatch-ready, with the rubric
+  checks that blocked them
+- **Provenance** — provider, source, snapshot time for every figure
 
 ### D.7 Regenerate the planning cockpit
-The roadmap and `sprint-catalog.csv` were just updated, so refresh the read-only planning
-cockpit so it reflects the new state. Run from the project root:
 
-    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/generate_cockpit.py" --root .
+    "$HOME/.virtuoso/bin/virtuoso" generate_cockpit --root .
 
-The launcher pins its own import root, so it runs from any working directory and for both a
-cloned repo and an installed plugin. It reads `Virtuoso/workspace-layout.json` to locate the
-roadmap and sprint catalog and writes `Virtuoso/reports/planning-cockpit.html`. It never
-modifies the roadmap or the catalog — if they disagree it surfaces the drift in the report
-instead. Note the output path for the final summary.
+The cockpit reads the **configured authoritative work register** through its
+provider and the roadmap through its registered role, and writes
+`Virtuoso/reports/planning-cockpit.html`. It never modifies a source document; it
+surfaces drift instead. Every figure it shows carries its provenance, and a
+snapshot-backed read is labelled with its age.
 
-**Known gap:** the cockpit generator (`tools/roadmap_visualizer/workbook.py`) currently reads
-its sprint data from `sprint-queue.xlsx` via openpyxl, not from `sprint-catalog.csv`. Until
-that script is migrated to read the CSV, its output can reflect the same stale Power-Query
-cache this skill no longer trusts elsewhere — treat the cockpit's sprint-level figures as
-secondary to the CSV-computed figures reported directly by /roadmap-status and /next-pointer.
+### D.8 Final summary
 
-### D.8 Final summary to user
-Present:
 - Roadmap changes
-- Catalog changes
-- Pace + scope discipline read
-- Phase brief in chat
-- Buffer status: N dispatch-ready full specs (out of 5 target)
-- Lessons-applied highlights
-- Planning cockpit regenerated: `Virtuoso/reports/planning-cockpit.html`
+- Work-register changes, and which provider served them
+- Pace and scope-discipline read, with any *not computable* metrics named as such
+- The phase brief, in chat
+- Buffer status: N dispatch-ready of the policy target
+- Lessons applied
+- Cockpit path
+- Any outstanding recovery records
 
 ---
 
 ## Roadmap document template
 
-```markdown
-# [Project Name] — Project Roadmap
+Headings the plugin's parser recognizes are shown; a project may rename sections
+and register the change. Grouping headings appear only if the project uses them.
 
-**Last updated:** [Session N (YYYY-MM-DD)] — [one-line state]
+```markdown
+# [Project] — Roadmap
+
+**Last updated:** [YYYY-MM-DD] — [one-line state]
 
 ## How This Document Is Maintained
-[Archive-forward policy]
+[Archive-forward policy; dispatch buffer size; where specifications live]
 
 ## Finish Line — Target
-[Description, graduated tiers if applicable.]
+[Description, graduated tiers if applicable]
 
 ## Completed Work Summary
-| Sprint | Session | Result | Close-Out |
-|--------|---------|--------|-----------|
+| Item | Session | Result | Close-Out |
+|------|---------|--------|-----------|
 
-**Disposition of superseded branches:**
-- `[SK-XX]` — [reason]. Branch preserved at commit `[hash]`.
+**Disposition of superseded work:**
+- `[ITEM-ID]` — [reason]. [Where the work is preserved.]
 
-## Active & Remaining Sprint Skeletons
+## Active & Remaining Work
 
-### Standing Rules All Skeletons Inherit
-- **[ID — short title].** [Rule.]
+### Standing Rules All Items Inherit
+- **[id from policy.standingRules.ids — short title].** [Rule.]
 
-### Phase 1 — [Phase Name]
+#### ITEM-ID — Title    *(position 1 — dispatch-ready)*
+[structural fields + implementation detail, per D.5.2]
 
-#### SK-XX — Sprint Title    *(position 1 — dispatch-ready)*
-- **What:** ...
-- **Why:** ...
-- **Prerequisites:** ...
-- **Done when:**
-    1. ...
-- **Effort:** ...
-- **Roster:** ...
-- **Source:** ...
-
-##### Implementation detail
-- **Edit sites:** ...
-- **Tests:** ...
-- **Constants:** ...
-- **Branch:** ...
-- **Commit hygiene:** ...
-- **Cal cadence:** ...
-- **Edge cases:** ...
-
-#### SK-XX — Sprint Title    *(position 6 — stub)*
+#### ITEM-ID — Title    *(beyond the buffer — stub)*
 [One-line gist.]
 
 ## Non-Blocking Follow-Up Queue
 ## Notes
-
-<!-- Frontmatter:
-loe_unit: t-shirt
-last_review: YYYY-MM-DD
-finish_line: ""
-roadmap_doc: Roadmap.md
-sprint_catalog_doc: sprint-catalog.csv
--->
 ```
 
-## Sprint catalog CSV structure
+## The work register
 
-`sprint-catalog.csv` is the authoritative source of truth for sprint data — a plain
-CSV with a header row and 15 columns:
+The register's shape is the project's, not the plugin's. The canonical fields the
+plugin reasons in are:
 
-Seq, Sprint Code, Phase, Stage, Title, LOE, Dependencies, Implementation Status,
-Written Status, Branch, Date Started, Date Completed, Close-Out File, Description,
-Notes.
+`id`, `title`, `sequence`, `status`, `written_status`, `prerequisites`, `effort`,
+`lane`, `group`, `spec_link`, `branch`, `started`, `completed`, `evidence`,
+`description`, `notes`.
 
-There are no formula-driven computed columns (no Priority, Done?, PhaseRank,
-SizeRank, SortKey) — `Seq` alone encodes conveyor-belt order, and this skill
-maintains it directly (see D.5.4). Status vocabulary: Implementation Status ∈
-{Blocked, Queued, In Flight, Completed (or `Completed <date>`), Dissolved,
-Superseded}; Written Status ∈ {Stub (or empty), Full Spec}. LOE sizes are
-XS/XS-S/S/S-M/M/M-L/L/XL (points 0.5/0.75/1/2/3/5/8/20).
+Map them to the project's own column names in
+`policy.workRegister.fieldMappings`, and the project's own status words in
+`policy.workRegister.statusMappings`. Canonical statuses: `queued`, `in-flight`,
+`blocked`, `completed`, `dissolved`, `superseded`. Canonical specification
+states: `stub`, `full-spec`.
 
-All KPIs (totals, % complete, buffer health, phase progress) are computed
-catalog-direct from this file at read time by /roadmap-status and /next-pointer —
-there is no cache and nothing to recalc.
+All metrics are computed from the register at read time, through the provider,
+with provenance. There is no cache to refresh and nothing to recalculate.
 
-## Optional generated report: sprint-queue.xlsx
+## Escalating a blocker
 
-A project may also keep a `sprint-queue.xlsx` as a human-facing report — nicer to
-browse in Excel, with a Dashboard tab (Pipeline Status, Effort & Progress, a Status
-Distribution chart) typically fed by Power Query pointed at `sprint-catalog.csv`.
-This workbook is **write-only from this skill's perspective**: regenerate it
-(D.5.4) if it exists, but never read it back and never treat its Dashboard as a
-KPI source — Power Query only refreshes when a human opens the workbook in Excel,
-so a workbook left unopened can show numbers that silently contradict each other
-and the CSV. If a report ever needs its cells confirmed, direct the user to open it
-in Excel and let it refresh; do not force-write its Dashboard cells via openpyxl (a
-prior version of this workflow did that via `recalc.py`, which fights Power Query's
-own refresh and is no longer used).
+A stop, hold, or block becomes an issue document routed per `policy.issues.targets`:
+
+- `local` — write it to the registered `issues` directory using
+  `policy.issues.filenameTemplate`.
+- `external` — create it in the tracker named by `policy.issues.externalRole`,
+  through the host's connector, and record the resulting identifier.
+- both — do both, and cross-reference them.
+
+Then route to `/mid-dispatch-decision` by path or identifier.
 
 ---
 
 ## Question protocol reminder
 
-Every clarifying question uses AskUserQuestion with at least 2
-alternatives, exactly one tagged [RECOMMENDED], and an escape hatch
-on consequential decisions. Never ask open-ended free-text questions
-during the run.
+Every clarifying question follows `references/actors-and-interaction.md`: 2–4
+concrete options, exactly one recommended, an escape hatch on consequential
+decisions, structured when the host supports it and plain text when it does not.
+Never ask an open-ended free-text question when a bounded set exists.

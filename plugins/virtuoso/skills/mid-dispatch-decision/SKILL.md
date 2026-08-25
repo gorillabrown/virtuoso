@@ -7,40 +7,62 @@ description: >
   issue document produced by the virtuoso skill. Reads the issue, produces a recommendation
   and a worker-pasteable instruction block, appends a Decision block to the issue file, and
   amends the dispatch spec. Trigger on: "mid-dispatch decision", "decision needed",
-  "escalation decision", "what should I tell CLI / the worker", "CLI is stuck", a virtuoso
+  "escalation decision", "what should I tell the implementation agent", "the implementation agent is stuck", a virtuoso
   issue path, or any pasted execution output showing a paused sprint awaiting direction.
 ---
 
-<!-- virtuoso-shared-contract v1 -->
+<!-- virtuoso-shared-contract v2 -->
 **Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
 
-- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
-- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
-- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
-- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
-- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
-- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+- **Registry resolution** — `Virtuoso/workspace-layout.json` is the authority; `Virtuoso.Governance.Readme.md` is its synchronized human view. Resolve every document, work item, and permission through the registry. Never hardcode a path, never fall back to a conventional one, and never infer authority from a role's name. Full contract: the plugin's `references/registry-contract.md`.
+- **Read-only preflight** — session start and any "where am I" check runs `--mode check`, which performs **zero project writes**. Adoption, creation, and repair are separate operations, each explicitly invoked.
+- **Providers** — work items come from the configured work-register provider (local file, spreadsheet, connector-backed task manager, issue tracker, database, or read-only snapshot). Negotiate capabilities before planning work; never open a register file directly. The live work register, the append-only terminal ledger, and any compatibility export are three different roles.
+- **Provenance** — every derived figure cites its provider, source, and snapshot time. A figure whose inputs are missing is reported as *not computable* with the missing inputs named, never approximated.
+- **Git** — behaviour is `policy.git`, not a fixed rule of this plugin. See `references/git-policy.md`. Under every policy: inspect first, stage exact paths, preserve unrelated work, no destructive flags, no force-push without explicit authorization.
+- **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (v1.0 — 8 universal checks plus the project's declared extensions). No skill restates it in its own words.
+- **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
+- **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
+- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 # Mid-Dispatch Decision
 
-## Preflight — workspace check (run first)
+## Preflight — read-only registry check (run first)
 
-This skill operates on the project's Virtuoso workspace. Before anything else, bring the project under management non-destructively:
+Resolve the plugin through its launcher, then run the **read-only** check. It performs
+discovery and validation with zero project writes.
 
-    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/virtuoso_preflight.py" --root . --mode adopt
+**Unix-like shell**
 
-`adopt` never moves or duplicates anything. Read the `virtuoso-status:` line it prints and branch:
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode check
 
-- `ready` — a `Virtuoso/` workspace already exists (it was healed if needed); continue.
-- `adopted roadmap=<path>` — the project already had an established documentation tree (e.g. `Project Documentation/` or `2. Project Documentation/`) with its own roadmap, so a thin `Virtuoso/` control marker was written that points at that existing roadmap. Tell the user it was adopted in place — nothing was moved or duplicated — then continue.
-- `none` — there is no workspace and no documentation tree to adopt (treat a missing `~/.virtuoso/plugin-root` the same way). Stop this skill and route the user to `/virtuoso-init`, which builds the plugin-only `Project Documentation/` layout (the only layout the workspace scaffolder supports).
+**Windows PowerShell**
 
-**Governance authority — read `Virtuoso.Governance.Readme.md` first.** The project-root `Virtuoso.Governance.Readme.md` is the single source of truth for where every governance document lives (roadmap, sprint catalog, lessons, close-outs, issues, review artifacts). Resolve each document you need through its registry and **defer to the paths it lists**, whatever layout the project uses (e.g. `docs/governance/ROADMAP.md`, `2. Project Documentation/…`, or the plugin default). `Virtuoso/workspace-layout.json` is the machine-readable mirror of the same paths. **Never create a parallel or competing document for a role the registry already lists** — open and edit the registered file in place. If the registry and the files on disk diverge (a registered path is an empty stub while the project's real document lives elsewhere), fix the **registry** — repoint it to the existing document and tell the user — do **not** seed or fork a rival. If `Virtuoso.Governance.Readme.md` is missing, run `/virtuoso-init` to generate it by registering the project's existing governance documents (it seeds a new file only for a role that genuinely has none).
+    & "$HOME/.virtuoso/bin/virtuoso.ps1" virtuoso_preflight --root . --mode check
 
+Add `--json` when you want the structured result (status, writes, findings, and the full
+resolved role table). Read the `virtuoso-status:` line and branch:
+
+- `ready` — the registry is valid. Continue.
+- `warning` — usable; surface the findings to the user and continue. Warnings are not blockers.
+- `repair-needed` — **STOP.** Run `--mode repair` to produce the preview, show the user the
+  proposed paths, semantic changes, files affected, and backup location, and apply it only
+  with `--apply` after they approve.
+- `adoptable` — the project has governance documents but is not registered. Offer
+  `--mode adopt`: it registers what exists, in place. Nothing is moved, duplicated, or rewritten.
+- `none` — no registry and nothing to adopt. Route the user to `/virtuoso-init`.
+- `failed` — report the error verbatim and stop.
+
+If neither launcher resolves, report that the plugin could not be located and stop. Do not
+guess a path.
+
+**Governance authority.** Resolve every document you need through the registry
+(`references/registry-contract.md`). Never create a parallel document for a registered role;
+never write to a role whose `allowedWriters` does not name this ceremony; never treat a
+`mirror`, `report`, `archive`, or `unknown` role as truth.
 
 A Virtuoso execution (Zeus) has paused mid-sprint and routed a structured issue. **Your
 primary input is a path to an `Issue.*.md` file under the manifest `issues` directory** — the 7-field issue document the
-virtuoso skill produced. Read it first. Then bring Cowork's planning context to the execution
+virtuoso skill produced. Read it first. Then bring the planner's planning context to the execution
 state, recommend a path, and — after user confirmation — print a worker-pasteable block,
 append a `## Decision` block to the issue file, and amend the dispatch spec and lessons
 learned. (If handed raw pasted output instead of a path — legacy fallback — reconstruct the
@@ -53,11 +75,11 @@ learned. (If handed raw pasted output instead of a path — legacy fallback — 
 ## Brevity Rule
 
 **Be succinct.** Deep analysis does not mean long output. Read everything, reason
-thoroughly, present in the fewest words that preserve accuracy. CLI is waiting.
+thoroughly, present in the fewest words that preserve accuracy. The implementation agent is waiting.
 
 - Step 5 (recommendation): one screen. If a justification point doesn't change
   the decision, drop it.
-- Step 6 (CLI block): as short as CLI needs to act.
+- Step 6 (instruction block): as short as the implementation agent needs to act.
 - Applies even when layered with ULTRATHINK. Deep *thinking* required; deep
   *output* is not.
 
@@ -71,9 +93,9 @@ the recommendation has failed.
 - **No acronyms.** No SRL-XXX, no CAL-XXX, no sprint IDs (SK-01B, FAS-1, IFG, etc.),
   no FP-XX, no internal codenames. Any concept currently invoked by acronym must be
   paraphrased in plain terms.
-- **No identifiers as proxies for ideas.** "SRL-100 supports re-banding" is wrong.
-  "When the engine's underlying behavior changes, the targets we calibrated against
-  the old behavior aren't the right targets — that argues for re-banding" is right.
+- **No identifiers as proxies for ideas.** "Rule 100 supports re-banding" is wrong.
+  "When the underlying behaviour changes, the targets we tuned against the old
+  behaviour are no longer the right targets — that argues for re-banding" is right.
   The idea carries the weight; the identifier doesn't appear in the recommendation.
 - **Self-contained.** The user must not have to reference other documents to
   understand the decision.
@@ -82,19 +104,19 @@ the recommendation has failed.
 - **Complete.** Brevity does not waive accuracy. If a lever, touch-point, risk, or
   downstream effect is decision-relevant, it gets one tight sentence. It does not
   get cut for length.
-- **File paths and line numbers go in the CLI block, not the recommendation,**
+- **File paths and line numbers go in the instruction block, not the recommendation,**
   unless the exact location is load-bearing for the decision itself.
 
-Sprint IDs, SRL numbers, file paths, and agent names belong in the **CLI block**
-(Step 6a), not the Recommendation. CLI's audience knows the codes; the user, under
+Sprint IDs, SRL numbers, file paths, and agent names belong in the **instruction block**
+(Step 6a), not the Recommendation. The implementation agent's audience knows the codes; the user, under
 time pressure, should not have to translate them.
 
 ---
 
 ## Why This Skill Exists
 
-CLI has execution context (what happened, what the numbers say) but lacks planning
-context (how this connects to adjacent sprints, what lessons learned say). Cowork
+The implementation agent has execution context (what happened, what the numbers say) but lacks planning
+context (how this connects to adjacent sprints, what lessons learned say). The planner
 has the inverse. This skill bridges the two. The cost asymmetry is extreme:
 advancing when you should pivot wastes budget and propagates bad baselines;
 stopping when you should advance abandons 80%-done work.
@@ -108,66 +130,66 @@ stop, and a verification gate that defers the strategic decision entirely.
 
 ### Type 1a — Advance (Pre-Authorized)
 
-The dispatch spec pre-authorized a response for this exact situation. CLI's
+The dispatch spec pre-authorized a response for this exact situation. The implementation agent's
 findings confirm the pre-authorization still applies. Confirm and go.
 
-**CLI block format:** Decision + constraints + why. Minimal — the spec already
+**instruction block format:** Decision + constraints + why. Minimal — the spec already
 said what to do.
 
-### Type 1b — Advance (Cowork-Originated)
+### Type 1b — Advance (Planner-Originated)
 
 No pre-authorization exists, but the direction is right and the remaining scope
-is correct. Cowork authors the direction CLI didn't have.
+is correct. The planner authors the direction the implementation agent didn't have.
 
-**CLI block format:** Decision + direction + scope + constraints + why. Fuller
-than 1a because CLI has no spec language to fall back on.
+**instruction block format:** Decision + direction + scope + constraints + why. Fuller
+than 1a because the implementation agent has no spec language to fall back on.
 
 ### Type 2 — Advance with Narrowing
 
 Same direction, reduced scope. Budget, focus, or new information justifies
 doing less.
 
-**CLI block format:** Decision + direction + what's narrowed + where deferred
+**instruction block format:** Decision + direction + what's narrowed + where deferred
 work goes (next sprint, parking lot, dropped) + constraints.
 
 ### Type 3 — Pivot Advance
 
-CLI continues but does *different work* than planned. Cowork authors a
+The implementation agent continues but does *different work* than planned. The planner authors a
 mini-dispatch-revision in real time.
 
-**CLI block format:** Decision + what to skip + revised task plan (new task
-numbers, agent assignments, model tiers, effort levels, done-when) + constraints.
+**instruction block format:** Decision + what to skip + revised task plan (new task
+numbers, agent assignments, task tiers, effort levels, done-when) + constraints.
 When Type 3 fires, use the effort-levels Task Type Reference Table to size new
 tasks, and flag that virtuoso's execution discipline applies to the revised plan.
 
 ### Type 3a — Revise Routing / Effort (Same Plan)
 
 The remaining work is valid and the direction is correct, but agent routing or
-effort allocation is wrong (e.g., a task dispatched to sonnet/medium needs
-opus/high). Revise annotations, continue.
+effort allocation is wrong (e.g., a task dispatched as bounded/medium needs
+cross-cutting/high). Revise annotations, continue.
 
-**CLI block format:** Decision + which tasks change + new `[agent] {effort}`
+**instruction block format:** Decision + which tasks change + new `[agent] {effort}`
 annotations. Keep task IDs and done-when unchanged.
 
 ### Type 4 — Pivot Stop and Regroup
 
-CLI stops. Completed work preserved; remaining tasks cancelled. Cowork runs a
+The implementation agent stops. Completed work preserved; remaining tasks cancelled. The planner runs a
 partial pointer-closeout, then authors a new dispatch.
 
-**CLI block format:** "Stop the dispatch. Preserve completed work from tasks
-#1-N. Cancel remaining tasks. I'll send a new dispatch from Cowork."
+**instruction block format:** "Stop the dispatch. Preserve completed work from tasks
+#1-N. Cancel remaining tasks. I'll send a new dispatch from the planning side."
 
-**Partial close-out contract:** When Type 4 fires, Cowork invokes pointer-closeout
+**Partial close-out contract:** When Type 4 fires, the planner invokes pointer-closeout
 with these inputs: (a) completed tasks treated as the sprint's deliverables,
 (b) cancelled tasks listed with reason "mid-dispatch pivot," (c) the close-out's
 findings table includes the pause-point finding that triggered the stop,
 (d) the next pointer enters Case C (brainstorm). Pointer-closeout does not need
-a full CLI summary — the mid-dispatch decision's Step 2 assessment serves as
+a full pause summary — the mid-dispatch decision's Step 2 assessment serves as
 the summary input.
 
 ### Type 5 — Verify First
 
-CLI's findings are surprising and the correct strategic decision depends on
+The implementation agent's findings are surprising and the correct strategic decision depends on
 whether the measurement is real. Instead of choosing a direction now, dispatch
 a narrow verification task, defer the decision until results land.
 
@@ -175,7 +197,7 @@ This is distinct from Type 3 — you aren't pivoting strategy; you're gating
 strategy on verification. The remaining plan pauses (not cancelled) while
 verification runs.
 
-**CLI block format:** Decision + verification task (agent, what to check,
+**instruction block format:** Decision + verification task (agent, what to check,
 done-when) + "pause remaining plan until verification lands, then come back
 for direction."
 
@@ -191,12 +213,12 @@ one of the valid measurement suspicions (below) applies.
 Ask the user:
 
 > **How deep should I go?**
-> - **Fast** — CLI pause message + dispatch spec only. ~2-3 min.
+> - **Fast** — pause report + dispatch spec only. ~2-3 min.
 > - **Deep** — Full context load (roadmap, lessons learned, close-outs). ~5-10 min.
 
 **Default to Deep** if the situation is non-trivial (unexpected finding, multiple
 viable paths, any Type 3/4/5 candidate). **Fast** only when the dispatch
-pre-authorized this exact response and CLI's analysis confirms it applies cleanly.
+pre-authorized this exact response and the implementation agent's analysis confirms it applies cleanly.
 Fast can escalate to Deep mid-analysis if the decision turns out more complex.
 
 ### Step 1 — Load Context
@@ -205,7 +227,7 @@ Fast can escalate to Deep mid-analysis if the decision turns out more complex.
 
 | Source | What to Extract |
 |--------|----------------|
-| **CLI pause message** | What happened, current state, CLI's analysis, options CLI sees |
+| **pause report** | What happened, current state, the implementation agent's analysis, options the implementation agent sees |
 | **Dispatch spec** | What was supposed to happen; pre-authorized paths; scope fences |
 
 #### Deep Mode
@@ -235,7 +257,7 @@ authoritative; this skill defers to it.
 
 Before analyzing, run a 30-second freshness check: compare file modification
 dates on the operational docs directory and `SpecRetro.Lessons_Learned.md`
-against the last known Cowork session timestamp. If anything was touched since
+against the last known planner-session timestamp. If anything was touched since
 the last session, surface it — a new standing rule or roadmap revision could
 flip the recommendation.
 
@@ -245,16 +267,16 @@ only freshness signal.
 
 ### Step 1.5 — Disambiguation (if needed)
 
-If CLI's pause message does not map cleanly to a decision — e.g., three
+If the implementation agent's pause message does not map cleanly to a decision — e.g., three
 observations without identifying which is the blocker, or a vague "not sure
-what to do" — produce a short response asking CLI (via the user) to restate:
+what to do" — produce a short response asking the implementation agent (via the user) to restate:
 "What specific decision do you need? Which task is blocked and what are the
 options?" Do not proceed on a decision you cannot classify.
 
 ### Step 2 — First-Principles Situation Assessment
 
 Reason from foundations, not from analogy. The dispatch spec, the pre-authorization,
-and even CLI's own framing carry assumptions. Strip them and rebuild. This step
+and even the implementation agent's own framing carry assumptions. Strip them and rebuild. This step
 prevents the most dangerous failure mode: rubber-stamping a pre-authorized response
 because pattern-matching is comfortable. The spec's framing is the starting point
 for analysis, never its conclusion.
@@ -266,9 +288,9 @@ produce. If the goal is unclear from the spec, infer it from the roadmap or ask
 the user.
 
 **2. Catalog assumptions.** List what the dispatch spec, the pre-authorization, and
-CLI's own analysis are taking for granted. Surface them explicitly. Common
+The implementation agent's own analysis are taking for granted. Surface them explicitly. Common
 categories: the measurement apparatus is correct; the pre-authorization's threshold
-is the right gate; CLI's hypothesis about cause is correct; the downstream baseline
+is the right gate; the implementation agent's hypothesis about cause is correct; the downstream baseline
 is what we think it is; the spec's scope fence still holds.
 
 **3. Challenge each assumption.** For each item in the catalog, mark it as
@@ -280,7 +302,7 @@ or is it inertia?
 
 **4. Identify the first principles.** With conventions stripped away, what is
 actually true about the situation? What are the real levers, real constraints,
-real signals — independent of how the spec or CLI framed them? In an engineering
+real signals — independent of how the spec or the implementation agent framed them? In an engineering
 context, this often reduces to: what does the code do, what does the data say,
 what does the user actually want.
 
@@ -295,29 +317,29 @@ output is Step 5's Recommendation, which presents the *conclusion* of this
 analysis in plain language — not the analysis itself. Show your work to yourself,
 not the user.
 
-#### Conditional CLI Direction (when Step 1 surfaces analysis-affecting context)
+#### Conditional Direction for the Implementation Agent (when Step 1 surfaces analysis-affecting context)
 
 If Step 1's context load surfaced something that could change the analysis — a
 recently-added standing rule, a roadmap revision since the last session, a
 constraint introduced by a recent close-out, an assumption that depends on
-state Cowork cannot directly verify — Step 2's reconstruction must propagate
-that uncertainty into the eventual CLI instruction (Step 6a) as an if/then
-guard. The CLI direction stops being a single directive and becomes
+state the planner cannot directly verify — Step 2's reconstruction must propagate
+that uncertainty into the eventual instruction (Step 6a) as an if/then
+guard. The direction stops being a single directive and becomes
 check-then-act.
 
 **Triggers (any of these in Step 1 → conditional direction in Step 6a):**
 
 - A new standing rule appeared since the last session that *might* apply but
-  requires CLI-side verification of state Cowork didn't load.
+  requires implementation-agent-side verification of state the planner didn't load.
 - The roadmap was revised in a way that affects downstream baselines, but the
-  revision's exact scope depends on which file or branch CLI is touching.
+  revision's exact scope depends on which file or branch the implementation agent is touching.
 - A measurement assumption can only be verified by reading state mid-execution.
 - The dispatch's pre-authorization rests on a property of the current code
   state that may have changed since the spec was written.
-- Cowork's planning context is more than one session stale on a load-bearing
+- The planner's planning context is more than one session stale on a load-bearing
   document.
 
-**Direction shape.** When a trigger fires, the CLI block enumerates the
+**Direction shape.** When a trigger fires, the instruction block enumerates the
 branches and the verification step that selects among them:
 
 ```
@@ -327,20 +349,20 @@ Before acting, verify [specific check]:
   - If [condition A]: proceed with [action A].
   - If [condition B]: proceed with [action B].
   - If neither / unclear: pause and report — I'll route the next decision
-    from Cowork.
+    from the planner.
 
-[remaining CLI block fields...]
+[remaining instruction block fields...]
 ```
 
-The branches must be exhaustive enough that CLI does not have to invent a
+The branches must be exhaustive enough that the implementation agent does not have to invent a
 third option. If the situation space isn't enumerable, escalate to Type 5
 (Verify First) instead.
 
 **This is not Type 5.** Type 5 defers the entire strategic decision until a
 verification task runs and reports back; the remaining plan pauses. Conditional
-direction makes the action *contingent* — CLI proceeds immediately and selects
+direction makes the action *contingent* — the implementation agent proceeds immediately and selects
 which action to take based on what it observes when it gets there. Use
-conditional direction when Cowork has enough context to enumerate the branches
+conditional direction when the planner has enough context to enumerate the branches
 but not enough to choose between them; use Type 5 when even the branches can't
 be enumerated without verification.
 
@@ -350,7 +372,7 @@ Walk this tree. Take the first match.
 
 ```
 1. Did the dispatch pre-authorize a response for this exact situation?
-   ├── YES: Does the pre-authorization still apply given what CLI found?
+   ├── YES: Does the pre-authorization still apply given what the implementation agent found?
    │   ├── YES → Type 1a (Advance — Pre-Authorized)
    │   └── NO → Continue to step 2
    └── NO → Continue to step 2
@@ -366,10 +388,10 @@ Walk this tree. Take the first match.
    │   ├── YES → Type 3a (Revise Routing / Effort)
    │   └── NO: Does remaining scope need reduction?
    │       ├── YES → Type 2 (Advance with Narrowing)
-   │       └── NO → Type 1b (Advance — Cowork-Originated)
+   │       └── NO → Type 1b (Advance — Planner-Originated)
    └── NO → Continue to step 4
 
-4. Can CLI productively continue with a revised direction?
+4. Can the implementation agent productively continue with a revised direction?
    ├── YES → Type 3 (Pivot Advance)
    └── NO → Type 4 (Pivot Stop)
 ```
@@ -393,7 +415,7 @@ This test prevents the most dangerous failure mode: choosing a comfortable type
 
 #### Valid Measurement Suspicions (for Type 5 gating)
 
-Only these qualify as reasons to suspect CLI's measurement. If none apply,
+Only these qualify as reasons to suspect the implementation agent's measurement. If none apply,
 accept the numbers and decide:
 
 1. **Single-seed result contradicts prior close-out** on the same code state
@@ -401,7 +423,8 @@ accept the numbers and decide:
    that suggests instrumentation error (e.g., a metric moves in the impossible
    direction given the change that was made)
 3. **Impossible delta** — magnitude exceeds what the change could plausibly produce
-4. **Measurement cadence doesn't match the mechanism class** per SRL-091
+4. **Measurement cadence doesn't match the mechanism class**, where a standing rule in
+   `policy.standingRules` says so — cite that rule by the project's own identifier
    (e.g., structural change measured with a constants-only N=200 gate)
 5. **Measurement differs from baseline CAL on the same code state** — same
    code, different numbers, no intervening change
@@ -433,7 +456,7 @@ as proxies, self-contained, succinct, complete (see Brevity Rule above).
 
 ### Problem / Opportunity
 
-[2-4 sentences. What CLI found, why it triggered a pause, what's at stake if the
+[2-4 sentences. What the implementation agent found, why it triggered a pause, what's at stake if the
 decision goes wrong. Connect to downstream work in plain terms — "the next four
 sprints all measure against the baseline we set here," not sprint IDs.]
 
@@ -472,16 +495,16 @@ cost-of-being-wrong profile and say so.
 
 ### Bundled Pauses
 
-When CLI surfaces multiple decision points simultaneously (e.g., two
+When the implementation agent surfaces multiple decision points simultaneously (e.g., two
 authorization flags triggered at once), do NOT collapse them into a single
 recommendation. Instead:
 
 - **One Problem/Opportunity block per decision,** stated separately.
 - **Separate Alternative Solutions and Recommended Way Forward per decision.**
 - **Separate alternative-frame test per decision.**
-- **Single CLI block at the end** listing all instructions in execution order.
+- **Single instruction block at the end** listing all instructions in execution order.
 - **Independence rule:** If decision A's outcome changes decision B's viable
-  options, they are NOT independent — separate the pauses. Handle A, get CLI
+  options, they are NOT independent — separate the pauses. Handle A, get the implementation agent
   to the next pause point, then handle B.
 
 ### Step 5.5 — Cross-Worktree Conflict Surface Check
@@ -492,13 +515,13 @@ integration happen in the same workflow — no cross-worktree timing gap exists.
 Steps 5.5 and the staging-file branching in Step 6b apply only to Types 1a, 1b,
 2, 3, 3a, and 5, where the dispatch continues and the close-out happens later.
 
-For all non-Type-4 decisions, before producing the CLI block and persisting
+For all non-Type-4 decisions, before producing the instruction block and persisting
 amendments, scan for foreseeable merge conflicts at close-out. Three conditions:
 
 1. The dispatch spec lives in a document subject to archive-forward collapse
    (e.g., a Roadmap §Active Skeletons section that converts to a one-paragraph
    Completed Work Summary row at close-out).
-2. An active CLI worktree exists on the sprint's feature branch.
+2. An active execution worktree exists on the sprint's feature branch.
 3. The close-out edit will modify the same section the amendment is being
    appended to.
 
@@ -521,14 +544,14 @@ IF branch); the user can override.
 
 Once confirmed, produce three outputs in this order:
 
-#### 6a. CLI Instruction Block (print first)
+#### 6a. Implementation-Agent Instruction Block (print first)
 
 User pastes this immediately. **Write in first person.** Keep it minimal.
 
 **If Step 2's conditional-direction rule fired,** any of the per-type formats
 below is wrapped in a check-then-act structure: the type's direction becomes
 the action under the matching branch, and additional branches enumerate the
-alternatives. See Step 2's "Conditional CLI Direction" subsection for the
+alternatives. See Step 2's "Conditional Direction for the Implementation Agent" subsection for the
 shape.
 
 **Per-type format:**
@@ -583,7 +606,7 @@ Change these task annotations (plan and done-when unchanged):
 
 ```
 Stop the dispatch. Preserve completed work from tasks #1-N.
-Cancel remaining tasks. I'll send a new dispatch from Cowork.
+Cancel remaining tasks. I'll send a new dispatch from the planning side.
 
 **For the close-out:** [what the partial close-out should capture]
 **Why:** [1-2 sentences]
@@ -608,7 +631,7 @@ on the strategic decision.
 
 #### 6b. Amend the Dispatch Spec (hard execution) — uses virtuoso's governance staging file
 
-This is not optional. Cowork **must execute an Edit call** and confirm the edit
+This is not optional. The planner **must execute an Edit call** and confirm the edit
 landed. The workflow does not terminate until the amendment is persisted.
 
 **Where the amendment lands** depends on the sprint's execution context:
@@ -658,13 +681,14 @@ in the fold-in entry serves the same function more directly.
 the main governance document, so cross-worktree conflicts on governance files
 are structurally impossible.
 
-**PATH B — Cowork-side session (no worktree boundary):**
+**PATH B — planner-side session (no worktree boundary):**
 
-When Cowork is making a mid-dispatch decision outside a worktree context (e.g.,
-the sprint is running in the same session or the user is manually operating CLI):
+When the planner is making a mid-dispatch decision outside a worktree context (e.g.,
+the sprint is running in the same session or the user is manually driving the implementation agent by hand):
 
-1. Identify the spec location (roadmap entry, sprint-queue entry, or standalone
-   file). If ambiguous, resolve **before** printing the CLI block in 6a.
+1. Identify the specification's location through the registry (the roadmap role,
+   a file under `policy.roadmap.specDirectory`, an external system, or a standalone
+   file). If ambiguous, resolve **before** printing the instruction block in 6a.
 2. Read the file.
 3. Append the amendment block (template below) inline to the dispatch spec.
 4. Print confirmation: "Amended `[filename]`: added mid-dispatch amendment
@@ -690,7 +714,7 @@ for Path B only — Path A uses fold-in instructions instead.]
 ```
 
 **How to decide which path:** If the sprint is running in a git worktree
-(check the dispatch spec or project configuration), use Path A. If Cowork is
+(check the dispatch spec or project configuration), use Path A. If the planner is
 operating on canonical main directly, use Path B. When in doubt, use Path A —
 it's always safe and the staging file is deleted at close-out regardless.
 
@@ -713,7 +737,7 @@ then walks each amendment/fold-in below and processes it.
 
 #### 6c. Update Lessons Learned (hard execution when warranted)
 
-Check whether the decision produced a reusable lesson. If yes, Cowork **must
+Check whether the decision produced a reusable lesson. If yes, the planner **must
 execute the append** to `SpecRetro.Lessons_Learned.md` — not just describe it.
 
 **Update triggers:**
@@ -740,14 +764,14 @@ Print confirmation: "Added SRL-NNN to lessons learned: [one-line summary]."
 **Type 4 triggers partial pointer-closeout immediately.** Inputs: (a) completed
 tasks as deliverables, (b) cancelled tasks with reason "mid-dispatch pivot,"
 (c) pause-point finding in the findings table, (d) next pointer enters Case C.
-Step 2's situation assessment serves as the CLI summary input.
+Step 2's situation assessment serves as the pause summary input.
 
 **Types 1-5 inform eventual close-out.** The amendment block (6b) ensures the
 close-out compares results against the *amended* spec, not the original.
 
 ### + Adversarial Review
 
-Offer when CLI's analysis rests on a hypothesis that, if wrong, flips the
+Offer when the implementation agent's analysis rests on a hypothesis that, if wrong, flips the
 decision type. If adversarial review finds the hypothesis fragile, push toward
 Type 5 (verify first) or Type 4 (stop). Don't just name the option — specify
 what to do with the output.
@@ -772,8 +796,8 @@ the task plan update.
 
 ### + Virtuoso
 
-If the decision changes what CLI executes next (Types 3, 3a, 5), virtuoso's
-execution discipline applies to the revised plan. The CLI block should flag
+If the decision changes what the implementation agent executes next (Types 3, 3a, 5), virtuoso's
+execution discipline applies to the revised plan. The instruction block should flag
 this: "Virtuoso task-plan reprint required after this change."
 
 **Governance Staging integration:** For worktree-resident sprints, virtuoso's
@@ -781,15 +805,15 @@ Worktree Governance Staging rules (§Rule 5) mandate that mid-dispatch amendment
 go to the sprint's staging file — not to the inline spec. This skill's Step 6b
 Path A implements that mandate. The conflict-surface check (Step 5.5) becomes
 unnecessary for worktree-resident work because the conflict surface is
-structurally eliminated. Step 5.5 still applies for Cowork-side (Path B) sessions.
+structurally eliminated. Step 5.5 still applies for planner-side (Path B) sessions.
 
 ---
 
 ## Behavioral Rules
 
-### Cite Specific Evidence (paraphrased in Step 5, identified in CLI block)
+### Cite Specific Evidence (paraphrased in Step 5, identified in instruction block)
 
-Every recommendation must rest on: (a) a finding from CLI's pause message,
+Every recommendation must rest on: (a) a finding from the implementation agent's pause message,
 (b) the dispatch spec's pre-authorization or scope fence, (c) the downstream
 dependency chain, (d) prior patterns or standing rules if any match. If you
 can't cite evidence, you haven't done enough analysis.
@@ -798,7 +822,7 @@ can't cite evidence, you haven't done enough analysis.
 name SRLs or sprint IDs by identifier. The user must follow the reasoning
 without lookups.
 
-**In Step 6a (CLI block):** Identifiers are appropriate and efficient. CLI knows
+**In Step 6a (instruction block):** Identifiers are appropriate and efficient. The implementation agent knows
 the codes. Cite SRL-NNN, sprint IDs, and file paths directly.
 
 ### Budget Awareness
@@ -808,14 +832,14 @@ Over-budget is a factor, not a veto — marginal work must justify marginal cost
 
 ### Measurement Trust with Enumerated Exceptions
 
-Accept CLI's numbers unless one of the five valid measurement suspicions
+Accept the implementation agent's numbers unless one of the five valid measurement suspicions
 (listed under the decision tree) applies. "The numbers seem off" without
 matching a listed suspicion is not grounds for Type 5.
 
 ### Decision Trail
 
-The CLI block's "Why" and "For the close-out" fields, plus the 6b amendment,
-are the permanent record. A future Cowork session doing the close-out must be
+The instruction block's "Why" and "For the close-out" fields, plus the 6b amendment,
+are the permanent record. A future the planner session doing the close-out must be
 able to reconstruct the reasoning from these artifacts alone.
 
 ### Don't Rush, Don't Pad
@@ -824,27 +848,27 @@ able to reconstruct the reasoning from these artifacts alone.
 But once the analysis is done, present concisely. The user is the decision-maker
 under time pressure — earn agreement with clarity, not volume.
 
-### Cowork-side Edits During In-Flight CLI Dispatch
+### planner-side Edits During In-Flight Dispatch
 
-When a CLI sprint is in flight (worktree exists, feature branch is active, work
-is in progress), Cowork-side governance edits to canonical main require explicit
+When a dispatch is in flight (worktree exists, feature branch is active, work
+is in progress), planner-side governance edits to canonical main require explicit
 conflict-surface awareness. Two risk classes apply:
 
-1. **Shared-file conflict (visible at rebase).** Both Cowork's edit on main and
+1. **Shared-file conflict (visible at rebase).** Both the planner's edit on main and
    the worktree's edits modify the same file. The conflict surfaces at the
    pre-merge rebase per the project's worktree-complete discipline. Manageable
    but adds friction, especially if the conflicted section is structurally
    complex (e.g., a Roadmap §Active Skeletons row).
 2. **Silent-revert risk (invisible at merge if pre-merge rebase isn't strict).**
-   Cowork's edit lands on main. The worktree's bootstrap snapshot pre-dates
+   The planner's edit lands on main. The worktree's bootstrap snapshot pre-dates
    that edit. At merge, if the rebase step is skipped or the conflict resolver
-   accepts the worktree's older view, Cowork's edit is silently discarded. This
+   accepts the worktree's older view, the planner's edit is silently discarded. This
    is the more dangerous failure mode — there is no error, just missing content.
 
 **Rule.** For worktree-resident sprints, this conflict surface is structurally
 eliminated by virtuoso's Worktree Governance Staging rules: the worktree never
 edits main governance documents, so conflicts are impossible. Step 6b Path A
-(staging file) is mandatory for all worktree-resident sprints. For Cowork-side
+(staging file) is mandatory for all worktree-resident sprints. For planner-side
 sessions (Path B), the conflict surface still applies — run Step 5.5 before
 any inline edit to a file the in-flight worktree might also touch at close-out.
 
@@ -855,20 +879,20 @@ any inline edit to a file the in-flight worktree might also touch at close-out.
 | Anti-Pattern | Do This Instead |
 |-------------|-----------------|
 | Deciding without reading the dispatch spec | The answer may already be there |
-| Rubber-stamping the pre-authorization | Verify its assumptions against what CLI actually found |
+| Rubber-stamping the pre-authorization | Verify its assumptions against what the implementation agent actually found |
 | Choosing Type 1 because it's comfortable | Run the alternative-frame test — state what Type 3 looks like |
-| Producing the CLI block before confirmation | Two-step: recommend first, execute after explicit assent |
-| Vague CLI block ("continue as you see fit") | Name tasks, agents, files, metrics, thresholds |
-| Type 3 without a revised task plan | CLI can't execute "do something different" without specifics |
-| Skipping 6b (spec amendment) | The amendment is not optional. For worktree sprints: append to the staging file. For Cowork-side: edit the spec inline. Confirm the edit either way. |
+| Producing the instruction block before confirmation | Two-step: recommend first, execute after explicit assent |
+| Vague instruction block ("continue as you see fit") | Name tasks, agents, files, metrics, thresholds |
+| Type 3 without a revised task plan | the implementation agent can't execute "do something different" without specifics |
+| Skipping 6b (spec amendment) | The amendment is not optional. For worktree sprints: append to the staging file. For planner-side: edit the spec inline. Confirm the edit either way. |
 | Using inline-spec amendments for a worktree-resident sprint | Always use Path A (staging file). Virtuoso forbids worktree edits to main governance docs — the staging file is the only valid target. |
 | Using Type 5 to avoid a hard decision | Only valid with a listed measurement suspicion |
 | Collapsing bundled pauses into one decision | One Problem/Alternatives/Recommendation per decision point |
-| Acronyms, sprint IDs, or SRL numbers in the Recommendation | Step 5 is plain language only. Paraphrase the idea; identifiers go in the CLI block. |
+| Acronyms, sprint IDs, or SRL numbers in the Recommendation | Step 5 is plain language only. Paraphrase the idea; identifiers go in the instruction block. |
 | User has to open another document to follow the recommendation | Recommendation must be self-contained. If a reference is decision-relevant, paraphrase it in plain terms. |
 | Skipping Step 2's first-principles assessment | Walk all five sub-steps. Pattern-matching to the spec's framing is the failure mode this step exists to prevent. |
 | Appending amendment without a Close-Out Preservation field | Always include the field — it's the contract that prevents silent loss at close-out. The close-out handler needs to know where to migrate the amendment, how, when, and what's at risk if skipped. |
-| Persisting amendment without checking execution context | For worktree-resident sprints, always use Path A (staging file) — no conflict check needed because the surface is eliminated. For Cowork-side (Path B), run Step 5.5 first. |
+| Persisting amendment without checking execution context | For worktree-resident sprints, always use Path A (staging file) — no conflict check needed because the surface is eliminated. For planner-side (Path B), run Step 5.5 first. |
 | Using inline-spec amendments for a sprint running in a worktree | Virtuoso's staging-file pattern makes this a hard prohibition. Use Path A unconditionally for worktree-resident work. |
 
 ---

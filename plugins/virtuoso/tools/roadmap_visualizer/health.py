@@ -1,184 +1,99 @@
+"""Drift between the roadmap document and the live work register.
+
+Works on canonical statuses from the provider layer, so a project using its own
+vocabulary ("Doing Now", "Shipped") is analyzed exactly like one using the
+defaults. Nothing here reads a generated workbook cache.
+"""
 from __future__ import annotations
 
-from .model import HealthSummary, RoadmapSnapshot, SprintRow
+from tools.governance.providers import base
+
+from .model import HealthSummary, RoadmapSnapshot
 
 
-DONE_STATUSES = {"Dissolved", "Superseded"}
+def _ordered(items):
+    return sorted(items, key=lambda i: (i.sequence is None, i.sequence or 0, i.id))
 
 
-def _is_completed(status: str) -> bool:
-    return status.startswith("Completed")
-
-
-def _is_done(status: str) -> bool:
-    return _is_completed(status) or status in DONE_STATUSES
-
-
-def _queue_rows(rows: list[SprintRow]) -> list[SprintRow]:
-    return sorted(
-        rows,
-        key=lambda row: (
-            row.seq is None,
-            row.seq or 999999,
-            row.priority,
-            row.code,
-        ),
-    )
-
-
-def _drift_findings(roadmap: RoadmapSnapshot, rows: list[SprintRow]) -> list[str]:
-    ordered_rows = _queue_rows(rows)
-    rows_by_code = {row.code: row for row in ordered_rows}
-    queue_codes = {row.code for row in ordered_rows}
+def _drift_findings(roadmap: RoadmapSnapshot, items) -> list[str]:
+    ordered = _ordered(items)
+    by_id = {item.id: item for item in ordered}
+    register_ids = set(by_id)
     active_codes = set(roadmap.active_codes)
     completed_codes = set(roadmap.completed_codes)
-    known_codes = active_codes | completed_codes | queue_codes
+    known = active_codes | completed_codes | register_ids
 
     findings: list[str] = []
-
     for code in roadmap.active_codes:
-        if code not in queue_codes:
-            findings.append(f"Missing from sprint queue: {code}")
+        if code not in register_ids:
+            findings.append("In the roadmap's active section but not in the work register: %s"
+                            % code)
             continue
-        row = rows_by_code[code]
-        if _is_done(row.implementation_status):
-            findings.append(f"Roadmap-active sprint marked done in queue: {code}")
+        if by_id[code].is_terminal:
+            findings.append("Roadmap-active item is terminal in the work register: %s" % code)
 
     for code in roadmap.completed_codes:
-        row = rows_by_code.get(code)
-        if row is not None and not _is_done(row.implementation_status):
-            findings.append(f"Roadmap-completed sprint still active in queue: {code}")
+        item = by_id.get(code)
+        if item is not None and not item.is_terminal:
+            findings.append("Roadmap-completed item is still active in the work register: %s"
+                            % code)
 
-    for row in ordered_rows:
-        if row.code not in active_codes and row.code not in completed_codes:
-            findings.append(
-                f"Queue row not present in roadmap active section: {row.code}"
-            )
+    if roadmap.path is not None:
+        for item in ordered:
+            if item.id not in active_codes and item.id not in completed_codes \
+                    and not item.is_terminal:
+                findings.append("Work-register item absent from the roadmap: %s" % item.id)
 
-    roadmap_common = [code for code in roadmap.active_codes if code in queue_codes]
-    queue_common = [row.code for row in ordered_rows if row.code in active_codes]
-    if roadmap_common and roadmap_common != queue_common:
-        findings.append(
-            "Queue order differs from roadmap order: "
-            f"roadmap={', '.join(roadmap_common)}; queue={', '.join(queue_common)}"
-        )
+    roadmap_common = [c for c in roadmap.active_codes if c in register_ids]
+    register_common = [i.id for i in ordered if i.id in active_codes]
+    if roadmap_common and roadmap_common != register_common:
+        findings.append("Sequence differs: roadmap=%s; register=%s"
+                        % (", ".join(roadmap_common), ", ".join(register_common)))
 
-    for row in ordered_rows:
-        for dependency in row.dependencies:
-            if dependency not in known_codes:
-                findings.append(
-                    f"Unknown dependency referenced by {row.code}: {dependency}"
-                )
-
+    for item in ordered:
+        for prerequisite in item.prerequisites:
+            if prerequisite and prerequisite not in known:
+                findings.append("Unknown prerequisite referenced by %s: %s"
+                                % (item.id, prerequisite))
     return findings
 
 
-def _dashboard_staleness(dashboard: dict | None, counts: dict[str, int]) -> list[str]:
-    if not dashboard:
-        return []
-    labels = {
-        "total": "total",
-        "queued": "queued",
-        "in_flight": "in flight",
-        "blocked": "blocked",
-        "completed": "completed",
-    }
-    findings: list[str] = []
-    for key, label in labels.items():
-        cached = dashboard.get(key)
-        if cached is None:
-            continue
-        try:
-            cached_int = int(cached)
-        except (TypeError, ValueError):
-            continue
-        live = counts.get(key)
-        if live is None:
-            continue
-        if cached_int != live:
-            findings.append(
-                f"Dashboard cache stale: {label} shows {cached_int} but catalog has "
-                f"{live} - run recalc.py"
-            )
-    return findings
+def _recommendation(drift: int, buffer_filled: int, buffer_target: int,
+                    counts: dict, stale: bool) -> str:
+    if stale:
+        return ("The work register was read from a stale snapshot. Refresh it before acting "
+                "on these numbers.")
+    if drift:
+        return "Run the roadmap-review ceremony: the roadmap and the work register disagree."
+    if counts.get(base.QUEUED, 0) == 0 and counts.get(base.BLOCKED, 0):
+        return "Run the roadmap-status ceremony: everything active is blocked."
+    if buffer_target and buffer_filled < buffer_target:
+        return ("Run the roadmap-review ceremony: the dispatch buffer holds %d of %d "
+                "specified items." % (buffer_filled, buffer_target))
+    return "Proceed: the roadmap and the work register agree."
 
 
-def _recommendation(
-    drift_count: int,
-    staleness_count: int,
-    full_spec_buffer: int,
-    queued_count: int,
-    blocked_count: int,
-) -> str:
-    if staleness_count:
-        return "Run recalc.py: the sprint-queue Dashboard cache is stale."
-    if drift_count:
-        return "Run /roadmap-review to reconcile: roadmap and sprint queue are out of sync."
-    if queued_count == 0 and blocked_count:
-        return "Run /roadmap-status: queue has blockers and no queued sprint."
-    if full_spec_buffer > 0:
-        return "Proceed: queue is aligned."
-    if full_spec_buffer < 5:
-        return "Run /roadmap-review: full-spec buffer is below 5."
-    return "Proceed: queue is aligned."
+def summarize_health(roadmap: RoadmapSnapshot, snapshot: base.Snapshot,
+                     *, buffer_target: int = 5) -> HealthSummary:
+    ordered = _ordered(snapshot.items)
+    counts = {status: 0 for status in base.CANONICAL_STATUSES}
+    for item in ordered:
+        counts[item.status] = counts.get(item.status, 0) + 1
 
+    active = [item for item in ordered if not item.is_terminal]
+    head = active[0] if active else None
+    buffer_filled = sum(1 for item in active[:buffer_target]
+                        if item.written_status == base.FULL_SPEC) if buffer_target else 0
 
-def summarize_health(
-    roadmap: RoadmapSnapshot,
-    rows: list[SprintRow],
-    dashboard: dict | None = None,
-) -> HealthSummary:
-    ordered_rows = _queue_rows(rows)
-
-    queued_count = sum(
-        1 for row in ordered_rows if row.implementation_status == "Queued"
-    )
-    in_flight_count = sum(
-        1 for row in ordered_rows if row.implementation_status == "In Flight"
-    )
-    blocked_count = sum(
-        1 for row in ordered_rows if row.implementation_status == "Blocked"
-    )
-    completed_count = sum(
-        1 for row in ordered_rows if _is_completed(row.implementation_status)
-    )
-    full_spec_buffer = sum(
-        1
-        for row in ordered_rows
-        if row.implementation_status == "Queued" and row.written_status == "Full Spec"
-    )
-
-    head_code = roadmap.active_codes[0] if roadmap.active_codes else ""
-    if not head_code and ordered_rows:
-        head_code = ordered_rows[0].code
-
-    drift_findings = _drift_findings(roadmap, ordered_rows)
-    staleness_findings = _dashboard_staleness(
-        dashboard,
-        {
-            "total": len(ordered_rows),
-            "queued": queued_count,
-            "in_flight": in_flight_count,
-            "blocked": blocked_count,
-            "completed": completed_count,
-        },
-    )
-    all_findings = drift_findings + staleness_findings
-
+    findings = _drift_findings(roadmap, ordered)
     return HealthSummary(
-        head_code=head_code,
-        full_spec_buffer=full_spec_buffer,
-        queued_count=queued_count,
-        in_flight_count=in_flight_count,
-        blocked_count=blocked_count,
-        completed_count=completed_count,
-        drift_count=len(all_findings),
-        drift_findings=all_findings,
-        recommendation=_recommendation(
-            len(drift_findings),
-            len(staleness_findings),
-            full_spec_buffer,
-            queued_count,
-            blocked_count,
-        ),
+        head_id=head.id if head else "",
+        head_title=head.title if head else "",
+        buffer_target=buffer_target,
+        buffer_filled=buffer_filled,
+        counts=counts,
+        drift_count=len(findings),
+        drift_findings=findings,
+        recommendation=_recommendation(len(findings), buffer_filled, buffer_target,
+                                       counts, snapshot.stale),
     )

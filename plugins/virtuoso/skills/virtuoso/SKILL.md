@@ -11,15 +11,18 @@ description: >
   discipline prevents regressions.
 ---
 
-<!-- virtuoso-shared-contract v1 -->
+<!-- virtuoso-shared-contract v2 -->
 **Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
 
-- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
-- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
-- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
-- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
-- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
-- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+- **Registry resolution** — `Virtuoso/workspace-layout.json` is the authority; `Virtuoso.Governance.Readme.md` is its synchronized human view. Resolve every document, work item, and permission through the registry. Never hardcode a path, never fall back to a conventional one, and never infer authority from a role's name. Full contract: the plugin's `references/registry-contract.md`.
+- **Read-only preflight** — session start and any "where am I" check runs `--mode check`, which performs **zero project writes**. Adoption, creation, and repair are separate operations, each explicitly invoked.
+- **Providers** — work items come from the configured work-register provider (local file, spreadsheet, connector-backed task manager, issue tracker, database, or read-only snapshot). Negotiate capabilities before planning work; never open a register file directly. The live work register, the append-only terminal ledger, and any compatibility export are three different roles.
+- **Provenance** — every derived figure cites its provider, source, and snapshot time. A figure whose inputs are missing is reported as *not computable* with the missing inputs named, never approximated.
+- **Git** — behaviour is `policy.git`, not a fixed rule of this plugin. See `references/git-policy.md`. Under every policy: inspect first, stage exact paths, preserve unrelated work, no destructive flags, no force-push without explicit authorization.
+- **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (v1.0 — 8 universal checks plus the project's declared extensions). No skill restates it in its own words.
+- **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
+- **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
+- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 # Virtuoso
 
@@ -33,7 +36,7 @@ This skill stays in active context because you reference it at every step bounda
 ## Sprint Record Naming
 
 When Virtuoso starts a sprint, the visible record must be named for the work, not for
-the trigger token. If Codex CLI/Desktop creates a new chat/thread/record for the run,
+the trigger token. If the implementation agent's host creates a new chat/thread/record for the run,
 the desired title is:
 
 `[SPRINT-ID] — [short dispatch name]`
@@ -56,8 +59,8 @@ first plan heading once the ID is discovered.
 
 ## Architecture: Parent Chat + Optional Swarm
 
-Virtuoso runs inside the active parent conversation or the CLI-created parent sprint
-record. It is acceptable for CLI to preserve a separate record per sprint run, but
+Virtuoso runs inside the active parent conversation or the implementation agent's parent
+record. It is acceptable for the implementation agent to preserve a separate record per sprint run, but
 that record must be named for the sprint, not for the skill invocation. Do not create,
 request, or suggest an additional top-level chat just to re-run Virtuoso inside a
 sprint record that already exists.
@@ -102,16 +105,16 @@ to know during execution.
 2. **Check for task-level overrides** — individual tasks may annotate `{high}` or `{max}`
    to override the sprint default.
 3. **Record effort on the task plan** and pass it through to any child worker prompt.
-4. **Effort ↔ model tier defaults** — when effort is not explicitly annotated on a task,
-   it inherits from the model tier: haiku→low, sonnet→medium, opus→high.
-5. **Only annotate effort when it differs from the default.** A `[sonnet]` task is implicitly
-   `{medium}`. Write `[sonnet] {high}` only when overriding.
+4. **Effort ↔ task-tier defaults** — when effort is not explicitly annotated on a task, it
+   inherits from the task tier: mechanical→low, bounded→medium, cross-cutting→high.
+5. **Only annotate effort when it differs from the default.** A `[bounded]` task is implicitly
+   `{medium}`. Write `[bounded] {high}` only when overriding.
 
 ### Close-out: Effort Mismatches
 
 In Phase 6 (Close Out), flag any task where the declared effort didn't match actual
 complexity. "Task #3 was spec'd as {low} but required 3 retries — recommend {medium}
-for similar tasks." This feedback helps Cowork calibrate future dispatches.
+for similar tasks." This feedback helps the planner calibrate future dispatches.
 
 ---
 
@@ -149,14 +152,16 @@ Use these markers consistently throughout:
 
 ### Task format
 
-Every task line follows this format: `□ N. owner-label: Task description [model] {effort}`
+Every task line follows this format: `□ N. owner-label: Task description [tier] {effort}`
 
-- **Model tier** in square brackets: `[haiku]`, `[sonnet]`, or `[opus]`.
+- **Task tier** in square brackets: `[mechanical]`, `[bounded]`, or `[cross-cutting]`.
+  The tier describes the *task*, not the capability of whoever runs it; a host maps a tier
+  to whatever model or agent it has available.
 - **Effort level** in curly braces: `{low}`, `{medium}`, `{high}`, or `{max}`.
-  Effort is optional when it matches the model-tier default (haiku→low, sonnet→medium,
-  opus→high). Only annotate effort when overriding the default.
-- **Task #1 is always `Zeus: Load spec, build plan, assign owners [opus]`.** Non-negotiable.
-  This represents Phases 1–3 combined. Task #1 is marked ✓ only after CLI has:
+  Effort is optional when it matches the tier default (mechanical→low, bounded→medium,
+  cross-cutting→high). Only annotate effort when overriding the default.
+- **Task #1 is always `Zeus: Load spec, build plan, assign owners [cross-cutting]`.** Non-negotiable.
+  This represents Phases 1–3 combined. Task #1 is marked ✓ only after the lead has:
   1. Read and understood the full dispatch spec (Phase 1)
   2. Built the numbered task plan (Phase 2)
   3. Assigned parent-owned tasks and child-worker candidates (Phase 3)
@@ -168,51 +173,52 @@ Every task line follows this format: `□ N. owner-label: Task description [mode
   these with owner labels.
 - The sprint's declared effort level is the default. Task-level annotations override it.
 
-### Model tiers
+### Task tiers
 
-Annotate each task with the minimum viable model — the cheapest tier that can handle
-the task without sacrificing accuracy.
+Annotate each task with the **lowest tier that can carry it without sacrificing accuracy**.
+A tier is a property of the task, not a ranking of hosts, products, or models. The host
+maps a tier onto whatever agents or models it actually has.
 
-**haiku** — deterministic steps with a known correct answer. Running a test suite,
-formatting a file, updating a version number, committing and pushing. Speed and
-reliability, not reasoning depth.
+**mechanical** — deterministic steps with a known correct answer: running a test suite,
+formatting a file, updating a version number, committing. Speed and reliability, not
+reasoning depth.
 
-**sonnet** — single-domain work requiring judgment within a bounded scope. Writing a
-function, tuning a constant, fixing a bug in one module, updating documentation to
-match code changes. Domain knowledge but not cross-cutting awareness.
+**bounded** — single-domain work requiring judgment inside one scope: writing a function,
+tuning a constant, fixing a bug in one module, updating documentation to match code.
+Domain knowledge, but no cross-cutting awareness required.
 
-**opus** — work that touches multiple modules, requires understanding interactions
-between subsystems, or involves architectural decisions. Root-cause analysis across
-files, calibration interpretation, resolving conflicting requirements.
+**cross-cutting** — work touching multiple modules, requiring an understanding of
+interactions between subsystems, or involving architectural decisions. Root-cause analysis
+across files, interpreting measurements, resolving conflicting requirements.
 
 ### Example (Phase 2 output — tasks enumerated, agents not yet assigned)
 
 ```
 ## Task Plan — Effort: Medium | Override: tasks #6, #8 → High
-□ 1. Zeus: Load spec, build plan, assign owners                [opus]
-□ 2. unassigned: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [sonnet]
-□ 3. unassigned: Update constants.toml default                          [haiku]
-□ 4. unassigned: Run fast test suite — all shards pass                  [haiku]
-□ 5. unassigned: Run calibration N=1,200×3 seeds                       [haiku]
-□ 6. unassigned: Interpret cal results + decide if tuning needed        [opus] {max}
-□ 7. unassigned: Generate profiler snapshot with pathway metrics        [haiku]
-□ 8. unassigned: Analyze profiler — does freed space flow to both?      [opus] {max}
-□ 9. unassigned: Update CLAUDE.md with constants and cal results        [sonnet]
-□ 10. unassigned: Commit, merge to main, push                          [haiku]
+□ 1. Zeus: Load spec, build plan, assign owners                [cross-cutting]
+□ 2. unassigned: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [bounded]
+□ 3. unassigned: Update constants.toml default                          [mechanical]
+□ 4. unassigned: Run fast test suite — all shards pass                  [mechanical]
+□ 5. unassigned: Run the full verification sweep                           [mechanical]
+□ 6. unassigned: Interpret cal results + decide if tuning needed        [cross-cutting] {max}
+□ 7. unassigned: Generate profiler snapshot with pathway metrics        [mechanical]
+□ 8. unassigned: Analyze profiler — does freed space flow to both?      [cross-cutting] {max}
+□ 9. unassigned: Update CLAUDE.md with constants and cal results        [bounded]
+□ 10. unassigned: Commit, merge to main, push                          [mechanical]
 ```
 
 Note: Tasks #6 and #8 override to `{max}` because interpreting calibration results
 and analyzing profiler output across subsystems are genuinely hard analytical problems
 where getting it wrong has real downstream consequences. All other tasks use their
-model-tier defaults (haiku→low, sonnet→medium, opus→high).
+task-tier defaults (mechanical→low, bounded→medium, cross-cutting→high).
 
 **Governance task rewrite (worktree-resident sprints):** Task #9 targets CLAUDE.md,
-which is a protected governance document. In a worktree-resident sprint, CLI rewrites
+which is a protected governance document. In a worktree-resident sprint, the lead rewrites
 this task at plan time:
 ```
-□ 9. unassigned: Write staging fold-ins for CLAUDE.md (constants + cal results) [sonnet]
+□ 9. unassigned: Write staging fold-ins for CLAUDE.md (constants + cal results) [bounded]
 ```
-Codex writes fold-in entries to the staging file instead of editing CLAUDE.md
+The implementation agent writes fold-in entries to the staging file instead of editing CLAUDE.md
 directly. See §Worktree Governance Staging for the full pattern.
 
 Also create a TodoWrite to track the same tasks programmatically. The printed plan is for
@@ -242,14 +248,14 @@ execution map without creating a fresh parent chat for the sprint.
 ### The Owner Hierarchy
 
 ```
-Zeus — owns plan, scope, integration, verification, close-out [opus]
-  ├── hermes-worker  — mechanical execution, known-correct changes   [haiku]
-  ├── hercules-worker — single-domain implementation, bounded judgment [sonnet]
-  ├── aristotle-worker — cross-system implementation, architectural  [opus]
+Zeus — owns plan, scope, integration, verification, close-out [cross-cutting]
+  ├── hermes-worker  — mechanical execution, known-correct changes   [mechanical]
+  ├── hercules-worker — single-domain implementation, bounded judgment [bounded]
+  ├── aristotle-worker — cross-system implementation, architectural  [cross-cutting]
   └── specialist workers — bounded job descriptions
-        ├── Hippocrates — test execution                          [haiku]
-        ├── MarcusAurelius — spec compliance, chronicles, docs    [sonnet]
-        ├── Plato — code quality review                           [sonnet]
+        ├── Hippocrates — test execution                          [mechanical]
+        ├── MarcusAurelius — spec compliance, chronicles, docs    [bounded]
+        ├── Plato — code quality review                           [bounded]
         └── [Project specialists as available]
 ```
 
@@ -272,11 +278,11 @@ after the plan identifies a concrete worker task.
 frontmatter `name:` field and use that label in the plan when helpful. The `name:`
 field is authoritative for worker naming.
 
-### Step 2: Analyze each worker's intent and model
+### Step 2: Analyze each worker's intent and tier
 
 For every discovered worker role, read its definition and extract:
 - **Intent**: what is this worker designed to do?
-- **Model**: what model does it run on (haiku / sonnet / opus)?
+- **Tier**: which task tier is it built for (mechanical / bounded / cross-cutting)?
 - **Type**: doer (general implementation) or specialist (bounded job)?
 - **Constraints**: any specializations, limitations, or scoping rules?
 
@@ -285,14 +291,14 @@ Print the roster:
 ```
 ## Worker Roster
 Doers:
-- hermes [haiku] — mechanical execution, prescribed changes
-- hercules [sonnet] — single-domain implementation with judgment
-- aristotle [opus] — cross-system implementation, architectural decisions, root-cause analysis
+- hermes [mechanical] — mechanical execution, prescribed changes
+- hercules [bounded] — single-domain implementation with judgment
+- aristotle [cross-cutting] — cross-system implementation, architectural decisions, root-cause analysis
 
 Specialists:
-- hippocrates [haiku] — runs test suites, reports pass/fail
-- marcusaurelius [sonnet] — spec compliance, documentation, governance updates
-- plato [sonnet] — code quality review
+- hippocrates [mechanical] — runs test suites, reports pass/fail
+- marcusaurelius [bounded] — spec compliance, documentation, governance updates
+- plato [bounded] — code quality review
 ```
 
 If doer roles are not defined in the project, use the generic labels above. The
@@ -351,16 +357,16 @@ final plan that governs execution.
 
 ```
 ## Task Plan (single parent chat — child workers allowed)
-✓ 1. Zeus: Load spec, build plan, assign owners                [opus]
-□ 2. hercules-worker: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0 [sonnet]
-□ 3. hermes-worker: Update constants.toml default                      [haiku]
-□ 4. hippocrates-worker: Run fast test suite — all shards pass         [haiku]
-□ 5. hippocrates-worker: Run calibration N=1,200×3 seeds               [haiku]
-□ 6. Zeus: Interpret cal results + decide if tuning needed     [opus]
-□ 7. hippocrates-worker: Generate profiler snapshot with pathway metrics [haiku]
-□ 8. aristotle-worker: Analyze profiler — does freed space flow to both? [opus]
-□ 9. marcusaurelius-worker: Update CLAUDE.md with constants and cal results [sonnet]
-□ 10. Zeus: Commit, merge to main, push                        [haiku]
+✓ 1. Zeus: Load spec, build plan, assign owners                [cross-cutting]
+□ 2. hercules-worker: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0 [bounded]
+□ 3. hermes-worker: Update constants.toml default                      [mechanical]
+□ 4. hippocrates-worker: Run fast test suite — all shards pass         [mechanical]
+□ 5. hippocrates-worker: Run the full verification sweep                   [mechanical]
+□ 6. Zeus: Interpret cal results + decide if tuning needed     [cross-cutting]
+□ 7. hippocrates-worker: Generate profiler snapshot with pathway metrics [mechanical]
+□ 8. aristotle-worker: Analyze profiler — does freed space flow to both? [cross-cutting]
+□ 9. marcusaurelius-worker: Update CLAUDE.md with constants and cal results [bounded]
+□ 10. Zeus: Commit, merge to main, push                        [mechanical]
 ```
 
 The header states that the parent chat remains singular even when child workers are
@@ -417,7 +423,7 @@ that the worker can read from the filesystem when needed]
 **Governance-task dispatch gate (worktree-resident sprints only).** Before dispatching
 any task that updates a document listed in CLAUDE.md §Main Governance Documents:
 
-1. CLI rewrites the task description to target the staging file instead of the
+1. The implementation agent rewrites the task description to target the staging file instead of the
    governance document. Example: "Update CLAUDE.md with constants and cal results"
    becomes "Write fold-in entries to the staging file for CLAUDE.md updates (constants,
    cal results, phase status)."
@@ -427,7 +433,7 @@ any task that updates a document listed in CLAUDE.md §Main Governance Documents
    `"Do NOT edit CLAUDE.md directly — this sprint runs in a worktree. All governance
    updates go to the staging file as fold-in entries."`
 
-If the task plan includes a governance-update task and CLI is in a worktree, the task
+If the task plan includes a governance-update task and the implementation agent is in a worktree, the task
 MUST include these three elements.
 
 **Downstream dependency handling:** When Task #8 depends on Task #4's output
@@ -456,9 +462,9 @@ active, and what it does.
 
 ### Respect the model annotations
 
-`[haiku]` tasks get executed quickly without extended reasoning. `[opus]` tasks get
+`[mechanical]` tasks get executed quickly without extended reasoning. `[cross-cutting]` tasks get
 deliberate thinking — read the relevant context, think through interactions, and
-narrate your reasoning before acting. If a `[haiku]` task turns out to need real
+narrate your reasoning before acting. If a `[mechanical]` task turns out to need real
 reasoning, update the annotation and note the change.
 
 ### During each action
@@ -490,16 +496,16 @@ of them is wrong.
 
 ```
 ## Task Plan — [30% complete] Fast tests running, code changes landed.
-✓ 1. Zeus: Load spec, build plan, assign owners                [opus]
-✓ 2. hercules: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [sonnet]
-✓ 3. hermes: Update constants.toml default                              [haiku]
-■ 4. hippocrates: Run fast test suite — all shards pass                 [haiku]
-□ 5. hippocrates: Run calibration N=1,200×3 seeds                      [haiku]
-□ 6. aristotle: Interpret cal results + decide if tuning needed          [opus]
-□ 7. hippocrates: Generate profiler snapshot with pathway metrics       [haiku]
-□ 8. aristotle: Analyze profiler — does freed space flow to both?       [opus]
-□ 9. marcusaurelius: Update CLAUDE.md with constants and cal results    [sonnet]
-□ 10. hermes: Commit, merge to main, push                              [haiku]
+✓ 1. Zeus: Load spec, build plan, assign owners                [cross-cutting]
+✓ 2. hercules: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [bounded]
+✓ 3. hermes: Update constants.toml default                              [mechanical]
+■ 4. hippocrates: Run fast test suite — all shards pass                 [mechanical]
+□ 5. hippocrates: Run the full verification sweep                          [mechanical]
+□ 6. aristotle: Interpret cal results + decide if tuning needed          [cross-cutting]
+□ 7. hippocrates: Generate profiler snapshot with pathway metrics       [mechanical]
+□ 8. aristotle: Analyze profiler — does freed space flow to both?       [cross-cutting]
+□ 9. marcusaurelius: Update CLAUDE.md with constants and cal results    [bounded]
+□ 10. hermes: Commit, merge to main, push                              [mechanical]
 ```
 
 ### Three-call rule
@@ -572,10 +578,10 @@ outcome was success, partial, or pivot stop. If the work was empirically falsifi
 or a gate triggered early stop, say so directly.
 ---
 Task Plan — SPRINT-NAME | [X% of authorized scope] Outcome summary.
-✓ 1.   Zeus:   Load spec, build plan, assign owners                  [opus]
-✓ 2.   hercules:       Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0 [sonnet]
+✓ 1.   Zeus:   Load spec, build plan, assign owners                  [cross-cutting]
+✓ 2.   hercules:       Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0 [bounded]
 ...
-✗ 9.   socrates:       Full-cal N=1,200×3 — CANCELLED (pivot stop)          [sonnet]
+✗ 9.   socrates:       Full verification sweep — CANCELLED (pivot stop)          [bounded]
 ---
 Worker Utilization Summary
 ┌─────────────┬────────────────┬──────────────────────────────────────────────┐
@@ -593,7 +599,7 @@ complexity, disproportionate token consumption, or task that needed a different
 role/effort level than planned, etc.]
 ---
 Repository state: [commit hash, merge/push status, notable remaining changes]
-Key engineering finding for Cowork: [the single most important technical insight
+Key engineering finding for the planner: [the single most important technical insight
 from this sprint that affects future work — not a summary of what was done, but
 what was learned]
 ```
@@ -613,7 +619,7 @@ what was learned]
   not the verbose duration/tokens/tool-calls breakdown. The detail matters for
   performance analysis but not for the close-out record. If performance
   recommendations are warranted, append them after the close-out block.
-- Git state and Key engineering finding close the block — these are what Cowork
+- Git state and Key engineering finding close the block — these are what the planner
   reads first when processing a close-out into a Pointer Close-Out Report. Run
   **`/pointer-closeout`** on this block to fold the result into the roadmap, sprint queue,
   and retrospective. (This sprint's spec arrived via **`/next-pointer`**'s dispatch pointer.)
@@ -678,7 +684,7 @@ universal execution discipline; the overlay handles project-specific requirement
 
 Worktree-resident sprints (any virtuoso-executed work running in a `git worktree`-
 isolated directory) have a structural conflict surface: if the sprint edits main
-governance documents directly, those edits conflict with any concurrent Cowork-side
+governance documents directly, those edits conflict with any concurrent planner-side
 governance work on canonical main. The conflict either surfaces at pre-merge rebase
 (friction) or produces silent-revert behavior (governance content lost undetected).
 
@@ -695,7 +701,7 @@ titled **"Main Governance Documents — Worktree Edit Prohibition."**
 Virtuoso reads that list at sprint start (Phase 1). If no such section exists in
 CLAUDE.md, the prohibition still applies to any document that:
 - Spans multiple sprints (roadmaps, sprint queues, constitutions)
-- Is edited by Cowork between sprints (SRL catalogs, debt logs, technical references)
+- Is edited by the planner between sprints (SRL catalogs, debt logs, technical references)
 - Contains the dispatch spec for the currently-running sprint (the inline full spec)
 
 If a task in the task plan would edit a main governance document, virtuoso rewrites
@@ -802,7 +808,7 @@ Destination: Close-out memo §Mid-Dispatch Decisions
 Content:
 ##### Mid-Dispatch Amendment — <date> — <title>
 Decision Type: <type>
-Context: <what CLI reported>
+Context: <what the implementation agent reported>
 Decision: <what was decided>
 Rationale: <why>
 ```
@@ -812,21 +818,21 @@ staging file under the appropriate target document section." The Close-Out Prese
 field becomes implicit — the staging file IS the preservation contract. The conflict-
 surface check becomes unnecessary because the conflict surface no longer exists.
 
-### Rule 6 — Cowork-Side Sprints Follow the Same Pattern by Default
+### Rule 6 — Planner-Side Sprints Follow the Same Pattern by Default
 
-Cowork-side governance work that runs in a single session (e.g., /pointer-closeout,
+planner-side governance work that runs in a single session (e.g., /pointer-closeout,
 /roadmap-review, /governance-sweep) doesn't have a worktree boundary, so the conflict
 surface doesn't apply in the same way. But the staging-file pattern still has value:
 
-- Cowork's mid-session governance edits become recoverable if the session crashes
+- The planner's mid-session governance edits become recoverable if the session crashes
 - The staging file documents WHAT changed and WHY for the change summary
 - It provides an audit trail of governance mutations within the session
 
 **Enforcement level:**
-- **Worktree-resident CLI dispatches:** staging file is **mandatory**. Virtuoso
+- **Worktree-resident dispatches:** staging file is **mandatory**. Virtuoso
   rejects any task plan that edits main governance documents directly.
-- **Cowork-side sessions:** staging file is **optional** (best practice, not enforced).
-  Cowork may edit main governance documents directly since there's no worktree
+- **planner-side sessions:** staging file is **optional** (best practice, not enforced).
+  The planner may edit main governance documents directly since there's no worktree
   boundary to create conflicts.
 
 ### Migration — Sprints Already in Flight
@@ -844,15 +850,15 @@ clear which sprints used which pattern.
 ### What This Prevents
 
 The pattern of:
-1. Cowork edits canonical main governance doc
+1. The planner edits canonical main governance doc
 2. Worktree edits same file from a stale base
 3. Pre-merge rebase produces conflict (visible) OR silent revert (invisible)
 4. Governance content potentially lost or scrambled
 
 Under the new pattern: the worktree NEVER edits canonical main governance documents.
-Conflicts on those files between worktree and Cowork are structurally impossible.
+Conflicts on those files between the worktree and the planner are structurally impossible.
 The staging file consolidates intent; pointer-closeout applies it once at close-out,
-with full visibility of any concurrent Cowork edits at that moment.
+with full visibility of any concurrent planner edits at that moment.
 
 **Trade-off:** pointer-closeout becomes mechanically heavier (more fold-ins to process)
 and the staging file is one more artifact per sprint. Both are small costs for the

@@ -98,7 +98,8 @@ def render_html(model: PlanningModel) -> str:
 <body>
   <header>
     <h1>Planning Health Cockpit</h1>
-    <p class="summary">Roadmap sprint queue status, conveyor flow, and dependency alignment in one self-contained report.</p>
+    <p class="summary">Work-register status, conveyor flow, and dependency alignment in one self-contained report. Every figure below cites the provider and snapshot it came from.</p>
+    <p class="summary" id="provenance"></p>
   </header>
   <nav class="tabs" aria-label="Planning views">
     <button type="button" data-view="cockpit" aria-selected="true">Cockpit</button>
@@ -116,7 +117,7 @@ def render_html(model: PlanningModel) -> str:
       <h2 id="conveyor-title">Conveyor</h2>
       <table>
         <thead>
-          <tr><th>Seq</th><th>Sprint</th><th>Phase / Stage</th><th>LOE</th><th>Implementation</th><th>Written</th></tr>
+          <tr><th>Seq</th><th>Item</th><th>Group / Lane</th><th>Effort</th><th>Status</th><th>Specification</th></tr>
         </thead>
         <tbody id="conveyor-rows"></tbody>
       </table>
@@ -125,7 +126,7 @@ def render_html(model: PlanningModel) -> str:
       <h2 id="dependencies-title">Dependencies</h2>
       <table>
         <thead>
-          <tr><th>Sprint</th><th>Dependency</th></tr>
+          <tr><th>Item</th><th>Prerequisite</th></tr>
         </thead>
         <tbody id="dependency-rows"></tbody>
       </table>
@@ -142,14 +143,29 @@ def render_html(model: PlanningModel) -> str:
       return td;
     }};
 
+    function renderProvenance() {{
+      const p = MODEL.provenance || {{}};
+      const workspace = MODEL.workspace || {{}};
+      const parts = [
+        `source: ${{text(p.source)}}`,
+        `provider: ${{text(p.provider)}}`,
+        `role: ${{text(workspace.work_register_role)}} (${{text(workspace.work_register_authority)}})`,
+        `snapshot: ${{text(p.takenAt)}}`,
+      ];
+      if (p.stale) parts.push(`STALE — ${{text(p.staleReason)}}`);
+      if (workspace.compatibility_adapter) parts.push("read through the legacy compatibility adapter");
+      document.getElementById("provenance").textContent = parts.join(" · ");
+    }}
+
     function renderMetrics() {{
       const health = MODEL.health || {{}};
+      const counts = health.counts || {{}};
       const metrics = [
-        ["Head Sprint", health.head_code],
-        ["Full-Spec Buffer", health.full_spec_buffer],
-        ["Queued", health.queued_count],
-        ["In Flight", health.in_flight_count],
-        ["Blocked", health.blocked_count],
+        ["Head Item", health.head_id],
+        ["Dispatch Buffer", `${{text(health.buffer_filled)}} / ${{text(health.buffer_target)}}`],
+        ["Queued", counts["queued"]],
+        ["In Flight", counts["in-flight"]],
+        ["Blocked", counts["blocked"]],
         ["Drift Findings", health.drift_count],
       ];
       const container = document.getElementById("metrics");
@@ -180,24 +196,24 @@ def render_html(model: PlanningModel) -> str:
 
     function renderConveyor() {{
       const body = document.getElementById("conveyor-rows");
-      const rows = MODEL.sprints || [];
+      const rows = MODEL.items || [];
       if (!rows.length) {{
         const tr = document.createElement("tr");
-        const td = cell("No sprint rows found.", "empty");
+        const td = cell("No work items found.", "empty");
         td.colSpan = 6;
         tr.appendChild(td);
         body.appendChild(tr);
         return;
       }}
-      rows.forEach((sprint) => {{
+      rows.forEach((item) => {{
         const tr = document.createElement("tr");
         tr.append(
-          cell(sprint.seq),
-          cell(`${{text(sprint.code)}} - ${{text(sprint.title)}}`),
-          cell(`${{text(sprint.phase)}} / ${{text(sprint.stage)}}`),
-          cell(sprint.loe),
-          cell(sprint.implementation_status),
-          cell(sprint.written_status)
+          cell(item.sequence),
+          cell(`${{text(item.title)}} — ${{text(item.id)}}`),
+          cell(`${{text(item.group)}} / ${{text(item.lane)}}`),
+          cell(item.effort),
+          cell(`${{text(item.status)}} (${{text(item.raw_status)}})`),
+          cell(item.written_status)
         );
         body.appendChild(tr);
       }});
@@ -206,14 +222,14 @@ def render_html(model: PlanningModel) -> str:
     function renderDependencies() {{
       const body = document.getElementById("dependency-rows");
       const dependencyRows = [];
-      (MODEL.sprints || []).forEach((sprint) => {{
-        (sprint.dependencies || []).forEach((dependency) => {{
-          dependencyRows.push([sprint.code, dependency]);
+      (MODEL.items || []).forEach((item) => {{
+        (item.prerequisites || []).forEach((prerequisite) => {{
+          dependencyRows.push([item.id, prerequisite]);
         }});
       }});
       if (!dependencyRows.length) {{
         const tr = document.createElement("tr");
-        const td = cell("No dependencies recorded.", "empty");
+        const td = cell("No prerequisites recorded.", "empty");
         td.colSpan = 2;
         tr.appendChild(td);
         body.appendChild(tr);
@@ -237,6 +253,7 @@ def render_html(model: PlanningModel) -> str:
       }});
     }});
 
+    renderProvenance();
     renderMetrics();
     renderConveyor();
     renderDependencies();

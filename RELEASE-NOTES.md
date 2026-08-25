@@ -1,5 +1,146 @@
 # Virtuoso Release Notes
 
+## v2.0.0 (2026-08-25) — source-of-truth redesign
+
+**Breaking change.** Plugin 1.3.6 → 2.0.0; registry schema 1 → 2. Migration is
+non-destructive and previewed — see [`docs/MIGRATION-v2.md`](docs/MIGRATION-v2.md).
+
+### Release-blocking safety
+
+- **A genuinely read-only preflight.** `--mode check` performs discovery and validation with
+  **zero project writes**, in every project state. The SessionStart hook now runs it, so
+  starting, clearing, or compacting a session can no longer create, heal, vendor, or rewrite
+  a project file.
+- **Four separate operations.** `check` (validate), `adopt` (register in place), `create`
+  (initialize, requires `--authorize`), `repair` (preview, then `--apply`). Adoption against
+  an already-registered project behaves exactly like `check` — it never silently heals.
+- **The human registry is never regenerated from a template.** Only the plugin's own
+  generated region is refreshed; user prose, tables, labels, comments, ordering, line
+  endings, and extension sections are preserved byte-for-byte. A registry with no generated
+  region is user-authored: the plugin reads it, reports divergence, and offers only an
+  additive append behind an approved repair.
+- **Repair is previewable and transactional.** The preview names the proposed paths, semantic
+  changes, files affected, and backup location, and writes nothing. The apply validates the
+  reconstruction before any write, backs every existing target into a hash-verified set, and
+  restores on any failure — leaving the original registry and manifest intact.
+- **Verifiable backups.** Each entry records source, destination, byte count, SHA-256,
+  timestamp, and operation, with a manifest that restores and verifies independently.
+- **One complete status contract**, documented and tested: `ready`, `warning`,
+  `repair-needed`, `repair-preview`, `repaired`, `adoptable`, `adopted`, `created`, `none`,
+  `failed` — plus `--json` for the full structured result.
+- **No global unversioned plugin pointer.** `~/.virtuoso/installs.json` is keyed by plugin
+  version, and version-agnostic launchers (`virtuoso`, `virtuoso.ps1`) resolve the newest
+  valid install. Two installed versions can no longer overwrite each other's discovery state.
+
+### Governance registry redesign
+
+- **One authority.** `Virtuoso/workspace-layout.json` holds the structured configuration;
+  `Virtuoso.Governance.Readme.md` is a synchronized view with protected user sections.
+  Divergence produces a diagnostic, never an overwrite.
+- **A versioned schema** with a declared plugin-compatibility range.
+- **Full role metadata**: path or external identifier, provider type, authority level,
+  mutability, owning ceremony, allowed writers, validation method, presence, active/historical
+  classification, and authored/generated origin.
+- **Seven authority classifications**: live, terminal, mirror, report, evidence, archive,
+  reference — plus `unknown` for conservative migration.
+- **Authority is never inferred from a role name.** A role called `sprintCatalog` is
+  authoritative only when the project says so.
+- **External identifiers are valid registrations.** A board, project, database, or service id
+  is validated by shape and never reported as a missing filesystem path.
+- **Protected `x-` extension namespaces** survive plugin upgrades verbatim.
+- **Registered paths are validated before use**: root escapes, unsafe absolute paths, archive
+  paths claiming live authority, malformed external identifiers, and role/type mismatches are
+  all rejected.
+- **A registered-but-absent target is reported**, never repointed at a lookalike.
+- **Conservative migration.** Unknown legacy roles stay unknown; the legacy local catalog
+  migrates as a read-only compatibility mirror, not as the live register.
+
+### Work-register provider architecture
+
+- **A provider interface** with negotiated capabilities: list active, read sequence, read and
+  write status, read prerequisites, read effort, store specification links, record
+  completion, find the next eligible item.
+- **Implementations** for local CSV, local Markdown, spreadsheet, read-only snapshot, and
+  external registers (connector-backed task manager, issue tracker, database).
+- **Three distinct roles**: the live work register, the append-only terminal ledger, and any
+  optional compatibility export. The local CSV catalog is now optional.
+- **Configurable field and status mappings.** Nothing requires the literal vocabulary
+  *Queued*, *In Flight*, *Blocked*, *Completed*, *Stub*, or *Full Spec*.
+- **Provenance on every derived metric**, and **"not computable"** with the missing inputs
+  named rather than a fabricated figure.
+- **Offline operation** through timestamped snapshots that are marked stale past a
+  configurable window.
+- **Optimistic concurrency**, **idempotent cross-system updates**, and **recovery records**
+  that name exactly what remains after a partial failure.
+
+### Ceremonies
+
+- Roadmap Review works through the configured provider and touches a compatibility export
+  only when it is registered, generated, and writable.
+- Roadmap Status is **read-only by default**; corrections require an explicitly approved
+  phase and a role this ceremony is registered to write.
+- Next Pointer determines the next item through the provider — the absence of any particular
+  file is no longer a hard stop — leads with descriptive names, and reports readiness as five
+  separate findings: specification, prerequisite, repository, external-register, and
+  execution-environment.
+- Pointer Close-Out performs an ordered transactional crossing: verify evidence, create the
+  artifact, append the terminal record, persist locally, close the item in the live register,
+  verify every result — with a recovery record on any partial failure.
+- The terminal ledger is **append-only** with configurable writers; corrections are new
+  records referencing prior ones, and history is never reordered, rewritten, or deleted.
+- The dispatch buffer, the phase/stage/lane hierarchy, and where specifications are stored
+  are all project policy. Standing-rule identifiers and branch conventions come from policy;
+  none are hardcoded. Issue escalation is provider-aware.
+- **One shared, versioned readiness rubric** (`references/readiness-rubric.md`, v1.0), split
+  into eight universal checks plus project-declared extensions. The two ceremonies that used
+  to carry divergent copies now read the same file.
+
+### Governance sweep
+
+- Structural authority resolves through the registry; a directory readme is authoritative
+  only when the project declares it so.
+- Configurable scan boundaries (include/exclude, ignored directories, symlinks, file-size
+  ceilings, binary policy) and protected path classes that can never enter a mutation plan.
+- **Quarantine before deletion** by default, with irreversible actions moved to the end.
+- Backup manifests that restore and verify; retention policy; backup and quarantine
+  directories excluded from future sweeps.
+- Source-and-derived artifact relationships, regeneration instead of hand-editing,
+  document-type verification adapters, registered generation and validation commands,
+  tested-before-documented command repair, immutable-hash verification, and exact repository
+  scope in the completion report.
+
+### Git and portability
+
+- The universal "the planner never mutates git" rule is replaced by a configurable policy
+  ladder: read-only, prepare-no-stage, explicit-path-stage, explicit-path-commit, push.
+- Separation of duties is an optional project policy, tied to no product.
+- The default branch and remote are **detected**; a repository with **no remote** is
+  supported; branch cleanup is maintenance, not a dispatch prerequisite; a stale lock is
+  reported, never deleted; network operations are explicit; and the plugin is worktree-aware.
+- Product-, vendor-, and model-specific names are gone from shipped content. Actors are
+  configurable roles; routing uses vendor-neutral task tiers; readiness never rests on a
+  claim that one host or model is superior.
+- A host-neutral launcher in both POSIX-shell and PowerShell forms; package resources resolve
+  relative to the installed plugin; runtime dependencies are declared and checked; fixtures
+  and comments carry no project's names, thresholds, or directory assumptions.
+
+### Tooling
+
+- The planning cockpit reads the configured authoritative provider instead of requiring a
+  generated spreadsheet.
+- The retired recalculation script is removed — bundled copy, tests, vendoring, and the
+  visualizer's recommendation.
+- Generated workbooks are presentation outputs; nothing reads one as operational truth.
+- Close-out path resolution fails loudly on a malformed registry instead of falling back to a
+  conventional directory, and is read-only unless `--prepare` is passed.
+
+### Validation
+
+216 tests and an expanded structural validator now cover byte-for-byte preservation, registry
+round-tripping, authority precedence, external identifiers, read-only hooks, repair previews,
+transactional failure, idempotency, cross-platform launchers, repository states, the provider
+contract, documentation-to-code agreement, and migration fixtures for the older schema.
+
 ## v1.2.1 (2026-07-02)
 
 ### Added

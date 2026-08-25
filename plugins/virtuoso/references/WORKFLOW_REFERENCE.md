@@ -14,7 +14,7 @@ This index maps the old section numbers to their new homes.
 - **roadmap-review / roadmap-status / next-pointer** — plan, pulse-check, and dispatch
 - **pointer-closeout** — close-out report + spec retrospective
 - **mid-dispatch-decision** — decision protocol when a dispatch pauses
-- **governance-sweep** — read-only doc-hygiene audit → CLI spec
+- **governance-sweep** — read-only doc-hygiene audit → the implementation agent spec
 - **3rd-party-audit** — external codebase audit lifecycle
 - **ultrathink / effort-levels / adversarial-review** — reasoning, sizing, red-team modifiers
 - **delayed-start** — defer execution to a clock time / delay

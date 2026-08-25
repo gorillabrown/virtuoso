@@ -1,58 +1,46 @@
+"""Resolve the cockpit's inputs through the governance registry (items 82, 84, 87).
+
+The cockpit used to require a generated spreadsheet and fell back to a
+conventional layout when no manifest existed. It now reads the *declared*
+authoritative work register through its provider, and a project with no registry
+gets an actionable error instead of a guess.
+"""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-from .model import WorkspacePaths
+from tools.governance import providers, registry as registry_mod
+from tools.governance.errors import RoleNotRegistered
+
+from .model import WorkspaceContext
 
 
-def load_workspace(root: Path | str) -> WorkspacePaths:
+def load_workspace(root: Path | str, *, actor: str = "") -> tuple[WorkspaceContext, object]:
+    """Return ``(context, provider_selection)`` for ``root``."""
     root_path = Path(root).resolve()
-    manifest = root_path / "Virtuoso" / "workspace-layout.json"
-
-    if manifest.is_file():
-        data = json.loads(manifest.read_text(encoding="utf-8"))
-        paths = data.get("paths") if isinstance(data, dict) else None
-        roadmap = paths.get("roadmap") if isinstance(paths, dict) else None
-        sprint_queue = paths.get("sprintQueue") if isinstance(paths, dict) else None
-        missing_fields = []
-        if not roadmap:
-            missing_fields.append("paths.roadmap")
-        if not sprint_queue:
-            missing_fields.append("paths.sprintQueue")
-        if missing_fields:
-            raise ValueError(
-                f"workspace manifest missing required fields: {', '.join(missing_fields)}"
-            )
-        return WorkspacePaths(
-            root=root_path,
-            manifest=manifest,
-            roadmap=_resolve(root_path, roadmap),
-            sprint_queue=_resolve(root_path, sprint_queue),
-            reports=root_path / "Virtuoso" / "reports",
+    reg = registry_mod.load(str(root_path))
+    if not reg.manifest_present:
+        raise FileNotFoundError(
+            "no governance registry at %s. Run virtuoso_preflight.py --mode check to see "
+            "what is here, then --mode adopt (established project) or --mode create "
+            "--authorize (new workspace)." % (root_path / "Virtuoso" / "workspace-layout.json")
         )
 
-    # No manifest: fall back to the conventional plugin layout.
-    conventional_roadmap = root_path / "Virtuoso" / "Roadmap.md"
-    conventional_queue = root_path / "Virtuoso" / "sprint-queue.xlsx"
-    if conventional_roadmap.is_file() and conventional_queue.is_file():
-        return WorkspacePaths(
-            root=root_path,
-            manifest=manifest,
-            roadmap=conventional_roadmap,
-            sprint_queue=conventional_queue,
-            reports=root_path / "Virtuoso" / "reports",
-        )
+    selection = providers.work_register(reg, actor=actor)
+    try:
+        roadmap = Path(reg.resolve("roadmap"))
+    except RoleNotRegistered:
+        roadmap = None
 
-    raise FileNotFoundError(
-        "No Virtuoso/workspace-layout.json manifest, and no conventional "
-        "Virtuoso/Roadmap.md + Virtuoso/sprint-queue.xlsx were found under "
-        f"{root_path}. Provide a manifest or use the conventional layout."
+    context = WorkspaceContext(
+        root=root_path,
+        manifest=Path(reg.manifest_path),
+        roadmap=roadmap,
+        reports=root_path / "Virtuoso" / "reports",
+        work_register_role=selection.role_name,
+        work_register_authority=selection.authority,
+        provider=selection.provider.describe(),
+        compatibility_adapter=selection.compatibility,
+        notes=list(selection.notes),
     )
-
-
-def _resolve(root: Path, rel: str) -> Path:
-    path = Path(rel)
-    if path.is_absolute():
-        return path
-    return root / path
+    return context, selection

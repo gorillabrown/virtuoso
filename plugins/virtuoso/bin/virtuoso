@@ -1,0 +1,65 @@
+#!/bin/sh
+# Virtuoso launcher (version-agnostic — identical content for every installed
+# version, so concurrent versions writing it is idempotent).
+#
+# Resolves the plugin root from $VIRTUOSO_PLUGIN_ROOT, else the newest valid
+# entry in ~/.virtuoso/installs.json.
+#
+# Usage: virtuoso <script-name> [args...]
+#   virtuoso virtuoso_preflight --root . --mode check
+#   virtuoso virtuoso_registry --root . next
+set -eu
+
+if [ "$#" -lt 1 ]; then
+  echo "usage: virtuoso <script-name> [args...]" >&2
+  exit 2
+fi
+
+PY=python3
+command -v python3 >/dev/null 2>&1 || PY=python
+
+VIRTUOSO_ROOT=$("$PY" - <<'PY'
+import json, os, sys
+
+def valid(path):
+    return bool(path) and os.path.isfile(os.path.join(path, "scripts", "virtuoso_preflight.py"))
+
+override = os.environ.get("VIRTUOSO_PLUGIN_ROOT", "")
+if valid(override):
+    print(override)
+    sys.exit(0)
+
+home = os.environ.get("VIRTUOSO_HOME") or os.path.expanduser("~")
+record = os.path.join(home, ".virtuoso", "installs.json")
+
+def key(name):
+    parts = []
+    for chunk in str(name).split("-", 1)[0].split("."):
+        parts.append(int(chunk) if chunk.isdigit() else 0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:3])
+
+try:
+    with open(record, encoding="utf-8") as handle:
+        installs = json.load(handle).get("installs", {})
+except (OSError, ValueError, AttributeError):
+    installs = {}
+
+for name in sorted(installs, key=key, reverse=True):
+    entry = installs.get(name) or {}
+    if valid(entry.get("root", "")):
+        print(entry["root"])
+        sys.exit(0)
+print("")
+PY
+)
+
+if [ -z "$VIRTUOSO_ROOT" ]; then
+  echo "virtuoso: no installed plugin root found. Set VIRTUOSO_PLUGIN_ROOT, or reinstall the plugin." >&2
+  exit 1
+fi
+
+SCRIPT="$1"
+shift
+exec "$PY" "$VIRTUOSO_ROOT/scripts/$SCRIPT.py" "$@"

@@ -1,337 +1,505 @@
 ---
 name: governance-sweep
-description: "Self-contained governance & operational document sweep for any project — directory structure via readme.md authority, orphan detection, stale-content and dead-reference scans, cross-doc consistency, archival candidates, and optional agent-roster checks. Runs in three gated phases: (1) read-only discovery that lists every issue and asks clarifying questions, (2) a complete work list presented for your approval, (3) implementation that performs the approved changes with backups and verification. Use when the user says 'governance sweep', 'doc cleanup', 'audit the docs', 'clean up the docs', 'organize the documents', 'check for stale references', 'are the docs consistent', 'doc hygiene', 'sync the docs', 'archive old content', 'find dead references', 'what files are orphaned', or wants to enforce a readme-based hierarchy, consolidate scattered files, or move outdated content to archive."
+description: "Self-contained governance & operational document sweep for any project — structural authority resolved through the project's governance registry, orphan detection, stale-content and dead-reference scans, cross-doc consistency, generated-artifact synchronization, and archival candidates. Runs in three gated phases: (1) read-only discovery that lists every issue and asks clarifying questions, (2) a complete work list presented for your approval, (3) implementation that performs the approved changes with a verifiable backup manifest, quarantine before deletion, and per-action verification. Use when the user says 'governance sweep', 'doc cleanup', 'audit the docs', 'clean up the docs', 'organize the documents', 'check for stale references', 'are the docs consistent', 'doc hygiene', 'sync the docs', 'archive old content', 'find dead references', 'what files are orphaned', or wants to consolidate scattered files or move outdated content to archive."
 ---
 
-<!-- virtuoso-shared-contract v1 -->
+<!-- virtuoso-shared-contract v2 -->
 **Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
 
-- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
-- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
-- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
-- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
-- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
-- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+- **Registry resolution** — `Virtuoso/workspace-layout.json` is the authority; `Virtuoso.Governance.Readme.md` is its synchronized human view. Resolve every document, work item, and permission through the registry. Never hardcode a path, never fall back to a conventional one, and never infer authority from a role's name. Full contract: the plugin's `references/registry-contract.md`.
+- **Read-only preflight** — session start and any "where am I" check runs `--mode check`, which performs **zero project writes**. Adoption, creation, and repair are separate operations, each explicitly invoked.
+- **Providers** — work items come from the configured work-register provider (local file, spreadsheet, connector-backed task manager, issue tracker, database, or read-only snapshot). Negotiate capabilities before planning work; never open a register file directly. The live work register, the append-only terminal ledger, and any compatibility export are three different roles.
+- **Provenance** — every derived figure cites its provider, source, and snapshot time. A figure whose inputs are missing is reported as *not computable* with the missing inputs named, never approximated.
+- **Git** — behaviour is `policy.git`, not a fixed rule of this plugin. See `references/git-policy.md`. Under every policy: inspect first, stage exact paths, preserve unrelated work, no destructive flags, no force-push without explicit authorization.
+- **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (v1.0 — 8 universal checks plus the project's declared extensions). No skill restates it in its own words.
+- **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
+- **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
+- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 # Governance Sweep
 
-Structured sweep of all governance and operational documents in a project. Works on any
-project — from a folder of markdown files to a full multi-agent codebase. It discovers docs
-dynamically, evaluates structural authority via readme.md files, identifies what's outdated
-or misplaced, and — after your approval — **performs the cleanup itself**.
+Structured sweep of a project's governance and operational documents. It discovers
+documents dynamically, resolves **structural authority through the project's
+governance registry**, identifies what is outdated, misplaced, or out of sync with
+its source, and — after your approval — performs the cleanup, with a verifiable
+backup manifest and quarantine before any deletion.
 
-This skill is **self-contained**: it both diagnoses and fixes, in three gated phases. You
-review and approve the complete plan before a single file changes.
+Three gated phases. You review and approve the complete plan before a single file
+changes.
 
 ---
 
-## Operating Model — Three Gated Phases
-
-The sweep runs in three phases. Each phase ends at a hard gate; the next phase does not begin
-until the gate is cleared.
+## Operating model — three gated phases
 
 ```
-Phase 1 — DISCOVER & DIAGNOSE   read-only. Inventory, analyze, audit. List every issue.
-                                Ask any clarifying questions.  → no files change
+Phase 1 — DISCOVER & DIAGNOSE   read-only. Inventory, analyze, audit, list every
+                                issue, ask every clarifying question. → nothing changes
         ▼ (gate: questions answered)
-Phase 2 — WORK LIST & APPROVAL  present the complete, ordered list of every change to be
-                                made. Ask for explicit approval to proceed.  → no files change
+Phase 2 — WORK LIST & APPROVAL  present the complete, ordered list of every change,
+                                and ask for explicit approval.        → nothing changes
         ▼ (gate: user approves)
-Phase 3 — IMPLEMENTATION        back up, then execute the approved actions in order, and
-                                verify each.  → files change here, and only here
+Phase 3 — IMPLEMENTATION        back up verifiably, execute in order (irreversible
+                                actions last), verify each.           → files change here only
 ```
 
-**Phase boundaries are hard.** Phase 1 and Phase 2 are strictly read-only — they inventory,
-classify, and plan, but change nothing. Files are modified **only in Phase 3, and only after
-the user approves the Phase 2 work list.** If the user declines at the Phase 2 gate, the
-sweep ends having changed nothing.
-
-**Safety in Phase 3:** before any mutation, copy every file the plan will touch into a
-timestamped backup directory. Execute actions in the documented order (lowest blast radius
-first). Verify after each action group. If anything looks wrong, stop and report — do not
-improvise recovery.
-
-> Note on history: earlier versions of this skill were read-only and emitted a spec for a
-> separate executor, because the original Cowork browser-sandbox could corrupt mounts/git on
-> direct file writes. In a native environment (Claude Code) that constraint does not apply —
-> so this skill performs the work directly, gated by approval and protected by backups.
+**Phase boundaries are hard.** Phases 1 and 2 change nothing. If the user declines
+at the Phase 2 gate, the sweep ends having changed nothing.
 
 ---
 
-## When to use
+## Before Phase 1 — read the registry and the sweep policy
 
-Project documentation drifts: files accumulate with no record of what belongs, stale memos
-sit next to active specs, duplicate docs diverge, and nobody can confidently delete anything.
-Run this skill to impose and maintain structure deliberately — discover what's wrong, agree
-on the fix, and apply it in one controlled pass.
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . roles --json
+
+### Structural authority comes from the registry
+
+A directory `readme.md` is treated as structural authority **only when the project
+declares it so** (redesign item 50). Set `policy.sweep.structuralAuthority`:
+
+| Value | Meaning |
+|---|---|
+| `registry` *(default)* | The registry's role table defines what belongs where. A directory readme is documentation, and inconsistency with it is a *finding*, not a mandate. |
+| `directory-readme` | Each directory's readme defines what belongs in it, as in earlier versions of this skill. |
+| `both` | Registry wins on conflict; readme governs anything the registry does not cover. |
+
+Under `registry` (the default), never delete, move, or rewrite a file because a
+directory readme does not list it. Report the discrepancy and let the user decide.
+
+### Scan boundaries are configuration (item 51)
+
+`policy.sweep` governs the entire traversal. Respect every field:
+
+```jsonc
+"sweep": {
+  "include": ["**/*"],
+  "exclude": ["Virtuoso/.backups/**", "Virtuoso/.quarantine/**",
+              "**/node_modules/**", "**/.git/**", "**/__pycache__/**",
+              "**/.venv/**", "**/vendor/**", "**/dist/**", "**/build/**"],
+  "ignoreDirectories": [".git", "node_modules", "__pycache__", ".venv", "vendor"],
+  "followSymlinks": false,
+  "maxFileBytes": 5242880,
+  "binaryPolicy": "skip",
+  "quarantineDirectory": "Virtuoso/.quarantine",
+  "deletionPolicy": "quarantine",
+  "backupRetention": 10,
+  "protectedAuthorities": ["archive", "terminal", "evidence"],
+  "structuralAuthority": "registry"
+}
+```
+
+- **Do not follow symlinks** unless `followSymlinks` is true; a symlink loop or a
+  link out of the project is a finding, not something to traverse.
+- **Do not read a file larger than `maxFileBytes`** for content analysis. Record
+  its size and hash instead.
+- **Binaries** follow `binaryPolicy`: `skip` (inventory only) or `hash-only`.
+- **Backup and quarantine directories are excluded by default** (item 56), so past
+  sweeps never become new findings. Apply `backupRetention` at the end of Phase 3.
+
+### Protected path classes (item 52)
+
+These may appear in findings but **may never enter a mutation plan**:
+
+- any role whose `authority` is in `policy.sweep.protectedAuthorities` — by default
+  immutable archives, the append-only terminal ledger, and sealed evidence;
+- any role whose `mutability` is `immutable` or `read-only`;
+- generated mirrors and reports (`origin: generated`) — these are *regenerated*,
+  never hand-edited (item 58);
+- anything matching `policy.sweep.exclude`.
+
+If a protected path genuinely needs to change, that is a question for the user and
+a registry change — not a sweep action.
 
 ---
 
 ## Phase 1 — Discover & Diagnose (read-only)
 
-Phase 1 runs four read-only stages — **Discover → Structure → Ground Truth → Audit** — then
-lists every finding and asks any clarifying questions. **No files change in this phase.**
+Four read-only stages — **Discover → Structure → Ground Truth → Audit** — then the
+findings and every clarifying question. Nothing changes.
 
 ### Stage A — Discover
 
-Scan the project directory to inventory document directories and files. Do not hardcode
-paths — discover them.
+Walk the project within the configured boundaries. Inventory directories and files.
+Do not hardcode paths.
 
 | Category | Typical signals |
-|----------|----------------|
-| **Project rules** | `CLAUDE.md`, `README.md`, root-level config docs |
-| **Operational docs** | `docs/`, `documentation/`, numbered doc folders |
-| **Historical records** | `CloseOut.*`, `archive/`, dated folders |
-| **Agent infrastructure** | `.claude/agents/`, `.claude/skills/` |
-| **Reference material** | `references/`, `assets/`, `templates/` |
+|---|---|
+| **Registered roles** | everything the registry declares — the primary inventory |
+| **Project rules** | root-level rule and configuration documents |
+| **Operational docs** | documentation directories |
+| **Historical records** | close-outs, archives, dated folders |
+| **Agent infrastructure** | agent and skill definition directories |
+| **Reference material** | references, assets, templates |
 
-Print the inventory: directories, file counts, and which have a `readme.md`.
+Print: directories, file counts, which are registered roles, which have a readme,
+and — explicitly — **what the boundaries excluded**, with counts. A sweep that
+silently skips a tree reads as "clean" when it was not looked at.
 
-**Detect project type** (determines which optional audit modules activate in Stage D):
-`.claude/agents/*.md` → agent-roster checks; `**/SpecRetro*` / `*lesson*` → SRL staleness;
-skills in multiple locations → parity checks; `**/roadmap*` / `**/sprint-queue*` → sprint
-artifact checks. If none exist, only the universal checks run.
+**Detect which optional audit modules apply.** Agent definitions → roster checks.
+Retrospective or lessons catalogs → entry-staleness checks. The same document
+deployed in multiple places → parity checks. Registered generated artifacts →
+source-to-mirror checks. If none exist, only the universal checks run. State which
+modules are active at the start.
 
 ### Stage B — Structure
 
-For each document directory, the `readme.md` is the structural authority — it defines what
-files belong, what subdirectories exist, and the naming conventions. Compare each directory's
-actual contents against its readme.
+Compare what is on disk against the structural authority chosen above.
 
-- **Missing readme** → note that one should be created (draft its proposed content: purpose,
-  file hierarchy with one-line descriptions, naming conventions, "what does NOT belong here").
-- **Files in directory but not in readme** → orphans (classify below).
-- **Files in readme but not on disk** → phantom entries (flag for removal or recovery).
-- **Undocumented subdirectories** → flag.
+Under `registry` authority:
+- **A registered role whose target is absent** → report it. Never search for a
+  similarly named file and never repoint the role (item 20).
+- **A file in a registered directory that no role covers** → orphan; classify it.
+- **A registry role pointing outside the project, into an archive while claiming
+  live authority, or at the wrong type** → a registry finding; the fix is
+  `virtuoso_preflight.py --mode repair`, previewed, not a file move.
 
-**Orphan classification** — for each orphan, choose a disposition:
+Under `directory-readme` authority, additionally:
+- **Missing readme** → propose one (draft its content: purpose, hierarchy, naming
+  conventions, what does not belong).
+- **Files in the directory but not in the readme** → orphans.
+- **Readme entries missing on disk** → phantom entries.
+
+**Orphan classification** — each orphan gets a disposition:
 
 | Disposition | Criteria |
-|-------------|----------|
-| **Absorb** | Still relevant; belongs inside an existing parent doc (merge then delete) |
-| **Promote** | Still relevant; stands alone — add it to the readme |
-| **Archive** | Outdated/superseded but has historical value — move to archive |
-| **Delete** | Temp file, duplicate, or artifact with no value |
+|---|---|
+| **Absorb** | Still relevant; belongs inside an existing parent document (merge, then quarantine the source) |
+| **Promote** | Still relevant; stands alone — register it or add it to the readme |
+| **Archive** | Superseded but historically valuable — move to the archive |
+| **Quarantine** | Temp file, duplicate, or artifact with no apparent value |
 
-Ambiguous dispositions become clarifying questions (see Flagging for Human Review).
+Ambiguous dispositions become clarifying questions. Never guess.
 
-### Stage C — Ground Truth
+### Stage C — Ground truth
 
-Establish what is actually true now, from the most authoritative sources: project root docs
-(`CLAUDE.md`/`README.md`), directory readmes, and the real on-disk file state. If agent
-infrastructure exists, read `.claude/agents/*.md` frontmatter to build the active-agent roster
-and the deprecated→successor mapping. Where the same fact appears in multiple docs, pick the
-authoritative source (priority: primary source files → root docs → operational docs →
-historical records).
+Establish what is true now, from the most authoritative sources in this order:
+
+1. **The registry** — what each role is, where it lives, who may write it.
+2. **Primary source files** — the actual code, data, or documents a claim is about.
+3. **Root project rules.**
+4. **Operational documents.**
+5. **Historical records.**
+
+Where a fact appears in several places, the higher source wins. Where a *generated*
+artifact disagrees with its `generatedFrom` source, the **source wins by
+definition** and the mirror is out of date (item 57).
 
 ### Stage D — Audit
 
-Compare every document against ground truth and the structural authority. Enumerate every
-finding. Run the universal checks always; run the optional modules only if their
-infrastructure was detected.
-
 **Universal checks (always):**
-1. **Structural violations** — orphans needing action; readme entries missing on disk; undocumented dirs.
-2. **Stale content** — references to moved/deleted files, outdated descriptions, version/date/status drift.
-3. **Cross-document inconsistency** — the same fact stated differently across docs.
-4. **Dead references** — links/pointers to files, sections, or headers that don't exist.
-5. **Duplicate content** — the same logical doc maintained in two places, drifted apart.
-6. **Misplaced content** — archive-era content in active dirs; wrong hierarchy level; tool dirs nested in doc trees.
-7. **Temp/junk artifacts** — `.tmp`/`.bak`/swap files, hash-like names, empties, `.DS_Store`/`Thumbs.db`/`desktop.ini`.
-8. **Version proliferation** — `file.v2.xlsx`, `_old`, `_backup`, `(1)` variants; identify the current one.
-9. **Naming-convention violations** — files not matching the directory readme's documented pattern.
-10. **Volume/age archival triggers** — high-count close-out/memo dirs where the oldest should rotate to archive (advisory — route to human review).
-11. **Stale temp packages** — content in `temp/`/`scratch/` past its lifecycle or tied to completed work.
-12. **Stale tool infrastructure** — `.claude/`, `agent-memory/`, `__pycache__/` nested where they don't belong.
-13. **Binary file accounting** — `.xlsx`/`.docx`/`.pdf`/`.zip` not documented in their directory's readme; large binaries better stored elsewhere.
 
-**Agent-specific (only if agent infra detected):**
-14. **Ghost agent references** — agent names in docs that match no active agent file (record file, line, ghost name, successor).
-15. **Deprecated stub presence** — `disabled: true` agent files still present (flag with merge target).
-16. **Agent memory dir names** — dirs in `.claude/agent-memory/` not matching an active agent.
+1. **Structural violations** — orphans; registered-but-absent targets; unregistered
+   directories; registry findings from preflight.
+2. **Stale content** — references to moved or deleted files; outdated descriptions;
+   version, date, and status drift.
+3. **Cross-document inconsistency** — the same fact stated differently.
+4. **Dead references** — links to files, sections, or anchors that do not exist.
+5. **Duplicate content** — one logical document maintained in two places, drifted.
+6. **Misplaced content** — archive-era content in active directories; wrong level.
+7. **Temp and junk artifacts** — editor swap files, OS metadata, empties.
+8. **Version proliferation** — `.v2`, `_old`, `_backup`, `(1)` variants; identify
+   which is current.
+9. **Naming-convention violations** — against the documented pattern, where one exists.
+10. **Volume and age archival triggers** — advisory; route to the user.
+11. **Stale temp packages** — content past its lifecycle or tied to closed work.
+12. **Stale tool infrastructure** — caches and tool directories nested where they
+    do not belong.
+13. **Binary accounting** — undocumented binaries; large binaries better stored
+    elsewhere.
+14. **Source-to-mirror drift** (item 57/58) — for every role with `generatedFrom`,
+    is the mirror in sync with its source? A drifted mirror is **regenerated**, never
+    edited.
+15. **Immutable-hash verification** (item 62) — hash every protected historical file
+    at the start of the sweep, and again at the end. Any change is a defect in the
+    sweep itself and halts it.
+16. **Documented-command health** (items 60, 61) — for every command the docs tell a
+    reader to run, does it exist and does it work in the documented form?
 
-**Multi-project (only if parity targets detected):**
-17. **Parity divergence** — checksum mismatches between canonical and deployed copies of shared files.
+**Agent-specific** (only if agent infrastructure was detected):
+17. Ghost references to agents that no longer exist (record file, line, name, successor).
+18. Deprecated stubs still present.
+19. Memory directories not matching an active agent.
 
-**SRL-specific (only if SRL/lessons catalog detected):**
-18. **SRL/finding staleness** — entries referencing changed agent names, paths, or sprints (propose name updates; flag content staleness for human review).
+**Parity** (only if parity targets were detected):
+20. Checksum mismatches between a canonical file and its deployed copies.
 
-Print findings grouped by check type with exact locations. Only print categories that
-produced findings.
+**Retrospective catalogs** (only if detected):
+21. Entries referencing changed names, paths, or items — propose reference updates;
+    route content staleness to the user.
 
-### End of Phase 1 — ask clarifying questions
+Print findings grouped by check, with exact locations. Print only categories with findings.
 
-Collect every ambiguous finding (ambiguous orphan dispositions, unclear absorption targets,
-stale references with no obvious replacement, duplicate-merge conflicts, archival-rotation
-candidates, unclear version currency, binaries of unknown purpose) and ask them now via
-AskUserQuestion (see Flagging for Human Review). Do not guess. The answers feed the Phase 2
-work list. **Phase 1 ends when every clarifying question is answered.**
+### Registered generation and validation commands (item 60)
+
+A project registers the commands that generate and validate its artifacts, under an
+extension namespace so plugin upgrades never discard them:
+
+```jsonc
+"x-commands": {
+  "build-handbook": {
+    "run": "make handbook",
+    "workingDirectory": "docs",
+    "requires": ["make", "pandoc>=3"],
+    "produces": ["docs/build/handbook.pdf"],
+    "fallback": "python -m handbook_build"
+  }
+}
+```
+
+A sweep may run a registered command to regenerate or validate an artifact. It never
+invents one, and it never runs an unregistered command found in prose.
+
+### Document-type verification adapters (item 59)
+
+Match the check to the document type. Run the ones that apply and that the project's
+declared dependencies support:
+
+| Type | Verification |
+|---|---|
+| Markdown / text | link validity, anchor existence, reference resolution |
+| Rendered documents (PDF, DOCX) | it renders; expected pages exist; expected headings present |
+| Spreadsheets | formulas resolve; no error cells; expected sheets and headers present |
+| Generated mirrors | regenerate into a temporary location and diff against the committed copy |
+| Source-to-mirror coverage | every source section appears in the mirror |
+| Data files | parses; required keys present |
+
+A verification that cannot run because a dependency is missing is reported as
+*not verified, dependency missing* — never as a pass.
+
+### Repairing a documented command (item 61)
+
+When check 16 finds a documented command that no longer works:
+
+1. Determine the correct invocation for this project **and test it**.
+2. Only after it succeeds, propose the documentation edit, carrying the evidence
+   (the command run and its output).
+3. If no working replacement is found, the finding is *documented command is broken*
+   with the error — **do not** replace it with an untested alternative.
+
+Module-mode and platform-specific alternatives are candidates, not answers, until run.
+
+### End of Phase 1 — ask
+
+Batch every ambiguous finding into bounded questions (see *Flagging for human
+review*). Phase 1 ends when every question is answered.
 
 ---
 
-## Phase 2 — Work List & Approval
+## Phase 2 — Work list & approval
 
-Translate every Phase 1 finding (plus the user's answers) into a single, complete, ordered
-**work list** — every change the sweep will make, in execution order. Present it in chat and
-**ask for explicit approval before proceeding.** Nothing has changed yet.
+Translate every finding, plus the user's answers, into a single ordered work list —
+every change the sweep will make, in execution order. Nothing has changed yet.
 
-### Work-list structure
+### Execution order: irreversible actions last (item 54)
 
-Group actions to minimize blast radius if something errors mid-run (this is also the Phase 3
-execution order):
+```
+Group A — Content repairs          in-place edits: stale references, dead links,
+                                   inconsistencies, ghost names. Reversible.
+Group B — Relocation               moves into their final locations.
+Group C — Regeneration             re-run registered generators for drifted mirrors.
+Group D — Verification & parity    per-type adapters; canonical↔deployed checksums.
+Group E — Archival                 move superseded material into the archive.
+Group F — Quarantine               move approved removals into the quarantine area.
+Group G — Permanent deletion       ONLY if policy.sweep.deletionPolicy is
+                                   "permanent" or the user explicitly required it.
+```
 
-- **Group A — Junk removal** — delete temp files, OS artifacts, swap files, empties. (Lowest risk, first.)
-- **Group B — Misplaced-content relocation** — `move` source → target, each with a one-line rationale.
-- **Group C — Archival** — move orphans, old versions, and approved rotation candidates to archive.
-- **Group D — Orphan absorption** — merge a file's content into a target doc §section, then delete the source. (Carries the exact content block to insert.)
-- **Group E — readme.md synchronization** — create/update readme files (each carries the full proposed content).
-- **Group F — Content repairs** — in-place edits for stale references, dead links, cross-doc inconsistencies, ghost agent names. (Each carries file, exact match string, replacement, rationale.)
-- **Group G — Parity sync** (if applicable) — copy canonical → deployment targets, with checksum verification.
+Repair, relocation, regeneration, verification, and parity all precede anything
+irreversible. Under the default `deletionPolicy: "quarantine"`, Group G does not run
+at all: approved removals land in `policy.sweep.quarantineDirectory`, from which the
+user can restore or purge them later (item 53).
 
-Every action is **atomic and self-contained**: absolute or project-relative paths; verbatim,
-unique match strings for content edits; checksums for binary moves.
+Every action is **atomic and self-contained**: project-relative paths, verbatim
+unique match strings for content edits, checksums for binary moves, and the
+registered command for every regeneration.
+
+**No action may target a protected path class.** If one appears, it is a defect in
+the plan — remove it and surface it as a question.
 
 ### Present the work list
 
-Show the user:
 ```
 ## Governance Sweep — Work List ([project], [date])
-- Findings: [N]   Actions: [N]   Files affected: [N]   Deferred to manual: [N]
 
-[Action groups A–G, each action enumerated with source/target/rationale]
+- Findings: [N]   Actions: [N]   Files affected: [N]   Deferred: [N]
+- Structural authority: [registry | directory-readme | both]
+- Boundaries: [N] path(s) excluded by policy — [summary]
+- Protected and untouchable: [N] path(s) — [roles/classes]
+- Deletion policy: quarantine → [quarantine dir]   (or: permanent, as required)
+
+[Groups A–G, each action enumerated with source, target, and rationale]
 
 ### Deferred (left for you to handle manually)
 [items too ambiguous to act on, with why]
 ```
 
-### Approval gate (AskUserQuestion)
+### Approval gate
 
-Ask: **proceed with implementation?**
-- (A) **Approve all — implement now** [RECOMMENDED]
-- (B) **Approve a subset — let me pick which groups/actions**
-- (C) **Don't implement — output the work list and stop** (read-only result)
-- (D) **The plan is wrong — let me explain**
+- (a) **Approve all — implement now** *(recommended)*
+- (b) **Approve a subset — pick groups or actions**
+- (c) **Don't implement — output the work list and stop**
+- (d) **The plan is wrong — let me explain**
 
-**Phase 3 begins only on (A) or (B).** On (C) the sweep ends having changed nothing; offer to
-save the work list to `governance-sweep-worklist.<date>.md` for later.
+Phase 3 begins only on (a) or (b). On (c) offer to save the work list.
 
 ---
 
 ## Phase 3 — Implementation
 
-Execute the approved actions. **This is the only phase that changes files.**
+The only phase that changes files.
 
-If the approved work list runs past a handful of actions, execute this phase under
-`/virtuoso`'s task-plan discipline. Phase 3 is a long sequential run across many files where
-the failure mode is silent partial completion — a group skipped, or its Step 2 verification
-never actually performed. The A → G ordering below is already the task plan; virtuoso keeps it
-honest across a long tool-call sequence by tracking each group to done and narrating what
-landed.
+If the approved list runs past a handful of actions, execute it under `/virtuoso`'s
+task-plan discipline: this is a long sequential run whose failure mode is silent
+partial completion.
 
-### Step 0 — Back up
+### Step 0 — Back up, verifiably (items 9, 55)
 
-Create a timestamped backup directory and copy every file the approved plan will modify,
-move, or delete (preserving relative paths):
-```
-<project-root>/.governance-sweep-backup/<YYYY-MM-DD-HHMMSS>/
-```
-(Pass the timestamp in, or derive it from the OS — do not fabricate.) If git is available and
-the project's workflow permits it, note the current commit for an extra recovery anchor.
+Copy every file the plan will modify, move, or delete into a timestamped backup
+set under `Virtuoso/.backups/`, and write its **backup manifest** recording, for
+each entry: source path, destination path, byte count, SHA-256, timestamp, and the
+operation that prompted it.
+
+Then **verify the set before proceeding** — re-hash every stored copy against the
+manifest. A backup that does not verify halts the sweep before anything changes.
+A backup set is restorable and independently checkable, not merely a copy in a
+timestamped folder.
+
+Also record the hashes of every protected historical file now (check 15), for the
+end-of-sweep comparison:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . protected --json > <backup set>/protected-before.json
+
+Check the project's declared runtime dependencies before running any verification adapter
+that needs one:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . deps
+
+If a repository is available and the project's git policy permits reads, record the
+current commit as an additional recovery anchor.
 
 ### Step 1 — Execute in order
 
-Run the approved groups in order A → B → C → D → E → F → G. Within each group, apply actions
-one at a time. Rationale for the ordering: junk removal is irreversible-but-safe and shrinks
-the working set; moves/archival run before absorption so targets are in final locations;
-readme sync runs after files have moved so it reflects reality; content repairs run last so
-they edit files already in place; parity sync is fully derivative and runs last.
+Run the approved groups A → G, one action at a time.
 
-For content edits, match the verbatim unique string and replace it. For moves, verify the
-source exists and the target directory exists (create it if the plan said to). For merges,
-insert the carried content block, then delete the source.
+- **Content edits** — match the verbatim unique string; replace it.
+- **Moves** — verify the source exists and the target directory exists.
+- **Absorption** — insert the carried content block into the target, verify it
+  landed, *then* quarantine the source.
+- **Regeneration** — run the role's registered `generatedBy` command in its
+  registered working directory; never hand-edit a generated artifact.
+- **Quarantine** — move, never delete; preserve the relative path inside the
+  quarantine directory.
+- **Permanent deletion** — only under an explicit policy or an explicit instruction,
+  and only after every other group has verified.
 
-### Step 2 — Verify
+### Step 2 — Verify after each group
 
-After each group, verify its effect:
-- readme sync → every file in the directory appears in its readme, and every readme entry exists on disk.
-- content repairs → the old match string is gone and the replacement is present.
-- agent sweeps → grep for any retired agent name returns zero hits.
-- parity → re-checksum canonical/target pairs match.
-- junk/moves/archival → the sources are gone and targets exist.
+- Content repairs → the old string is gone; the replacement is present.
+- Relocation → sources gone, targets present, checksums match for binaries.
+- Regeneration → the mirror now matches its source by the registered coverage check.
+- Verification adapters → each ran, or is reported as *not verified* with its reason.
+- Parity → canonical and deployed checksums match.
+- Archival and quarantine → sources gone, targets present.
+- **Protected files → re-hash and compare against Step 0.** Any change halts the
+  sweep and is reported as a defect:
 
-### Step 3 — Completion report
+        "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . protected --json
 
-Print what changed:
+### Step 3 — Retention
+
+Apply `policy.sweep.backupRetention`: keep the newest N backup sets, remove older
+ones. Backup and quarantine directories stay excluded from future sweeps.
+
+### Step 4 — Completion report, with exact repository scope (item 63)
+
+Get the repository facts from the read-only inspector rather than assuming them — it
+detects the remote and default branch, enumerates worktrees, and splits the dirty set into
+what this sweep touched and what it must leave alone:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . repo --expect "<the plan's paths>" --json
+
+
 ```
 ## Governance Sweep — Complete
+
 - Actions executed: [N]  (A:[n] B:[n] C:[n] D:[n] E:[n] F:[n] G:[n])
-- Files created/moved/deleted/edited: [counts]
-- Backup: <path to backup dir>
-- Verification: [all checks passed | anomalies: ...]
+- Files created / moved / quarantined / deleted / edited: [counts]
+- Backup set: [path]   manifest verified: [yes]
+- Protected-file hashes: [N] checked, [N] unchanged
+- Verification: [all checks passed | anomalies: …]
 - Deferred (manual): [N] — [list]
+
+### Repository scope
+- Changed paths:            [explicit list]
+- Staged paths:             [explicit list, or "none — policy.git is <policy>"]
+- Cached diff (name-only):  [explicit list]
+- Commit:                   [sha, or "not committed — policy.git is <policy>"]
+- Uncommitted unrelated work present: [explicit list, untouched]
 ```
 
-If the project uses version control, remind the user to review `git status`/`git diff` and
-commit — this skill does not run git itself unless the project's workflow explicitly allows it.
+Never report "the docs are clean" without this block. Report the exact paths, not a
+count alone, and name any unrelated dirty work that was left alone.
 
-**Halt semantics:** if any action fails or a verification check fails, stop immediately,
-report the exact failure and what was already changed, and point the user to the backup
-directory. Never improvise a recovery that could lose data.
+What happens to those changes in version control is `policy.git` — see
+`references/git-policy.md`. Under `read-only` or `prepare-no-stage`, report the paths
+and stop. Never `git add .`; never stage a path outside the plan.
+
+**Halt semantics.** Any failed action or failed verification stops the sweep
+immediately. Report the exact failure, everything already changed, and the backup
+set path. Never improvise a recovery.
 
 ---
 
-## Flagging for Human Review
+## Flagging for human review
 
-Findings that need judgment become **AskUserQuestion** prompts — in Phase 1 (clarifications)
-and at the Phase 2 approval gate. Batch them (up to 4 per call); never prompt one-at-a-time
-per file. Each question names the specific file and offers the viable dispositions with
-consequences. Common patterns:
+Findings needing judgement become bounded questions, per
+`references/actors-and-interaction.md` — batched, never one file at a time, each
+naming the specific file with its viable dispositions and consequences.
 
-- **Ambiguous orphan** — "What should happen to `X.md`?" → Absorb into [doc] / Archive / Promote / Delete.
-- **Absorption target unclear** — "`X.md` is relevant but has no clear parent. Where?" → [best-guess doc] / Promote standalone / Archive.
-- **Large orphan absorption** (>500 lines) — Absorb (full) / Absorb (summary + link) / Promote standalone.
-- **Stale reference, no obvious fix** — "`X` references '[old]' which is gone. Replacement?" → [best guess] / Remove reference / Defer.
-- **Duplicate-merge conflict** — "`spec.md` exists in two places, both with unique content. Which is authoritative?" → A primary / B primary / Defer (manual merge).
-- **Archival rotation** (`multiSelect`) — "These [N] oldest close-outs — which rotate to archive?"
-- **Unclear version currency** — "`file.xlsx`, `file.v2.xlsx`, `file.v2.bak.xlsx` — which is current?"
-- **Stale tool infra** — "`.claude/agent-memory/...` nested in a reference dir — relocate / delete / leave (document)?"
-- **Binary of unknown purpose** — "`data.sqlite` in docs/ — what is it?" → [best guess, document] / Archive / Delete.
-- **SRL content staleness** — "SRL-[ID] references [outdated concept]. Still valid?" → Update refs only / Needs rewrite (defer) / Retire.
+- **Ambiguous orphan** — Absorb into [doc] / Archive / Promote / Quarantine.
+- **Absorption target unclear** — [best guess] / Promote standalone / Archive.
+- **Large orphan** (>500 lines) — Absorb whole / Absorb summary + link / Promote.
+- **Stale reference, no obvious fix** — [best guess] / Remove the reference / Defer.
+- **Duplicate conflict** — which copy is authoritative, or defer to a manual merge.
+- **Archival rotation** (multi-select) — which of these oldest records rotate?
+- **Unclear version currency** — which variant is current?
+- **Binary of unknown purpose** — document / archive / quarantine.
+- **Protected path implicated** — a registry change, previewed, never a sweep action.
+- **Broken documented command with no tested replacement** — leave and flag / the
+  user supplies the correct invocation / remove the instruction.
 
-Resolved answers become actions in the Phase 2 work list (tagged `[user-confirmed]`).
-Unresolved/declined items become **Deferred (manual)** entries — surfaced in the work list and
-the completion report, never silently acted on.
+Answers become actions tagged `[user-confirmed]`. Declined items become **Deferred
+(manual)** — surfaced in the work list and the completion report, never silently
+acted on.
 
 ---
 
 ## Scope
 
-This skill audits **documents and their organization** and, after approval, fixes them. It
-does:
+It does:
 - Discover, classify, and audit documentation (Phase 1).
-- Propose a complete, ordered work list and get approval (Phase 2).
-- Create/edit/move/archive/delete documentation files, create/update readmes, repair stale
-  references, and sync parity copies (Phase 3) — with backups and verification.
+- Propose a complete ordered work list and get approval (Phase 2).
+- Edit, move, archive, quarantine, regenerate, and verify documents (Phase 3), with
+  a verifiable backup manifest and per-action verification.
 
 It does NOT:
-- Change anything before the user approves the Phase 2 work list.
-- Modify source code (it flags stale code references for repair as content edits; it does not
-  refactor code).
-- Run tests, builds, or calibrations.
-- Make architectural or design decisions.
-- Auto-resolve ambiguous classifications — those always go through AskUserQuestion or land in
-  the deferred list.
-- Run git itself unless the project's documented workflow explicitly permits it; otherwise it
-  reminds the user to review and commit.
+- Change anything before the Phase 2 approval.
+- Touch a protected path class, a role it is not a registered writer of, or anything
+  the boundaries excluded.
+- Hand-edit a generated artifact — it regenerates it.
+- Permanently delete anything under the default quarantine policy.
+- Delete a lock file, stash, reset, or clean a repository.
+- Modify source code, run tests or builds, or make architectural decisions.
+- Auto-resolve an ambiguous classification.
+- Mutate the repository beyond what `policy.git` permits.
 
 ---
 
-## Adapting to Project Structure
+## Adapting to project structure
 
-Works on any project. A minimal project might be a single `docs/` folder with five markdown
-files; a mature one has agent definitions, roadmaps, SRL catalogs, close-out archives, and
-multi-project deployments. The universal checks (structure, orphans, staleness, cross-doc
-consistency, dead references) run everywhere; the optional modules (agent roster, SRL, parity)
-activate only when their infrastructure is detected. The skill states which modules are active
-at the start of Phase 1. The only hard requirement is at least one directory containing
-documents — if none exists, the skill reports that and exits.
+Works on any project — a single documentation folder, or a mature tree with agent
+definitions, roadmaps, retrospective catalogs, archives, and multi-project
+deployments. The universal checks run everywhere; optional modules activate only
+when their infrastructure is detected, and the sweep states which are active at the
+start. The only hard requirement is a governance registry (so authority and
+protection are declared) plus at least one directory containing documents. Without a
+registry, report that and route the user to `virtuoso_preflight.py --mode check`.

@@ -1,316 +1,344 @@
 ---
 name: pointer-closeout
-description: >
-  Process CLI phase or sprint summaries into two durable outputs: a Pointer Close-Out Report
-  for project decisions and a Spec Retrospective for workflow improvement. Use when a
-  completed CLI run, sprint summary, merge summary, or "phase complete" update needs to be
-  interpreted, dispositioned, saved to files, and folded back into roadmap/governance work.
+description: |
+  MANUAL INVOCATION ONLY. Closes a completed dispatch. Verifies completion
+  evidence, drafts the close-out report and retrospective entries, and then
+  performs a transactional crossing — create the close-out artifact, append the
+  append-only terminal record, persist local governance changes, close the item
+  in the live work register through its provider, and verify every result. Any
+  partial failure leaves a recovery record naming exactly what remains. Triggered
+  by "/pointer-closeout", "close out this sprint", or "run the close-out".
 ---
 
-<!-- virtuoso-shared-contract v1 -->
+<!-- virtuoso-shared-contract v2 -->
 **Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
 
-- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
-- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
-- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
-- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
-- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
-- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+- **Registry resolution** — `Virtuoso/workspace-layout.json` is the authority; `Virtuoso.Governance.Readme.md` is its synchronized human view. Resolve every document, work item, and permission through the registry. Never hardcode a path, never fall back to a conventional one, and never infer authority from a role's name. Full contract: the plugin's `references/registry-contract.md`.
+- **Read-only preflight** — session start and any "where am I" check runs `--mode check`, which performs **zero project writes**. Adoption, creation, and repair are separate operations, each explicitly invoked.
+- **Providers** — work items come from the configured work-register provider (local file, spreadsheet, connector-backed task manager, issue tracker, database, or read-only snapshot). Negotiate capabilities before planning work; never open a register file directly. The live work register, the append-only terminal ledger, and any compatibility export are three different roles.
+- **Provenance** — every derived figure cites its provider, source, and snapshot time. A figure whose inputs are missing is reported as *not computable* with the missing inputs named, never approximated.
+- **Git** — behaviour is `policy.git`, not a fixed rule of this plugin. See `references/git-policy.md`. Under every policy: inspect first, stage exact paths, preserve unrelated work, no destructive flags, no force-push without explicit authorization.
+- **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (v1.0 — 8 universal checks plus the project's declared extensions). No skill restates it in its own words.
+- **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
+- **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
+- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 # Pointer Close-Out
 
-## Preflight — workspace check (run first)
+## Preflight — read-only registry check (run first)
 
-This skill operates on the project's Virtuoso workspace. Before anything else, bring the project under management non-destructively:
+Resolve the plugin through its launcher, then run the **read-only** check. It performs
+discovery and validation with zero project writes.
 
-    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/virtuoso_preflight.py" --root . --mode adopt
+**Unix-like shell**
 
-`adopt` never moves or duplicates anything. Read the `virtuoso-status:` line it prints and branch:
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode check
 
-- `ready` — a `Virtuoso/` workspace already exists (it was healed if needed); continue.
-- `adopted roadmap=<path>` — the project already had an established documentation tree (e.g. `Project Documentation/` or `2. Project Documentation/`) with its own roadmap, so a thin `Virtuoso/` control marker was written that points at that existing roadmap. Tell the user it was adopted in place — nothing was moved or duplicated — then continue.
-- `none` — there is no workspace and no documentation tree to adopt (treat a missing `~/.virtuoso/plugin-root` the same way). Stop this skill and route the user to `/virtuoso-init`, which builds the plugin-only `Project Documentation/` layout (the only layout the workspace scaffolder supports).
+**Windows PowerShell**
 
-**Governance authority — read `Virtuoso.Governance.Readme.md` first.** The project-root `Virtuoso.Governance.Readme.md` is the single source of truth for where every governance document lives (roadmap, sprint catalog, lessons, close-outs, issues, review artifacts). Resolve each document you need through its registry and **defer to the paths it lists**, whatever layout the project uses (e.g. `docs/governance/ROADMAP.md`, `2. Project Documentation/…`, or the plugin default). `Virtuoso/workspace-layout.json` is the machine-readable mirror of the same paths. **Never create a parallel or competing document for a role the registry already lists** — open and edit the registered file in place. If the registry and the files on disk diverge (a registered path is an empty stub while the project's real document lives elsewhere), fix the **registry** — repoint it to the existing document and tell the user — do **not** seed or fork a rival. If `Virtuoso.Governance.Readme.md` is missing, run `/virtuoso-init` to generate it by registering the project's existing governance documents (it seeds a new file only for a role that genuinely has none).
+    & "$HOME/.virtuoso/bin/virtuoso.ps1" virtuoso_preflight --root . --mode check
+
+Add `--json` when you want the structured result (status, writes, findings, and the full
+resolved role table). Read the `virtuoso-status:` line and branch:
+
+- `ready` — the registry is valid. Continue.
+- `warning` — usable; surface the findings to the user and continue. Warnings are not blockers.
+- `repair-needed` — **STOP.** Run `--mode repair` to produce the preview, show the user the
+  proposed paths, semantic changes, files affected, and backup location, and apply it only
+  with `--apply` after they approve.
+- `adoptable` — the project has governance documents but is not registered. Offer
+  `--mode adopt`: it registers what exists, in place. Nothing is moved, duplicated, or rewritten.
+- `none` — no registry and nothing to adopt. Route the user to `/virtuoso-init`.
+- `failed` — report the error verbatim and stop.
+
+If neither launcher resolves, report that the plugin could not be located and stop. Do not
+guess a path.
+
+**Governance authority.** Resolve every document you need through the registry
+(`references/registry-contract.md`). Never create a parallel document for a registered role;
+never write to a role whose `allowedWriters` does not name this ceremony; never treat a
+`mirror`, `report`, `archive`, or `unknown` role as truth.
+
+Read the `roadmap-integrity:` line. On `fail` (null bytes, non-UTF-8, or missing — exit 3), STOP and report the corruption to the user; do not migrate or rewrite a corrupt roadmap. On `warn` (empty or unusually large — exit 2), surface it and confirm with the user before proceeding. On `ok`, continue.
 
 
-Using the pointer-closeout skill to process this summary.
+Heavyweight, periodic recalibration of an entire project. The ceremony
+you run when you need to know — with confidence — where the project
+has been, where it's going, and what to dispatch next.
+**Bookend with `/next-pointer`.** That skill opens a dispatch; this one closes it.
 
-**Bookend with `/next-pointer`.** `/next-pointer` is the dispatch gate that opens a sprint;
-`pointer-closeout` is its bookend — it ingests the completed sprint's summary and folds the
-result back into the roadmap, sprint queue, and retrospective. Run it whenever a sprint
-dispatched via `/next-pointer` reports back.
+Two waves:
 
-Treat this skill as a structured close-out workflow for completed CLI work. Produce two
-deliverables in order:
+- **Wave 1 — Draft & Confirm** (writes nothing): the brief, findings,
+  interpretation, proposed dispositions, governance updates, retrospective
+  entries, and the proposed register and roadmap changes. The user confirms.
+- **Wave 2 — The transactional crossing** (writes, in a fixed order, verifying
+  each step): create the artifact, append the terminal record, persist local
+  governance, close the item in the live register, verify everything.
 
-1. **Pointer Close-Out Report**
-2. **Spec Retrospective**
+This skill never prints a next dispatch pointer — that is `/next-pointer`.
 
-Persist both outputs to files after user confirmation.
+## Resolve roles and capabilities before Wave 1
 
-The skill runs in **two waves**:
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout provider
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . closeout --item "<ITEM-ID>" --date "<YYYY-MM-DD>"
 
-- **Wave 1 — Draft & Confirm** (before save): a tight Sprint Brief, then findings,
-  interpretation, proposed dispositions, governance updates, draft retrospective
-  entries, and proposed roadmap updates. Ask the user to confirm.
-- **Wave 2 — Persist** (after confirmation): apply the confirmed roadmap and sprint-queue
-  edits — **retiring the sprint just closed and elevating the next dispatch** — save the
-  close-out report, append the retrospective entries, report what was saved, and finally
-  **persist everything to version control per the project's Git Workflow**.
-  **Do not print a next-sprint dispatch pointer in either wave** — the next pointer is
-  the responsibility of the separate `/next-pointer` skill, not this one. (Persistence is
-  unrelated: it commits the saved files, it does not print a dispatch pointer.)
+The second command is **read-only**: it resolves paths and the next lesson
+identifier without creating anything. Pass `--prepare` only in Wave 2, when the
+user has approved the crossing and the directory actually needs to exist.
 
-## Core Workflow
+It **fails loudly** rather than guessing: no registry, or a registry with
+error-severity findings, is an error naming the fix — never a silent fallback to
+a conventional close-out directory.
 
-**Wave 1 — Draft & Confirm:**
+Confirm before drafting:
 
-1. **Lead with the 5-line Sprint Brief** — *Goal*, *Result*, *Learned*, *Recommend*,
-   *Bottom line*, one sentence each. See the Sprint Brief section below.
+| Step | Requires |
+|---|---|
+| append the terminal record | `terminalLedger` registered, and `policy.terminalLedger.writers` names `pointer-closeout` |
+| close the item in the live register | provider capability `record-completion` (or `write-status`), and `workRegister`'s `allowedWriters` names `pointer-closeout` |
+| write the close-out artifact | `closeOuts` writable by this ceremony |
+| append lessons | `lessons` writable by this ceremony |
+| persist to version control | whatever `policy.git.policy` permits |
+
+Any of these that is unavailable changes the plan **before** Wave 1 drafts
+anything. Say what will happen instead — a hand-off, or a manual step — rather
+than discovering it mid-crossing.
+
+## Wave 1 — Draft & Confirm
+
+1. **Lead with the five-line brief** (below).
 2. Findings table.
-3. Interpret non-pass results and propose dispositions.
-4. Draft only the net-new governance updates still needed.
-5. Spec Retrospective entries.
-6. Proposed roadmap updates.
-7. Ask the user to confirm dispositions, retrospective entries, and roadmap updates.
+3. Interpret non-pass results; propose dispositions.
+4. Draft the net-new governance updates still needed.
+5. Draft the retrospective entries.
+6. Propose the register and roadmap changes.
+7. State the **crossing plan**: the exact ordered steps Wave 2 will perform, the
+   roles each touches, and what happens on a partial failure.
+8. Ask the user to confirm dispositions, lessons, and the crossing plan.
 
-**Wave 2 — Persist (after confirmation):**
+Wave 1 writes nothing.
 
-7b. **Process governance staging file (if present).** Check for
-    `Memo.<sprint-id>.GovernanceStaging.<date>.md` in the close-out folder.
-    If it exists (worktree-resident sprint using virtuoso's staging pattern):
-    - Parse all fold-in instructions
-    - Apply them to canonical main as Edit calls against named target documents
-    - Process Mid-Dispatch Amendment migrations BEFORE inline spec collapses
-    - After applying all fold-ins, delete the staging file
-    - If a fold-in conflicts with current state (target section moved/changed),
-      surface as a reconciliation prompt to the user before proceeding
-    For grandfathered sprints (pre-staging pattern): check for inline Mid-Dispatch
-    Amendment blocks with Close-Out Preservation fields and process those instead.
-8. **Apply the confirmed roadmap and sprint-queue edits** (any that weren't already
-   applied via staging file). Two updates are mandatory here:
-   - **Retire the closed sprint** — mark the sprint just closed as done/complete in the
-     roadmap and remove it from the head of the active sprint queue (move it to the
-     completed/archive section per the project's convention).
-   - **Elevate the next dispatch** — promote the next queued sprint into the now-vacated
-     head position so it becomes the active dispatch target.
-   See the Roadmap & Sprint-Queue Update section below.
-9. Save the close-out report and append retrospective entries.
-10. Brief persistence summary — files saved and their paths (close-out report,
-    retrospective, roadmap, sprint queue). No next-sprint dispatch pointer; that is
-    `/next-pointer`'s job.
-11. **Persist all of the above to version control** as the final step, per the project's
-    Git Workflow (Cowork never runs mutating git itself). See the Persistence section below.
-
-## Sprint Brief — Lead of Wave 1
-
-A 5-line scannable lead. One sentence per label. The findings table and detail
-sections come after — the brief is the answer, not the report.
+## The five-line brief
 
 ```
-# [Sprint ID] Close-Out
+# [Item title] Close-Out  *(ITEM-ID)*
 
 **Goal:** [What the dispatch set out to do — one sentence.]
-**Result:** [What actually happened — one sentence, name the things, no aggregates.]
-**Learned:** [Durable lesson — promoted rule, retired tool, or shifted assumption.]
-**Recommend:** [Recommended next direction — single sentence, no pointer code box.]
+**Result:** [What actually happened — name the things, no aggregates.]
+**Learned:** [The durable lesson — a promoted rule, a retired tool, a shifted assumption.]
+**Recommend:** [Recommended next direction — prose only, no pointer.]
 **Bottom line:** [One-sentence takeaway.]
 ```
 
-Optional add-ons (use only when they materially sharpen the story, one line each):
-**By the numbers**, **Between the lines**, **Yes, but**, **What's at risk**. If
-the brief grows past ~10 lines, cut.
+Optional one-line add-ons where they materially sharpen the story: **By the
+numbers**, **Between the lines**, **Yes, but**, **What's at risk**. Past ~10
+lines, cut.
 
-**Substance rule:** name the actual things, not aggregates. "Shipped three fixes"
-and "surfaced a tooling failure" hide the conclusion — write *which* three and
-*what* failed in one clause. No undefined sprint codes or acronyms in the brief
-unless they're already part of the user's working vocabulary.
+**Substance rule:** name the actual things. "Shipped three fixes" hides the
+conclusion — write which three, in one clause. Lead with the descriptive name;
+the identifier is secondary.
 
 ## Deliverables
 
-### 1. Pointer Close-Out Report
+### 1. Close-out report
 
-Purpose:
-- interpret the results
-- classify findings
-- confirm dispositions
-- identify governance updates
-- point to next work
+Interprets results, classifies findings, confirms dispositions, identifies
+governance updates, and points at the next work.
 
-Write one per completed sprint:
+One per completed item, named per the project's convention, written into the
+registered `closeOuts` directory.
 
-- `CloseOut.[sprint-id].[date].md`
+- Template: [assets/CloseOut.template.md](assets/CloseOut.template.md)
+- Structure and the finding/disposition model:
+  [references/closeout-report-format.md](references/closeout-report-format.md)
 
-Use the template in:
-- [assets/CloseOut.template.md](assets/CloseOut.template.md)
+### 2. Retrospective entries
 
-For the detailed report structure and finding/disposition model, read:
-- [references/closeout-report-format.md](references/closeout-report-format.md)
+Evaluates the specification, calibrates effort and sizing, reviews routing and
+precision, captures reusable lessons. Appended to the registered `lessons` role.
 
-### 2. Spec Retrospective
+- Template: [assets/SpecRetro.entry.template.md](assets/SpecRetro.entry.template.md)
+- Categories and promotion rules:
+  [references/spec-retro-format.md](references/spec-retro-format.md),
+  [references/promotion-rules.md](references/promotion-rules.md)
 
-Purpose:
-- evaluate the dispatch spec
-- calibrate effort and sizing
-- review routing and precision
-- capture reusable workflow lessons
+---
 
-Append approved lessons to:
+## Wave 2 — The transactional crossing
 
-- `SpecRetro.Lessons_Learned.md`
+Run the six steps **in this order**. Each step verifies before the next begins.
+Local, reversible work happens before anything irreversible or external.
 
-Use the template in:
-- [assets/SpecRetro.entry.template.md](assets/SpecRetro.entry.template.md)
+### Step 1 — Verify completion evidence
 
-For the retrospective categories, promotion rules, and persistence model, read:
-- [references/spec-retro-format.md](references/spec-retro-format.md)
-- [references/promotion-rules.md](references/promotion-rules.md)
+Before writing anything, confirm the work is actually done:
 
-## Persistence Rules
+- the deliverables the specification named exist;
+- its acceptance criteria are mechanically satisfied — run the commands the
+  specification recorded and read their output, do not accept a summary;
+- the repository state matches what was claimed (read-only inspection:
+  `GIT_OPTIONAL_LOCKS=0 git --no-optional-locks status -sb`, `log --oneline -5`,
+  `show <commit> --stat`);
+- any mid-dispatch amendments are accounted for.
 
-- Never leave the output only in conversation.
-- Save the close-out report as a per-sprint file.
-- Append retrospective lessons to the running `SpecRetro.Lessons_Learned.md` document.
-- Present drafts first. Save only after the user confirms dispositions and lessons.
+Evidence that does not hold **stops the crossing**. Report exactly which
+criterion failed, with its output. A close-out is a claim about reality; do not
+make one you have not checked.
 
-To prepare output files and compute the next `SRL-NNN`, use:
+### Step 2 — Create the close-out artifact
 
-```powershell
-python Virtuoso/scripts/prepare_closeout_files.py --project-root "<project-root>" --sprint-id "<SPRINT-ID>" --date "<YYYY-MM-DD>"
-```
+Write the close-out report into the registered `closeOuts` directory.
 
-## Save Location
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . closeout --item "<ITEM-ID>" --date "<YYYY-MM-DD>" --prepare
 
-Use this fallback order:
+**Idempotent:** if the artifact already exists for this item and date, do not
+duplicate it. Update it in place, or stop and ask — never write a second one.
 
-1. Existing close-out folder beside prior `CloseOut.*` or `SpecRetro.Lessons_Learned.md`
-2. The `closeOuts` directory from `Virtuoso/workspace-layout.json`
-3. Create the manifest `closeOuts` directory
+Also process a governance staging file if the project uses one (a worktree-
+resident dispatch stages its governance changes rather than editing main
+documents directly). Parse the fold-in instructions, apply them to the registered
+targets, process amendment migrations before inline collapses, and delete the
+staging file only after every fold-in lands. A fold-in that conflicts with current
+state becomes a reconciliation question, not a silent overwrite.
 
-## Governance / Gate Checks
+### Step 3 — Append the terminal record
 
-After the close-out report is drafted, check:
+Append **one** record to the registered `terminalLedger`:
 
-- whether roadmap or sprint queue updates are already current
-- whether any lessons belong in governance docs
-- whether an audit, milestone review, or merge/release gate should be surfaced
+- Only if `policy.terminalLedger.writers` names `pointer-closeout`. If it does
+  not, stop and hand the record to a permitted ceremony or to the user.
+- **Append-only.** Never reorder, rewrite, or delete an existing record. A
+  correction is a **new** record that names the record it corrects, appended
+  under `policy.terminalLedger.correctionWriters`.
+- **Idempotent.** A record whose content already appears in the ledger is a
+  no-op. Re-running a close-out never duplicates history.
 
-Read:
-- [references/governance-gates.md](references/governance-gates.md)
+### Step 4 — Persist local governance changes
 
-## Roadmap & Sprint-Queue Update (Draft in Wave 1, Apply in Wave 2)
+Apply the confirmed roadmap changes and append the retrospective entries, then
+persist per `policy.git`:
 
-After the close-out report and spec retrospective are drafted, propose roadmap and
-sprint-queue updates in the Wave 1 draft so the user can confirm them alongside
-dispositions and lessons. The sprint just produced new information — the roadmap should
-reflect it, and the user needs to sign off before edits land.
+| `policy.git.policy` | What happens |
+|---|---|
+| `read-only` | Report the exact changed paths; someone else commits. |
+| `prepare-no-stage` | Leave the changes in the working tree; report the paths. |
+| `explicit-path-stage` | `git add "<exact paths>"`; verify the cached set; report. |
+| `explicit-path-commit` | Stage the exact paths and commit. |
+| `push` | As above, then push, subject to `policy.git.networkOperations`. |
 
-**The two mandatory updates — retire and elevate.** Every close-out moves the conveyor
-belt forward by exactly one position:
+Stage **exact paths** — never `git add .` or `-A`. Verify
+`git diff --cached --name-only` matches the expected set before committing, and
+stop on anything unexpected. Unrelated dirty paths are reported and left alone.
 
-- **Retire the closed sprint.** The sprint just closed leaves the active queue. Mark it
-  done/complete in the roadmap and move it out of the head position into the
-  completed/archive section (Completed Work Summary, done list, or whatever convention
-  the project uses). It should no longer read as in-flight or pending.
-- **Elevate the next dispatch.** The next queued sprint is promoted into the now-vacated
-  head of the queue and becomes the active dispatch target. This is a queue-order change,
-  not the dispatch pointer itself — `/next-pointer` later reads this head and specs it.
+If `policy.git.separationOfDuties` is true, hand the commit to another actor with
+the exact file list. That is a project choice, not a rule of this plugin.
 
-**Also propose in Wave 1 (as confirmation items, not commits):**
-- Mark other completed work as done (milestones hit, features shipped, investigations closed)
-- Reprioritize based on discoveries (a sprint finding that reorders what matters next)
-- Add new work surfaced by the sprint (gaps found, follow-up investigations needed)
-- Remove or defer work invalidated by results (if the sprint disproved a hypothesis,
-  the work planned on that hypothesis should be removed or deferred)
-- Adjust timelines if the sprint revealed scope was larger or smaller than expected
+If the project declares no git policy and the default applies, say plainly which
+files were written and whether they are committed. The close-out is not finished
+while the changes are unpersisted.
 
-**Where updates land (Wave 2, after confirmation):**
-- The project's roadmap file (roadmap.md or equivalent) and the sprint catalog
-  (`sprint-catalog.csv`, or `sprint-queue.md` for older/simpler projects) — the
-  authoritative catalog is always the CSV where one exists; a companion
-  `sprint-queue.xlsx` is a generated report only and is never edited directly here
-- Show the user the diff summary: what was retired, what was elevated, and why
+### Step 5 — Close the item in the live register
 
-**When to skip the discretionary items:** if the sprint produced no findings that affect
-priorities (rare — flag it if so), or the roadmap was already updated via governance
-checks in step 3. The retire/elevate pair is **not** discretionary — a closed sprint
-always vacates the head and the next one always moves up, even when nothing else changes.
+Through the provider, not by editing a file:
 
-**Buffer-depletion check (mandatory).** Every close-out drains the eager-spec buffer by one.
-After retiring + elevating, count the remaining dispatch-ready sprints (Implementation Status
-`Queued` ∧ Written Status `Full Spec` in the Catalog). If that count is **< 5**, or the newly
-elevated head is a **stub** (not `Full Spec`), recommend the user run **`/roadmap-review`** to
-replenish the buffer to 5 — state it plainly in the close-out summary. This closes the loop:
-close-out drains the buffer, `/roadmap-review` refills it. Do not author specs here (that is
-`/roadmap-review`'s job) — only flag the depletion so the next `/next-pointer` doesn't hit an
-empty buffer.
+- pass the `revision` read in Wave 1, so a concurrent change is refused rather
+  than clobbered;
+- set the terminal status using the project's own vocabulary
+  (`policy.workRegister.statusMappings`);
+- record the completion date and the evidence link (the close-out artifact).
 
-## Next Dispatch Pointer — Out of Scope
+**External registers are mutated by this ceremony, not by the plugin.** The
+provider returns a structured instruction — operation, item, fields, expected
+revision, idempotency key. Execute it with the host's connector, then confirm the
+result. Re-running with the same idempotency key must not repeat the change.
 
-This skill **does not** print a next-sprint dispatch pointer. The next pointer (single
-or parallel) is the responsibility of the `/next-pointer` skill, run separately after
-pointer-closeout finishes.
+**Two mandatory register outcomes** — the belt moves forward by exactly one:
 
-Wave 1's *Recommend* line names a direction in prose only (no code box). Wave 2 ends
-at persistence — no dispatch pointer.
+- **Retire the closed item.** It leaves the active pipeline and no longer reads as
+  in flight or pending.
+- **Elevate the next item** into the vacated head position, so it becomes the
+  active target. This is a sequence change, not a dispatch pointer.
 
-## Optional Adversarial Pass — Offer Before Persisting
+### Step 6 — Verify every result
 
-Before Wave 2 persists anything, offer the user an adversarial pass over this close-out
-itself — `/adversarial-review` on the drafted report and retrospective. A close-out is a
-document that makes claims (what shipped, what the findings mean) and proposes actions
-(dispositions, roadmap edits), which is exactly the shape that skill is built to stress-test.
-Offer it when the close-out carries something the project will inherit unexamined: a lesson
-being promoted to a standing rule, a sprint declared complete on partial evidence, or a
-roadmap edit that retires scope. Skip the offer for routine close-outs — a clean sprint with
-mechanical findings does not need red-teaming, and a reflexive offer trains the user to
-decline it. If the pass runs, fold its blocking concerns into the findings table before
-persisting; the close-out is not final until they are resolved or explicitly accepted.
+Re-read each thing you wrote, from its source:
 
-## Persistence — Final Step of Wave 2
+- the close-out artifact exists at the resolved path and carries the expected content;
+- the terminal ledger carries exactly one new record for this item, and prior
+  records are byte-identical to before;
+- the roadmap and lessons changes are present, and committed if policy required it;
+- the item's status in the live register, re-read through the provider, is terminal;
+- the next item is now at the head.
 
-Once all files are saved (close-out report, retrospective, roadmap, sprint queue), the
-last action of this skill is to **persist them to version control per the project's Git
-Workflow** (typically defined in the project's `CLAUDE.md`).
+### On partial failure
 
-- **Cowork (the planner) never runs mutating git itself.** Per the standard Git-Ownership
-  rule, the entity doing the work does not solely certify that git reflects it: the user —
-  or a dispatched executor — commits, while Cowork verifies with read-only, lock-free git
-  (`git --no-optional-locks status`, `git log`). Follow whatever the project's `CLAUDE.md`
-  Git Workflow specifies.
-- Hand the committer the exact set of files this close-out wrote/changed so they land in
-  one commit. This is distinct from the next-dispatch pointer (that is `/next-pointer`'s
-  job) — persistence commits files, it does not print a dispatch code box.
-- If no project Git Workflow is defined, state plainly that the saved files are
-  uncommitted and ask the user how to commit them — the close-out is not finished until
-  the changes are committed. (The legacy `git-handoff` skill remains available for the old
-  browser-sandbox packet flow if a user explicitly asks, but it is not invoked here.)
+If a step succeeds and a later one fails — most commonly, local files commit but
+the external register update does not — **write a recovery record** naming
+precisely what completed and what remains:
 
-## Important Guardrails
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . recovery
+
+Report it to the user in the close-out summary. Never silently retry the whole
+crossing: the completed steps are idempotent, so re-running is safe, but the user
+must know the crossing is incomplete before it happens again.
+
+---
+
+## After the crossing
+
+### Buffer check
+
+Every close-out drains the dispatch buffer by one. Count the remaining
+dispatch-ready active items and compare against `policy.roadmap.dispatchBuffer`.
+If the count is below target, or the newly elevated head item is a stub,
+recommend `/roadmap-review` plainly in the summary.
+
+If `policy.roadmap.dispatchBuffer` is 0 or `policy.roadmap.eagerSpec` is false,
+skip this check — the project has deliberately disabled eager specification. Do
+not recommend replenishing a buffer the project does not keep.
+
+Never author a specification here. Flagging depletion is this skill's whole job in
+that loop.
+
+### Governance gates
+
+After the report is drafted, check whether any lesson belongs in a governance
+document, and whether an audit, milestone review, or release gate should be
+surfaced. Read [references/governance-gates.md](references/governance-gates.md).
+
+### Optional adversarial pass
+
+Before Wave 2 writes anything, offer `/adversarial-review` over the drafted
+report and retrospective **when the close-out carries something the project will
+inherit unexamined**: a lesson being promoted to a standing rule, an item declared
+complete on partial evidence, or a change that retires scope. Skip the offer for
+a routine close-out — a reflexive offer trains the user to decline it. If the pass
+runs, fold its blocking concerns into the findings before the crossing begins.
+
+### Next dispatch pointer — out of scope
+
+This skill does not print one. Wave 1's *Recommend* line names a direction in
+prose. Wave 2 ends at verification.
+
+---
+
+## Guardrails
 
 - Propose dispositions; do not decide them unilaterally.
 - Prefer net-new governance updates over ceremonial rewrites.
-- Promote a retrospective lesson to a standing rule only after the same pattern appears twice.
-- Keep the report project-facing and the retrospective workflow-facing.
-- Lead Wave 1 with the 5-line Sprint Brief; everything else is support detail.
-- **Always retire the closed sprint and elevate the next dispatch** in the roadmap and
-  sprint queue — the conveyor belt moves forward by one on every close-out.
-- **End Wave 2 by persisting per the project's Git Workflow** — the close-out isn't done
-  until the changes are committed (by the user or a dispatched executor, not Cowork).
-- **No next-sprint dispatch pointer in either wave.** That belongs to `/next-pointer`.
+- Promote a lesson to a standing rule only after the same pattern appears twice.
+- Never leave output only in conversation.
+- Never write to a role whose `allowedWriters` does not name this ceremony.
+- Never edit a generated artifact — regenerate it through its registered generator.
+- Never treat a mirror, report, archive, or unclassified role as truth.
 
-## Anti-Patterns
+## Anti-patterns
 
-- Leaving the outputs unsaved
-- Writing files before user confirmation
-- Opening Wave 1 with the Findings table instead of the Sprint Brief
-- Letting the Sprint Brief grow past ~10 lines — it should be scannable in seconds
-- Leading with aggregate labels ("the three fixes", "a tooling failure") that hide
-  the actual referents — name the things or explain the failure in one clause
-- Printing a next-sprint dispatch pointer (Wave 1 or Wave 2) — that is `/next-pointer`'s job
-- Leaving the closed sprint at the head of the queue, or failing to elevate the next dispatch
-- Ending Wave 2 without persisting the changes — leaving saved files uncommitted
-- Writing vague retrospective lessons
-- Promoting one-off observations into standing rules
-- Skipping the Wave 1 roadmap-update proposals
+- Declaring completion from a summary rather than from evidence.
+- Appending a terminal record before the artifact exists, or before evidence holds.
+- Editing existing terminal records instead of appending a correction.
+- Closing the external register before local governance is persisted — that is the
+  ordering that produces an unrecoverable split.
+- Duplicating a terminal record by re-running the close-out.
+- Silently creating directories while merely resolving paths.

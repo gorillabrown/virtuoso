@@ -10,19 +10,22 @@ description: >
   When in doubt, use this skill — misallocated effort is invisible waste.
 ---
 
-<!-- virtuoso-shared-contract v1 -->
+<!-- virtuoso-shared-contract v2 -->
 **Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
 
-- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
-- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
-- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
-- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
-- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
-- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+- **Registry resolution** — `Virtuoso/workspace-layout.json` is the authority; `Virtuoso.Governance.Readme.md` is its synchronized human view. Resolve every document, work item, and permission through the registry. Never hardcode a path, never fall back to a conventional one, and never infer authority from a role's name. Full contract: the plugin's `references/registry-contract.md`.
+- **Read-only preflight** — session start and any "where am I" check runs `--mode check`, which performs **zero project writes**. Adoption, creation, and repair are separate operations, each explicitly invoked.
+- **Providers** — work items come from the configured work-register provider (local file, spreadsheet, connector-backed task manager, issue tracker, database, or read-only snapshot). Negotiate capabilities before planning work; never open a register file directly. The live work register, the append-only terminal ledger, and any compatibility export are three different roles.
+- **Provenance** — every derived figure cites its provider, source, and snapshot time. A figure whose inputs are missing is reported as *not computable* with the missing inputs named, never approximated.
+- **Git** — behaviour is `policy.git`, not a fixed rule of this plugin. See `references/git-policy.md`. Under every policy: inspect first, stage exact paths, preserve unrelated work, no destructive flags, no force-push without explicit authorization.
+- **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (v1.0 — 8 universal checks plus the project's declared extensions). No skill restates it in its own words.
+- **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
+- **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
+- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 # Effort Levels — Sprint Dispatch Sizing
 
-This skill helps Cowork select the right effort level when authoring dispatch specs.
+This skill helps the planner select the right effort level when authoring dispatch specs.
 Effort level controls how deeply sub-agents reason on each task — it is the primary
 cost lever in the system. A single task at max effort can consume 10x+ more tokens
 than the same task at low effort. Getting this right prevents both underthinking
@@ -214,18 +217,18 @@ Effort: Low
 
 ### Effort ↔ Model Tier Defaults
 
-Effort and model tier are orthogonal but correlate. These defaults apply when effort
+Effort and task tier are orthogonal but correlate. These defaults apply when effort
 is not explicitly annotated on a task:
 
 | Model Tier | Default Effort | Rationale |
 |-----------|---------------|-----------|
-| haiku | Low | Mechanical tasks — pattern-match, no reasoning needed |
-| sonnet | Medium | Standard implementation — judgment within bounded scope |
-| opus | High | Cross-system reasoning — multiple approaches, careful tracing |
+| mechanical | Low | Mechanical tasks — pattern-match, no reasoning needed |
+| bounded | Medium | Standard implementation — judgment within bounded scope |
+| cross-cutting | High | Cross-system reasoning — multiple approaches, careful tracing |
 
-**Only annotate effort when it differs from the model-tier default.** A `[sonnet]` task
-is implicitly `{medium}`. Write `[sonnet] {high}` only when the task needs deeper
-reasoning than sonnet normally provides. This keeps the dispatch readable.
+**Only annotate effort when it differs from the model-tier default.** A `[bounded]` task
+is implicitly `{medium}`. Write `[bounded] {high}` only when the task needs deeper
+reasoning than bounded normally provides. This keeps the dispatch readable.
 
 ---
 
@@ -266,33 +269,33 @@ If any criterion triggers, split.
 | "Everything should be Medium, it's the safe default" | Medium is a great default for standard work, but it underthinks hard problems and overthinks trivial ones. Both waste tokens. |
 | "Max effort on everything ensures quality" | Max effort on a rename burns 10x tokens for zero quality improvement. Match effort to actual complexity. |
 | "Low effort is fine, the agent can figure it out" | Low effort explicitly limits reasoning depth. Complex tasks at Low effort produce plausible-but-wrong output. |
-| "I'll set effort during execution when I see the task" | Effort is a spec decision, not an execution decision. The spec author knows the task complexity. CLI just executes. |
-| "Effort doesn't matter, model tier handles it" | Model tier selects capability. Effort selects how much of that capability is used. A sonnet at Low is fundamentally different from sonnet at High. |
+| "I'll set effort during execution when I see the task" | Effort is a spec decision, not an execution decision. The spec author knows the task complexity. The implementation agent just executes. |
+| "Effort doesn't matter, the task tier handles it" | The task tier says how wide the task reaches. Effort says how much deliberation to spend on it. The same bounded task run at `low` and at `high` produces materially different work. |
 | "This sprint is all one effort level, no need to declare it" | Declare it anyway. The explicit declaration prevents drift and enables cost forecasting. |
 | "Splitting by effort adds overhead, just run everything at High" | The cost difference between Low and High is ~5x per task. On a 10-task sprint with 6 Low tasks, that's wasting ~24x the tokens on those 6 tasks. |
 
 ---
 
-## CLI Execution: The `/effort-levels` Command
+## Runtime effort: the `/effort-levels` command
 
 Effort declarations in the spec are **planning decisions**. The actual mechanism that
-changes the extended thinking budget at runtime is the CLI command:
+changes the deliberation budget at runtime is the host command:
 
 ```
 /effort-levels [low | medium | high | max]
 ```
 
-This command must be run inside the CLI session before dispatching tasks at the
+Run it inside the implementation agent's session before dispatching tasks at the
 declared effort level. Without it, effort annotations in the spec are decorative —
-the CLI will use whatever effort level happens to be active.
+the session will use whatever effort level happens to be active.
 
-### How CLI Uses This
+### How the implementation agent uses this
 
-1. **At sprint start:** CLI reads the dispatch header's `Effort:` field and runs
+1. **At dispatch start:** the implementation agent reads the dispatch header's `Effort:` field and runs
    `/effort-levels [default]` to set the baseline for the sprint.
 
 2. **Per-task override:** Before dispatching a task with an effort override (e.g.,
-   `{max}`), CLI runs `/effort-levels [override]`. After the task completes, CLI
+   `{max}`), it runs `/effort-levels [override]`. After the task completes, it
    reverts to the sprint default with `/effort-levels [default]`.
 
 ### Example Execution Sequence
@@ -300,7 +303,7 @@ the CLI will use whatever effort level happens to be active.
 ```
 Sprint header: Effort: Medium | Override: tasks #3, #7 → High, task #5 → Max
 
-CLI execution:
+Execution:
   /effort-levels medium          ← set sprint default
   dispatch task #1               ← runs at medium (default)
   dispatch task #2               ← runs at medium (default)
@@ -319,10 +322,11 @@ CLI execution:
 
 ### Important
 
-- **Cowork authors the spec.** Effort level selection is a Cowork decision made
+- **The planner authors the specification.** Effort-level selection is a planner decision made
   during dispatch authoring — that's what this skill governs.
-- **CLI executes the spec.** CLI reads the effort declarations and runs the
-  `/effort-levels` command at the right moments. CLI doesn't decide effort — it
+- **The implementation agent executes the specification.** It reads the effort
+  declarations and runs the `/effort-levels` command at the right moments. It does not
+  decide effort — it
   follows the spec.
 - **If effort isn't changing, don't re-run the command.** Consecutive tasks at the
   same level don't need redundant `/effort-levels` calls.

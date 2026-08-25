@@ -43,12 +43,12 @@ Locate the project's equivalent of each layer before tracing anything. These are
 
 ### Gauge Degradation Within a Period
 - Gauges that accumulate (wear, depletion, per-component degradation) should visibly move *within* a period
-- If a gauge only changes between periods, the engine is updating state correctly but the renderer is reading a period-start snapshot instead of the live field
-- Check which field the renderer reads, not whether the engine writes
+- If a gauge only changes between periods, the underlying state is updating correctly but the view is reading a period-start snapshot instead of the live field
+- Check which field the view reads, not whether the source writes
 
 ### Derived Durations
 - If a count field is non-zero but its derived duration renders as `0:00`, the count-to-time conversion is missing
-- Typical fix: `duration = event_count * per_event_duration` — confirm the per-event duration constant is the same one the engine uses
+- Typical fix: `duration = event_count * per_event_duration` — confirm the per-event duration constant is the same one the source uses
 
 ### Score Tier Evidence Gates
 - An elevated score tier should require positive evidence, not just a margin. A typical compound gate: a decisive event OR a progression milestone OR (dominance ratio ≥ 3.0 AND margin > 0.40)
@@ -68,14 +68,14 @@ Locate the project's equivalent of each layer before tracing anything. These are
 ## Display Fix Pattern
 
 1. **Identify the display field** that is wrong
-2. **Trace backward**: renderer → snapshot → engine state
+2. **Trace backward**: view → snapshot → source state
 3. **Find the gap**: missing field copy, wrong scale, wrong source field, wrong classification
 4. **Fix at the correct layer**: snapshot if it is a data-capture issue, renderer if it is a formatting issue
 5. **Verify**: confirm the fix does not break other outputs reading the same field
 
-## ICM Knowledge System Integration (Tagger Role)
+## Knowledge-system integration (tagger role)
 
-**Rule:** If a display or statistics bug affects any metric later consumed by the ICM Knowledge System, tag the issue as **"knowledge-system affecting"** in your findings and identify which downstream artifact could be compromised:
+**Rule:** If a display or statistics bug affects any metric later consumed by the project's knowledge system, tag the issue as **"knowledge-system affecting"** in your findings and identify which downstream artifact could be compromised:
 - **Experiential bridge metrics** (outcome variety, terminal-event texture, recovery dynamics, temporal pacing)
 - **Strategy Guide use** (calibration metrics that inform tuning rules)
 - **Validation Log interpretation** (audit-trail entries based on now-incorrect display data)
@@ -108,7 +108,7 @@ At the START of every task, count the total fixes/steps and print a progress hea
 - If a fix introduces a test failure: `===== PROGRESS: [X/N] BLOCKED — [test name] failing after OA-012 fix =====`
 
 ## STRICT OUTPUT RULES
-1. **Record findings only.** Write all findings to the project's agent findings document (`AGENT_FINDINGS.md`; resolve its location from the project's documentation readme) and save patterns to agent memory.
+1. **Record findings only.** Write all findings to the project's agent findings document (resolve it through the registry) and save patterns to agent memory.
 2. **Do NOT suggest next steps or offer to investigate further.** Report and stop.
 3. **Do NOT ask questions.** End with findings summary. No postamble.
 

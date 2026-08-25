@@ -1,44 +1,28 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, is_dataclass
+from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
 from typing import Any
 
 
 @dataclass(frozen=True)
-class WorkspacePaths:
+class WorkspaceContext:
+    """Where the cockpit reads from — always the registry, never a convention."""
+
     root: Path
     manifest: Path
-    roadmap: Path
-    sprint_queue: Path
+    roadmap: Path | None
     reports: Path
-
-
-@dataclass(frozen=True)
-class SprintRow:
-    priority: str
-    seq: int | None
-    code: str
-    phase: str
-    stage: str
-    title: str
-    loe: str
-    dependencies: list[str]
-    implementation_status: str
-    written_status: str
-    branch: str
-    date_started: str
-    date_completed: str
-    close_out_file: str
-    description: str
-    notes: str
-    done: bool
-    sort_key: str
+    work_register_role: str
+    work_register_authority: str
+    provider: dict
+    compatibility_adapter: bool = False
+    notes: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class RoadmapSnapshot:
-    path: Path
+    path: Path | None
     active_codes: list[str]
     completed_codes: list[str]
     full_spec_codes: list[str]
@@ -48,12 +32,11 @@ class RoadmapSnapshot:
 
 @dataclass(frozen=True)
 class HealthSummary:
-    head_code: str
-    full_spec_buffer: int
-    queued_count: int
-    in_flight_count: int
-    blocked_count: int
-    completed_count: int
+    head_id: str
+    head_title: str
+    buffer_target: int
+    buffer_filled: int
+    counts: dict[str, int]
     drift_count: int
     drift_findings: list[str]
     recommendation: str
@@ -61,11 +44,12 @@ class HealthSummary:
 
 @dataclass(frozen=True)
 class PlanningModel:
-    workspace: WorkspacePaths
+    workspace: WorkspaceContext
     roadmap: RoadmapSnapshot
-    sprints: list[SprintRow]
-    dashboard: dict[str, Any]
+    items: list[Any]
+    metrics: dict
     health: HealthSummary
+    provenance: dict
 
 
 def to_jsonable(value: Any) -> Any:
@@ -75,8 +59,6 @@ def to_jsonable(value: Any) -> Any:
         return to_jsonable(asdict(value))
     if isinstance(value, dict):
         return {str(key): to_jsonable(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [to_jsonable(item) for item in value]
-    if isinstance(value, tuple):
+    if isinstance(value, (list, tuple)):
         return [to_jsonable(item) for item in value]
     return value

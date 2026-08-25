@@ -1,458 +1,411 @@
 ---
 name: roadmap-status
 description: |
-  MANUAL INVOCATION ONLY. Lightweight roadmap pulse check (~5-10 min).
-  ONLY runs when the user types "/roadmap-status", "run roadmap
-  status", or "check roadmap status". DO NOT auto-trigger on
-  conversational mentions of status, progress, or "where do things
-  stand" — this is a deliberate ritual, not a casual status answer.
-  Reads the current state, computes KPIs directly from
-  sprint-catalog.csv (catalog-direct — no cached Dashboard to trust
-  or distrust), enforces archive-forward discipline by migrating any
-  shipped sprints lingering in active skeletons to the Completed Work
-  Summary table (and keeps the catalog CSV in sync), reports a fast
-  Axios-style briefing with bracketed sprint IDs and LEDE-first
-  bullets, and optionally executes small (under 5 min) recommended edits.
-  Lightweight sibling of /roadmap-review — use that when full
-  recalibration is needed.
+  MANUAL INVOCATION ONLY. Read-only status briefing (~5 min). ONLY runs
+  when the user types "/roadmap-status", "roadmap status", or "status
+  update". Reads the roadmap document and the project's configured
+  work register through its provider, computes figures with provenance,
+  and composes a plain-language briefing. It writes nothing to the
+  project unless the user explicitly approves a bounded correction
+  phase. DO NOT auto-trigger on conversational mentions of status,
+  progress, or planning.
 ---
 
-<!-- virtuoso-shared-contract v1 -->
+<!-- virtuoso-shared-contract v2 -->
 **Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
 
-- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
-- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
-- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
-- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
-- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
-- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+- **Registry resolution** — `Virtuoso/workspace-layout.json` is the authority; `Virtuoso.Governance.Readme.md` is its synchronized human view. Resolve every document, work item, and permission through the registry. Never hardcode a path, never fall back to a conventional one, and never infer authority from a role's name. Full contract: the plugin's `references/registry-contract.md`.
+- **Read-only preflight** — session start and any "where am I" check runs `--mode check`, which performs **zero project writes**. Adoption, creation, and repair are separate operations, each explicitly invoked.
+- **Providers** — work items come from the configured work-register provider (local file, spreadsheet, connector-backed task manager, issue tracker, database, or read-only snapshot). Negotiate capabilities before planning work; never open a register file directly. The live work register, the append-only terminal ledger, and any compatibility export are three different roles.
+- **Provenance** — every derived figure cites its provider, source, and snapshot time. A figure whose inputs are missing is reported as *not computable* with the missing inputs named, never approximated.
+- **Git** — behaviour is `policy.git`, not a fixed rule of this plugin. See `references/git-policy.md`. Under every policy: inspect first, stage exact paths, preserve unrelated work, no destructive flags, no force-push without explicit authorization.
+- **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (v1.0 — 8 universal checks plus the project's declared extensions). No skill restates it in its own words.
+- **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
+- **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
+- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 # Roadmap Status
 
-## Preflight — workspace check (run first)
+## Preflight — read-only registry check (run first)
 
-This skill operates on the project's Virtuoso workspace. Before anything else, bring the project under management non-destructively:
+Resolve the plugin through its launcher, then run the **read-only** check. It performs
+discovery and validation with zero project writes.
 
-    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/virtuoso_preflight.py" --root . --mode adopt
+**Unix-like shell**
 
-`adopt` never moves or duplicates anything. Read the `virtuoso-status:` line it prints and branch:
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode check
 
-- `ready` — a `Virtuoso/` workspace already exists (it was healed if needed); continue.
-- `adopted roadmap=<path>` — the project already had an established documentation tree (e.g. `Project Documentation/` or `2. Project Documentation/`) with its own roadmap, so a thin `Virtuoso/` control marker was written that points at that existing roadmap. Tell the user it was adopted in place — nothing was moved or duplicated — then continue.
-- `none` — there is no workspace and no documentation tree to adopt (treat a missing `~/.virtuoso/plugin-root` the same way). Stop this skill and route the user to `/virtuoso-init`, which builds the plugin-only `Project Documentation/` layout (the only layout the workspace scaffolder supports).
+**Windows PowerShell**
 
-**Governance authority — read `Virtuoso.Governance.Readme.md` first.** The project-root `Virtuoso.Governance.Readme.md` is the single source of truth for where every governance document lives (roadmap, sprint catalog, lessons, close-outs, issues, review artifacts). Resolve each document you need through its registry and **defer to the paths it lists**, whatever layout the project uses (e.g. `docs/governance/ROADMAP.md`, `2. Project Documentation/…`, or the plugin default). `Virtuoso/workspace-layout.json` is the machine-readable mirror of the same paths. **Never create a parallel or competing document for a role the registry already lists** — open and edit the registered file in place. If the registry and the files on disk diverge (a registered path is an empty stub while the project's real document lives elsewhere), fix the **registry** — repoint it to the existing document and tell the user — do **not** seed or fork a rival. If `Virtuoso.Governance.Readme.md` is missing, run `/virtuoso-init` to generate it by registering the project's existing governance documents (it seeds a new file only for a role that genuinely has none).
+    & "$HOME/.virtuoso/bin/virtuoso.ps1" virtuoso_preflight --root . --mode check
+
+Add `--json` when you want the structured result (status, writes, findings, and the full
+resolved role table). Read the `virtuoso-status:` line and branch:
+
+- `ready` — the registry is valid. Continue.
+- `warning` — usable; surface the findings to the user and continue. Warnings are not blockers.
+- `repair-needed` — **STOP.** Run `--mode repair` to produce the preview, show the user the
+  proposed paths, semantic changes, files affected, and backup location, and apply it only
+  with `--apply` after they approve.
+- `adoptable` — the project has governance documents but is not registered. Offer
+  `--mode adopt`: it registers what exists, in place. Nothing is moved, duplicated, or rewritten.
+- `none` — no registry and nothing to adopt. Route the user to `/virtuoso-init`.
+- `failed` — report the error verbatim and stop.
+
+If neither launcher resolves, report that the plugin could not be located and stop. Do not
+guess a path.
+
+**Governance authority.** Resolve every document you need through the registry
+(`references/registry-contract.md`). Never create a parallel document for a registered role;
+never write to a role whose `allowedWriters` does not name this ceremony; never treat a
+`mirror`, `report`, `archive`, or `unknown` role as truth.
+
+Read the `roadmap-integrity:` line. On `fail` (null bytes, non-UTF-8, or missing — exit 3), STOP and report the corruption to the user; do not migrate or rewrite a corrupt roadmap. On `warn` (empty or unusually large — exit 2), surface it and confirm with the user before proceeding. On `ok`, continue.
 
 
-A fast pulse on where the project stands and what's next, in
-Axios-style bullets: bracketed sprint ID, then a LEDE that says the
-news, then optional sub-bullets with supporting detail. ~5-10
-minutes. No replanning, no spec authoring. Cleanup duty: enforces
-archive-forward discipline by migrating any shipped sprints that
-linger in `## Active & Remaining Sprint Skeletons`, and keeps
-`sprint-catalog.csv` in sync with the canonical roadmap document.
+Heavyweight, periodic recalibration of an entire project. The ceremony
+you run when you need to know — with confidence — where the project
+has been, where it's going, and what to dispatch next.
+## Read-only by default
+
+Phase 1 — the whole briefing — performs **zero project writes** (redesign item 36).
+Archival, straggler migration, and status correction all live in Phase 2, which
+runs only after the user explicitly approves specific, named changes.
+
+If the user asked for a status update and nothing else, Phase 1 is the entire
+skill. Ending after Phase 1 is a complete, correct run.
+
+Phase 2 is additionally gated by the registry: a correction is attempted only when
+the target role's `allowedWriters` names `roadmap-status` **and** the provider
+reports the capability. When it does not, the correction is reported as a
+recommendation for a ceremony that is permitted to make it.
 
 ## When to use
 
-- Weekly or biweekly recurring check-in
-- Before a stakeholder conversation where you want a fresh read
-- When something feels off and you want a sanity check
-- Between phases to spot what's drifting
+- Weekly or ad-hoc "where are we" check
+- Before a stakeholder conversation
+- Returning after a gap and wanting the short version
 
 Do NOT use this for:
-- Full replanning (use /roadmap-review)
-- Skeleton or full-spec authoring (use /roadmap-review)
-- Adding new initiatives (use roadmap-update)
-- Sprint scoping (use sprint-planning)
+- Replanning or re-sequencing — `/roadmap-review`
+- Finalizing a specification for dispatch — `/next-pointer`
+- Closing out completed work — `/pointer-closeout`
 
 ## Invocation
 
-Manual only. The user must explicitly type one of:
-- `/roadmap-status`
-- "run roadmap status"
-- "check roadmap status"
-
-If no roadmap document exists, STOP and recommend running
-/roadmap-review to establish one first.
+Manual only: `/roadmap-status`, "roadmap status", "status update".
 
 ## Glossary
 
-These terms are used precisely throughout this skill.
+- **Work item** — a discrete unit of work with clear acceptance criteria.
+- **Group / lane** — optional grouping levels, only if `policy.roadmap.hierarchy`
+  and `policy.roadmap.lanes` declare them.
+- **Stub / specification** — an item without / with its full card.
+- **Straggler** — an item still in the roadmap's active section that has in fact
+  shipped.
 
-- **Sprint** — A discrete unit of work (1-5 days, S-M t-shirt) with
-  clear acceptance criteria.
-- **Phase** — A coherent shippable chunk containing multiple
-  sprints, with a clear theme, goal, and exit criteria.
-- **Stage** — Optional sub-grouping within a phase.
-- **Stub** — A placeholder sprint card with just code, title, and
-  optionally a one-line gist. Lives inline in the roadmap; the
-  Catalog row marks Written Status as `Stub` (or `None`).
-- **Full spec** — A sprint card with all 7 structural fields PLUS
-  implementation detail. Lives inline in the roadmap; Catalog row
-  marks Written Status as `Full Spec`.
-- **Dispatch** — The act of sending a sprint to the implementer.
-  The implementer reads the full spec inline in the roadmap and
-  runs.
-- **Scope** — What's included in / excluded from a sprint.
-- **Pointer** — A textual reference to where detail lives.
-
-### The progression of a sprint's content density
-
-```
-Stub  →  Full spec  →  Close-out
-(TBD)    (in roadmap)  (post-completion)
-```
-
-This skill **reads** the roadmap and `sprint-catalog.csv`. It does
-not write full specs or stubs. Its only write actions are small
-cleanup migrations.
-
-**Note on the legacy term "skeleton":** the section heading
-`## Active & Remaining Sprint Skeletons` is preserved for backward
-compatibility.
+This skill **reads** the roadmap and the live work register. Its only write
+actions are the small, individually approved corrections of Phase 2.
 
 ## Operating principles
 
-1. **LEDE first, detail second.** Each bullet leads with
-   `[SPRINT-ID]` in brackets, then a one-to-two-sentence bolded
-   LEDE.
-2. **Plain language, always.** Plain English, complete sentences,
-   no fragments, no bare acronyms.
-3. **Bulleted and fast.** Whole briefing readable in under 60
-   seconds at the LEDE level.
-4. **Active section is uncompleted-only.** Cleanup duty: scan
-   `## Active & Remaining Sprint Skeletons` for any sprint that has
-   actually shipped. Stragglers get auto-recommended for migration
-   in Phase 2 — always <5 min edits.
-5. **sprint-catalog.csv stays in sync.** When a sprint moves out of
-   active, its catalog row is updated (Implementation Status flipped
-   to `Completed` / `Dissolved`, Seq cleared, Date Completed
-   populated, Close-Out File pointer recorded). Both views reflect
-   the same reality after Phase 2.
-6. **sprint-catalog.csv is the canonical KPI source.** All KPIs are
-   computed directly (catalog-direct) from the CSV — there is no
-   cached Dashboard to trust or distrust. If a companion
-   `sprint-queue.xlsx` report exists, it is a generated, human-facing
-   view only; never read it back, and never treat its Dashboard tab
-   as authoritative (its Power Query cache only refreshes when a
-   human opens it in Excel, so it can silently go stale/contradictory —
-   the CSV numbers are always the ground truth).
-7. **Read, don't restructure.** Beyond cleanup, this skill never
-   re-sequences, generates new specs, or changes phase boundaries.
-8. **Two-phase hard ceiling.** Phase 2 only executes <5 min edits.
-   Anything bigger gets handed off to /roadmap-review.
-9. **AskUserQuestion for all confirmations.** 2+ alternatives, one
-   tagged [RECOMMENDED], escape hatch.
+1. **Read-only unless approved.** Phase 1 writes nothing. Phase 2 writes only what
+   the user named.
+2. **Descriptive names first.** Every bullet leads with the item's human title;
+   the identifier follows in parentheses.
+3. **Plain language, always.** Complete sentences, no fragments, no bare acronyms.
+4. **Fast.** The whole briefing readable in under 60 seconds at the summary level.
+5. **The provider is the register.** Figures come from the configured provider,
+   never from a generated report or spreadsheet cache.
+6. **Provenance on every figure.** Provider, source, snapshot time. A stale
+   snapshot is labelled with its age.
+7. **Never fabricate a figure.** A metric the data cannot support is reported as
+   *not computable*, naming the missing inputs.
+8. **Read, don't restructure.** This skill never re-sequences, authors
+   specifications, or changes group boundaries.
+9. **Two-phase hard ceiling.** Phase 2 executes only changes under five minutes
+   each. Anything larger is handed to `/roadmap-review`.
+10. **Bounded questions**, per `references/actors-and-interaction.md`.
 
 ## Writing rules for bullets
 
-These rules apply to every bullet in **Recently completed** and
-**Coming up**. Apply them WHILE writing.
+Apply these while writing, to every **Recently completed** and **Coming up** bullet.
 
-### Rule 1 — Bracket the ID, then bold the LEDE
+### Rule 1 — Lead with the name, then bold the summary
 ```
-- [SPRINT-ID] **One- or two-sentence LEDE that says the news.**
+- **[Item title]** — one- or two-sentence summary that says the news. *(ITEM-ID)*
   - Supporting detail (optional).
   - *Issue: [plain-language sentence, if any].*
 ```
 
-### Rule 2 — The LEDE answers "what + why"
-Pick the 1-2 angles most useful: what was supposed to happen / what
-happened / why it matters / zoom in or out.
+### Rule 2 — The summary answers "what + why"
+Pick the one or two angles most useful: what was supposed to happen, what
+happened, why it matters, or zoom in/out.
 
 ### Rule 3 — Lead with news, not process
-❌ "[SK-FU12-DIAGNOSTIC] **Investigated a failing calibration result
-and discovered the original explanation was wrong; wrote up a
-diagnostic protocol.**"
 
-✓ "[SK-FU12-DIAGNOSTIC] **The previous calibration failure was
-misdiagnosed — the deeper investigation produced a standing
-diagnostic protocol now in force for every future calibration
-failure.**"
+✗ "**Diagnostic review** — investigated a failing result and discovered the
+original explanation was wrong; wrote up a protocol."
 
-### Rule 4 — Use complete sentences, never fragments
-❌ "[SK-FU12-RESOLUTION] **B6 hybrid revert; Secondary gate cleared at
-20.90%.**"
+✓ "**Diagnostic review** — the earlier failure was misdiagnosed. The deeper
+investigation produced a standing protocol now in force for every future failure
+of this kind."
 
-✓ "[SK-FU12-RESOLUTION] **The broken secondary-finish gate is
-fixed.** Reverting to a clean baseline cleared it at 20.9%, inside
-the target band; the rest of the calibration cluster is unblocked."
+### Rule 4 — Complete sentences, never fragments
 
-### Rule 5 — Translate or paraphrase acronyms in the LEDE
-❌ "[SK-FLASH-CAL-SYM] **Added Sec-INT flash mult; ref overshot at
-70, retuned to 60.**"
+✗ "**Gate fix** — hybrid revert; secondary gate cleared at 20.90%."
 
-✓ "[SK-FLASH-CAL-SYM] **Secondary-channel specialists now get a finish
-bonus comparable to primary-channel specialists, finally evening out
-the two finish channels.** An initial multiplier value overshot the
-target band and was tuned down."
+✓ "**Gate fix** — the broken secondary gate is fixed. Reverting to a clean
+baseline cleared it at 20.9%, inside the target band, which unblocks the rest of
+the cluster."
+
+### Rule 5 — Expand or paraphrase acronyms
+
+✗ "**Flash symmetry** — added Sec-INT flash mult; ref overshot at 70, retuned to 60."
+
+✓ "**Flash symmetry** — secondary-channel specialists now receive a finish bonus
+comparable to primary-channel specialists, evening out the two channels. An
+initial multiplier overshot the target band and was tuned down."
 
 ### Rule 6 — Coming-up bullets follow the same format
-❌ "[SK-FU12-E] **Wire Instinct + RT into secondary finish-threat
-bonus.**"
 
-✓ "[SK-FU12-E] **Wires the Instinct and Risk Tolerance attributes
-into the secondary-channel finish-bonus calculation, so high-instinct,
-high-risk-tolerance participants get a bigger reward for committed
-secondary-channel attempts.**"
-  - *Adaptation: validation calibration runs with two random seeds
-    instead of one to reduce noise variance.*
+✓ "**Attribute wiring** — wires the two relevant attributes into the
+secondary-channel bonus calculation, so participants with high values in both are
+rewarded for committed attempts. *(ITEM-ID)*"
+  - *Adaptation: validation runs use two random seeds instead of one to reduce
+    noise.*
 
-### The "stranger test"
-Before saving, ask of every LEDE: would a smart colleague who has
-never seen this project understand the news from this LEDE alone?
-If no, rewrite.
+### The stranger test
+Before saving, ask of every summary: would a smart colleague who has never seen
+this project understand the news from this line alone? If not, rewrite.
 
 ---
 
 ## Inputs
 
-1. The project's roadmap document — specifically `## Active &
-   Remaining Sprint Skeletons` and `## Completed Work Summary`
-2. `sprint-catalog.csv` — the single source of truth for sprint
-   data. Used for:
-   - **KPI computation** — buffer health, % complete, phase
-     progress, totals, and category counts, all computed
-     catalog-direct. See Phase 1.3a.
-   - **Row-level reads** needed by the cleanup scan, sync check, and
-     window-specific signals (Date Completed in window, recently
-     added rows, etc.) — see Phase 1.3b.
-   - Read/write it as a plain CSV (standard library / pandas-style
-     row parsing) — this is not a spreadsheet mechanic.
-3. Most recent file in `roadmap-reviews/` — baseline
-4. Most recent file in `roadmap-reviews/checkins/` — baseline
-5. Recent git log (last 7 days)
-6. Close-out files (`CloseOut.<SPRINT>.<DATE>.md`)
+1. The registry — the authority for every path and permission.
+2. The roadmap document, through its registered role.
+3. The live work register, through its provider:
+
+        "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . items --all --json
+        "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . kpis --json
+
+4. The terminal ledger — for what is already final.
+5. The registered reviews directory — for the previous briefing and the pace read.
+6. The registered close-outs directory — for completion evidence.
+
+Never open a register file directly, and never read a generated report to obtain a
+figure.
 
 ## Outputs
 
-1. Axios-style bulleted briefing in chat
-2. Saved file: `roadmap-reviews/checkins/YYYY-MM-DD-status.md`
-3. (If Phase 2 runs) Direct edits to the roadmap document AND
-   sprint-catalog.csv — most commonly, migrating a shipped sprint out
-   of active
+1. The briefing, in chat.
+2. The briefing saved into the registered reviews directory (a checkins
+   subdirectory when the project keeps one). **This is the one Phase 1 write, and
+   it goes to a role this ceremony is registered to write.** If
+   `roadmapReviews`'s `allowedWriters` does not name `roadmap-status`, print the
+   briefing and say it was not saved, rather than writing anywhere else.
+3. Nothing else, unless Phase 2 is approved.
 
 ---
 
-## Phase 1 — READ & REPORT
+## Phase 1 — READ & REPORT (read-only)
 
 ### 1.1 Determine the window
-"Recent" = the longer of:
-- Time since the last status or review file
-- Last 7 days
+"Recent" = the longer of: time since the last briefing or review artifact, or the
+last seven days.
 
-### 1.2 Identify the current phase
-Look at `## Active & Remaining Sprint Skeletons` for a `(current)`
-marker. If ambiguous, AskUserQuestion.
+### 1.2 Identify the current group
+Only if `policy.roadmap.hierarchy` declares grouping. A flat project has no
+"current phase" and the briefing simply omits that line — do not invent one.
 
-### 1.3 Compute KPIs from sprint-catalog.csv + read window signals
+### 1.3 Compute figures through the provider
 
-**1.3a Compute KPIs catalog-direct from sprint-catalog.csv.**
-Read the CSV (columns: Seq, Sprint Code, Phase, Stage, Title, LOE,
-Dependencies, Implementation Status, Written Status, Branch, Date
-Started, Date Completed, Close-Out File, Description, Notes) and
-compute:
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . kpis --json
 
-| KPI | How |
+The provider returns each metric with its provenance and marks anything it cannot
+compute. Report them as returned:
+
+| Figure | Notes |
 |---|---|
-| Total sprints | row count |
-| Completed | rows where Implementation Status matches `Completed*` |
-| Blocked | rows where Implementation Status = `Blocked` |
-| Queued | rows where Implementation Status = `Queued` |
-| In Flight | rows where Implementation Status = `In Flight` |
-| Dissolved | rows where Implementation Status = `Dissolved` |
-| Superseded | rows where Implementation Status = `Superseded` |
-| % Complete (by count) | Completed ÷ (Total − Dissolved − Superseded) |
-| LOE remaining (points) | sum LOE points for rows not done (not Completed/Dissolved/Superseded) |
-| LOE completed (points) | sum LOE points for Completed rows |
-| Total LOE (points, excl. dissolved/superseded) | remaining + completed |
-| **% Complete (by LOE)** — primary progress metric | completed points ÷ total points |
-| Sprints remaining | Blocked + Queued + In Flight |
-| Avg sprint size (points) | total points ÷ (Total − Dissolved − Superseded) |
-| **Full specs queued** | rows where Implementation Status = `Queued` AND Written Status = `Full Spec` |
-| **Buffer health** | from full-specs-queued count: ≥5 Healthy, ≥3 Running low, ≥1 Critical, else Empty |
-| **Phase progress** | rows where Phase = the current phase (total / completed / remaining) |
+| Total items | |
+| Counts by canonical status | queued, in-flight, blocked, completed, dissolved, superseded, unknown |
+| % complete by count | terminal ÷ total |
+| Effort totals and % complete by effort | requires an effort value on every item and a scale entry for every value; otherwise **not computable**, with the offending items named |
+| Items remaining | blocked + queued + in-flight |
+| Dispatch-ready items | against `policy.roadmap.dispatchBuffer`; if the buffer is 0, report "eager specification disabled" |
+| Group progress | only if the project uses grouping |
 
-Status vocabulary includes **`Superseded`** and **`Pivot`**, and a completed sprint
-may read `Completed` or `Completed <date>` (match `Completed*`). LOE sizes are
-XS/XS-S/S/S-M/M/M-L/L/XL (points 0.5/0.75/1/2/3/5/8/20).
+The status *words* in the register are the project's own; the canonical statuses
+above come from `policy.workRegister.statusMappings`. Never assume a project
+spells anything a particular way.
 
-There is no cache to refresh — every figure is derived from the CSV as it stands
-right now. If a companion `sprint-queue.xlsx` exists and its Dashboard tab shows
-different numbers, that's a stale Power Query cache (it only recomputes when a
-human opens the workbook in Excel) — note the discrepancy if asked, but the
-figures computed here from the CSV are authoritative.
+**There is no cache to refresh.** If a generated report exists and disagrees, the
+report is stale by definition — note it if asked, regenerate it through its
+registered generator if the user wants, and never read it as truth.
 
-**1.3b Read window-specific signals from sprint-catalog.csv.**
-The CSV captures temporal information via Date Started and Date
-Completed. Read:
-- Sprints with Date Completed within the window → recently shipped
-- Sprints added (new rows) during the window — flag sideways adds
-- Sprints at the head of active (low Seq, Implementation Status =
-  Queued / In Flight) that have been there from before the window
+### 1.4 Read window signals
+- Items whose completion date falls in the window → recently shipped
+- Items added during the window → possible sideways scope
+- Items at the head of the sequence that predate the window and are still active
   → potentially stuck
-- Pace: completion count in window vs recent average
+- Pace: completions in the window versus the recent average. If completion dates
+  are absent from the register, pace is **not computable** — say so.
 
-**1.3c Active section cleanup scan (mandatory).**
-Walk every sprint in active skeletons and check for completion
-signals:
-- `CloseOut.<SPRINT>.<DATE>.md` file exists
-- Status marker `[COMPLETED ...]`
-- Closed PRs / merge commits closing the sprint
-- A deliverable the sprint was supposed to produce now exists
+### 1.5 Straggler scan (read-only)
+Walk the roadmap's active section and look for completion signals:
+- a close-out artifact exists in the registered close-outs directory
+- a terminal record exists in the terminal ledger
+- the deliverable the item was to produce now exists
 
-Any sprint with completion signals but still in active is a
-**straggler**. Auto-recommendation in 1.4.
+An item with completion signals but still active is a **straggler**. Record it as
+a Phase 2 candidate. **Do not migrate it in Phase 1.**
 
-**1.3d Sync check between roadmap and sprint-catalog.csv.**
-- Sprints in roadmap's active section but missing from the CSV →
-  flag for sync
-- CSV rows with Implementation Status = `Queued` but absent
-  from the roadmap's active section → flag for sync (likely stale)
-- CSV `Seq` order doesn't match roadmap's active sequence →
-  flag for sync
+### 1.6 Drift scan (read-only)
+- In the roadmap's active section but absent from the register
+- Active in the register but absent from the roadmap's active section
+- Sequence order differs between the two
+- A prerequisite that resolves to nothing
 
-Mismatches generate auto-recommendations.
+Each becomes a Phase 2 candidate, never a Phase 1 edit.
 
-### 1.4 Compose the briefing
-Use this exact structure. Every Recently-completed and Coming-up
-bullet must obey the writing rules above.
+### 1.7 Compose the briefing
 
 ```
 ## Roadmap Status — YYYY-MM-DD
 
-### Roadmap health
-- [Plain-language sentence about whether sprints are moving.]
-- [Plain-language sentence about anything stuck.]
-- [Plain-language sentence about anything sideways.]
-- [Plain-language sentence about pace.]
-- [Plain-language sentence about buffer health — computed from sprint-catalog.csv
-  (full specs queued = Implementation Status `Queued` ∧ Written Status `Full Spec`;
-  ≥5 Healthy / ≥3 Running low / ≥1 Critical / else Empty); mention N full specs of 5
-  if not "Healthy".]
-- [If stragglers: plain-language sentence noting N sprints look
-  complete and need migration.]
-- [If sync mismatches: plain-language sentence noting roadmap and
-  Catalog drifted out of sync.]
+*Source: [register] via [provider], snapshot [timestamp][ — STALE: reason].*
+*[Read through the legacy compatibility adapter — reads only.]*
+
+### Health
+- [Whether work is moving.]
+- [Anything stuck.]
+- [Anything sideways.]
+- [Pace — or: pace is not computable because [missing inputs].]
+- [Dispatch buffer: N of [policy target] — or: eager specification is disabled.]
+- [If stragglers: N items look complete and need migration.]
+- [If drift: the roadmap and the register disagree about N items.]
 
 ### Recently completed (since YYYY-MM-DD)
-- [SPRINT-ID] **LEDE.**
+- **[Item title]** — summary. *(ITEM-ID)*
   - Supporting detail.
-  - *Issue: ...*
 
-### Coming up (next 2-4 sprints)
-- [SPRINT-ID] **LEDE.**
-  - *Adaptation: ...*
+### Coming up (next 2–4 items)
+- **[Item title]** — summary. *(ITEM-ID)*
+  - *Adaptation: …*
 
 ### Where we stand
-- **Current phase ([Phase Name]):** X% of work remaining.
-  *(computed from sprint-catalog.csv: completed-in-phase ÷ sprints-in-phase; X = 1 − that ratio)*
-- **Finish line:** Y% of work remaining by LOE; N sprints remaining.
-  *(computed catalog-direct from sprint-catalog.csv: Y = 1 − % Complete by LOE)*
+- **Current group ([name]):** X% of the group's work remains. *(omit for a flat project)*
+- **Finish line:** Y% remains by effort; N items remain.
+  *(or: not computable — [missing inputs])*
 
 ### Health read
-- **[On Track / Watch Closely / Concerns]** — one plain-language
-  sentence explaining why.
+- **[On track / Watch closely / Concerns]** — one plain-language sentence saying why.
 
-### Recommendations
-- [SPRINT-ID] **One-sentence specific action, <5 min to execute.**
+### Recommended corrections
+- **[Item title]** — one-sentence specific action, under five minutes. *(ITEM-ID)*
+  *[permitted / needs a ceremony with write access to <role>]*
 ```
 
-**Section rules:**
-- Recently-completed: from sprints migrated to Completed Work
-  Summary during the window.
-- Coming-up: from the head of active skeletons going forward.
-- Stragglers become auto-recommendations:
-  `- [SPRINT-ID] **Migrate from active skeletons to Completed Work
-  Summary in both the roadmap document and sprint-catalog.csv.**`
-- Sync mismatches become auto-recommendations:
-  `- [SPRINT-ID] **Reconcile sprint-catalog.csv with the
-  roadmap — [specific drift].**`
-- If zero recommendations: `- _No recommendations — status quo
-  holds._`
+**Section rules**
+- Recently completed: items that became terminal during the window.
+- Coming up: the head of the active sequence, forward.
+- Stragglers become recommendations: "Migrate to the completed summary and record
+  the terminal record."
+- Drift becomes recommendations naming the specific disagreement.
+- Every recommendation is marked *permitted* or *needs a ceremony with write
+  access*, based on the registry and the provider's capabilities.
+- No recommendations → `- _No corrections needed — the roadmap and the register agree._`
 
-**Pre-save verification (mandatory):** stranger test on every LEDE.
-
-**Escalation rule:** If a recommendation would require
-restructuring, do NOT include it. Instead, add:
+**Escalation rule.** A recommendation that would require restructuring is not
+listed as a correction. Instead:
 
 ```
 ### Larger changes detected
-- [SPRINT-ID] **One-sentence LEDE explaining why /roadmap-review
-  is recommended.**
+- **[Item title]** — one sentence explaining why /roadmap-review is the right
+  ceremony for this. *(ITEM-ID)*
 ```
 
-### 1.5 Save the briefing
-Save to `roadmap-reviews/checkins/YYYY-MM-DD-status.md`.
+### 1.8 Save the briefing
+Into the registered reviews directory (a `checkins` subdirectory if the project
+keeps one), as `YYYY-MM-DD-status.md`, including the provenance line.
 
-### 1.6 Present and pause
-Show in chat. AskUserQuestion:
-- (A) Approve all — execute Phase 2 [RECOMMENDED if recs exist]
-- (B) Approve some — let me pick which
-- (C) Skip Phase 2 — read only
-- (D) The read is wrong — let me explain
+### 1.9 Present and pause
 
-If no recommendations exist, skip to (C) and close.
+Show the briefing, then ask:
+- (a) Approve all corrections — run Phase 2 *(recommended when corrections exist and are permitted)*
+- (b) Approve some — pick which
+- (c) Read only — stop here
+- (d) The read is wrong — explain
+
+With no corrections, close after (c). **Do not run Phase 2 without an explicit
+approval of specific corrections.**
 
 ---
 
-## Phase 2 — ACT (only if Phase 1 produced approved recommendations)
+## Phase 2 — CORRECT (only with explicit approval)
 
-### 2.1 Execute the approved recommendations
-For each approved recommendation:
+This is the mutation phase. It runs only on named, approved corrections.
 
-- **Straggler migration** (most common):
-  1. In the roadmap document, add a one-line entry to
-     `## Completed Work Summary`.
-  2. Remove the full skeleton/spec block from
-     `## Active & Remaining Sprint Skeletons`.
-  3. In `sprint-catalog.csv`: flip Implementation Status
-     from `Queued`/`In Flight` to `Completed` (or `Dissolved`),
-     clear `Seq`, populate `Date Completed`, populate `Close-Out
-     File`.
+### 2.0 Confirm permission before touching anything
 
-  All three edits count as one logical migration; <5 min. KPIs are
-  computed catalog-direct on the next read — there is no cache to
-  refresh.
+For each approved correction, confirm:
+1. the target role's `allowedWriters` names `roadmap-status`;
+2. the provider reports the capability the correction needs;
+3. the role's authority and mutability permit a write at all — `archive`,
+   `unknown`, `read-only`, and `immutable` never do.
 
-- **Sync reconciliation** (catalog drift):
-  - CSV row for already-completed sprint → flip Implementation
-    Status to `Completed`, clear Seq.
-  - Missing row for an active skeleton → add row with appropriate
-    Implementation Status, Written Status, Seq.
-  - Order mismatch → renumber `Seq` column to match roadmap's
-    active sequence.
+If any of the three fails, **do not attempt the write**. Report the correction as
+a hand-off to a ceremony that is permitted to make it, and say which check failed.
 
-- **Status updates** → edit the roadmap; mirror in the CSV if it
-  changes a column value.
+### 2.1 Execute the approved corrections
 
-- **Dependency or context notes** → edit roadmap or relevant
-  close-out file. The CSV's Notes column may also receive a short note.
+- **Straggler migration**
+  1. Add the one-line entry to the roadmap's completed summary.
+  2. Remove the full block from the active section.
+  3. Update the item in the live register through the provider: status, clear the
+     sequence, completion date, evidence link — passing the `revision` read in
+     Phase 1 so a concurrent change is refused rather than clobbered.
+  4. The terminal record belongs to the close-out ceremony. Append it here only if
+     `policy.terminalLedger.correctionWriters` names `roadmap-status`; otherwise
+     list it as a hand-off. Terminal records are append-only: a correction is a
+     new record referencing the one it corrects, never an edit to history.
 
-- **Risk flags** → append to roadmap `## Notes` or relevant Phase
-  section header.
+  All of this counts as one logical migration.
 
-Read/write `sprint-catalog.csv` as a plain CSV — this is a text file,
-not a spreadsheet mechanic. If a companion `sprint-queue.xlsx` report
-exists, do not write to it here; it is regenerated (via
-`/roadmap-review` or `build_sprint_queue.py`) from the CSV, not edited
-directly.
+- **Drift reconciliation**
+  - Item terminal in reality but active in the register → set its status.
+  - Active in the roadmap but missing from the register → add it, if the provider
+    supports it; otherwise report it.
+  - Sequence mismatch → renumber only if the provider can write the sequence field.
 
-**Hard ceiling enforcement:** if any single recommendation balloons
-past >5 min of editing or affects >2 sprints, STOP. Roll back
-partial changes for that recommendation and tell the user to run
-/roadmap-review for that one. Others can still proceed.
+- **Status notes** → edit the roadmap; mirror through the provider only where a
+  field actually changes.
 
-### 2.2 Confirm and close
-Show the diff in BOTH the roadmap doc and sprint-catalog.csv.
-AskUserQuestion:
-- (A) Approve — close [RECOMMENDED]
-- (B) Roll back
+- **Risk flags** → append to the roadmap's notes section.
+
+### 2.2 Regenerate derived artifacts (never hand-edit them)
+
+If a generated report role exists and the register changed:
+
+    "$HOME/.virtuoso/bin/virtuoso" build_register_report --root . --role sprintQueue
+
+The generator refuses any role the project has not declared generated. Never edit
+a generated artifact directly.
+
+### 2.3 Confirm and close
+
+Report:
+- exactly which corrections were applied, and to which roles
+- which were handed off, and why
+- any recovery records created by a partial cross-system failure
+  (`virtuoso_registry recovery`)
+- the refreshed figures, with provenance
 
 ---
 
 ## Question protocol reminder
 
-Every clarifying question uses AskUserQuestion with at least 2
-alternatives, one tagged [RECOMMENDED], and an escape hatch. Never
-ask open-ended free-text questions during the run.
+Every clarifying question follows `references/actors-and-interaction.md`: 2–4
+concrete options, exactly one recommended, an escape hatch on consequential
+decisions — structured when the host supports it, plain text when it does not.

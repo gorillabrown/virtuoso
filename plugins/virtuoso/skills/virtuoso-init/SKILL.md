@@ -8,90 +8,160 @@ description: >
   supported layout) plus the Virtuoso plugin workspace, and never overwrites user content.
 ---
 
-<!-- virtuoso-shared-contract v1 -->
+<!-- virtuoso-shared-contract v2 -->
 **Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
 
-- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
-- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
-- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
-- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
-- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
-- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+- **Registry resolution** — `Virtuoso/workspace-layout.json` is the authority; `Virtuoso.Governance.Readme.md` is its synchronized human view. Resolve every document, work item, and permission through the registry. Never hardcode a path, never fall back to a conventional one, and never infer authority from a role's name. Full contract: the plugin's `references/registry-contract.md`.
+- **Read-only preflight** — session start and any "where am I" check runs `--mode check`, which performs **zero project writes**. Adoption, creation, and repair are separate operations, each explicitly invoked.
+- **Providers** — work items come from the configured work-register provider (local file, spreadsheet, connector-backed task manager, issue tracker, database, or read-only snapshot). Negotiate capabilities before planning work; never open a register file directly. The live work register, the append-only terminal ledger, and any compatibility export are three different roles.
+- **Provenance** — every derived figure cites its provider, source, and snapshot time. A figure whose inputs are missing is reported as *not computable* with the missing inputs named, never approximated.
+- **Git** — behaviour is `policy.git`, not a fixed rule of this plugin. See `references/git-policy.md`. Under every policy: inspect first, stage exact paths, preserve unrelated work, no destructive flags, no force-push without explicit authorization.
+- **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (v1.0 — 8 universal checks plus the project's declared extensions). No skill restates it in its own words.
+- **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
+- **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
+- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 # Virtuoso Init
 
-Bootstrap (or heal) the per-project Virtuoso workspace that the governance skills
-read and write.
+Register a project with Virtuoso, or initialize a new workspace. Four separate
+operations, each doing exactly one thing.
 
-## Already have a roadmap? (adoption)
+| Operation | What it does | Writes |
+|---|---|---|
+| `check` | read-only validation and discovery | **none** |
+| `adopt` | register an established project **in place** | the control files only |
+| `create` | initialize a **new** workspace — requires `--authorize` | the scaffold |
+| `repair` | preview proposed registry repairs; apply only with `--apply` | only what you approved |
 
-If the project **already maintains an established documentation tree** — a
-`Project Documentation/` or `2. Project Documentation/` directory with a `1 governance` /
-`2 operational` subtree and its own roadmap (under any name, e.g. `<ProjectName>_Roadmap.md`) — you
-usually do **not** want a fresh scaffold. The governance skills detect this and run
-`--mode adopt`, which lays down only a thin `Virtuoso/` control marker whose
-`workspace-layout.json` **points at the existing roadmap**; nothing is moved or
-duplicated and no parallel `Roadmap.md` is seeded. Prefer adoption for an established
-project; reach for the create flow below only to (re)build a documentation tree.
+## Always start with check
 
-The `create` flow below is also adoption-aware: when a roadmap already exists anywhere
-under the documentation root, the manifest points at it instead of seeding a new one.
+**Unix-like shell**
 
-## Layout
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode check --json
 
-Plugin-only is the only supported layout: project documentation stays in the project root
-under `Project Documentation/`; `Virtuoso/` only holds plugin-managed files such as the
-marker, layout manifest, and vendored scripts. (A previously offered "canonical" layout —
-moving documentation into `Virtuoso/Project Documentation/` — was removed; the script now
-hard-rejects `--layout canonical` at argparse, and a workspace with a legacy `"layout":
-"canonical"` value recorded in `workspace-layout.json` falls back to plugin-only.)
+**Windows PowerShell**
 
-**Run:**
+    & "$HOME/.virtuoso/bin/virtuoso.ps1" virtuoso_preflight --root . --mode check --json
 
-    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/virtuoso_preflight.py" --root . --mode create --layout plugin-only
+It performs discovery and validation with **zero project writes**, and prints:
 
-Then report to the user what was created vs. what already existed (the script prints
-this) and where the workspace lives.
+```
+virtuoso-status: <status>
+writes: 0
+```
 
-The script writes two coupled outputs that record where governance lives:
+Branch on the status:
 
-- **`Virtuoso.Governance.Readme.md`** (project root) — the **governance registry**, the
-  human-readable authority every skill reads first. It lists each required document role
-  (roadmap, sprint catalog, lessons, close-outs, issues, reviews, outside audits) and the
-  actual path it resolves to, marking each present or not-present. For an established project
-  it registers the files that already exist (wherever they live — `docs/governance/`,
-  `2. Project Documentation/`, the root); it never seeds an empty template beside a document
-  that already exists, and skills never create a parallel doc for a role already registered.
-- **`Virtuoso/workspace-layout.json`** — the machine-readable mirror of the same paths, used
-  where a skill needs a resolved path programmatically.
+| Status | What it means | Next |
+|---|---|---|
+| `ready` | registered and valid | nothing to do |
+| `warning` | usable; non-blocking findings | report them; continue |
+| `repair-needed` | error-severity findings | `--mode repair` (preview), then `--apply` after approval |
+| `adoptable` | governance exists, unregistered | `--mode adopt` |
+| `none` | nothing here and nothing to adopt | `--mode create --authorize` |
+| `failed` | could not complete; nothing partial was written | report the error verbatim |
 
-The documentation tree contains:
+## Already have governance? Adopt it
 
-- `Roadmap.md` — the canonical roadmap (seed; flesh out via /roadmap-review). If the
-  project already has a roadmap under another name, the manifest points at that file
-  instead and no seed is written.
-- `sprint-catalog.csv` — the authoritative sprint catalog (header row only; seeded
-  with rows by /roadmap-review from the active section of the roadmap). Every skill
-  reads and writes this CSV — it is never generated from or read back from a
-  spreadsheet.
-- `sprint-queue.xlsx` (optional) — a human-facing report, not a workspace file this
-  script seeds by default. If a project wants one, generate it from
-  `sprint-catalog.csv` via `build_sprint_queue.py`; its Dashboard tab is meant to be
-  driven by Power Query against the CSV and refreshed by opening the workbook in
-  Excel — no skill reads it back or force-writes its cells.
-- `SpecRetro.Lessons_Learned.md` — running lessons catalog
-- `WORKFLOW_REFERENCE.md` — index mapping legacy section numbers to skills
-- `roadmap-reviews/` (+ `checkins/`), `Close-Outs/`, `Issues/`
-- `4 Outside Audits/` for external audit packages and reports
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode adopt
 
-Running `create` on a project that was previously **adopted** (thin) rebuilds the full
-documentation tree under the existing documentation root — non-destructively, adding only
-the missing empty subdirs and seeds — and switches it from thin-adopt to full management.
-If you only want the lightweight marker, let the governance skills adopt it instead.
+Adoption registers what the project already has, **in place**. Nothing is moved,
+nothing is duplicated, no parallel document is seeded, and no existing document is
+rewritten. It writes exactly three control files: the workspace marker, the
+manifest, and the human registry view.
 
-The script never overwrites existing files, so it is safe to re-run any time. The path
-comes from `~/.virtuoso/plugin-root`, a bridge file the plugin's session-start hook records
-every session (skill bodies cannot read `${CLAUDE_PLUGIN_ROOT}`). If that file is missing,
-create `Virtuoso/.virtuoso`, `Virtuoso/scripts/`, `Virtuoso/workspace-layout.json`, and the
-chosen `Project Documentation/` tree by hand — the spreadsheet and scripts then populate on
-the next session, when the hook runs preflight.
+Adoption reports, role by role, what it registered and why. Two of its decisions
+matter:
+
+- **A discovered local register is registered `unknown`, not authoritative.** The
+  plugin never promotes a file to live authority on its own (redesign item 6).
+  Classify it — set `authority`, `mutability`, and `allowedWriters` — before any
+  ceremony can write to it.
+- **A role it cannot find is not registered at all**, rather than pointed at a
+  phantom path. Register it yourself when the project has one.
+
+**Adoption never heals.** Run against an already-registered project, `adopt` behaves
+exactly like `check` and says so. Repair is a separate, previewed operation.
+
+## New project? Create, with explicit authorization
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode create --authorize
+
+`create` writes new files into the project, so it requires `--authorize`. Without
+it the run reports `failed` and explains what to pass. It refuses outright if the
+project already carries a registry.
+
+It lays down the documentation tree, seeds the roles it creates, and writes the
+registry. It never overwrites an existing file.
+
+The registry it writes declares, for every role: the path or external identifier,
+the provider type, the authority level, the mutability, the owning ceremony, the
+allowed writers, the validation method, and whether the role is authored or
+generated. Authority is **declared**, so you can change it — see
+`references/registry-contract.md`.
+
+### What create lays down
+
+- **`Virtuoso/workspace-layout.json`** — the machine manifest. The authority.
+- **`Virtuoso.Governance.Readme.md`** — the human view of it, with a generated
+  region the plugin maintains and protected sections that are yours. Everything
+  outside the generated region is preserved byte-for-byte forever.
+- **A roadmap** — the specification store (`live`, read-write).
+- **A work register** — the live pipeline. Created as a CSV by default; change its
+  provider to a Markdown table, a spreadsheet, a connector-backed tracker, a
+  database, or a read-only snapshot at any time.
+- **A terminal ledger** — append-only completion records (`terminal`, append-only).
+- **A lessons catalog**, close-outs, issues, reviews, outside audits, and reference
+  directories.
+
+The local CSV is **optional** and it is **not special**. It is authoritative here
+only because `create` explicitly declared it so; a project may make it a generated
+mirror or drop it entirely.
+
+## Repair — always previewed
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode repair
+
+Prints the proposed paths, the semantic changes, the files affected, and where
+backups will go. It writes nothing. Show that preview to the user.
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode repair --apply
+
+Applies it transactionally: the reconstructed registry is validated **before any
+write**, every existing target is copied into a hash-verified backup set first, and
+any failure restores from that set and leaves the original registry and manifest
+intact.
+
+Repair will **not**:
+- regenerate a user-authored registry from a template — it only refreshes its own
+  generated region, or offers to *append* one, preserving every existing byte;
+- reclassify an unknown legacy role as writable or authoritative;
+- repoint a registered-but-absent role at a similarly named file.
+
+Anything it cannot fix safely is listed as *not repairable automatically*, with the
+reason.
+
+## Migrating from schema v1
+
+A v1 registry (a manifest with a flat `paths` map) is read and migrated
+conservatively:
+
+- Recognized roles migrate with their documented defaults.
+- **Unknown legacy roles stay unknown** — not writable, not authoritative — until
+  a human classifies them.
+- **The legacy `sprintCatalog` migrates as a compatibility mirror, not as the live
+  register.** v1 described it as authoritative by convention; v2 does not carry
+  that claim forward — only the registry assigns authority. Ceremonies can still *read* it through the compatibility adapter;
+  writing requires registering a `workRegister` role explicitly.
+
+Migration is non-destructive and previewed like any other repair.
+
+## Locating the plugin
+
+Skill bodies cannot expand `${CLAUDE_PLUGIN_ROOT}`, so use the launcher. It resolves
+the newest valid installed version from `~/.virtuoso/installs.json` — a record keyed
+**by plugin version**, so two installed versions never overwrite each other's
+discovery state. `VIRTUOSO_PLUGIN_ROOT` overrides it.
+
+If neither launcher resolves, say the plugin could not be located and stop. Do not
+guess a path, and do not read a hardcoded home-directory file.

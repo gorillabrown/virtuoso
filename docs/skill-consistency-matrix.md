@@ -1,5 +1,13 @@
 # Skill Consistency Matrix
 
+> **Historical record (v1.x line).** This document captured the shared-contract state as it
+> stood under `virtuoso-shared-contract v1`, with pasted output from that run. Virtuoso 2.0
+> replaced that block with `v2` and rewrote the ceremony skills; the commands and hashes
+> below no longer describe the current tree. It is kept as evidence of what was verified at
+> the time, unedited — evidence is preserved, not rewritten. For the current contract see
+> `plugins/virtuoso/references/registry-contract.md`, and for the checks that enforce it,
+> `plugins/virtuoso/scripts/validate.py` and `scripts/test_docs_contract.py`.
+
 Sprint SK-09. Establishes what the 15 Virtuoso skills share, proves the shared contract is
 present and identical in all of them, and records the deliberate cross-invocation call-outs
 between skills.

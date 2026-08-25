@@ -47,8 +47,12 @@ Retrospective lessons are appended to:
 
 Use sequential IDs:
 
-- `SRL-001`
-- `SRL-002`
+- `<prefix>-001`
+- `<prefix>-002`
+
+The prefix is project configuration — `SRL` is only the default. Resolve the next
+identifier with `virtuoso_registry closeout --lesson-prefix <prefix>`, which reads the
+registered lessons document and never creates it.
 - ...
 
 Check the existing document before appending new entries.

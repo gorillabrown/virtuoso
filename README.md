@@ -1,28 +1,28 @@
 # Virtuoso
 
-A Claude Code plugin that packages a complete **Cowork-style governance & dispatch
-system**: a planning surface that specs and sequences work, hands dispatch-ready specs to
-an implementer, and closes the loop with retrospectives, audits, and documentation
-hygiene — backed by a self-healing per-project workspace.
+A Claude Code plugin that packages a complete **governance & dispatch system**: a planning
+surface that specifies and sequences work, hands dispatch-ready specifications to an
+implementer, and closes the loop with terminal records, retrospectives, audits, and
+documentation hygiene — driven by a **per-project governance registry** that each project
+declares for itself.
 
 ## What it is
 
-Virtuoso models a two-role workflow:
+Virtuoso models a workflow between **roles**, never products:
 
-- **Cowork (planning)** — the high-capability model that plans the roadmap, writes
-  dispatch-ready specs, makes decisions, and closes out sprints.
-- **CLI (implementer)** — a lower-capability agent that executes a fully-specified sprint
-  without judgment calls.
+| Role | What it does |
+|---|---|
+| **planner** | plans the roadmap, writes specifications, makes decisions, closes work out |
+| **implementation agent** | executes a fully-specified item without inventing decisions |
+| **reviewer** | reviews work against its specification |
+| **repository operator** | performs the repository mutations the project's git policy permits |
 
-The skills enforce the discipline that makes that hand-off reliable: rigorous specs,
-execution narration, progress tracking, mid-run decision protocols, close-out
-retrospectives, and read-only governance audits.
+Rename them in `policy.actors`. The same session may hold several roles at once; whether
+they must be held by *different* actors is an optional project policy, not an assumption.
 
-**Reading the vocabulary.** The skills speak in terms of *Cowork* and *CLI* (their origin
-in a Codex/Cowork setup). Read these as roles, not products: *Cowork* = your main planning
-agent (on Claude Code, your interactive session); *CLI* / *the implementer* = whatever
-executes a fully-specified sprint — a subagent, a separate lower-tier session, or a CLI
-runner. The discipline is platform-neutral; only the names are historical.
+A specification must be complete because an incomplete one cannot be executed without
+inventing the missing decisions — by anyone, at any capability. Virtuoso makes no claim
+that one host or model is inherently more capable than another.
 
 ## Install
 
@@ -31,182 +31,238 @@ runner. The discipline is platform-neutral; only the names are historical.
 /plugin install virtuoso@virtuoso-marketplace
 ```
 
-Then initialize a project workspace:
+Then register your project:
 
 ```
-/virtuoso-init
+/virtuoso:virtuoso-init
 ```
 
-## The `Virtuoso/` workspace
+## The governance registry
 
-Virtuoso supports two bootstrap layouts. Both are created and healed automatically, and
-neither overwrites existing user files.
+Everything resolves through one authority.
 
-### Option 1: plugin-only `Virtuoso/` folder
+| Artifact | Role |
+|---|---|
+| `Virtuoso/workspace-layout.json` | **the machine manifest — the authority** |
+| `Virtuoso.Governance.Readme.md` | a synchronized human view, with protected sections that are yours |
 
-Project documentation lives in the project root under `Project Documentation/`; `Virtuoso/`
-holds plugin-managed files only. This is the default.
+The manifest declares its own `schemaVersion` and the plugin range it works with. Every
+registered role carries its full metadata:
 
-```
-Project Documentation/
-├── 1 governance/
-│   ├── Roadmap.md
-│   └── SpecRetro.Lessons_Learned.md
-├── 2 operational/
-│   ├── sprint-queue.xlsx
-│   ├── roadmap-reviews/  └── checkins/
-│   ├── Close-Outs/
-│   └── Issues/
-├── 3 temp/
-├── 4 Outside Audits/
-└── 5 Reference/
-    └── WORKFLOW_REFERENCE.md
-
-Virtuoso/
-├── .virtuoso
-├── workspace-layout.json
-└── scripts/                       # plugin-managed: recalc.py, prepare_closeout_files.py
-```
-
-### Option 2: canonical Virtuoso layout
-
-Project documentation lives under `Virtuoso/Project Documentation/`. When selected,
-preflight migrates existing documentation into the new tree only when the destination path
-is free; conflicts are left in place for human review.
-
-```
-Virtuoso/
-├── .virtuoso                      # marker — tags this as a Virtuoso project
-├── workspace-layout.json          # selected layout + path map
-├── Project Documentation/
-│   ├── 1 governance/
-│   │   ├── Roadmap.md
-│   │   └── SpecRetro.Lessons_Learned.md
-│   ├── 2 operational/
-│   │   ├── sprint-queue.xlsx
-│   │   ├── roadmap-reviews/  └── checkins/
-│   │   ├── Close-Outs/
-│   │   └── Issues/
-│   ├── 3 temp/
-│   ├── 4 Outside Audits/
-│   └── 5 Reference/
-│       └── WORKFLOW_REFERENCE.md
-└── scripts/                       # plugin-managed: recalc.py, prepare_closeout_files.py
+```jsonc
+"workRegister": {
+  "path": "docs/work-register.csv",     // OR "external": "monday:board/1234567890"
+  "provider": "csv",                    // markdown csv xlsx jsonl json directory snapshot
+                                        // connector issue-tracker database external none
+  "authority": "live",                  // live terminal mirror report evidence archive
+                                        // reference unknown
+  "mutability": "read-write",           // read-write append-only generated read-only immutable
+  "owner": "roadmap-review",
+  "allowedWriters": ["roadmap-review", "pointer-closeout"],
+  "validation": "csv-headers",
+  "classification": "active",           // active | historical | unknown
+  "origin": "authored",                 // authored | generated | unknown
+  "generatedFrom": "",                  // for a derived artifact: its source role
+  "generatedBy": ""                     // for a derived artifact: its registered generator
+}
 ```
 
-`Virtuoso/workspace-layout.json` is the source of truth for skill path resolution. The
-SessionStart hook runs preflight in `auto` mode, so it preserves whichever layout was
-selected during `/virtuoso-init`.
+The rules every skill follows:
 
-### Adopting an existing project
+1. **Authority is declared, never inferred from a name.** A role called `sprintCatalog` is
+   authoritative only if its `authority` says `live`.
+2. **Resolve, never guess.** An unregistered role is an error naming the fix, not a fallback
+   to a conventional path.
+3. **A registered-but-absent target is reported**, never silently repointed at a lookalike.
+4. **Write only where `allowedWriters` names you**, and never to an `archive`, `unknown`,
+   `read-only`, or `immutable` role.
+5. **Generated artifacts are regenerated, never hand-edited.**
+6. **External identifiers are valid registrations** — a board, project, database, or service
+   id is never reported as a missing file.
+7. **Project extensions live under `x-`** and survive plugin upgrades verbatim.
 
-If a project already maintains its own documentation tree — a `Project Documentation/` or
-`2. Project Documentation/` directory with a `1 governance` / `2 operational` subtree and
-its own roadmap under any name (e.g. `GoG_Roadmap.md`) — the governance skills **adopt it in
-place** rather than scaffolding a parallel structure. On first run they invoke preflight
-`--mode adopt`, which:
+Full contract: [`plugins/virtuoso/references/registry-contract.md`](plugins/virtuoso/references/registry-contract.md).
 
-- discovers the project's existing roadmap and sprint-queue (preferring the live file over a
-  fresh `/virtuoso-init` seed, a backup/snapshot copy, or an archived review), and
-- writes only a thin `Virtuoso/` control dir (`.virtuoso`, `workspace-layout.json`, vendored
-  `scripts/`) whose manifest **points at those existing files**.
+## Four separate operations
 
-Nothing is moved or duplicated and no parallel `Roadmap.md` is seeded. A project with no
-discoverable roadmap is routed to `/virtuoso-init` instead, which seeds one. Before its
-destructive rewrite, `/roadmap-review` also runs a `--check-roadmap` integrity gate and
-stops on a corrupt roadmap (null bytes, non-UTF-8) rather than rewriting it.
+```
+check    read-only validation and discovery.       ZERO project writes, always.
+adopt    register an established project in place. Never rewrites its documents.
+create   initialize a new workspace.               Requires --authorize.
+repair   preview repairs; apply only with --apply. Transactional, with verified backups.
+```
 
-Three ways the workspace stays healthy:
+Every invocation prints two parseable lines:
 
-1. **`/virtuoso-init`** — explicit setup/repair.
-2. **Inline preflight** — every governance skill runs `--mode adopt` before starting: it
-   heals an existing workspace, adopts an established project in place, or routes a bare
-   project to `/virtuoso-init`.
-3. **SessionStart hook** — auto-heals an *existing* Virtuoso project (a no-op in unrelated
-   folders, so it never litters directories you open by chance; it never adopts unattended).
+```
+virtuoso-status: <status>
+writes: <N>
+```
 
-The hook also records the plugin's install path to `~/.virtuoso/plugin-root`, and preflight
-vendors its scripts into `Virtuoso/scripts/`. This lets skills locate bundled scripts
-*without* relying on `${CLAUDE_PLUGIN_ROOT}` — which resolves only inside hooks/MCP, never in
-skill or command bodies.
+| status | meaning | writes |
+|---|---|---|
+| `ready` | registered, valid, nothing to do | 0 |
+| `warning` | usable; non-blocking findings | 0 |
+| `repair-needed` | error-severity findings; a repair plan exists | 0 |
+| `repair-preview` | a repair plan was produced, not applied | 0 |
+| `repaired` | an approved repair was applied | ≥0 |
+| `adoptable` | established project, not yet registered | 0 |
+| `adopted` | adopt registered it in place | ≥1 |
+| `created` | create initialized a new workspace | ≥1 |
+| `none` | nothing here and nothing to adopt | 0 |
+| `failed` | could not complete; nothing partial was written | 0 |
+
+`--json` adds the full structured result. **The SessionStart hook runs `--mode check`**, so
+starting, clearing, or compacting a session never creates, heals, vendors, or rewrites a
+project file.
+
+## Work-register providers
+
+Roadmap ceremonies never open a register file. They ask a provider, and negotiate its
+capabilities before planning work.
+
+| Provider | Registration |
+|---|---|
+| local CSV | a path |
+| local Markdown table | a path |
+| spreadsheet | a path (needs `openpyxl`) |
+| connector-backed task manager | an external identifier, e.g. `monday:board/1234567890` |
+| issue tracker | an external identifier, e.g. `jira:project/ABC` |
+| database | an external identifier, e.g. `postgres:table/public.work_items` |
+| read-only snapshot | a path to a timestamped capture |
+
+Capabilities: `list-active`, `read-sequence`, `read-status`, `write-status`,
+`read-prerequisites`, `read-effort`, `store-spec-link`, `record-completion`, `next-eligible`.
+
+Three roles, deliberately separate:
+
+- **`workRegister`** — the live work register, the only place item status is true;
+- **`terminalLedger`** — the append-only record of finished work;
+- **`sprintCatalog` / `sprintQueue`** — optional compatibility export and generated report.
+
+**Field names and status words are yours.** Map them in
+`policy.workRegister.fieldMappings` and `policy.workRegister.statusMappings`. Nothing
+requires the literal words *Queued*, *In Flight*, or *Full Spec*.
+
+Every derived figure states its provider, source, and snapshot time. A figure whose inputs
+are missing is reported as **not computable** with the missing inputs named — never
+approximated. Mutations are optimistically concurrent and idempotent; a cross-system
+partial failure leaves a recovery record naming exactly what remains.
+
+## Locating the plugin
+
+Skill bodies cannot expand `${CLAUDE_PLUGIN_ROOT}`. Use the launcher, which resolves the
+newest valid installed version from `~/.virtuoso/installs.json` — a record keyed **by plugin
+version**, so two installed versions never overwrite each other's discovery state.
+
+```sh
+# Unix-like shell
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode check
+```
+
+```powershell
+# Windows PowerShell
+& "$HOME/.virtuoso/bin/virtuoso.ps1" virtuoso_preflight --root . --mode check
+```
+
+`VIRTUOSO_PLUGIN_ROOT` overrides both. If neither resolves, the plugin says it could not be
+located rather than guessing a path.
+
+## Command-line surface
+
+| Script | Purpose |
+|---|---|
+| `virtuoso_preflight.py` | check / adopt / create / repair, plus `--check-document` |
+| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `provider`, `items`, `next`, `kpis`, `closeout`, `repo`, `recovery`; and the explicit writers `snapshot`, `closeout --prepare` |
+| `generate_cockpit.py` | the planning cockpit, read from the configured provider |
+| `build_register_report.py` | the generated spreadsheet report (declared generated roles only) |
+| `validate.py` | structural validation of the plugin itself |
 
 ## Skills
 
-All skills are invoked through the plugin namespace, e.g. `/virtuoso:roadmap-review`.
-(The standalone `commands/` wrappers were removed — each only re-invoked its matching skill,
-so it produced a duplicate slash entry alongside `/virtuoso:<name>`.)
+Invoked through the plugin namespace, e.g. `/virtuoso:roadmap-review`.
 
 | Skill | Slash | Purpose |
 |-------|-------|---------|
-| `virtuoso` | — | Multi-step execution discipline for sprints |
-| `epic` | `/virtuoso:epic` | Launch materials for goal-scale, multi-session autonomous runs |
+| `virtuoso` | — | Multi-step execution discipline |
+| `epic` | `/virtuoso:epic` | Launch materials for goal-scale, multi-session runs |
 | `roadmap-review` | `/virtuoso:roadmap-review` | Heavyweight roadmap recalibration |
-| `roadmap-status` | `/virtuoso:roadmap-status` | Lightweight roadmap pulse check |
-| `next-pointer` | `/virtuoso:next-pointer` | Finalize + dispatch the next sprint |
-| `pointer-closeout` | `/virtuoso:pointer-closeout` | Close-out report + retrospective |
+| `roadmap-status` | `/virtuoso:roadmap-status` | Read-only status briefing |
+| `next-pointer` | `/virtuoso:next-pointer` | Finalize and dispatch the next item |
+| `pointer-closeout` | `/virtuoso:pointer-closeout` | The transactional close-out crossing |
 | `mid-dispatch-decision` | `/virtuoso:mid-dispatch-decision` | Decide when a dispatch pauses mid-run |
-| `governance-sweep` | `/virtuoso:governance-sweep` | 3-phase doc-hygiene sweep: discover → approve → fix |
-| `3rd-party-audit` | `/virtuoso:3rd-party-audit` | External codebase audit lifecycle |
+| `governance-sweep` | `/virtuoso:governance-sweep` | 3-phase doc hygiene: discover → approve → fix |
+| `3rd-party-audit` | `/virtuoso:3rd-party-audit` | External audit lifecycle |
 | `ultrathink` | `/virtuoso:ultrathink` | Deep first-principles reasoning |
-| `effort-levels` | — | Effort/cost sizing framework (modifier) |
+| `effort-levels` | — | Effort sizing (modifier) |
 | `adversarial-review` | — | Structured red-team review (modifier) |
-| `git-handoff` | — | Legacy git handoff packet (manual only) |
-| `delayed-start` | `/virtuoso:delayed-start` | Defer execution to a clock time / delay |
-| `virtuoso-init` | `/virtuoso:virtuoso-init` | Create/repair the `Virtuoso/` workspace |
+| `git-handoff` | — | Hand-off packet for a session that cannot mutate the repository |
+| `delayed-start` | `/virtuoso:delayed-start` | Defer execution to a clock time or delay |
+| `virtuoso-init` | `/virtuoso:virtuoso-init` | Register a project, or initialize a workspace |
 
-(The three modifiers and `virtuoso` itself are model-invoked — they layer onto other work
-rather than being entry points.)
+## Shared references
+
+One home each, so nothing can drift apart:
+
+| Reference | What it settles |
+|---|---|
+| [`registry-contract.md`](plugins/virtuoso/references/registry-contract.md) | roles, providers, capabilities, the status contract |
+| [`readiness-rubric.md`](plugins/virtuoso/references/readiness-rubric.md) | the single versioned readiness rubric (v1.0) |
+| [`git-policy.md`](plugins/virtuoso/references/git-policy.md) | the git policy ladder, detection, and the universal safety rules |
+| [`actors-and-interaction.md`](plugins/virtuoso/references/actors-and-interaction.md) | actor roles and the interaction adapter |
+
+## Git behaviour is project policy
+
+`policy.git.policy` picks one rung of the ladder: `read-only`, `prepare-no-stage`,
+`explicit-path-stage`, `explicit-path-commit`, `push`. The default branch and remote are
+**detected**, never assumed; a repository with **no remote** is fully supported; branch
+cleanup is maintenance, not a dispatch prerequisite; a stale index lock is **reported**,
+never removed automatically; and the plugin is worktree-aware, so a dirty primary tree does
+not invalidate a clean dedicated execution worktree.
+
+Under every policy: inspect first, stage exact paths, preserve unrelated work, no
+destructive flags, and no force-push without explicit authorization.
 
 ## Agents
 
-Virtuoso bundles a dispatchable agent roster in `agents/` (the virtuoso skill scans it when
-delegating worker tasks):
+A dispatchable roster in `plugins/virtuoso/agents/`, routed by **task tier** — a property of
+the task, not a ranking of whoever runs it:
 
-| Agent | Model | Role |
-|-------|-------|------|
-| `Aristotle` | opus | Lead — investigation, cross-system, root-cause, cross-finding synthesis |
-| `Hercules` | sonnet | Single-domain implementation |
-| `Hermes` | haiku | Mechanical execution (config, renames, git) |
-| `Hippocrates` | haiku | Test execution + coverage-gap reporting |
-| `Plato` | sonnet | Code-quality review (complexity, coupling, dead code, duplication, churn, TODOs) |
-| `MarcusAurelius` | sonnet | Docs, compliance, archiving + doc/spec drift detection |
-| `Socrates` | sonnet | Calibration specialist |
-| `Pythagoras` | sonnet | SQLite / data-integrity auditing |
-| `Archimedes` | sonnet | Display / stats / scorecard auditing |
-| `Hesiod` | opus | Archetype behavioral-KPI evaluation |
+| Agent | Task tier | Role |
+|-------|-----------|------|
+| `Aristotle` | cross-cutting | Lead — investigation, cross-system work, root cause |
+| `Hercules` | bounded | Single-domain implementation |
+| `Hermes` | mechanical | Prescribed changes (config, renames, repository operations) |
+| `Hippocrates` | mechanical | Test execution and coverage-gap reporting |
+| `Plato` | bounded | Code-quality review |
+| `MarcusAurelius` | bounded | Documentation, compliance, drift detection |
+| `Socrates` | bounded | Measurement and tuning specialist |
+| `Pythagoras` | bounded | Data-integrity auditing |
+| `Archimedes` | bounded | Display and statistics auditing |
+| `Hesiod` | cross-cutting | Behavioural KPI evaluation |
 
-- **`skills/virtuoso/references/zeus.md`** is the orchestration protocol (routing tree, agent
-  hierarchy, escalation rules) the `virtuoso` skill *reads* at Phase 1 — it is not a
-  dispatchable subagent.
-- **`agents/AGENT_MEMORY_GUIDE.md`** documents the shared agent-memory convention.
-- `Socrates`, `Pythagoras`, `Archimedes`, and `Hesiod` are domain-flavored templates — adapt
-  their project-specific paths and targets per project.
+`skills/virtuoso/references/zeus.md` is the orchestration protocol the `virtuoso` skill
+reads; it is not a dispatchable subagent. The specialist agents read their commands from the
+project's **registered commands**, so they carry no project's script names, sample sizes, or
+thresholds of their own.
 
-## External prerequisites (recommended)
+## External prerequisites (optional)
 
-Some skills reference skills from other plugins. They are **not** bundled:
-
-- **`anthropic-skills`** — `docx` (audit orientation documents) and `xlsx` (spreadsheet
-  mechanics). The bundled `sprint-queue.template.xlsx` is the canonical roadmap workbook (a
-  hand-built Excel file with live formulas + chart); `recalc.py` refreshes its Dashboard KPIs
-  headlessly when a skill edits the Catalog without opening Excel.
+- **`anthropic-skills`** — `docx` and `xlsx`, for document and spreadsheet mechanics.
 - **`product-management`** — `write-spec` and `roadmap-update`, used by `roadmap-review`.
-
-## Project conventions
-
-- **`zeus.md` / lead-agent reference** — several skills can read a project-supplied
-  behavioral reference (routing, escalation, coordination rules). Provide your own per
-  project; Virtuoso ships none.
-- **Git Workflow** — `next-pointer` and `pointer-closeout` follow your project's Git Workflow
-  (typically defined in the project's `CLAUDE.md`) for how — and whether — read-only git
-  inspection runs and who commits. Cowork never runs mutating git itself.
 
 ## Requirements
 
-- Python 3 with `openpyxl` for the parts that read/write the sprint-queue workbook:
-  `recalc.py` (Dashboard KPI refresh) and the roadmap visualizer
-  (`tools/roadmap_visualizer/`, incl. `scripts/generate_cockpit.py`). The preflight
-  (`virtuoso_preflight.py`) and the rest of the scripts need only the standard library.
+- Python 3.12+ with the standard library for the registry, the providers, and the CLI.
+- `openpyxl` only for the spreadsheet provider and the generated report. It is a **declared**
+  dependency: when it is absent, those capabilities are withdrawn with a message naming it,
+  never an import error mid-ceremony.
+
+## Upgrading from v1
+
+See [`docs/MIGRATION-v2.md`](docs/MIGRATION-v2.md). Migration is non-destructive and
+previewed; unknown legacy roles stay unclassified, and the legacy local catalog migrates as
+a read-only compatibility mirror rather than being reinterpreted as authoritative.
 
 ## License
 

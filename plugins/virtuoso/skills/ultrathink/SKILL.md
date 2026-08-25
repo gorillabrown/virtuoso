@@ -11,15 +11,18 @@ description: >
   the user wants exhaustive reasoning over efficient output.
 ---
 
-<!-- virtuoso-shared-contract v1 -->
+<!-- virtuoso-shared-contract v2 -->
 **Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
 
-- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
-- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
-- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
-- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
-- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
-- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+- **Registry resolution** — `Virtuoso/workspace-layout.json` is the authority; `Virtuoso.Governance.Readme.md` is its synchronized human view. Resolve every document, work item, and permission through the registry. Never hardcode a path, never fall back to a conventional one, and never infer authority from a role's name. Full contract: the plugin's `references/registry-contract.md`.
+- **Read-only preflight** — session start and any "where am I" check runs `--mode check`, which performs **zero project writes**. Adoption, creation, and repair are separate operations, each explicitly invoked.
+- **Providers** — work items come from the configured work-register provider (local file, spreadsheet, connector-backed task manager, issue tracker, database, or read-only snapshot). Negotiate capabilities before planning work; never open a register file directly. The live work register, the append-only terminal ledger, and any compatibility export are three different roles.
+- **Provenance** — every derived figure cites its provider, source, and snapshot time. A figure whose inputs are missing is reported as *not computable* with the missing inputs named, never approximated.
+- **Git** — behaviour is `policy.git`, not a fixed rule of this plugin. See `references/git-policy.md`. Under every policy: inspect first, stage exact paths, preserve unrelated work, no destructive flags, no force-push without explicit authorization.
+- **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (v1.0 — 8 universal checks plus the project's declared extensions). No skill restates it in its own words.
+- **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
+- **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
+- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 # ULTRATHINK Protocol
 
@@ -32,27 +35,29 @@ output conventions and requires maximum analytical depth, grounded in first prin
 
 ## Required Settings
 
-ULTRATHINK performs best at the highest-capability configuration. Framework quality matters
-independently of model tier, but stronger models apply the protocol more faithfully.
+ULTRATHINK's value comes from the framework, not from any assumption about which host or
+model is running it. Run it at the highest effort level the task justifies; where the host
+cannot sustain that, say so and lower confidence accordingly — that is a statement about
+this run's depth, not a ranking of hosts.
 
 | Setting | Recommended | Minimum Viable | Compensating Behavior at Minimum |
 |---------|-------------|----------------|----------------------------------|
-| **Model** | **Opus** | Any | Flag more claims as working assumptions; lower confidence ratings; be more explicit in assumption cataloging |
+| **Task tier** | **Cross-cutting** | Any | Flag more claims as working assumptions; lower confidence ratings; be more explicit in assumption cataloging |
 | **Effort** | **Max** | Medium | Narrow scope to fewer dimensions; invest depth where evidence is thinnest |
 
-**If dispatching to CLI:** Any task tagged ULTRATHINK in a sprint spec should be assigned to
-an opus-tier agent with `{max}` effort override. Example:
+**If dispatching to an implementation agent:** any task tagged ULTRATHINK should be assigned at
+the cross-cutting tier with a `{max}` effort override. Example:
 ```
-□ 3. athena: Analyze architecture tradeoffs for cache redesign [opus] {max}  ← ULTRATHINK
+□ 3. athena: Analyze architecture tradeoffs for cache redesign [cross-cutting] {max}  ← ULTRATHINK
 
-CLI execution:
+Execution:
   /effort-levels max             ← set before ULTRATHINK task
-  dispatch task #3               ← runs at max effort on opus
+  dispatch task #3               ← runs at max effort, cross-cutting tier
   /effort-levels [default]       ← revert after task completes
 ```
 
-**If in Cowork conversation:** Opus + Max effort is recommended. If running at a lower tier,
-acknowledge this in your output and apply the compensating behaviors above.
+**If running it yourself:** the cross-cutting tier at `max` effort is recommended. If the host
+cannot sustain that, say so in your output and apply the compensating behaviors above.
 
 ---
 

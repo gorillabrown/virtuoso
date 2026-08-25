@@ -5,38 +5,60 @@ description: >
   the user says "3rd party audit", "external audit", "outside audit", or when an audit is
   required at phase close. This skill governs package creation, auditor prompts, remediation
   planning, and final decision integration. It produces 5 deliverables across 6 steps with
-  structured handoffs between Cowork, the user, and the external auditor. Trigger on:
+  structured handoffs between the planner, the user, and the external auditor. Trigger on:
   "3rd party audit", "audit the codebase", "prepare audit package", "audit remediation",
-  "process audit findings", or any phase-close audit gate. This is a Cowork skill — all
+  "process audit findings", or any phase-close audit gate. This is a planner skill — all
   audit steps are coordinated from the planning surface.
 ---
 
-<!-- virtuoso-shared-contract v1 -->
+<!-- virtuoso-shared-contract v2 -->
 **Shared contract (all Virtuoso skills).** Reference block; the skill body below governs specifics.
 
-- **Registry resolution** — the project-root governance readme's machine-readable block and `Virtuoso/workspace-layout.json` together form the registry. The manifest wins for any role it already carries a key for; the readme is the carrier for roles the manifest does not yet hold. Resolve every governance path through the registry — never hardcode one.
-- **Workspace adopt** — bringing an established project under management is non-destructive: nothing is moved, nothing is duplicated, no parallel document is seeded beside a registered one, and user content is never overwritten.
-- **Git ownership** — stage explicitly (`git add <path>`); never `git add .` or `git add -A`. Run a tripwire status check against the expected dirty set before any commit and stop on anything unexpected. No destructive flags, no force-push.
-- **Effort levels** — low / medium / high / max. Model tier sets the default (haiku→low, sonnet→medium, opus→high); annotate a task only when overriding its default.
-- **Issue contract** — any stop, hold, block, or elevation becomes the 7-field issue document, saved to the registered `issues` directory as `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md`, then routed to `/mid-dispatch-decision` by path.
-- **Governance staging** — a worktree-resident run never edits a main governance document directly; the change-intent goes to a staging file as fold-in instructions, applied at close-out.
+- **Registry resolution** — `Virtuoso/workspace-layout.json` is the authority; `Virtuoso.Governance.Readme.md` is its synchronized human view. Resolve every document, work item, and permission through the registry. Never hardcode a path, never fall back to a conventional one, and never infer authority from a role's name. Full contract: the plugin's `references/registry-contract.md`.
+- **Read-only preflight** — session start and any "where am I" check runs `--mode check`, which performs **zero project writes**. Adoption, creation, and repair are separate operations, each explicitly invoked.
+- **Providers** — work items come from the configured work-register provider (local file, spreadsheet, connector-backed task manager, issue tracker, database, or read-only snapshot). Negotiate capabilities before planning work; never open a register file directly. The live work register, the append-only terminal ledger, and any compatibility export are three different roles.
+- **Provenance** — every derived figure cites its provider, source, and snapshot time. A figure whose inputs are missing is reported as *not computable* with the missing inputs named, never approximated.
+- **Git** — behaviour is `policy.git`, not a fixed rule of this plugin. See `references/git-policy.md`. Under every policy: inspect first, stage exact paths, preserve unrelated work, no destructive flags, no force-push without explicit authorization.
+- **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (v1.0 — 8 universal checks plus the project's declared extensions). No skill restates it in its own words.
+- **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
+- **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
+- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 # 3rd Party Audit Process
 
-## Preflight — workspace check (run first)
+## Preflight — read-only registry check (run first)
 
-This skill operates on the project's Virtuoso workspace. Before anything else, bring the project under management non-destructively:
+Resolve the plugin through its launcher, then run the **read-only** check. It performs
+discovery and validation with zero project writes.
 
-    python "$(cat ~/.virtuoso/plugin-root 2>/dev/null)/scripts/virtuoso_preflight.py" --root . --mode adopt
+**Unix-like shell**
 
-`adopt` never moves or duplicates anything. Read the `virtuoso-status:` line it prints and branch:
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode check
 
-- `ready` — a `Virtuoso/` workspace already exists (it was healed if needed); continue.
-- `adopted roadmap=<path>` — the project already had an established documentation tree (e.g. `Project Documentation/` or `2. Project Documentation/`) with its own roadmap, so a thin `Virtuoso/` control marker was written that points at that existing roadmap. Tell the user it was adopted in place — nothing was moved or duplicated — then continue.
-- `none` — there is no workspace and no documentation tree to adopt (treat a missing `~/.virtuoso/plugin-root` the same way). Stop this skill and route the user to `/virtuoso-init`, which builds the plugin-only `Project Documentation/` layout (the only layout the workspace scaffolder supports).
+**Windows PowerShell**
 
-**Governance authority — read `Virtuoso.Governance.Readme.md` first.** The project-root `Virtuoso.Governance.Readme.md` is the single source of truth for where every governance document lives (roadmap, sprint catalog, lessons, close-outs, issues, review artifacts). Resolve each document you need through its registry and **defer to the paths it lists**, whatever layout the project uses (e.g. `docs/governance/ROADMAP.md`, `2. Project Documentation/…`, or the plugin default). `Virtuoso/workspace-layout.json` is the machine-readable mirror of the same paths. **Never create a parallel or competing document for a role the registry already lists** — open and edit the registered file in place. If the registry and the files on disk diverge (a registered path is an empty stub while the project's real document lives elsewhere), fix the **registry** — repoint it to the existing document and tell the user — do **not** seed or fork a rival. If `Virtuoso.Governance.Readme.md` is missing, run `/virtuoso-init` to generate it by registering the project's existing governance documents (it seeds a new file only for a role that genuinely has none).
+    & "$HOME/.virtuoso/bin/virtuoso.ps1" virtuoso_preflight --root . --mode check
 
+Add `--json` when you want the structured result (status, writes, findings, and the full
+resolved role table). Read the `virtuoso-status:` line and branch:
+
+- `ready` — the registry is valid. Continue.
+- `warning` — usable; surface the findings to the user and continue. Warnings are not blockers.
+- `repair-needed` — **STOP.** Run `--mode repair` to produce the preview, show the user the
+  proposed paths, semantic changes, files affected, and backup location, and apply it only
+  with `--apply` after they approve.
+- `adoptable` — the project has governance documents but is not registered. Offer
+  `--mode adopt`: it registers what exists, in place. Nothing is moved, duplicated, or rewritten.
+- `none` — no registry and nothing to adopt. Route the user to `/virtuoso-init`.
+- `failed` — report the error verbatim and stop.
+
+If neither launcher resolves, report that the plugin could not be located and stop. Do not
+guess a path.
+
+**Governance authority.** Resolve every document you need through the registry
+(`references/registry-contract.md`). Never create a parallel document for a registered role;
+never write to a role whose `allowedWriters` does not name this ceremony; never treat a
+`mirror`, `report`, `archive`, or `unknown` role as truth.
 
 This skill manages the full lifecycle of external codebase audits. Audits are conducted
 by **legitimate independent 3rd-party auditors** — separate AI instances with no access
@@ -63,15 +85,15 @@ only the audit package and orientation brief and evaluate the project on its own
 The audit is a 6-step pipeline producing 5 deliverables with structured handoffs:
 
 ```
-Step 1: Package Creation (Cowork)         → D1a + D1b
+Step 1: Package Creation (planner)         → D1a + D1b
 Step 2: Handoff to Auditor (User)         → [user action]
 Step 3: Audit Report (3rd Party)          → D2
-Step 4: Remediation Plan (Cowork + User)  → D3
+Step 4: Remediation Plan (planner + user)  → D3
 Step 5: Auditor Review of Response (3P)   → D4
-Step 6: Final Decisions (Cowork + User)   → D5
+Step 6: Final Decisions (planner + user)   → D5
 ```
 
-**Ownership:** Cowork owns Steps 1, 4, 6. User owns Step 2. 3rd party owns Steps 3, 5.
+**Ownership:** the planner owns Steps 1, 4, 6. User owns Step 2. 3rd party owns Steps 3, 5.
 
 ---
 
@@ -407,7 +429,7 @@ These are project-agnostic templates. Customize the bracketed sections for each 
 >
 > Required output format: (A) Executive verdict, (B) Current-state architecture summary, (C) Roadmap item-by-item audit, (D) Major contradictions, (E) Sequencing analysis, (F) Structural/modeling review, (G) Testing review, (H) Top risks, (I) Missing work, (J) Proposed revised roadmap, (K) Final recommendation with scores
 
-### Step 2 Prompt — Remediation Plan (Cowork)
+### Step 2 Prompt — Remediation Plan (planner)
 
 > You are managing remediation of an audit against the [PROJECT NAME] roadmap.
 >
@@ -430,7 +452,7 @@ These are project-agnostic templates. Customize the bracketed sections for each 
 > 1. Feedback item — Utilize the item number
 > 2. Disposition — Accept / Accept with narrowing / Defer / Reject / Convert into documentation-only correction / Convert into later-phase calibration task
 
-### Step 4 Prompt — Final Decisions (Cowork)
+### Step 4 Prompt — Final Decisions (planner)
 
 > Here are responses to your Audit Remediation Plan. Consider this audit loop now closed with these responses as the definitive way forward.
 >
@@ -440,7 +462,7 @@ These are project-agnostic templates. Customize the bracketed sections for each 
 
 ---
 
-## Cowork Execution Checklist
+## Planner Execution Checklist
 
 Use this checklist to track progress through the audit lifecycle:
 

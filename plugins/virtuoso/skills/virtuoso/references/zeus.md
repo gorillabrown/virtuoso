@@ -10,8 +10,8 @@ description: "Behavioral reference for Zeus-as-orchestrator execution. The top-l
 **Not:** a spawnable agent. The orchestrator reads this file to load coordination rules.
 
 > **Vocabulary bridge.** "Zeus" is the orchestrator *role* — the planning/coordinating
-> session (the README's **Cowork** / planner). The **workers** (Hermes, Hercules,
-> Aristotle, and the specialists) are the implementers (the README's *CLI* / implementer).
+> session (the README's **planner**). The **workers** (Hermes, Hercules,
+> Aristotle, and the specialists) are the implementers (the README's *implementation agent*).
 > One two-role model, named for the roster. "Zeus" replaces the older "codex-parent" label.
 
 ---
@@ -71,9 +71,9 @@ plugin's bundled `agents/` roster and the project's `.claude/agents/`, reading e
 
 | Agent (dispatch name) | Model | Trigger | Output Contract |
 |-------|-------|---------|-----------------|
-| **Hermes** | haiku | Mechanical change; exact diff known; config edits, git ops | COMPLETE / FAILED with output |
-| **Hercules** | sonnet | Single-domain implementation; judgment within one module | COMPLETE with decisions documented / BLOCKED |
-| **Aristotle** | opus | Cross-system work; architectural judgment needed | COMPLETE with interaction map / BLOCKED |
+| **Hermes** | mechanical | Mechanical change; exact diff known; config edits, git ops | COMPLETE / FAILED with output |
+| **Hercules** | bounded | Single-domain implementation; judgment within one module | COMPLETE with decisions documented / BLOCKED |
+| **Aristotle** | cross-cutting | Cross-system work; architectural judgment needed | COMPLETE with interaction map / BLOCKED |
 
 ### Specialist Agents (Verification & Support)
 
@@ -81,11 +81,11 @@ Specialists handle specific bounded roles. They take priority over doers when th
 
 | Agent (dispatch name) | Model | Trigger | Output Contract |
 |-------|-------|---------|-----------------|
-| **Hippocrates** | haiku | After code changes; verify no regression | Pass/fail counts, categorized failures |
-| **MarcusAurelius** | sonnet | After tests pass; verify spec match | APPROVED / WITH_CONCERNS / REJECTED |
-| **Plato** | sonnet | After spec passes; architecture check | READY / MINOR_FIXES / MAJOR_REVISION |
-| **MarcusAurelius** | sonnet | After all reviews pass; update governing docs | Updated doc snapshots with timestamps |
-| **Aristotle** | opus | Root cause unknown; deep trace needed | Root-cause analysis + fix spec |
+| **Hippocrates** | mechanical | After code changes; verify no regression | Pass/fail counts, categorized failures |
+| **MarcusAurelius** | bounded | After tests pass; verify spec match | APPROVED / WITH_CONCERNS / REJECTED |
+| **Plato** | bounded | After spec passes; architecture check | READY / MINOR_FIXES / MAJOR_REVISION |
+| **MarcusAurelius** | bounded | After all reviews pass; update governing docs | Updated doc snapshots with timestamps |
+| **Aristotle** | cross-cutting | Root cause unknown; deep trace needed | Root-cause analysis + fix spec |
 
 Projects may define additional specialists. Zeus MUST scan the agent roster at the start of
 each dispatch to discover all available agents and their exact registered names. Use the
@@ -142,8 +142,8 @@ Examples: refactor that changes an interface consumed by multiple modules, imple
 ### 5. Fallback — when in doubt
 
 If you genuinely can't decide between tiers:
-- **Default to Hercules.** It can self-escalate to opus if the task turns out to be cross-system, and it will report if the task only needed haiku.
-- **Zeus never takes implementation tasks as a fallback.** If no doer agent file exists in the project, dispatch an ad-hoc Agent call at the appropriate model tier.
+- **Default to Hercules.** It can self-escalate to `high` effort if the task turns out to be cross-system, and it will report if the task only needed `low` effort.
+- **Zeus never takes implementation tasks as a fallback.** If no doer agent file exists in the project, dispatch an ad-hoc Agent call at the appropriate task tier.
 
 ### Routing examples
 
@@ -214,7 +214,7 @@ Proceeding to PLAN phase.
 
 **Actions:**
 - Decompose spec into numbered tasks (one per deliverable)
-- Annotate each task with: agent assignment, model tier [haiku/sonnet/opus], effort level
+- Annotate each task with: agent assignment, task tier [mechanical/bounded/cross-cutting] and effort level [low/medium/high/max]
 - Identify sequential dependencies vs. parallelizable tasks
 - Read the dispatch header's Effort field and any per-task overrides
 - Set the default effort level via `/effort-levels [low|medium|high|max]` (see the `effort-levels` skill)
@@ -225,10 +225,10 @@ Proceeding to PLAN phase.
 ===== PHASE 2: PLAN COMPLETE =====
 
 TASK PLAN (<sprint-id>):
-  Task 0: [Hermes/haiku] Prepare the isolated workspace (if the project's Git Workflow uses one)
+  Task 0: [Hermes/mechanical] Prepare the isolated workspace (if the project's Git Workflow uses one)
   Task 1: [<Agent>/<tier>] <description>
   ...
-  Task N: [Hermes/haiku] Persist per the project's Git Workflow
+  Task N: [Hermes/mechanical] Persist per the project's Git Workflow
 
 Dependencies: <list>
 Effort level (default): <level>
@@ -327,8 +327,8 @@ Inserts between TEST and VERIFY. Skip entirely if the project has no such gate.
 - Report per-target PASS / MARGINAL / FAIL.
 
 > *Illustrative example (one project's instance — not part of the generic protocol):* a
-> simulation-heavy project dispatches a calibration specialist to run N=1,200 × 3 seeds and
-> checks outcome-distribution bands (Standard/Immediate/Official/Special/NoResult) defined in
+> simulation-heavy project dispatches a measurement specialist to run its full multi-seed sweep and
+> checks outcome-distribution bands defined in
 > that project's own reference. Your project supplies its own specialist, tiers, and targets.
 
 **Gate output:**
@@ -407,7 +407,7 @@ Awaiting user direction.
 - All governance changes go to a **governance staging file** (per the project's convention)
   — not applied to protected documents directly.
 - Protected documents (Roadmap, CLAUDE.md, lessons catalog, any constitution/charter) are
-  NOT edited by workers; they are staged for Cowork to apply at close-out.
+  NOT edited by workers; they are staged for the planner to apply at close-out.
 
 **Gate output:**
 ```
@@ -421,7 +421,7 @@ Contents:
   - Roadmap fold-ins: <summary>
   - Other: <if any>
 
-These will be applied to canonical docs by Cowork at close-out (/pointer-closeout).
+These will be applied to canonical docs by the planner at close-out (/pointer-closeout).
 =====
 ```
 
@@ -618,7 +618,7 @@ Zeus does not invent a git strategy; it executes the project's. The principles b
 regardless of strategy:
 
 - **Separation of duties (Git-Ownership rule).** The worker (a sub-agent) owns the mutating
-  git for the work it does; the independent reconciler (Cowork / Zeus) verifies only with
+  git for the work it does; the independent reconciler (the planner) verifies only with
   read-only, lock-free git (`git --no-optional-locks status`, `git log`, `git diff`). The
   entity doing the work never solely certifies that git reflects it.
 - **Never commit directly to the integration branch (e.g., `main`)** unless the project's

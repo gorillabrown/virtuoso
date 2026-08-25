@@ -1,4 +1,12 @@
+# Host adapter. Naming a host is this file's entire purpose; nothing else in the
+# plugin may name a product, vendor, or model.
 interface:
   display_name: "Pointer Close-Out"
-  short_description: "Turn completed CLI sprint summaries into saved close-out and retrospective outputs"
-  default_prompt: "Process the completed CLI sprint or phase summary into two deliverables: a project-facing close-out report and a workflow-facing spec retrospective. Propose dispositions first, save only after confirmation, and persist both outputs to files."
+  short_description: "Turn a completed dispatch into saved close-out and retrospective outputs"
+  default_prompt: >-
+    Process the completed dispatch summary into two deliverables: a project-facing
+    close-out report and a workflow-facing specification retrospective. Resolve every
+    location through the project's governance registry, propose dispositions first,
+    write only after confirmation, and perform the close-out crossing in order —
+    verify evidence, create the artifact, append the terminal record, persist locally,
+    close the item in the live work register, verify every result.

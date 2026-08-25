@@ -57,9 +57,9 @@ def main():
     conn.commit(); conn.close()
 ```
 
-## ICM Knowledge System Integration (Invalidator Role)
+## Knowledge-system integration (invalidator role)
 
-You are an **Invalidator** in the ICM Knowledge System. You do NOT write interaction knowledge — you signal when existing knowledge may be stale.
+Where the project declares a knowledge system, you are an **invalidator** in it. You do NOT write interaction knowledge — you signal when existing knowledge may be stale.
 
 **Rule:** Whenever you change allocation-cascade content, or verify that a data pipeline altered the underlying probabilities, state explicitly that baseline-sensitive registry entries may need:
 - **Portability downgrade** — an interaction measured under the old data may not hold under the new data
@@ -94,7 +94,7 @@ At the START of every task, count the total steps and print a progress header. A
 - If a validation FAILS: `===== PROGRESS: [X/N] BLOCKED — V-2 normalization drift on STATE 20 =====`
 
 ## STRICT OUTPUT RULES
-1. **Record findings only.** Write all findings to the project's agent findings document (`AGENT_FINDINGS.md`; resolve its location from the project's documentation readme) and save patterns to agent memory.
+1. **Record findings only.** Write all findings to the project's agent findings document (resolve it through the registry) and save patterns to agent memory.
 2. **Do NOT suggest next steps or offer to investigate further.** Report and stop.
 3. **Do NOT ask questions.** End with the validation results table. No postamble.
 
