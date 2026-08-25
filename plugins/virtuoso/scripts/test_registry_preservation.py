@@ -74,7 +74,7 @@ Everything down here is ours too. Ordering, labels, and comments must survive.
 
 CUSTOM_MANIFEST = {
     "schemaVersion": 2,
-    "pluginCompatibility": ">=2.0.0 <3.0.0",
+    "pluginCompatibility": ">=1.4.0 <2.0.0",
     "layout": "plugin-only",
     "adopted": True,
     "documentationRoot": "docs",
@@ -233,7 +233,7 @@ def test_external_live_register_local_ledger_and_legacy_catalog_coexist(project)
     (project / "Virtuoso" / "workspace-layout.json").write_text(
         json.dumps(manifest, indent=2), encoding="utf-8")
 
-    reg = registry_mod.load(str(project), plugin_version="2.0.0")
+    reg = registry_mod.load(str(project), plugin_version="1.4.0")
     assert [f for f in reg.findings if f.severity == "error"] == []
 
     assert reg.roles["workRegister"].authority == "live"

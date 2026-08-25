@@ -26,7 +26,7 @@ SCHEMA_VERSION = 2
 #: with ``SchemaVersionError`` rather than silently reinterpreted.
 SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 #: Plugin versions a v2 registry written by this build declares compatibility with.
-PLUGIN_COMPATIBILITY = ">=2.0.0 <3.0.0"
+PLUGIN_COMPATIBILITY = ">=1.4.0 <2.0.0"
 
 MANIFEST_RELPATH = "Virtuoso/workspace-layout.json"
 README_RELPATH = "Virtuoso.Governance.Readme.md"

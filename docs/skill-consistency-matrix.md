@@ -1,7 +1,7 @@
 # Skill Consistency Matrix
 
 > **Historical record (v1.x line).** This document captured the shared-contract state as it
-> stood under `virtuoso-shared-contract v1`, with pasted output from that run. Virtuoso 2.0
+> stood under `virtuoso-shared-contract v1`, with pasted output from that run. Virtuoso 1.4
 > replaced that block with `v2` and rewrote the ceremony skills; the commands and hashes
 > below no longer describe the current tree. It is kept as evidence of what was verified at
 > the time, unedited — evidence is preserved, not rewritten. For the current contract see

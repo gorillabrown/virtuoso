@@ -1,9 +1,11 @@
 # Virtuoso Release Notes
 
-## v2.0.0 (2026-08-25) — source-of-truth redesign
+## v1.4.0 (2026-08-25) — source-of-truth redesign
 
-**Breaking change.** Plugin 1.3.6 → 2.0.0; registry schema 1 → 2. Migration is
-non-destructive and previewed — see [`docs/MIGRATION-v2.md`](docs/MIGRATION-v2.md).
+**Breaking changes, despite the minor version number.** Plugin 1.3.6 → 1.4.0; the
+**registry schema moves 1 → 2**; several bundled scripts are removed. Migration itself is
+non-destructive and previewed — see [`docs/MIGRATION-1.4.md`](docs/MIGRATION-1.4.md) for the
+full removed-and-changed tables.
 
 ### Release-blocking safety
 

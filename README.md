@@ -258,9 +258,11 @@ thresholds of their own.
   dependency: when it is absent, those capabilities are withdrawn with a message naming it,
   never an import error mid-ceremony.
 
-## Upgrading from v1
+## Upgrading from 1.3.x
 
-See [`docs/MIGRATION-v2.md`](docs/MIGRATION-v2.md). Migration is non-destructive and
+Virtuoso 1.4 carries breaking changes despite the minor version number: the registry schema
+moves 1 → 2 and several bundled scripts are removed. See
+[`docs/MIGRATION-1.4.md`](docs/MIGRATION-1.4.md). Migration itself is non-destructive and
 previewed; unknown legacy roles stay unclassified, and the legacy local catalog migrates as
 a read-only compatibility mirror rather than being reinterpreted as authoritative.
 

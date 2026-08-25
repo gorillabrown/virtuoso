@@ -1,7 +1,8 @@
-# Migrating to Virtuoso 2.0
+# Migrating to Virtuoso 1.4
 
-Virtuoso 2.0 is a **breaking change**. The plugin version moves 1.3.6 → 2.0.0 and the
-registry schema moves 1 → 2.
+Virtuoso 1.4 carries **breaking changes** despite the minor version number. The plugin
+moves 1.3.6 → 1.4.0 and the **registry schema moves 1 → 2**. Read the removed-and-changed
+tables below before upgrading a live project.
 
 Nothing about the migration is automatic or destructive. A v1 project keeps working in
 read mode from the moment you upgrade; the migration itself is previewed and approved like
@@ -140,7 +141,7 @@ Until you register a `workRegister` role, ceremonies still **read** a registered
 `sprintCatalog` through an explicitly-labelled compatibility adapter. Reads work; writes do
 not, and every report says so.
 
-The adapter is retained for the v2 line. Register a real `workRegister` role to leave it
+The adapter is retained for the 1.x line. Register a real `workRegister` role to leave it
 behind.
 
 ---
