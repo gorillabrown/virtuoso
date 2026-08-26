@@ -24,6 +24,7 @@ REQUIRED_RULE_ANCHORS = {
         ("registry-resolved-staging", "AMEND-THE-RESTATEMENTS"),
         ("lane-declaration", "SRL-551"),
         ("merge-through-slot", "SRL-551"),
+        ("checkpoint-commits", "SRL-065"),
     ],
     "governance-sweep": [
         ("grep-registry-before-moving", "SRL-680"),

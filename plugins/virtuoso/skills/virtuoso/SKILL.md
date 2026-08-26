@@ -230,7 +230,7 @@ files, calibration interpretation, resolving conflicting requirements.
 □ 7. unassigned: Generate profiler snapshot with pathway metrics        [haiku]
 □ 8. unassigned: Analyze profiler — does freed space flow to both?      [opus] {max}
 □ 9. unassigned: Update CLAUDE.md with constants and cal results        [sonnet]
-□ 10. unassigned: Commit, merge to main, push                          [haiku]
+□ 10. unassigned: Final commit, merge to main, push                    [haiku]
 ```
 
 Note: Tasks #6 and #8 override to `{max}` because interpreting calibration results
@@ -404,7 +404,7 @@ final plan that governs execution.
 □ 7. hippocrates-worker: Generate profiler snapshot with pathway metrics [haiku]
 □ 8. aristotle-worker: Analyze profiler — does freed space flow to both? [opus]
 □ 9. marcusaurelius-worker: Update CLAUDE.md with constants and cal results [sonnet]
-□ 10. Zeus: Commit, merge to main, push                        [haiku]
+□ 10. Zeus: Final commit, merge to main, push                  [haiku]
 ```
 
 The header states that the parent chat remains singular even when child workers are
@@ -514,6 +514,30 @@ don't context-switch. Scope creep is how 30-minute tasks become 90-minute tasks.
 
 1. Mark the task ✓ in TodoWrite
 2. **Reprint the full task plan** with updated markers
+3. **Commit the task's work before starting the next one**
+
+<!-- rule:checkpoint-commits (SRL-065) -->
+**A task boundary is a commit boundary.** Commit when a task completes, and push at
+burst end — do not carry a whole sprint's work to one terminal commit at the end of the
+plan. An uncommitted working tree is not a git-verified state: a crashed session, a
+reverted edit, or a worktree removed early takes everything that was never committed,
+and no amount of correct work survives that.
+
+This applies to the worked examples in this skill as much as to real sprints. A plan
+whose only commit is its last task teaches the failure — the example's final task is the
+*merge*, not the sprint's first save.
+
+Two consequences worth stating, because both have been observed:
+
+- **Commit before running tests, not after.** Verify `git status` shows the changes
+  landed before a suite runs against them; a green suite on an uncommitted tree proves
+  nothing about what will merge.
+- **Committed is not the same as pushed.** Commits sitting on one machine are invisible
+  to every other lane and to the merge slot. Count them at burst end:
+
+```bash
+python <registry:scripts>/sprint_guards.py unpushed --root <project-root>
+```
 
 This is the most important habit. Reprinting the plan after each task:
 - Proves you're tracking progress (not just blazing through tool calls)
@@ -543,7 +567,7 @@ of them is wrong.
 □ 7. hippocrates: Generate profiler snapshot with pathway metrics       [haiku]
 □ 8. aristotle: Analyze profiler — does freed space flow to both?       [opus]
 □ 9. marcusaurelius: Update CLAUDE.md with constants and cal results    [sonnet]
-□ 10. hermes: Commit, merge to main, push                              [haiku]
+□ 10. hermes: Final commit, merge to main, push                        [haiku]
 ```
 
 ### Three-call rule
