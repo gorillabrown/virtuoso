@@ -110,6 +110,48 @@ def cmd_staging_sweep(args):
     return 1
 
 
+def _git(root, *args):
+    return subprocess.run(["git", *args], cwd=root,
+                          capture_output=True, text=True)
+
+
+def missing_on_ref(root, ref, paths):
+    """Which of `paths` are NOT present on `ref`, in the order given.
+
+    Uses `git cat-file -e <ref>:<path>`, which asks the object database rather than
+    the filesystem -- the whole point is that a worktree-only artifact looks present
+    to `os.path.exists` right up until the worktree is removed (SRL-312).
+    Raises LookupError when `ref` itself does not resolve.
+    """
+    if _git(root, "rev-parse", "--verify", "--quiet", ref + "^{commit}").returncode:
+        raise LookupError(ref)
+    missing = []
+    for rel in paths:
+        probe = "%s:%s" % (ref, rel.replace("\\", "/"))
+        if _git(root, "cat-file", "-e", probe).returncode:
+            missing.append(rel)
+    return missing
+
+
+def cmd_artifacts_exist(args):
+    try:
+        missing = missing_on_ref(args.root, args.ref, args.paths)
+    except LookupError as exc:
+        print("artifacts-exist: ref %s does not resolve in %s" % (exc.args[0], args.root))
+        return 2
+    total = len(args.paths)
+    if not missing:
+        print("artifacts-exist: %d/%d present on %s" % (total, total, args.ref))
+        return 0
+    print("artifacts-exist: %d of %d NOT on %s:" % (len(missing), total, args.ref))
+    for m in missing:
+        print("  ! " + m)
+    print("Do not remove the worktree - worktree-only artifacts vanish at removal, and "
+          "a close-out that names them would reference a file that never existed in "
+          "git (SRL-312).")
+    return 1
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -118,6 +160,14 @@ def main(argv=None):
                            help="list staging memos still resident in closeOuts")
     sweep.add_argument("--root", default=os.getcwd())
     sweep.set_defaults(func=cmd_staging_sweep)
+
+    art = sub.add_parser("artifacts-exist",
+                         help="verify named artifacts are present on a git ref")
+    art.add_argument("--root", default=os.getcwd())
+    art.add_argument("--ref", required=True,
+                     help="branch/commit the artifacts must be present on")
+    art.add_argument("paths", nargs="+", help="repo-relative artifact paths")
+    art.set_defaults(func=cmd_artifacts_exist)
 
     args = ap.parse_args(argv)
     return args.func(args)

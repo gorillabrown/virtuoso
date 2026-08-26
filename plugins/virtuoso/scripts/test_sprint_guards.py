@@ -85,3 +85,49 @@ def test_staging_sweep_exits_2_when_closeouts_is_unregistered(tmp_path):
     rc, out = _run("staging-sweep", "--root", str(tmp_path))
     assert rc == 2, out
     assert "closeOuts" in out
+
+
+def _git(root, *args):
+    subprocess.run(["git", *args], cwd=str(root), check=True,
+                   capture_output=True, text=True)
+
+
+def _init_repo(tmp_path):
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.email", "test@example.invalid")
+    _git(tmp_path, "config", "user.name", "Test")
+    (tmp_path / "kept.md").write_text("on the branch\n", encoding="utf-8")
+    _git(tmp_path, "add", "kept.md")
+    _git(tmp_path, "commit", "-q", "-m", "seed")
+
+
+def test_missing_on_ref_finds_an_untracked_artifact(tmp_path):
+    _init_repo(tmp_path)
+    (tmp_path / "worktree-only.md").write_text("never committed\n", encoding="utf-8")
+    assert sg.missing_on_ref(str(tmp_path), "main",
+                             ["kept.md", "worktree-only.md"]) == ["worktree-only.md"]
+
+
+def test_artifacts_exist_passes_when_all_are_on_the_ref(tmp_path):
+    _init_repo(tmp_path)
+    rc, out = _run("artifacts-exist", "--root", str(tmp_path), "--ref", "main", "kept.md")
+    assert rc == 0, out
+    assert "artifacts-exist: 1/1 present on main" in out
+
+
+def test_artifacts_exist_fails_on_a_worktree_only_artifact(tmp_path):
+    _init_repo(tmp_path)
+    (tmp_path / "worktree-only.md").write_text("never committed\n", encoding="utf-8")
+    rc, out = _run("artifacts-exist", "--root", str(tmp_path), "--ref", "main",
+                   "kept.md", "worktree-only.md")
+    assert rc == 1, out
+    assert "worktree-only.md" in out
+    assert "vanish" in out
+
+
+def test_artifacts_exist_exits_2_on_an_unresolvable_ref(tmp_path):
+    _init_repo(tmp_path)
+    rc, out = _run("artifacts-exist", "--root", str(tmp_path),
+                   "--ref", "no-such-branch", "kept.md")
+    assert rc == 2, out
+    assert "no-such-branch" in out
