@@ -203,7 +203,8 @@ Every task line follows this format: `□ N. owner-label: Task description [mode
 ### Model tiers
 
 Annotate each task with the minimum viable model — the cheapest tier that can handle
-the task without sacrificing accuracy.
+the task without sacrificing accuracy — then apply the blast-radius override below
+before finalizing.
 
 **haiku** — deterministic steps with a known correct answer. Running a test suite,
 formatting a file, updating a version number, committing and pushing. Speed and
@@ -216,6 +217,24 @@ match code changes. Domain knowledge but not cross-cutting awareness.
 **opus** — work that touches multiple modules, requires understanding interactions
 between subsystems, or involves architectural decisions. Root-cause analysis across
 files, calibration interpretation, resolving conflicting requirements.
+
+<!-- rule:tier-by-blast-radius (SRL-650) -->
+**Blast-radius override — ask what breaks if this output is wrong, not how hard it is
+to produce.** Cheapness is the right axis only when a wrong answer is cheap to detect
+and cheap to redo. Three cases where it is not:
+
+- **An output that becomes a baseline.** A figure that later work is measured against
+  is load-bearing even when producing it is a single command. A baseline capture
+  assigned to the cheapest tier returned figures that could not be reproduced under any
+  invocation, and an entire merge gate had to be re-derived. Baselines go to a tier that
+  can notice its own output is wrong (SRL-650).
+- **An interpretation wearing a mechanical label.** "Re-run the tool and report" sizes
+  as mechanical, but is reasoning-dense whenever the deliverable is an *interpretation*
+  rather than an *artifact*. Classify by the shape of the output, not by the phrasing
+  of the task (SRL-506).
+- **Cross-module work at the top effort tier.** These systematically trigger critical
+  review findings. Pre-allocate a **fix round as its own planned task**, so it appears
+  in the plan as a step rather than arriving as an overrun (SRL-038).
 
 ### Example (Phase 2 output — tasks enumerated, agents not yet assigned)
 
