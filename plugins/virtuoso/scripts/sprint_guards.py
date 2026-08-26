@@ -152,6 +152,35 @@ def cmd_artifacts_exist(args):
     return 1
 
 
+def unpushed_count(root):
+    """Commits on HEAD not on its upstream, or None when no upstream is configured.
+
+    None is a distinct answer from 0: "nothing to push" and "nowhere to push to" are
+    different states, and collapsing them lets a whole burst's work sit invisible on a
+    branch nobody else can see.
+    """
+    if _git(root, "rev-parse", "--verify", "--quiet", "@{u}").returncode:
+        return None
+    proc = _git(root, "rev-list", "--count", "@{u}..HEAD")
+    if proc.returncode:
+        return None
+    return int(proc.stdout.strip() or 0)
+
+
+def cmd_unpushed(args):
+    count = unpushed_count(args.root)
+    if count is None:
+        print("unpushed: no upstream configured for HEAD in %s - every commit here is "
+              "invisible to other lanes and to the merge slot. Set one, or push "
+              "explicitly." % args.root)
+        return 2
+    if count == 0:
+        print("unpushed: 0 - HEAD matches its upstream.")
+        return 0
+    print("unpushed: %d commit(s) not on the upstream." % count)
+    return 1
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -168,6 +197,11 @@ def main(argv=None):
                      help="branch/commit the artifacts must be present on")
     art.add_argument("paths", nargs="+", help="repo-relative artifact paths")
     art.set_defaults(func=cmd_artifacts_exist)
+
+    unp = sub.add_parser("unpushed",
+                         help="count commits on HEAD that are not on its upstream")
+    unp.add_argument("--root", default=os.getcwd())
+    unp.set_defaults(func=cmd_unpushed)
 
     args = ap.parse_args(argv)
     return args.func(args)

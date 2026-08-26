@@ -552,6 +552,16 @@ If you make 3 consecutive tool calls without printing narration text between the
 something has gone wrong. Stop, reorient, and narrate what you're doing and why.
 Silent chains of tool calls are where plans go off the rails.
 
+**At the end of every burst, count what has not left the machine.**
+
+```bash
+python <registry:scripts>/sprint_guards.py unpushed --root <project-root>
+```
+
+A non-zero count is not automatically wrong — a sprint mid-flight legitimately holds
+local commits. It is wrong to *not know*. Exit 2 means there is no upstream at all,
+which makes every commit on this branch invisible to other lanes and to the merge slot.
+
 ---
 
 ## Phase 5: Handle Blockers

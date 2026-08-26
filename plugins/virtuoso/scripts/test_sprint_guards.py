@@ -131,3 +131,61 @@ def test_artifacts_exist_exits_2_on_an_unresolvable_ref(tmp_path):
                    "--ref", "no-such-branch", "kept.md")
     assert rc == 2, out
     assert "no-such-branch" in out
+
+
+def _init_repo_with_upstream(tmp_path):
+    remote = tmp_path / "remote.git"
+    work = tmp_path / "work"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(remote)],
+                   check=True, capture_output=True, text=True)
+    subprocess.run(["git", "clone", "-q", str(remote), str(work)],
+                   check=True, capture_output=True, text=True)
+    _git(work, "config", "user.email", "test@example.invalid")
+    _git(work, "config", "user.name", "Test")
+    (work / "a.md").write_text("a\n", encoding="utf-8")
+    _git(work, "add", "a.md")
+    _git(work, "commit", "-q", "-m", "seed")
+    _git(work, "push", "-q", "-u", "origin", "main")
+    return work
+
+
+def test_unpushed_count_is_zero_right_after_a_push(tmp_path):
+    work = _init_repo_with_upstream(tmp_path)
+    assert sg.unpushed_count(str(work)) == 0
+
+
+def test_unpushed_count_counts_local_only_commits(tmp_path):
+    work = _init_repo_with_upstream(tmp_path)
+    (work / "b.md").write_text("b\n", encoding="utf-8")
+    _git(work, "add", "b.md")
+    _git(work, "commit", "-q", "-m", "local only")
+    assert sg.unpushed_count(str(work)) == 1
+
+
+def test_unpushed_exits_1_with_the_count(tmp_path):
+    work = _init_repo_with_upstream(tmp_path)
+    (work / "b.md").write_text("b\n", encoding="utf-8")
+    _git(work, "add", "b.md")
+    _git(work, "commit", "-q", "-m", "local only")
+    rc, out = _run("unpushed", "--root", str(work))
+    assert rc == 1, out
+    assert "unpushed: 1 commit(s)" in out
+
+
+def test_unpushed_exits_0_when_clean(tmp_path):
+    work = _init_repo_with_upstream(tmp_path)
+    rc, out = _run("unpushed", "--root", str(work))
+    assert rc == 0, out
+    assert "unpushed: 0" in out
+
+
+def test_unpushed_count_is_none_without_an_upstream(tmp_path):
+    _init_repo(tmp_path)
+    assert sg.unpushed_count(str(tmp_path)) is None
+
+
+def test_unpushed_exits_2_without_an_upstream(tmp_path):
+    _init_repo(tmp_path)
+    rc, out = _run("unpushed", "--root", str(tmp_path))
+    assert rc == 2, out
+    assert "upstream" in out
