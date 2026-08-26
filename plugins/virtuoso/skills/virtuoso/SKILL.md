@@ -488,6 +488,27 @@ Bad: [200 lines of inlined source code, data structure definitions, and API docs
 that the worker can read from the filesystem when needed]
 ```
 
+<!-- rule:inline-safety-into-worker-prompts (SRL-589) -->
+**Brevity applies to context, never to safety.** A rule that lives behind a pointer
+the worker was told to read, but not in the worker's own task text, does not exist for
+that worker. Every dispatch inlines these verbatim — they are short, and their absence
+is what gets violated:
+
+- **A tool refusal is a stop, not a `--force` invitation.** If a tool, hook, or gate
+  refuses, stop and report the refusal. This holds even when you believe you have
+  proven the refusal spurious — *especially* then. Verification and override authority
+  belong to the orchestrator, not to the worker that hit the wall (SRL-597 → SRL-617).
+- **Git scope fence, stated affirmatively.** When another agent owns commit and merge:
+  "You may edit files under `<manifest>`. You may not run `git add`, `git commit`,
+  `git merge`, `git push`, or `git checkout`. Leave your changes in the working tree"
+  (SRL-051). State what is permitted, not only what is forbidden.
+- **Working-directory assertion as the first action.** Any dispatch that writes to the
+  filesystem opens by printing its resolved working directory and confirming it matches
+  the expected worktree, before the first edit (SRL-227).
+
+These three are additive to the task text, not a substitute for it. They cost a few
+lines and they are the difference between a worker that stops and one that forces.
+
 **Governance-task dispatch gate (worktree-resident sprints only).** Before dispatching
 any task that updates a document listed in CLAUDE.md §Main Governance Documents:
 

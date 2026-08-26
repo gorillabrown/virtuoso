@@ -27,6 +27,7 @@ REQUIRED_RULE_ANCHORS = {
         ("checkpoint-commits", "SRL-065"),
         ("worker-output-validation", "SRL-513"),
         ("orchestrator-owns-long-runs", "SRL-417"),
+        ("inline-safety-into-worker-prompts", "SRL-589"),
     ],
     "governance-sweep": [
         ("grep-registry-before-moving", "SRL-680"),
