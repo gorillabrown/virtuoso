@@ -26,6 +26,7 @@ REQUIRED_RULE_ANCHORS = {
         ("merge-through-slot", "SRL-551"),
         ("checkpoint-commits", "SRL-065"),
         ("worker-output-validation", "SRL-513"),
+        ("orchestrator-owns-long-runs", "SRL-417"),
     ],
     "governance-sweep": [
         ("grep-registry-before-moving", "SRL-680"),

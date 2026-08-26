@@ -448,6 +448,23 @@ tool-use trail and the repository delta. Before marking any delegated task ✓:
 Discarding and re-dispatching is cheaper than every downstream task built on a result
 that was never produced.
 
+<!-- rule:orchestrator-owns-long-runs (SRL-417) -->
+**The orchestrator owns any run that outlives the sub-agent tool timeout.** This is a
+real exception to "the parent coordinates, workers implement", and it exists because a
+sub-agent holding a long handle is a single point of silent failure: the sub-agent's
+background process dies when the sub-agent returns, and the parent inherits a handle
+to nothing.
+
+- A suite, calibration, or build expected to exceed the sub-agent tool timeout is run
+  **by the parent**, in the parent's own background, with the parent polling it.
+- A backgrounded multi-arm compute launch in a sibling worktree dies silently and can
+  leave a stale result file that reads as fresh. Plan **foreground per-arm splits**
+  from the start rather than discovering this at the results-reading step (SRL-571).
+- If you are unsure whether a run will exceed the timeout, it will. Split it or own it.
+
+Owning the run does not make the parent an implementer: it still does not read source,
+edit code, or decide the fix. It holds a handle, which is coordination work.
+
 **Effort level management:** Effort controls how deeply the parent and child workers
 reason. Set the sprint's default effort at the start of Phase 4 (read from the dispatch
 header's `Effort:` field), then note before/after any task with a `{curly brace}`
