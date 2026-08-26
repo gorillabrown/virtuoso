@@ -481,14 +481,19 @@ If yes and the task is independent enough to hand off → assign to the speciali
 worker. Stop.
 
 <!-- rule:calibration-routing (measurement-dispatch) -->
-**Calibration is a measurement dispatch, not a regression dispatch.** A run whose
-output is a *distribution to be compared against target bands* routes to the
-calibration specialist, never to the test runner — regardless of how mechanical
-the invocation looks. The test runner reports pass/fail against a known-correct
-answer; a calibration run has no pass/fail, it has a measured value that someone
-has to interpret. Routing it to the cheap test-execution tier produces numbers
-nobody can defend and a gate that has to be re-derived. This applies to
-small-sample sanity calibration and full multi-seed runs alike.
+**Measurement is not regression.** A run whose output is a *distribution compared
+against target bands* routes to an agent permitted to interpret results — never to
+the test runner, regardless of how mechanical the invocation looks. The test runner
+reports pass/fail against a known-correct answer; a measurement run has no pass/fail,
+it has a measured value that someone has to interpret. Routing it to the
+execution-only tier produces numbers nobody can defend and a gate that has to be
+re-derived. This holds for small-sample sanity runs and full multi-seed runs alike.
+
+**The tell is the output shape, not the vocabulary.** Renaming a measurement run
+"quick verification" or "acceptance verification" does not convert it into a
+regression check — if a seed count or a target band appears anywhere in its
+definition, it is measurement. A grep tuned to the old words will certify a clean
+bill on an intact defect, which is how this rule was violated after it was written.
 
 **2. Exact diff known?**
 Can you write the precise file + old text + new text right now, with zero judgment?
