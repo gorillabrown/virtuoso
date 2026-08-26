@@ -147,14 +147,23 @@ def gate_preflight(target, redeploy=False):
 
 # --- step 2: regen-diff (charter A2 class) -------------------------------------------------
 
+def _create_command(writer, root):
+    """Build a create probe compatible with both legacy and fail-closed writers."""
+    help_result = subprocess.run(
+        [sys.executable, writer, "--help"], capture_output=True, text=True, timeout=30)
+    command = [sys.executable, writer, "--root", root, "--mode", "create"]
+    if help_result.returncode == 0 and "--authorize" in help_result.stdout:
+        command.append("--authorize")
+    return command
+
+
 def _writer_outputs(writer, label):
     """Run an explicitly authorized create fixture and return {relpath: sha}."""
     out = {}
     with tempfile.TemporaryDirectory() as td:
         env = dict(os.environ, VIRTUOSO_HOME=td)
-        p = subprocess.run([sys.executable, writer, "--root", td, "--mode", "create",
-                            "--authorize", "--quiet"], capture_output=True, text=True,
-                           env=env, timeout=120)
+        p = subprocess.run(_create_command(writer, td) + ["--quiet"],
+                           capture_output=True, text=True, env=env, timeout=120)
         if p.returncode != 0:
             raise Gate("%s writer failed on fresh fixture: %s" % (label, (p.stderr or p.stdout)[:400]))
         for dirpath, _dirs, files in os.walk(td):
@@ -359,8 +368,7 @@ def verify_installed(cache_dir):
     writer = os.path.join(cache_dir, WRITER_REL)
     with tempfile.TemporaryDirectory() as td:
         env = dict(os.environ, VIRTUOSO_HOME=td)
-        p1 = subprocess.run([sys.executable, writer, "--root", td, "--mode", "create",
-                             "--authorize"],
+        p1 = subprocess.run(_create_command(writer, td),
                             capture_output=True, text=True, env=env, timeout=120)
         if p1.returncode != 0:
             raise Gate("installed writer create failed: %s" % (p1.stderr or p1.stdout)[:400])

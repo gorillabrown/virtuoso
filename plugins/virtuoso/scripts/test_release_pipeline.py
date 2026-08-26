@@ -98,6 +98,9 @@ def test_release_fixture_writers_explicitly_authorize_create(tmp_path):
         "from pathlib import Path\n"
         "import sys\n"
         "args = sys.argv[1:]\n"
+        "if '--help' in args:\n"
+        "    print('--authorize')\n"
+        "    raise SystemExit(0)\n"
         "root = Path(args[args.index('--root') + 1])\n"
         "mode = args[args.index('--mode') + 1]\n"
         "if mode == 'create':\n"
@@ -110,6 +113,21 @@ def test_release_fixture_writers_explicitly_authorize_create(tmp_path):
 
     assert rp._writer_outputs(str(writer), "fixture")
     rp.verify_installed(str(cache))
+
+    legacy = tmp_path / "legacy_preflight.py"
+    legacy.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "args = sys.argv[1:]\n"
+        "if '--help' in args:\n"
+        "    print('--mode create')\n"
+        "    raise SystemExit(0)\n"
+        "if '--authorize' in args:\n"
+        "    raise SystemExit(8)\n"
+        "root = Path(args[args.index('--root') + 1])\n"
+        "(root / 'created.txt').write_text('legacy', encoding='utf-8')\n",
+        encoding="utf-8")
+    assert rp._writer_outputs(str(legacy), "legacy fixture")
 
 
 def test_update_registry_survives_replace_failure(tmp_path, monkeypatch):
