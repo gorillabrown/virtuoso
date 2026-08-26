@@ -31,6 +31,8 @@ REQUIRED_RULE_ANCHORS = {
         ("tier-by-blast-radius", "SRL-650"),
         ("mechanical-acceptance-criteria", "SRL-067"),
         ("red-base-procedure", "SRL-585"),
+        ("closeout-is-an-artifact", "SRL-114"),
+        ("verification-spawns-remediation", "SRL-004"),
     ],
     "governance-sweep": [
         ("grep-registry-before-moving", "SRL-680"),

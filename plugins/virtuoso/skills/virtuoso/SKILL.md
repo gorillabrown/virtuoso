@@ -794,6 +794,36 @@ what was learned]
   not the verbose duration/tokens/tool-calls breakdown. The detail matters for
   performance analysis but not for the close-out record. If performance
   recommendations are warranted, append them after the close-out block.
+<!-- rule:closeout-is-an-artifact (SRL-114) -->
+- **The printed block is not the deliverable — three artifacts are, and each needs its
+  own numbered task in the plan, created back in Phase 2:**
+  1. **The durable close-out file**, written to the registry-resolved `closeOuts`
+     directory. A plan authored without an explicit authoring task completes with
+     governance updates that reference a file nobody produced (SRL-114). If the plan
+     has no such task when you reach Phase 6, add it and reprint — do not write the
+     file as an unnumbered aside.
+  2. **The completed-work ledger row.** Close-out authoring and ledger entry are
+     separate acts, and only the first has a natural owner, so the ledger silently
+     falls behind. This is a standing rule, not a nicety (SRL-642).
+  3. **Deliverable existence, verified on the merged branch, before teardown.** Every
+     artifact this close-out names must be confirmed present on the branch it merged
+     into — not in the worktree. Worktree-only artifacts vanish at removal, and a
+     referenced deliverable has been found never to have existed in git (SRL-312).
+     Run:
+     ```bash
+     python <registry:scripts>/sprint_guards.py artifacts-exist --ref <merged-branch> <path> [<path> ...]
+     ```
+     Removing the worktree before this check passes destroys the evidence that would
+     have caught the gap.
+
+<!-- rule:verification-spawns-remediation (SRL-004) -->
+- **A verification task that finds more than a handful of issues stops and spawns a
+  remediation task.** It does not quietly become an implementation task. Silent
+  conversion is how a minimal-effort verification once consumed more tool calls than
+  any maximum-effort task in its sprint — and the plan showed one ✓ line for it. If
+  verification turns up substantive work, mark the verification ✓ with its findings,
+  add a numbered remediation task, and reprint.
+
 <!-- rule:merge-through-slot (SRL-551) -->
 - **Integration runs through the merge slot, in this order.** A worktree-resident
   sprint is not done when its tasks are ✓ — it is done when it has merged. Serialized
