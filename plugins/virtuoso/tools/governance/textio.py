@@ -64,8 +64,14 @@ def write_if_changed(path: str, content: str) -> bool:
     if parent:
         os.makedirs(parent, exist_ok=True)
     eol = detect_eol(path) if current is not None else "\n"
+    # `content` may already carry CRLF -- `read_text` decodes raw bytes without
+    # newline translation, so text read back from a CRLF file keeps its \r\n.
+    # Opening with newline=eol translates every \n on write, so writing that text
+    # unnormalized turns each \r\n into \r\r\n, which reads back as TWO line
+    # breaks and silently grows the file on every repair. Normalize to \n first
+    # and let `newline` apply the file's own ending exactly once.
     with open(path, "w", encoding="utf-8", newline=eol or "\n") as handle:
-        handle.write(content)
+        handle.write(normalized(content))
     return True
 
 

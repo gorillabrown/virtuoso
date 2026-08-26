@@ -25,12 +25,17 @@ from dataclasses import dataclass
 BEGIN_MARK = "<!-- virtuoso:begin-generated -->"
 END_MARK = "<!-- virtuoso:end-generated -->"
 
+# `\r?\n`, not `\n`: `textio.read_text` decodes raw bytes without newline
+# translation, so a registry written on Windows reaches these patterns carrying
+# CRLF. An `\n`-only pattern does not match it, the plugin concludes its OWN
+# generated region is absent, and repair then APPENDS a second one — duplicating
+# the region on every Windows repair. Tolerate both endings.
 _GENERATED_RE = re.compile(
-    re.escape(BEGIN_MARK) + r"\n(?P<body>.*?)\n?" + re.escape(END_MARK),
+    re.escape(BEGIN_MARK) + r"\r?\n(?P<body>.*?)(?:\r?\n)?" + re.escape(END_MARK),
     re.DOTALL,
 )
 _MACHINE_RE = re.compile(
-    r"<!--\s*virtuoso-governance-registry\s*\n(?P<body>.*?)\n-->",
+    r"<!--\s*virtuoso-governance-registry\s*\r?\n(?P<body>.*?)\r?\n-->",
     re.DOTALL,
 )
 _MACHINE_LINE_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_.\-]*):\s*(.+)$")
