@@ -191,6 +191,24 @@ execution order):
 Every action is **atomic and self-contained**: absolute or project-relative paths; verbatim,
 unique match strings for content edits; checksums for binary moves.
 
+<!-- rule:grep-registry-before-moving (SRL-680) -->
+**Before proposing that any document move, grep the registry contents for its path.**
+The registry is `Virtuoso/workspace-layout.json` plus the `virtuoso-governance-registry`
+machine block in the project-root governance readme. A registered document that moves
+without its registry entry moving in the same change leaves every skill resolving that
+role to a path that no longer exists — and the next heal will either mark the role
+`⬜ not present` or repoint it somewhere nobody chose.
+
+Concretely, for each proposed move:
+
+```bash
+grep -rn "<current/relative/path>" Virtuoso/workspace-layout.json <governance-readme>
+```
+
+If the path appears, the move is not a file operation — it is a **registry amendment
+plus** a file operation, and both land in the same change. If it does not appear, the
+document is unregistered and moving it is safe.
+
 ### Present the work list
 
 Show the user:

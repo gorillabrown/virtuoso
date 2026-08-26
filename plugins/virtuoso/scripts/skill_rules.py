@@ -23,7 +23,9 @@ REQUIRED_RULE_ANCHORS = {
         ("calibration-routing", "SRL-087"),
         ("registry-resolved-staging", "AMEND-THE-RESTATEMENTS"),
     ],
-    "governance-sweep": [],
+    "governance-sweep": [
+        ("grep-registry-before-moving", "SRL-680"),
+    ],
 }
 
 
