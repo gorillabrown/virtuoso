@@ -12,6 +12,9 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import skill_rules  # noqa: E402  (path must be set first; validate.py runs from anywhere)
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 fails, oks = [], []
 
@@ -97,6 +100,15 @@ def main():
     (ok if not root_path_hits else fail)(
         "no ${CLAUDE_PLUGIN_ROOT}/ path-uses in skill bodies"
         if not root_path_hits else f"${{CLAUDE_PLUGIN_ROOT}}/ path-use in skills: {root_path_hits}")
+
+    # 7. Promoted-rule anchors. A rule promoted into a skill body is only enforced
+    # while it is still IN that body (SRL-122); this fails CI when one goes missing,
+    # which is the dispatch-time machinery SRL-046 asks for.
+    missing_rules = skill_rules.missing_anchors(skills_dir)
+    total_rules = sum(len(v) for v in skill_rules.REQUIRED_RULE_ANCHORS.values())
+    (ok if not missing_rules else fail)(
+        f"{total_rules} promoted-rule anchors present"
+        if not missing_rules else f"missing rule anchors: {missing_rules}")
 
     # 6. Commands (optional): if present, each must map 1:1 to a skill.
     # Skills are invoked via the `virtuoso:` namespace, so standalone command
