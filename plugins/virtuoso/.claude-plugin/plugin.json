@@ -1,6 +1,6 @@
 {
   "name": "virtuoso",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Provider-based governance & dispatch suite: roadmap planning, execution discipline, close-outs, mid-dispatch decisions, audits, and doc hygiene — driven by a per-project registry that declares its live work register, terminal ledger, ownership rules, and permitted mutations.",
   "author": { "name": "Evan Brown", "email": "evan@heyevanbrown.com" },
   "homepage": "https://github.com/gorillabrown/virtuoso",

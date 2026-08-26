@@ -1,5 +1,56 @@
 # Virtuoso Release Notes
 
+## v1.5.0 (2026-08-26) — promoted-rule enforcement
+
+**Additive. No breaking changes; registry schema stays at v2.** A rule promoted into a
+project's lessons catalog produces documentation, not enforcement — execution paths read skill
+bodies at session start, never the catalog. This release gives promoted rules machinery.
+
+### Rule anchors, enforced by CI
+
+`scripts/skill_rules.py` carries a manifest of required rule anchors, and `validate.py` fails
+when a registered anchor leaves its skill body. **27 rules** are held this way across
+`virtuoso`, `epic`, `adversarial-review`, `effort-levels` and `governance-sweep`. Removing any
+one of them turns CI red.
+
+Anchors carry **plugin-neutral identifiers**. A consuming project maps a tag back to its own
+catalogue in its own records; no project's rule numbers enter shipped content.
+
+### Sprint guards
+
+`scripts/sprint_guards.py`, 23 tests, three subcommands that exit 0 clean / 1 on a finding /
+2 on a resolution error, so a caller branches on the code rather than parsing prose:
+
+| Subcommand | Enforces |
+|---|---|
+| `staging-sweep` | A resident governance-staging memo is an open obligation, verified against its target documents rather than its own claims |
+| `artifacts-exist` | A named deliverable is present on the merged branch — asks the object database, not the filesystem, because a worktree-only artifact looks present until the worktree is removed |
+| `unpushed` | Commits not on the upstream at burst end; returns "no upstream" distinctly from "nothing to push" |
+
+### Rules landed in skill bodies
+
+Worker-output validation (a "completed" message is not evidence) · orchestrator owns runs past
+the sub-agent timeout · safety rules inlined into worker prompts rather than left behind a
+pointer · tier by blast radius, not by cheapness · mechanical acceptance criteria and the
+red-base procedure · close-out as an artifact with its own task · staging-memo lifecycle ·
+task boundaries are commit boundaries · lane declaration and the merge-slot procedure ·
+instrument positive-control · identity-not-counts · cite-a-searchable-anchor · fork-surface ·
+re-derive-don't-restate · enforcement-not-disclosure · content-not-presence.
+
+### Also
+
+- The close-out template gains the **Mid-Dispatch Decisions** section that two producer skills
+  already named as a migration destination but which did not exist.
+- Measurement routing: a run whose output is a distribution routes to an agent permitted to
+  interpret, never to the test runner. *The tell is the output shape, not the vocabulary* — a
+  detector tuned to retired words will certify a clean bill on an intact defect.
+- `bin/` launchers pinned to LF so the byte-for-byte drift check survives checkout on Windows.
+
+### Notes
+
+Two `test_registry_preservation.py` failures (repair path, user-authored readme) remain open
+from v1.4.0 and are tracked as follow-on. `validate.py` — the CI gate — is green.
+
 ## v1.4.0 (2026-08-25) — source-of-truth redesign
 
 **Breaking changes, despite the minor version number.** Plugin 1.3.6 → 1.4.0; the
