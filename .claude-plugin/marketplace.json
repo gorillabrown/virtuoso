@@ -5,7 +5,7 @@
   "plugins": [
     {
       "name": "virtuoso",
-      "version": "1.5.0",
+      "version": "1.5.1",
       "source": "./plugins/virtuoso",
       "description": "Provider-based governance & dispatch suite — 15 skills for roadmap planning, execution discipline, goal-scale epics, close-outs, audits, and doc hygiene, driven by a declared per-project governance registry."
     }
