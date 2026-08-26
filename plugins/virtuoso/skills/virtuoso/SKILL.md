@@ -1067,6 +1067,36 @@ surface doesn't apply in the same way. But the staging-file pattern still has va
   Cowork may edit main governance documents directly since there's no worktree
   boundary to create conflicts.
 
+### Rule 7 — A Resident Staging Memo Is an Open Obligation
+
+<!-- rule:staging-memo-lifecycle (SRL-651) -->
+Rule 4 says the staging file is deleted once processed. That makes any memo still
+resident in the close-outs directory an **open obligation**, not an archive artifact —
+and the failure mode is that nobody ever looks. Four lifecycle hazards:
+
+- **Sweep the directory at every close-out.** Enumerate every resident
+  `Memo.*.GovernanceStaging.*.md` and confirm each is processed **by checking the
+  destination documents, not by reading the memo's claims about them.** A memo that
+  says its fold-ins were applied is a claim; the target document containing them is
+  the evidence. Run:
+  ```bash
+  python <registry:scripts>/sprint_guards.py staging-sweep --root <project-root>
+  ```
+  A non-zero exit means resident memos exist. Report them; do not delete a memo you
+  did not verify against its targets.
+- **A gate claim needs a backing artifact before it is folded in.** A staging memo
+  asserting "gate approved" is not approval. Locate the artifact — the gate log, the
+  run output, the signed check — before that claim reaches a canonical document. An
+  unverified "approved" has come within one edit of being written into governance
+  (SRL-320).
+- **Lesson numbers proposed inside a worktree are provisional labels only.** The
+  worktree's view of the catalog is frozen at branch time, so any number it proposes
+  collides with numbers consumed since. Treat every in-worktree lesson number as a
+  placeholder to be reassigned at fold-in (SRL-372).
+- **Pass the current catalog tip into the authoring agent's prompt.** The paired fix
+  for the above: an agent that is told the tip proposes from it instead of from a
+  stale snapshot (SRL-424).
+
 ### Migration — Sprints Already in Flight
 
 Sprints dispatched before this pattern was introduced continue under the old pattern

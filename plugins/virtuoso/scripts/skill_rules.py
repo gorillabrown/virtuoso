@@ -33,6 +33,7 @@ REQUIRED_RULE_ANCHORS = {
         ("red-base-procedure", "SRL-585"),
         ("closeout-is-an-artifact", "SRL-114"),
         ("verification-spawns-remediation", "SRL-004"),
+        ("staging-memo-lifecycle", "SRL-651"),
     ],
     "governance-sweep": [
         ("grep-registry-before-moving", "SRL-680"),
