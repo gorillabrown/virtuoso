@@ -10,7 +10,7 @@ memory: project
 
 **Model:** claude-haiku
 **Type:** Lightweight test execution
-**Triggers:** "Run tests," "Verify no regression," "Check test status," "Before/after validation," "Run ICM," "Run full-cal"
+**Triggers:** "Run tests," "Verify no regression," "Check test status," "Before/after validation"
 
 ---
 
@@ -22,9 +22,11 @@ The test runner executes the test suite and reports results. This is a **lightwe
 - After code changes (verify no regression)
 - Before implementation (baseline)
 - After fixes (verify fix worked)
-- ICM small-sample sanity calibration after a mechanism-shift wave
-- Full-cal multi-seed aggregate-stability calibration
 - On schedule (nightly/weekly health check)
+
+**Not this agent:** calibration and measurement runs — small-sample sanity passes and
+full multi-seed runs alike — route to Socrates. Their output is a distribution to
+interpret against target bands, not a pass/fail against a known-correct answer (SRL-087).
 
 ---
 

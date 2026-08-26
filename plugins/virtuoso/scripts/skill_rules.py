@@ -19,7 +19,9 @@ not paperwork about it.
 import os
 
 REQUIRED_RULE_ANCHORS = {
-    "virtuoso": [],
+    "virtuoso": [
+        ("calibration-routing", "SRL-087"),
+    ],
     "governance-sweep": [],
 }
 

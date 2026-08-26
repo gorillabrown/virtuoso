@@ -193,7 +193,7 @@ files, calibration interpretation, resolving conflicting requirements.
 □ 2. unassigned: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [sonnet]
 □ 3. unassigned: Update constants.toml default                          [haiku]
 □ 4. unassigned: Run fast test suite — all shards pass                  [haiku]
-□ 5. unassigned: Run calibration N=1,200×3 seeds                       [haiku]
+□ 5. unassigned: Run calibration N=1,200×3 seeds                       [sonnet]
 □ 6. unassigned: Interpret cal results + decide if tuning needed        [opus] {max}
 □ 7. unassigned: Generate profiler snapshot with pathway metrics        [haiku]
 □ 8. unassigned: Analyze profiler — does freed space flow to both?      [opus] {max}
@@ -291,6 +291,7 @@ Doers:
 
 Specialists:
 - hippocrates [haiku] — runs test suites, reports pass/fail
+- socrates [sonnet] — runs calibration/measurement harnesses, interprets results against target bands
 - marcusaurelius [sonnet] — spec compliance, documentation, governance updates
 - plato [sonnet] — code quality review
 ```
@@ -312,6 +313,7 @@ immediately?
 **1. Specialist match?**
 Does a specialist label match this task exactly?
 - Running tests → **hippocrates**
+- Running a calibration / measurement harness → **socrates**
 - Verifying spec compliance → **marcusaurelius**
 - Reviewing code quality → **plato**
 - Updating governing docs → **marcusaurelius**
@@ -320,6 +322,16 @@ Does a specialist label match this task exactly?
 
 If yes and the task is independent enough to hand off → assign to the specialist
 worker. Stop.
+
+<!-- rule:calibration-routing (SRL-087) -->
+**Calibration is a measurement dispatch, not a regression dispatch.** A run whose
+output is a *distribution to be compared against target bands* routes to the
+calibration specialist, never to the test runner — regardless of how mechanical
+the invocation looks. The test runner reports pass/fail against a known-correct
+answer; a calibration run has no pass/fail, it has a measured value that someone
+has to interpret. Routing it to the cheap test-execution tier produces numbers
+nobody can defend and a gate that has to be re-derived. This applies to
+small-sample sanity calibration and full multi-seed runs alike.
 
 **2. Exact diff known?**
 Can you write the precise file + old text + new text right now, with zero judgment?
@@ -355,7 +367,7 @@ final plan that governs execution.
 □ 2. hercules-worker: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0 [sonnet]
 □ 3. hermes-worker: Update constants.toml default                      [haiku]
 □ 4. hippocrates-worker: Run fast test suite — all shards pass         [haiku]
-□ 5. hippocrates-worker: Run calibration N=1,200×3 seeds               [haiku]
+□ 5. socrates-worker: Run calibration N=1,200×3 seeds                  [sonnet]
 □ 6. Zeus: Interpret cal results + decide if tuning needed     [opus]
 □ 7. hippocrates-worker: Generate profiler snapshot with pathway metrics [haiku]
 □ 8. aristotle-worker: Analyze profiler — does freed space flow to both? [opus]
@@ -494,7 +506,7 @@ of them is wrong.
 ✓ 2. hercules: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [sonnet]
 ✓ 3. hermes: Update constants.toml default                              [haiku]
 ■ 4. hippocrates: Run fast test suite — all shards pass                 [haiku]
-□ 5. hippocrates: Run calibration N=1,200×3 seeds                      [haiku]
+□ 5. socrates: Run calibration N=1,200×3 seeds                         [sonnet]
 □ 6. aristotle: Interpret cal results + decide if tuning needed          [opus]
 □ 7. hippocrates: Generate profiler snapshot with pathway metrics       [haiku]
 □ 8. aristotle: Analyze profiler — does freed space flow to both?       [opus]
@@ -585,7 +597,8 @@ Worker Utilization Summary
 │ hermes      │ #3, #10        │ 2 commits; repository updates                │
 │ hercules    │ #2             │ Single-line constant edit                     │
 │ aristotle   │ #6, #8         │ Cal interpretation; profiler analysis         │
-│ hippocrates │ #4, #5, #7     │ 1,990 tests; 1 stale-bound catch             │
+│ hippocrates │ #4, #7         │ 1,990 tests; 1 stale-bound catch             │
+│ socrates    │ #5, #9         │ Cal run; #9 full-cal cancelled at gate       │
 │ marcusaurelius │ #9          │ CLAUDE.md + cal results documented            │
 └─────────────┴────────────────┴──────────────────────────────────────────────┘
 Effort mismatch to flag: [specific mismatch if any — model annotation vs actual
