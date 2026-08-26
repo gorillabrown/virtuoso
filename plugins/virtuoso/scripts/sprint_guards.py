@@ -100,9 +100,9 @@ def cmd_staging_sweep(args):
               "machine block). Register it before sweeping.")
         return 2
     if not memos:
-        print("staging-sweep: clean — no resident staging memos.")
+        print("staging-sweep: clean - no resident staging memos.")
         return 0
-    print("staging-sweep: %d resident memo(s) — each is an OPEN OBLIGATION." % len(memos))
+    print("staging-sweep: %d resident memo(s) - each is an OPEN OBLIGATION." % len(memos))
     for m in memos:
         print("  ! " + m)
     print("Confirm each against its TARGET DOCUMENTS, not against the memo's own "
