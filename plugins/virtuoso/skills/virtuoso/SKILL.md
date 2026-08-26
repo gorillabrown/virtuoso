@@ -555,6 +555,32 @@ tool-use trail and the repository delta. Before marking any delegated task ✓:
 Discarding and re-dispatching is cheaper than every downstream task built on a result
 that was never produced.
 
+<!-- rule:re-derive-dont-restate (SRL-706) -->
+**An agent that restates an upstream number inherits its errors; one that re-derives it
+catches them.** When a worker's deliverable is a figure the sprint will act on — a
+count, a rate, a pass/fail tally — do not accept it restated from another tool's summary.
+Have it re-derived from the underlying data, or re-run independently.
+
+A harness has printed a summary line that disagreed with its own per-item verdicts, and
+only a second agent re-running the same check caught it. Reading the primary evidence was
+not enough; **independent re-execution was.** This is the sharpened form of
+worker-output validation for gate-critical numbers.
+
+<!-- rule:enforcement-not-disclosure (SRL-633) -->
+**A computed marker that nothing enforces is disclosure theatre.** A script can honestly
+record that a precondition was violated — a dirty-tree provenance stamp, a documented
+exclusion, a "not yet authorized" status — without that computation being wired to an
+abort. The record is then true and inert, and the run proceeds.
+
+- If a condition is worth computing, wire it to a **refusal**, or state plainly that it
+  is advisory and name who acts on it.
+- **A failure signalled in data is still a failure.** A tool returning `ok: false` while
+  exiting 0 is a halt in substance; halt-detection that keys only on exceptions treats it
+  as success and skips cleanup.
+- Per-stage checks refuse **per stage**. Falling back to a soft status that still exits 0
+  is unsafe for any caller that branches on exit codes rather than waiting for a final
+  aggregate.
+
 <!-- rule:orchestrator-owns-long-runs (SRL-417) -->
 **The orchestrator owns any run that outlives the sub-agent tool timeout.** This is a
 real exception to "the parent coordinates, workers implement", and it exists because a
@@ -758,6 +784,38 @@ When you hit something unexpected:
 - You've been working on a single task for significantly longer than expected
 - An external dependency is missing or broken
 - A required tool, file, dependency, or instruction is unavailable
+- The environment cannot satisfy a required isolation or permission boundary
+
+<!-- rule:user-gate-is-success (SRL-553) -->
+**Reaching a decision that belongs to the operator is a SUCCESS terminal, not a failure.**
+An unattended run that arrives at a genuine operator decision has finished its job. Record
+the question, state precisely what it unblocks, advance every front that does not depend on
+it, and stop cleanly. Do not treat the stop as incompleteness to be worked around, and do
+not manufacture a decision to keep moving.
+
+Two riders, both observed:
+
+- **Halt rather than degrade.** When the environment cannot satisfy a required isolation
+  or permission boundary, stop — do not substitute a dirty tree, an unregistered worktree,
+  or a bypassed safety helper. A capability shortfall is not permission to lower the
+  boundary.
+- **Autonomy grants and STOP conditions must be disjoint.** A pre-registered halt names
+  which grants it suspends; no grant may cover a condition that is also a STOP trigger,
+  or the run can authorise itself past its own gate (SRL-556).
+
+<!-- rule:git-separation-of-duties (SRL-520) -->
+**The entity that performed a change is never the sole certifier that git reflects it.**
+Self-grading invites bias. The worker performs mutating git inside its own worktree; an
+independent reader verifies state with **read-only** git — and read-only git must be
+invoked lock-free (`git --no-optional-locks status`, or `GIT_OPTIONAL_LOCKS=0`) so it
+never writes `.git/index.lock` or races a concurrent mutation.
+
+- **Every dispatch verifies live git state as its first action** — current branch and
+  tree — before its first edit, not only the dispatch that commits.
+- **Feature branches are created by the orchestrator**, never inside a worker's transient
+  worktree.
+- **Committed is not pushed**, and a long-lived branch that becomes the de-facto trunk
+  leaves `main` stale — check what a new sprint would actually branch from.
 
 **What to do when stopped:**
 1. Mark the current task ✗ (blocked).

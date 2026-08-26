@@ -38,6 +38,10 @@ REQUIRED_RULE_ANCHORS = {
         ("identity-not-counts", "GATE-IDENTITY"),
         ("cite-searchable-anchor", "CITE-ANCHOR"),
         ("name-the-fork-under-test", "FORK-SURFACE"),
+        ("git-separation-of-duties", "SRL-520"),
+        ("user-gate-is-success", "SRL-553"),
+        ("enforcement-not-disclosure", "SRL-633"),
+        ("re-derive-dont-restate", "SRL-706"),
     ],
     "governance-sweep": [
         ("grep-registry-before-moving", "SRL-680"),
