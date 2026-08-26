@@ -327,10 +327,9 @@ def update_registry(target, cache_dir):
 
 def sweep(target_dir, dry_run=False):
     # Post-release, all three copies MUST match the repo (that is what "released" means).
-    # Mid-cycle (--dry-run), the repo legitimately runs ahead of the installed version, so
-    # the reference is the cache-target and the repo is reported informationally -- failing
-    # on it would make every between-releases dry-run red, which trains people to ignore
-    # the gate (the exact reflex this phase exists to kill).
+    # Mid-cycle (--dry-run), the repo may legitimately run ahead of the active install.
+    # The marketplace clone may match either lineage: it can still be at the installed
+    # release, or already track the newer source commit. A third, unrelated hash fails.
     ref_label = "cache-target" if dry_run else "repo"
     rows = [("repo", os.path.join(PLUGIN, WRITER_REL)),
             ("clone", os.path.join(CLONE, "plugins", "virtuoso", WRITER_REL)),
@@ -340,12 +339,21 @@ def sweep(target_dir, dry_run=False):
     bad = []
     for label, _p in rows:
         h = hashes[label]
-        if dry_run and label == "repo" and h != ref:
-            say("[sweep] %-13s %s  differs (unreleased changes pending — expected mid-cycle)"
-                % (label, h or "(absent)"))
-            continue
-        ok = h is not None and h == ref
-        say("[sweep] %-13s %s  %s" % (label, h or "(absent)", "OK" if ok else "MISMATCH"))
+        if dry_run and label == "repo":
+            ok = h is not None
+            state = "SOURCE" if ok else "MISSING"
+        elif dry_run and label == "clone":
+            ok = h is not None and h in {hashes["repo"], hashes["cache-target"]}
+            if h == hashes["repo"]:
+                state = "OK (matches source)"
+            elif h == hashes["cache-target"]:
+                state = "OK (matches active install)"
+            else:
+                state = "MISMATCH"
+        else:
+            ok = h is not None and h == ref
+            state = "OK" if ok else "MISMATCH"
+        say("[sweep] %-13s %s  %s" % (label, h or "(absent)", state))
         if not ok:
             bad.append(label)
     if bad:

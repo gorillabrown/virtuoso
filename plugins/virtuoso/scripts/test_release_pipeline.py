@@ -130,6 +130,46 @@ def test_release_fixture_writers_explicitly_authorize_create(tmp_path):
     assert rp._writer_outputs(str(legacy), "legacy fixture")
 
 
+def _write_sweep_fixture(root, body):
+    writer = root / rp.WRITER_REL
+    writer.parent.mkdir(parents=True, exist_ok=True)
+    writer.write_text(body, encoding="utf-8")
+    return writer
+
+
+def test_dry_run_sweep_accepts_clone_matching_repo_or_active_install(tmp_path, monkeypatch):
+    repo = tmp_path / "repo" / "plugins" / "virtuoso"
+    clone = tmp_path / "clone"
+    active = tmp_path / "active"
+    _write_sweep_fixture(repo, "new")
+    _write_sweep_fixture(clone / "plugins" / "virtuoso", "new")
+    _write_sweep_fixture(active, "old")
+    monkeypatch.setattr(rp, "PLUGIN", str(repo))
+    monkeypatch.setattr(rp, "CLONE", str(clone))
+
+    rp.sweep(str(active), dry_run=True)
+
+    _write_sweep_fixture(clone / "plugins" / "virtuoso", "old")
+    rp.sweep(str(active), dry_run=True)
+
+
+def test_dry_run_sweep_rejects_a_clone_matching_neither_lineage(tmp_path, monkeypatch):
+    repo = tmp_path / "repo" / "plugins" / "virtuoso"
+    clone = tmp_path / "clone"
+    active = tmp_path / "active"
+    _write_sweep_fixture(repo, "new")
+    _write_sweep_fixture(clone / "plugins" / "virtuoso", "unrelated")
+    _write_sweep_fixture(active, "old")
+    monkeypatch.setattr(rp, "PLUGIN", str(repo))
+    monkeypatch.setattr(rp, "CLONE", str(clone))
+
+    try:
+        rp.sweep(str(active), dry_run=True)
+        raise AssertionError("an unrelated marketplace clone must fail the sweep")
+    except rp.Gate as exc:
+        assert "clone" in str(exc)
+
+
 def test_update_registry_survives_replace_failure(tmp_path, monkeypatch):
     """Fault injection for the atomicity contract: if os.replace fails, the original
     registry bytes must be intact and the error must surface as a Gate (so the pipeline's
