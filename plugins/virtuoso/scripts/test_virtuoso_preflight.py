@@ -2192,3 +2192,68 @@ def test_record_root_called_once_per_adopt_invocation(tmp_path, monkeypatch):
     assert len(calls) == 1, (
         "record_root() called %d time(s) via preflight(mode='adopt'); want exactly 1" % len(calls)
     )
+
+
+HAND_AUTHORED = (
+    "\n## Local Operating Notes (hand-authored)\n\n"
+    "This project pins the engine lane to a single merge slot.\n"
+    "Do not run two engine sprints concurrently.\n"
+)
+
+
+def test_detect_preserves_hand_authored_registry_prose(tmp_path):
+    """Reproduction of record, 2026-08-25 (SRL-557 / SRL-590).
+
+    Probes the ORIGINALLY REPORTED SYMPTOM -- prose deletion -- not the manifest-churn
+    mechanism a previous closure verified against and was falsified by within hours.
+    """
+    _run(tmp_path, "create")
+    readme = tmp_path / "Virtuoso.Governance.Readme.md"
+    readme.write_text(readme.read_text(encoding="utf-8") + HAND_AUTHORED,
+                      encoding="utf-8")
+
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "detect", "--quiet",
+                           root=tmp_path)
+
+    assert rc == 0, out
+    assert "Local Operating Notes" in readme.read_text(encoding="utf-8"), \
+        "the SessionStart hook command deleted hand-authored registry prose"
+
+
+def test_detect_still_refreshes_the_generated_registry_slots(tmp_path):
+    """Preserving prose must not freeze the table: a newly registered role still lands."""
+    _run(tmp_path, "create")
+    readme = tmp_path / "Virtuoso.Governance.Readme.md"
+    readme.write_text(readme.read_text(encoding="utf-8") + HAND_AUTHORED,
+                      encoding="utf-8")
+
+    m = _manifest(tmp_path)
+    m["paths"]["laneLedger"] = "docs/lanes/LEDGER.md"
+    (tmp_path / "Virtuoso" / "workspace-layout.json").write_text(
+        json.dumps(m, indent=2), encoding="utf-8")
+
+    _run(tmp_path, "detect")
+
+    text = readme.read_text(encoding="utf-8")
+    assert "Local Operating Notes" in text
+    assert "laneLedger: docs/lanes/LEDGER.md" in text
+    assert "docs/lanes/LEDGER.md" in text.split("## Rules for skills")[0], \
+        "the new role should appear in the generated table, not only the machine block"
+
+
+def test_detect_is_a_true_noop_on_a_settled_tree_with_prose(tmp_path):
+    _run(tmp_path, "create")
+    readme = tmp_path / "Virtuoso.Governance.Readme.md"
+    readme.write_text(readme.read_text(encoding="utf-8") + HAND_AUTHORED,
+                      encoding="utf-8")
+    _run(tmp_path, "detect")  # settle
+
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "detect", "--quiet",
+                           root=tmp_path)
+    assert rc == 0, out
+    assert "writes: 0" in out, out
+
+
+def test_splice_returns_none_when_a_generated_slot_is_absent():
+    assert vp._splice_governance_readme(
+        "# Registry\n\nno table, no machine block\n", ["| a | b | c |"], ["k: v"]) is None

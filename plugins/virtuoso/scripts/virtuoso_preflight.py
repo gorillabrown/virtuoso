@@ -239,6 +239,12 @@ _MACHINE_LINE_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*):\s*(.+)$")
 # camelCase word boundary, used to derive a human label for an unrecognized registry key.
 _CAMEL_BOUNDARY_RE = re.compile(r"(?<!^)(?=[A-Z])")
 
+# The role table's generated body: the header row and its separator are the anchor, and
+# every consecutive `|`-led line after them is regenerated content. Anchored to the row
+# SHAPE rather than to surrounding prose, so an operator may write anything above or
+# below the table without the splice losing its place.
+_README_TABLE_RE = re.compile(r"(?m)^(\| Role \| Path \| Status \|\n\|[-| ]+\|\n)(?:\|.*\n)*")
+
 
 def _home():
     return os.environ.get("VIRTUOSO_HOME") or os.path.expanduser("~")
@@ -923,6 +929,24 @@ def _write_layout_manifest(root, layout, paths, created, custom_paths=None, adop
     _refresh_text(_layout_manifest(root), json.dumps(data, indent=2) + "\n", created)
 
 
+def _splice_governance_readme(existing, rows, machine):
+    """Replace ONLY the two generated regions of an existing registry readme -- the role
+    table body and the machine block -- leaving every other line byte-identical.
+
+    The readme is a hand-editable document that happens to contain two generated slots.
+    Rendering the whole template over it deletes any prose an operator added around them
+    (SRL-557); the SessionStart hook command reproduced exactly that deletion on
+    2026-08-25. Returns None when either slot is missing, which routes the caller back to
+    a full render -- a file that is not recognizably the registry is not one we splice.
+    """
+    if not _README_TABLE_RE.search(existing) or not _MACHINE_BLOCK_RE.search(existing):
+        return None
+    table_body = "\n".join(rows) + "\n"
+    spliced = _README_TABLE_RE.sub(lambda m: m.group(1) + table_body, existing, count=1)
+    block = "<!-- virtuoso-governance-registry\n" + "\n".join(machine) + "\n-->"
+    return _MACHINE_BLOCK_RE.sub(lambda _m: block, spliced, count=1)
+
+
 def _write_governance_readme(root, paths, created, custom_paths=None):
     """Render the project-root governance registry — the authority skills read first. Lists
     each required document role and its resolved path, marking present vs. absent. Content is
@@ -941,8 +965,21 @@ def _write_governance_readme(root, paths, created, custom_paths=None):
         label = _derive_label(key, ap)
         rows.append("| %s | `%s` | %s |" % (label, rel, status))
         machine.append("%s: %s" % (key, rel))
+    path = paths["governance_readme"]
+    try:
+        with open(path, encoding="utf-8") as f:
+            existing = f.read()
+    except (OSError, UnicodeDecodeError):
+        existing = None
+    if existing is not None:
+        spliced = _splice_governance_readme(existing, rows, machine)
+        if spliced is not None:
+            # _refresh_text no-ops when spliced == existing, so a settled tree with
+            # operator prose stays at `writes: 0` (R1) instead of churning forever.
+            _refresh_text(path, spliced, created)
+            return
     body = GOVERNANCE_README_TEMPLATE.format(table="\n".join(rows), machine="\n".join(machine))
-    _refresh_text(paths["governance_readme"], body, created)
+    _refresh_text(path, body, created)
 
 
 def _vendor_scripts(paths, created):
