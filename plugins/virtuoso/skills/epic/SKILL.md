@@ -150,6 +150,23 @@ creating it to phase 1's gate instead of writing it now.
 
 ## Execution discipline (rides inside the packet)
 
+<!-- rule:claim-no-broader-than-evidence (evidence-scope) -->
+**A claim may never be broader than the evidence actually checked, and the scope checked
+must be stated.** This governs every Definition-of-Done claim an epic makes. "The greps
+are clean" is a different claim from "the greps are clean on the surface I ran them
+against" — and when a row says *both surfaces*, meeting it on one is not meeting it.
+
+Three consequences that have each been observed:
+
+- **A row met vacuously is not met.** If deleting a surface makes its check pass, record
+  it as *"unreachable because the surface no longer exists"*, never as a clean result.
+- **When an amendment makes any DoD row unmeetable as written, the epic stops and
+  escalates.** It does not quietly continue on the remaining rows, and it does not loosen
+  the row to fit what happened.
+- **Scope narrowing is legitimate exactly when it is the owner's explicit recorded
+  decision**, with the honest state documented. The same narrowing taken by the executor
+  to fit a budget is scope creep in reverse.
+
 The templates embed the run rules so the executor gets them by reading the files it must
 read anyway — the packet works even for an executor that has never seen this plugin:
 

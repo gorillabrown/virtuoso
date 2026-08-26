@@ -27,6 +27,8 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import skill_rules  # noqa: E402
 
 from tools.governance import result as result_mod  # noqa: E402
 
@@ -426,9 +428,25 @@ def check_commands() -> None:
     ok("%d commands; all map to skills" % len(commands))
 
 
+def check_promoted_rule_anchors() -> None:
+    """Every promoted rule must still be present in its skill body.
+
+    A rule promoted into a project's lessons catalog is documentation, not
+    enforcement: execution paths read skill bodies at session start, never the
+    catalog, and a promoted rule with no dispatch-time machinery is applied at
+    agent discretion. This is that machinery for prose.
+    """
+    missing = skill_rules.missing_anchors(os.path.join(ROOT, "skills"))
+    total = sum(len(v) for v in skill_rules.REQUIRED_RULE_ANCHORS.values())
+    (ok if not missing else fail)(
+        "%d promoted-rule anchors present" % total if not missing
+        else "missing rule anchors: %s" % missing)
+
+
 def main() -> int:
     skill_names = check_frontmatter_and_manifests(os.path.join(ROOT, "skills"))
     check_session_hook()
+    check_promoted_rule_anchors()
     check_text_scans(skill_names)
     check_relative_resources()
     check_status_tokens()

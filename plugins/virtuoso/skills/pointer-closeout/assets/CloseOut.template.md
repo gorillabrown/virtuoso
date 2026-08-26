@@ -25,6 +25,12 @@ status: [all-pass | has-regressions | has-discoveries]
 
 ## Proposed Dispositions
 
+## Mid-Dispatch Decisions
+
+<!-- Amendment blocks migrated verbatim from the sprint's staging file (or, for a
+     grandfathered sprint, from the inline spec). One block per decision: date, title,
+     decision type, context, decision, rationale. "None" is a valid and complete entry. -->
+
 ## Governance Updates
 
 ## Roadmap & Queue Movement
