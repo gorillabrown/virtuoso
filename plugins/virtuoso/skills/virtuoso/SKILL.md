@@ -701,9 +701,11 @@ structurally incapable of editing main governance documents.
 ### Rule 1 — Worktree-Resident Sprints MUST NOT Edit Main Governance Documents
 
 During worktree-resident execution, virtuoso's task plan must not include direct
-edits to documents classified as "main governance." The classification is project-
-specific and lives in the project's CLAUDE.md (or equivalent) under a section
-titled **"Main Governance Documents — Worktree Edit Prohibition."**
+edits to documents classified as "main governance." The classification is
+project-specific. Locate it by searching the project's CLAUDE.md (or equivalent)
+for a **worktree edit prohibition** section and reading its list of protected
+documents — do not match on a section title verbatim, because titles drift and a
+restated title silently reads as "no such section, no prohibition."
 
 Virtuoso reads that list at sprint start (Phase 1). If no such section exists in
 CLAUDE.md, the prohibition still applies to any document that:
@@ -723,8 +725,14 @@ document, virtuoso writes the change-intent to a staging file in the worktree:
 <close-out-directory>/Memo.<sprint-id>.GovernanceStaging.<YYYY-MM-DD>.md
 ```
 
-(Where `<close-out-directory>` is wherever the project's close-out memos live —
-typically `2 operational/` or equivalent.)
+<!-- rule:registry-resolved-staging (AMEND-THE-RESTATEMENTS) -->
+**`<close-out-directory>` is resolved through the registry, never guessed.** Read the
+`closeOuts` key from `Virtuoso/workspace-layout.json`; if the manifest does not carry
+it, read `closeOuts` from the `virtuoso-governance-registry` machine block in the
+project-root governance readme. Those two together are the registry, and the registry
+is the declared authority for exactly this lookup. Do not infer the directory from
+where memos happen to sit, and do not hardcode a conventional path — a guessed
+location writes an open obligation somewhere close-out will never sweep.
 
 The staging file is created on first governance-change-intent and appended to
 throughout the sprint. It contains all the changes that would normally land in

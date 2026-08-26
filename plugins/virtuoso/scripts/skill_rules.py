@@ -21,6 +21,7 @@ import os
 REQUIRED_RULE_ANCHORS = {
     "virtuoso": [
         ("calibration-routing", "SRL-087"),
+        ("registry-resolved-staging", "AMEND-THE-RESTATEMENTS"),
     ],
     "governance-sweep": [],
 }
