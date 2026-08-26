@@ -128,6 +128,38 @@ Before touching any file or running any command:
    (a file changed, a test passing, a document updated, a commit made).
 4. **Flag anything unclear.** If a step is ambiguous, a file path might be wrong, or a dependency
    might not exist — stop and ask NOW. Guessing wastes 10x more time than asking.
+5. **Declare the lane and its surface manifest** when the project runs lane-based
+   concurrency. Read the lane assignment from the dispatch spec; if the spec does not
+   name one, ask before touching a file.
+
+<!-- rule:lane-declaration (SRL-551) -->
+**Lane discipline.** Under lane-based concurrency the sprint declares, at Phase 1 and
+before any edit:
+
+| Declaration | What it is |
+|---|---|
+| **Lane** | Which lane this sprint occupies. A project with an exclusive engine lane admits exactly one engine sprint at a time. |
+| **Surface manifest** | The explicit set of paths this sprint may write. Anything outside it is another lane's surface. |
+| **Merge slot** | The per-lane serialization token claimed at integration, not at dispatch. |
+
+The manifest is what makes a dirty file someone else's problem rather than a blocker:
+dirt inside the manifest stops the sprint, dirt outside it is disclosed and ignored.
+A sprint that cannot state its lane and manifest is not ready to dispatch — stop and
+ask, do not infer one from the files the spec happens to mention.
+
+**Resolve the concurrency cap from the project's own gate; never assume one, and never
+restate a number here.** The cap and the lane set are project configuration, enforced by
+the project's worktree/lane tooling. Read them from that tool at dispatch time. A cap
+written into this skill body would be a restatement that goes stale the moment a project
+changes its lane count — which is the failure this skill's own citation discipline exists
+to prevent.
+
+**Concurrency supersedes serialization — do not re-introduce "one dispatch at a time."**
+Lane-based concurrency with serialized *integration* replaced the older
+one-sprint-in-flight rule. A project that has adopted lanes has retired serialization-first
+deliberately; re-adding it contradicts both that project's governance and its shipped
+tooling. Serialized mode survives only as the **default for a dispatch that declares no
+lane**, which is a different rule.
 
 If you have concerns about the plan, raise them before proceeding. Plans are not sacred —
 they're starting points. But once you start executing, follow the plan unless you hit a
@@ -626,6 +658,25 @@ what was learned]
   not the verbose duration/tokens/tool-calls breakdown. The detail matters for
   performance analysis but not for the close-out record. If performance
   recommendations are warranted, append them after the close-out block.
+<!-- rule:merge-through-slot (SRL-551) -->
+- **Integration runs through the merge slot, in this order.** A worktree-resident
+  sprint is not done when its tasks are ✓ — it is done when it has merged. Serialized
+  integration exists because two lanes that each pass their own gate can still break
+  the combined tree:
+
+  1. **Claim the merge slot** for this lane. Block until it is free; never merge without it.
+  2. **Merge the base branch into the feature branch** — not the other direction.
+  3. **Re-run the full gate on the combined tree.** The pre-merge gate result is stale
+     the moment the base moves; a gate that ran only on the feature branch has not
+     tested what is about to land.
+  4. **Merge** to base.
+  5. **Push.** An unpushed merge is invisible to every other lane and to the slot.
+  6. **Remove the worktree** — only after the artifact-existence check has passed.
+  7. **Release the merge slot.**
+
+  If any step fails, release the slot before escalating. A held slot blocks every other
+  lane on a sprint that is no longer progressing.
+
 - Git state and Key engineering finding close the block — these are what Cowork
   reads first when processing a close-out into a Pointer Close-Out Report. Run
   **`/pointer-closeout`** on this block to fold the result into the roadmap, sprint queue,
