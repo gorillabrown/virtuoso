@@ -56,12 +56,12 @@ def test_every_documented_registry_subcommand_exists():
         [sys.executable, str(ROOT / "scripts" / "virtuoso_registry.py"), "--help"],
         capture_output=True, text=True)
     assert completed.returncode == 0
-    implemented = set(re.findall(r"\{([a-z,]+)\}", completed.stdout)[0].split(","))
+    implemented = set(re.findall(r"\{([a-z,-]+)\}", completed.stdout)[0].split(","))
 
     documented = set()
     pattern = re.compile(r"virtuoso_registry[^\n]*?(?:--json\s+|--actor \S+\s+|--root \S+\s+)*"
                          r"\b(roles|resolve|provider|items|next|kpis|closeout|snapshot|"
-                         r"recovery|repo|deps|protected)\b")
+                         r"recovery|repo|deps|protected|mutation-plan|mutation-confirm)\b")
     for path in DOCS:
         documented.update(pattern.findall(path.read_text(encoding="utf-8")))
     assert documented, "no registry subcommands are documented at all"

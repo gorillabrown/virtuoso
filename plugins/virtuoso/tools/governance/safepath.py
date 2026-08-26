@@ -8,7 +8,10 @@ finding is reported:
   path that resolves *inside* the root is normalized to a relative one and
   accepted, because that is unambiguous and harmless.)
 * **archive registered as live authority** — a path living under an archive /
-  snapshot segment cannot carry ``live`` or ``terminal`` authority.
+  snapshot segment cannot carry ``live`` authority. An explicitly registered,
+  append-only ``terminal`` ledger may live under a durable archive segment
+  because it is the archive's record, not competing live authority; terminal
+  authority remains forbidden under backups, snapshots, and quarantine.
 * **role-type mismatch** — a role declared as a directory pointing at a file, or
   a file role pointing at a directory, or a file role whose extension disagrees
   with its declared provider.
@@ -25,7 +28,7 @@ import posixpath
 from dataclasses import dataclass, field
 
 # Directory segments (case-insensitive, matched whole) that mark archived or
-# snapshot material. A role with live/terminal authority must not point inside one.
+# snapshot material. A role with live authority must not point inside one.
 ARCHIVE_SEGMENTS = frozenset(
     {
         "archive",
@@ -40,8 +43,14 @@ ARCHIVE_SEGMENTS = frozenset(
     }
 )
 
+# Terminal records may live in a durable archive, but never in transient,
+# duplicated, or quarantined storage.
+TERMINAL_FORBIDDEN_SEGMENTS = frozenset(
+    {"backup", "backups", ".virtuoso-backups", "quarantine", "snapshot", "snapshots"}
+)
+
 # Authority levels that must never resolve inside an archive segment.
-_LIVE_AUTHORITIES = frozenset({"live", "terminal"})
+_ARCHIVE_FORBIDDEN_AUTHORITIES = frozenset({"live"})
 
 _PROVIDER_EXTENSIONS = {
     "csv": {".csv"},
@@ -98,10 +107,14 @@ def is_inside(root: str, absolute: str) -> bool:
     return rel == "." or not rel.startswith("..")
 
 
-def in_archive_segment(relative_posix: str) -> bool:
+def in_named_segment(relative_posix: str, names: frozenset[str]) -> bool:
     segments = [s for s in _to_posix(relative_posix).lower().split("/") if s]
     # The final segment is the document itself; only its ancestors classify it.
-    return any(seg in ARCHIVE_SEGMENTS for seg in segments[:-1])
+    return any(seg in names for seg in segments[:-1])
+
+
+def in_archive_segment(relative_posix: str) -> bool:
+    return in_named_segment(relative_posix, ARCHIVE_SEGMENTS)
 
 
 def validate_path(
@@ -144,10 +157,15 @@ def validate_path(
             )
         return verdict
 
-    if authority in _LIVE_AUTHORITIES and in_archive_segment(rel):
+    if authority in _ARCHIVE_FORBIDDEN_AUTHORITIES and in_archive_segment(rel):
         verdict.findings.append(
             "role %r claims %s authority but is registered under an archive path: %s"
             % (role, authority, rel)
+        )
+    if authority == "terminal" and in_named_segment(rel, TERMINAL_FORBIDDEN_SEGMENTS):
+        verdict.findings.append(
+            "role %r claims terminal authority but is registered under transient storage: %s"
+            % (role, rel)
         )
 
     if os.path.exists(absolute):

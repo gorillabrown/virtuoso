@@ -189,6 +189,11 @@ class Registry:
             found.append(Finding("bad-mutability", "error",
                                  "role %r has unknown mutability %r" % (name, spec.mutability),
                                  role=name))
+        if spec.authority == "terminal" and spec.mutability != "append-only":
+            found.append(Finding(
+                "terminal-not-append-only", "error",
+                "role %r claims terminal authority but has mutability %r; terminal records "
+                "must be append-only" % (name, spec.mutability), role=name))
         if spec.provider not in schema.PROVIDERS:
             found.append(Finding("bad-provider", "error",
                                  "role %r has unknown provider %r" % (name, spec.provider),

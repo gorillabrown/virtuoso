@@ -51,6 +51,44 @@ def workspace(project):
     return project
 
 
+@pytest.fixture
+def external_workspace(project):
+    """A connector-backed register with an exact-revision canonical snapshot."""
+    (project / "Virtuoso").mkdir()
+    snapshot = project / "Virtuoso" / "work-register.snapshot.json"
+    snapshot.write_text(json.dumps({
+        "snapshotVersion": 1,
+        "takenAt": "2099-01-01T00:00:00Z",
+        "provider": "connector",
+        "source": "monday:board/1234567890",
+        "fields": ["id", "status", "revision"],
+        "items": [{
+            "id": "123", "title": "Example", "status": "queued",
+            "raw_status": "Queued", "revision": "rev-1",
+        }],
+    }, indent=2), encoding="utf-8")
+    manifest = {
+        "schemaVersion": 2,
+        "roles": {
+            "workRegister": {
+                "external": "monday:board/1234567890", "provider": "connector",
+                "authority": "live", "mutability": "read-write",
+                "allowedWriters": ["roadmap-review"], "validation": "external",
+                "classification": "active", "origin": "authored",
+            },
+            "workRegisterSnapshot": {
+                "path": "Virtuoso/work-register.snapshot.json", "provider": "snapshot",
+                "authority": "report", "mutability": "generated",
+                "validation": "exists", "classification": "active", "origin": "generated",
+            },
+        },
+        "policy": {"workRegister": {"snapshot": "workRegisterSnapshot"}},
+    }
+    (project / "Virtuoso" / "workspace-layout.json").write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8")
+    return project
+
+
 def cockpit_model(html: str) -> dict:
     match = re.search(r"const MODEL = (\{.*?\});\n", html, re.S)
     assert match, "the cockpit did not embed its model"
@@ -253,6 +291,57 @@ def test_the_registry_cli_queries_write_nothing(workspace):
                  ["repo"], ["resolve", "roadmap"]):
         run(REGISTRY_CLI, "--root", str(workspace), *args)
     assert snapshot_tree(workspace) == before
+
+
+def test_external_mutation_cli_plans_and_confirms_with_recovery(external_workspace):
+    planned = run(
+        REGISTRY_CLI, "--root", str(external_workspace), "--actor", "roadmap-review",
+        "mutation-plan", "--operation", "set-status", "--item", "123",
+        "--fields-json", json.dumps({"status": "In Flight"}),
+        "--revision", "rev-1", "--json")
+    assert planned.returncode == 0, planned.stderr
+    plan = json.loads(planned.stdout)
+    assert plan["expectedRevision"] == "rev-1"
+    assert plan["idempotencyKey"]
+    assert plan["recoveryId"]
+
+    pending = run(REGISTRY_CLI, "--root", str(external_workspace), "recovery", "--json")
+    assert len(json.loads(pending.stdout)["outstanding"]) == 1
+
+    confirmed = run(
+        REGISTRY_CLI, "--root", str(external_workspace), "--actor", "roadmap-review",
+        "mutation-confirm", "--operation", plan["operation"], "--item", plan["itemId"],
+        "--idempotency-key", plan["idempotencyKey"],
+        "--recovery-id", plan["recoveryId"], "--actual-revision", "rev-2",
+        "--succeeded", "--json")
+    assert confirmed.returncode == 0, confirmed.stderr
+    outcome = json.loads(confirmed.stdout)
+    assert outcome["succeeded"] is True
+    assert outcome["actualRevision"] == "rev-2"
+    pending = run(REGISTRY_CLI, "--root", str(external_workspace), "recovery", "--json")
+    assert json.loads(pending.stdout)["outstanding"] == []
+
+
+def test_external_mutation_cli_rejects_stale_revision(external_workspace):
+    completed = run(
+        REGISTRY_CLI, "--root", str(external_workspace), "--actor", "roadmap-review",
+        "mutation-plan", "--operation", "set-status", "--item", "123",
+        "--fields-json", json.dumps({"status": "In Flight"}),
+        "--revision", "stale-revision", "--json")
+    assert completed.returncode == 3
+    assert "changed since it was read" in completed.stderr
+    assert not (external_workspace / "Virtuoso" / ".recovery").exists()
+
+
+def test_external_mutation_cli_rejects_an_unauthorized_actor(external_workspace):
+    completed = run(
+        REGISTRY_CLI, "--root", str(external_workspace), "--actor", "next-pointer",
+        "mutation-plan", "--operation", "set-status", "--item", "123",
+        "--fields-json", json.dumps({"status": "In Flight"}),
+        "--revision", "rev-1", "--json")
+    assert completed.returncode == 3
+    assert "does not support" in completed.stderr
+    assert not (external_workspace / "Virtuoso" / ".recovery").exists()
 
 
 # --- item 62: immutable-hash verification --------------------------------------

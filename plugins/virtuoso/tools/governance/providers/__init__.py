@@ -108,7 +108,8 @@ def for_role(reg, role_name: str, *, actor: str = "") -> Selection:
     if spec.is_external:
         provider = ExternalWorkRegister(
             source=spec.external, mapping=mapping, provider_kind=spec.provider,
-            snapshot_provider=_snapshot_for(reg, policy), read_only=not writable)
+            snapshot_provider=_snapshot_for(reg, policy), read_only=not writable,
+            recovery_root=reg.root)
     else:
         provider = _make_local(spec, _resolve_path(reg, spec), mapping, not writable)
 

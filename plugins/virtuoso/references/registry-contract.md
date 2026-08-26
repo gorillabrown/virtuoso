@@ -69,6 +69,11 @@ Each entry under `roles` carries the full metadata set (item 15):
    database, or service id is never reported as a missing file.
 7. **Project extensions live under `x-`** and are preserved verbatim across
    plugin upgrades (item 18).
+8. **Archive paths cannot host live authority.** A terminal ledger is different:
+   it may be registered beneath an archive directory when its authority is
+   `terminal` and its mutability is `append-only`, because it is the durable
+   completion record rather than live operational state. Terminal authority is
+   still forbidden beneath backups, snapshots, and quarantine.
 
 ## Three distinct work roles (item 24)
 
@@ -97,8 +102,8 @@ python <plugin>/scripts/virtuoso_registry.py --root . recovery
 ```
 
 All of those are queries: none of them creates a directory, seeds a document, or heals
-anything as a side effect. The two that write say so in their names — `snapshot`, and
-`closeout --prepare`.
+anything as a side effect. The commands that write say so explicitly — `snapshot`,
+`closeout --prepare`, `mutation-plan`, and `mutation-confirm`.
 
 **Negotiate capabilities before you plan work** (item 28). A provider declares
 which of these it supports: `list-active`, `read-sequence`, `read-status`,
@@ -134,8 +139,25 @@ requirements.
   update fails, a recovery record is written under `Virtuoso/.recovery/` naming
   exactly what remains. Check it with `virtuoso_registry.py recovery`.
 - **External registers are mutated by the ceremony, not the plugin.** The
-  provider returns a structured instruction; the ceremony executes it with the
-  host's connector and confirms the result.
+  provider advertises mutation capabilities only to an authorized writer, then
+  returns a structured instruction containing the expected revision and an
+  idempotency key. Planning opens a durable recovery record. The ceremony
+  executes the instruction with the host's connector and calls `confirm()` with
+  the result; success resolves the record, while failure or interruption leaves
+  the exact remaining work visible. Direct Python mutation methods still reject
+  the write because they cannot impersonate the host connector.
+
+For connector-backed work registers, use the supported handshake rather than
+crafting an untracked mutation:
+
+```sh
+python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> mutation-plan \
+  --operation set-status --item <ID> --fields-json '<JSON>' --revision <REVISION> --json
+# execute the returned instruction with the host connector
+python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> mutation-confirm \
+  --operation set-status --item <ID> --idempotency-key <KEY> --recovery-id <RECOVERY-ID> \
+  --succeeded --actual-revision <NEW-REVISION> --json
+```
 
 ## Preflight status contract (items 10, 11)
 

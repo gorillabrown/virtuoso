@@ -106,7 +106,8 @@ UNSAFE_CREATE_RE = re.compile(r"(?:os\.makedirs|mkdir\(parents=True|\.mkdir\()")
 #: Files where directory creation is legitimate (they exist to write).
 CREATE_ALLOWED = {
     "scripts/virtuoso_preflight.py", "scripts/build_register_report.py",
-    # Creates only behind --prepare/--out; enforced by its own targeted check below.
+    # Direct creation exists only behind --prepare/--out. mutation-plan delegates
+    # its explicit recovery write to providers/recovery.py.
     "scripts/virtuoso_registry.py",
     "tools/governance/backup.py", "tools/governance/textio.py",
     "tools/governance/install.py", "tools/governance/repair.py",
@@ -326,7 +327,9 @@ def check_unsafe_fallback_creation() -> None:
         "no unsafe fallback path creation" if not hits
         else "path creation in a module that should not write: %s" % hits)
 
-    # virtuoso_registry.py may create only under an explicit --prepare flag.
+    # Direct directory creation in virtuoso_registry.py may occur only behind an
+    # explicit --prepare/--out path. mutation-plan's deliberate recovery write is
+    # delegated to providers/recovery.py and covered by command-level tests.
     registry_cli = os.path.join(ROOT, "scripts", "virtuoso_registry.py")
     if os.path.isfile(registry_cli):
         text = open(registry_cli, encoding="utf-8").read()
@@ -337,7 +340,7 @@ def check_unsafe_fallback_creation() -> None:
                      "--prepare/--out path")
                 break
         else:
-            ok("virtuoso_registry.py creates directories only behind --prepare/--out")
+            ok("virtuoso_registry.py creates directories directly only behind --prepare/--out")
 
 
 def check_authority_claims() -> None:

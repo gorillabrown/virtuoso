@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Read-only registry and work-register queries for ceremonies.
+"""Registry and work-register operations for ceremonies.
 
-Every subcommand here is a *query*. None of them creates a directory, seeds a
-document, or heals anything as a side effect of being asked (item 86). The two
-subcommands that do write — `snapshot` and `prepare` — say so in their names and
-require an explicit flag.
+Query subcommands create nothing and heal nothing as a side effect (item 86).
+The commands that write say so explicitly: `snapshot`, `closeout --prepare`,
+`mutation-plan` (opens durable recovery before a host connector write), and
+`mutation-confirm` (records the connector result and resolves recovery only on
+success).
 
 Subcommands:
   roles                     list every registered role and how it resolves
@@ -19,6 +20,8 @@ Subcommands:
   protected                 hash every protected file (immutable-hash verification)
   snapshot --out PATH       capture a timestamped snapshot of the work register
   recovery                  list unresolved partial-failure recovery records
+  mutation-plan             emit a revision-aware host connector instruction
+  mutation-confirm          durably record the host connector result
 
 Exit codes: 0 ok; 3 the query could not be answered (unregistered role, missing
 provider, malformed configuration) — always with a message naming the fix.
@@ -36,7 +39,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools.governance import (  # noqa: E402
     policy as policy_mod, providers, registry as registry_mod, schema, textio,
 )
-from tools.governance.errors import GovernanceError, RoleNotRegistered  # noqa: E402
+from tools.governance.errors import CapabilityError, GovernanceError, RoleNotRegistered  # noqa: E402
 from tools.governance import dependencies, integrity, repostate  # noqa: E402
 from tools.governance.providers import kpi, recovery, snapshot_provider  # noqa: E402
 
@@ -287,10 +290,63 @@ def cmd_recovery(args) -> int:
         print("no outstanding recovery records")
         return EXIT_OK
     for record in records:
-        print("%s  %s/%s" % (record.get("id"), record.get("operation"), record.get("itemId")))
+        print("%s  %s/%s" % (
+            record.get("id"), record.get("operation"),
+            record.get("item_id") or record.get("itemId")))
         for step in record.get("remaining_steps", []):
             print("    remaining: %s" % step)
     return EXIT_OK
+
+
+def _json_object(raw: str, label: str) -> dict:
+    try:
+        value = json.loads(raw or "{}")
+    except ValueError as exc:
+        raise GovernanceError("%s must be valid JSON: %s" % (label, exc)) from exc
+    if not isinstance(value, dict):
+        raise GovernanceError("%s must be a JSON object" % label)
+    return value
+
+
+def _external_mutation_provider(args):
+    if not args.actor:
+        raise CapabilityError("an explicit ceremony actor is required for external mutations")
+    selection = providers.work_register(_load(args.root), actor=args.actor)
+    provider = selection.provider
+    if not hasattr(provider, "plan_mutation"):
+        raise CapabilityError(
+            "provider %r performs local mutations and does not use host mutation plans"
+            % provider.name)
+    return provider
+
+
+def cmd_mutation_plan(args) -> int:
+    """Create a revision-aware instruction and durable recovery record."""
+    provider = _external_mutation_provider(args)
+    plan = provider.plan_mutation(
+        args.operation, args.item, _json_object(args.fields_json, "--fields-json"),
+        revision=args.revision, idempotency_key=args.idempotency_key)
+    return _emit(plan.as_dict(), args.as_json,
+                 lambda: json.dumps(plan.as_dict(), indent=2, ensure_ascii=False))
+
+
+def cmd_mutation_confirm(args) -> int:
+    """Record the host connector result; only success resolves recovery."""
+    provider = _external_mutation_provider(args)
+    if not hasattr(provider, "confirm"):
+        raise CapabilityError("provider %r cannot confirm host mutations" % provider.name)
+    plan = providers.PendingMutation(
+        operation=args.operation,
+        register=provider.source,
+        item_id=args.item,
+        idempotency_key=args.idempotency_key,
+        recovery_id=args.recovery_id,
+    )
+    outcome = provider.confirm(
+        plan, succeeded=args.succeeded, actual_revision=args.actual_revision,
+        detail=_json_object(args.detail_json, "--detail-json"))
+    return _emit(outcome, args.as_json,
+                 lambda: json.dumps(outcome, indent=2, ensure_ascii=False))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -350,6 +406,34 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("deps", parents=[common]).set_defaults(func=cmd_deps)
     sub.add_parser("protected", parents=[common]).set_defaults(func=cmd_protected)
     sub.add_parser("recovery", parents=[common]).set_defaults(func=cmd_recovery)
+
+    mutation_plan = sub.add_parser("mutation-plan", parents=[common])
+    mutation_plan.add_argument(
+        "--operation", required=True,
+        choices=("set-status", "store-spec-link", "record-completion"))
+    mutation_plan.add_argument("--item", required=True)
+    mutation_plan.add_argument("--fields-json", required=True)
+    mutation_plan.add_argument("--revision", default="")
+    mutation_plan.add_argument("--idempotency-key", default="")
+    mutation_plan.set_defaults(func=cmd_mutation_plan)
+
+    mutation_confirm = sub.add_parser("mutation-confirm", parents=[common])
+    mutation_confirm.add_argument(
+        "--operation", required=True,
+        choices=("set-status", "store-spec-link", "record-completion"))
+    mutation_confirm.add_argument("--item", required=True)
+    mutation_confirm.add_argument("--idempotency-key", required=True)
+    mutation_confirm.add_argument("--recovery-id", required=True)
+    mutation_confirm.add_argument("--actual-revision", default="")
+    mutation_confirm.add_argument("--detail-json", default="{}")
+    confirmation = mutation_confirm.add_mutually_exclusive_group(required=True)
+    confirmation.add_argument(
+        "--succeeded", dest="succeeded", action="store_true",
+        help="the host connector mutation succeeded")
+    confirmation.add_argument(
+        "--failed", dest="succeeded", action="store_false",
+        help="the host connector mutation failed; leave recovery outstanding")
+    mutation_confirm.set_defaults(func=cmd_mutation_confirm)
     return parser
 
 

@@ -382,7 +382,10 @@ def test_an_external_register_without_a_snapshot_withdraws_reads():
     from tools.governance.providers.external_provider import ExternalWorkRegister
     provider = ExternalWorkRegister(source="monday:board/1234567890",
                                     provider_kind="connector")
-    assert provider.capabilities == frozenset()
+    assert base.LIST_ACTIVE not in provider.capabilities
+    assert base.WRITE_STATUS in provider.capabilities
+    assert base.STORE_SPEC_LINK in provider.capabilities
+    assert base.RECORD_COMPLETION in provider.capabilities
     with pytest.raises(CapabilityError) as excinfo:
         provider.list_active()
     assert "snapshot" in str(excinfo.value)
@@ -403,9 +406,12 @@ def test_an_external_register_reads_through_its_snapshot(tmp_path):
     assert [i.id for i in read.items] == ["ITEM-1", "ITEM-2", "ITEM-3", "ITEM-4"]
 
 
-def test_an_external_mutation_is_planned_not_performed():
+def test_an_external_mutation_is_planned_not_performed(tmp_path):
     from tools.governance.providers.external_provider import ExternalWorkRegister
-    provider = ExternalWorkRegister(source="jira:project/ABC", provider_kind="issue-tracker")
+    provider = ExternalWorkRegister(
+        source="jira:project/ABC", provider_kind="issue-tracker",
+        recovery_root=str(tmp_path))
+    provider.require(base.WRITE_STATUS, base.STORE_SPEC_LINK, base.RECORD_COMPLETION)
     with pytest.raises(CapabilityError) as excinfo:
         provider.set_status("ABC-1", base.COMPLETED)
     assert "plan_mutation" in str(excinfo.value)
@@ -415,6 +421,71 @@ def test_an_external_mutation_is_planned_not_performed():
     assert payload["register"] == "jira:project/ABC"
     assert payload["expectedRevision"] == "r1"
     assert payload["idempotencyKey"]
+    assert payload["recoveryId"]
+    pending = recovery.outstanding(str(tmp_path))
+    assert len(pending) == 1
+    assert pending[0]["detail"]["expectedRevision"] == "r1"
+    assert pending[0]["detail"]["idempotencyKey"] == payload["idempotencyKey"]
+
+    confirmation = provider.confirm(plan, succeeded=True, actual_revision="r2")
+    assert confirmation["succeeded"] is True
+    assert confirmation["actualRevision"] == "r2"
+    assert recovery.outstanding(str(tmp_path)) == []
+
+
+def test_a_failed_external_confirmation_leaves_recovery_evidence(tmp_path):
+    from tools.governance.providers.external_provider import ExternalWorkRegister
+    provider = ExternalWorkRegister(
+        source="monday:board/1234567890", provider_kind="connector",
+        recovery_root=str(tmp_path))
+    plan = provider.plan_mutation(
+        "record-completion", "123", {"evidence": "commit:abc"},
+        revision="rev-before", idempotency_key="close-123")
+
+    confirmation = provider.confirm(
+        plan, succeeded=False, detail={"error": "connector unavailable"})
+    assert confirmation["succeeded"] is False
+    pending = recovery.outstanding(str(tmp_path))
+    assert len(pending) == 1
+    assert pending[0]["id"] == plan.recovery_id
+    assert pending[0]["detail"]["operation"] == "record-completion"
+    assert pending[0]["detail"]["lastConfirmation"]["succeeded"] is False
+    assert pending[0]["detail"]["lastConfirmation"]["detail"]["error"] == "connector unavailable"
+
+
+def test_an_external_read_only_actor_withdraws_planned_mutations(tmp_path):
+    from tools.governance.providers.external_provider import ExternalWorkRegister
+    provider = ExternalWorkRegister(
+        source="monday:board/1234567890", provider_kind="connector",
+        read_only=True, recovery_root=str(tmp_path))
+    for capability in base.MUTATIONS:
+        assert provider.supports(capability) is False
+        with pytest.raises(CapabilityError):
+            provider.require(capability)
+    with pytest.raises(CapabilityError):
+        provider.plan_mutation("set-status", "123", {"status": "In Flight"})
+    assert recovery.outstanding(str(tmp_path)) == []
+
+
+def test_an_external_plan_rejects_unknown_mutation_operations():
+    from tools.governance.providers.external_provider import ExternalWorkRegister
+    provider = ExternalWorkRegister(source="jira:project/ABC", provider_kind="issue-tracker")
+    with pytest.raises(CapabilityError) as excinfo:
+        provider.plan_mutation("delete-project", "ABC", {})
+    assert "unsupported planned mutation" in str(excinfo.value)
+
+
+def test_registry_selection_supplies_external_mutation_recovery_root(project):
+    reg = _registry(project, {"workRegister": {
+        "external": "monday:board/1234567890", "provider": "connector",
+        "authority": "live", "mutability": "read-write",
+        "allowedWriters": ["roadmap-review"], "validation": "external",
+        "classification": "active", "origin": "authored"}})
+    provider = providers.work_register(reg, actor="roadmap-review").provider
+    plan = provider.plan_mutation(
+        "set-status", "123", {"status": "In Flight"}, revision="rev-1")
+    assert plan.recovery_id
+    assert len(recovery.outstanding(str(project))) == 1
 
 
 # --- item 34: partial-failure recovery ----------------------------------------

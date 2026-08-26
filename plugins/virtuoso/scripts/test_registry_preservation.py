@@ -342,6 +342,63 @@ def test_unsafe_registered_paths_are_rejected(project, path, code):
     assert any(f.code == code for f in reg.findings), [f.as_dict() for f in reg.findings]
 
 
+def test_an_append_only_terminal_ledger_may_live_beneath_an_archive_directory(project):
+    """Archive location and terminal authority are compatible when the role is append-only."""
+    (project / "Virtuoso").mkdir()
+    ledger = project / "docs" / "archives" / "CompletedLedger.csv"
+    ledger.parent.mkdir(parents=True)
+    ledger.write_text("id,completed\n", encoding="utf-8")
+    manifest = {"schemaVersion": 2, "roles": {
+        "terminalLedger": {
+            "path": "docs/archives/CompletedLedger.csv", "provider": "csv",
+            "authority": "terminal", "mutability": "append-only",
+            "allowedWriters": ["pointer-closeout"], "validation": "csv-headers",
+            "classification": "historical", "origin": "authored",
+        }}}
+    (project / "Virtuoso" / "workspace-layout.json").write_text(
+        json.dumps(manifest), encoding="utf-8")
+    reg = registry_mod.load(str(project))
+    assert [f for f in reg.findings if f.severity == "error"] == []
+    assert reg.writable("terminalLedger", "pointer-closeout") is True
+
+
+def test_terminal_authority_requires_append_only_mutability(project):
+    (project / "Virtuoso").mkdir()
+    ledger = project / "docs" / "ledger.csv"
+    ledger.parent.mkdir()
+    ledger.write_text("id,completed\n", encoding="utf-8")
+    manifest = {"schemaVersion": 2, "roles": {
+        "terminalLedger": {
+            "path": "docs/ledger.csv", "provider": "csv",
+            "authority": "terminal", "mutability": "read-write",
+            "allowedWriters": ["pointer-closeout"], "validation": "csv-headers",
+            "classification": "historical", "origin": "authored",
+        }}}
+    (project / "Virtuoso" / "workspace-layout.json").write_text(
+        json.dumps(manifest), encoding="utf-8")
+    reg = registry_mod.load(str(project))
+    assert any(f.code == "terminal-not-append-only" for f in reg.findings)
+
+
+@pytest.mark.parametrize("segment", ["backup", "backups", "quarantine", "snapshot", "snapshots"])
+def test_terminal_authority_is_rejected_beneath_transient_storage(project, segment):
+    (project / "Virtuoso").mkdir()
+    ledger = project / "docs" / segment / "ledger.csv"
+    ledger.parent.mkdir(parents=True)
+    ledger.write_text("id,completed\n", encoding="utf-8")
+    manifest = {"schemaVersion": 2, "roles": {
+        "terminalLedger": {
+            "path": "docs/%s/ledger.csv" % segment, "provider": "csv",
+            "authority": "terminal", "mutability": "append-only",
+            "allowedWriters": ["pointer-closeout"], "validation": "csv-headers",
+            "classification": "historical", "origin": "authored",
+        }}}
+    (project / "Virtuoso" / "workspace-layout.json").write_text(
+        json.dumps(manifest), encoding="utf-8")
+    reg = registry_mod.load(str(project))
+    assert any(f.code == "unsafe-path" for f in reg.findings)
+
+
 def test_a_registered_but_absent_role_is_reported_not_repointed(project):
     """Item 20: never search for a lookalike and silently repoint the role."""
     run(project, "--mode", "create", "--authorize")
