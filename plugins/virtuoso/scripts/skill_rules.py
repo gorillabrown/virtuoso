@@ -34,6 +34,10 @@ REQUIRED_RULE_ANCHORS = {
         ("closeout-is-an-artifact", "SRL-114"),
         ("verification-spawns-remediation", "SRL-004"),
         ("staging-memo-lifecycle", "SRL-651"),
+        ("instrument-positive-control", "INSTRUMENT-CONTROL"),
+        ("identity-not-counts", "GATE-IDENTITY"),
+        ("cite-searchable-anchor", "CITE-ANCHOR"),
+        ("name-the-fork-under-test", "FORK-SURFACE"),
     ],
     "governance-sweep": [
         ("grep-registry-before-moving", "SRL-680"),

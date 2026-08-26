@@ -193,6 +193,62 @@ attribution is unambiguous later. Then:
 A sprint that discovers a red base halfway through cannot tell its own breakage from
 the base's, and every hour after that point is spent on the wrong question.
 
+### Verification integrity — how you know a check is telling the truth
+
+<!-- rule:instrument-positive-control (INSTRUMENT-CONTROL) -->
+**Never trust a null result from an unvalidated instrument.** "No change", "zero",
+"identical", "not reproducible" and "no matches" are claims about the **instrument**
+until the instrument has been shown capable of reporting the opposite. A green check
+and a check that examines nothing report the same symbol.
+
+Before a null result is allowed to close anything:
+
+- **Show the check fail.** Run it against a deliberately broken fixture, or against a
+  known-bad input, and observe the failure. A check whose red state was never observed
+  is unproven coverage.
+- **Say which real inputs it fires on today.** A rule that matches no real row is not
+  protecting anything, however correct its logic.
+- **Distinguish a structural zero from a guarded one.** "This cannot happen" and "this
+  is currently prevented" are different claims with different blast radii; a zero used
+  as proof of unreachability must say which it is.
+- **A verifier must exercise the real thing.** A check that reimplements the logic it
+  is checking, or hardcodes a copy of the data it is validating, can pass while the
+  production path is broken — and can be wrong on its own.
+
+<!-- rule:identity-not-counts (GATE-IDENTITY) -->
+**Gates and acceptance criteria state identities, not counts.** A gate that tolerates
+known failures records the failing **node IDs** and compares them against the expected
+waived set. A matching count with a narrative attribution is not a pass — it is a
+coincidence that has been argued for.
+
+- Never state a suite criterion as a count, or as "passes". State it as the failing
+  node-ID set measured against the base.
+- A numeric carve-out ("up to N failures allowed") is a licence that widens silently as
+  its baseline goes stale. Enumerate instead.
+- **Name the tested tree by hash.** When lanes stay unsynchronised during implementation,
+  "the combined tree" describes nothing; a result whose tested-tree hash differs from the
+  tree proposed for merge is a result about a different tree.
+
+<!-- rule:name-the-fork-under-test (FORK-SURFACE) -->
+**Name which fork the acceptance test runs against.** When a fix lands on a path that
+forks by backend, environment, or deployment target, the spec names the fork the test
+exercises, plus a check that the suite is not entirely the blind fork. "Tests pass" is
+not a completion condition when two forks exist and only one is covered.
+
+Two corollaries with teeth: verification must run against **the artifact that ships**,
+not a convenient local stand-in; and a gate's trigger must cover the **union** of the
+paths it guards, or it sits vacuous over whatever it does not reach.
+
+<!-- rule:cite-searchable-anchor (CITE-ANCHOR) -->
+**Cite a searchable anchor, not a line number.** Any `file:line` inherited from a
+document older than the current session is **unverified by default** — citation drift is
+structural, not careless. Cite a function name, a constant, a heading, or a verbatim
+fragment: an anchor survives edits above it, a line number does not.
+
+The same applies to a cited rule or lesson **number**: verify it by content, not by
+existence. A number that resolves to unrelated text is worse than a missing citation,
+because it reads as verified.
+
 If you have concerns about the plan, raise them before proceeding. Plans are not sacred —
 they're starting points. But once you start executing, follow the plan unless you hit a
 genuine blocker.
