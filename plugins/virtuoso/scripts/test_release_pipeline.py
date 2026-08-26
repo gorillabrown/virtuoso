@@ -9,6 +9,7 @@ derivation from bump_version.py's own config.
 import importlib.util
 import json
 import os
+from pathlib import Path
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _spec = importlib.util.spec_from_file_location("release_pipeline", os.path.join(_HERE, "release.py"))
@@ -86,6 +87,29 @@ def test_tripwire_derivation_matches_bump_config():
     # actual code regress unnoticed).
     assert rp._expected_release_files() == {"plugins/virtuoso/.claude-plugin/plugin.json",
                                             ".claude-plugin/marketplace.json"}
+
+
+def test_release_fixture_writers_explicitly_authorize_create(tmp_path):
+    """Both release probes must satisfy the writer's fail-closed create contract."""
+    cache = tmp_path / "cache"
+    writer = cache / "scripts" / "virtuoso_preflight.py"
+    writer.parent.mkdir(parents=True)
+    writer.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "args = sys.argv[1:]\n"
+        "root = Path(args[args.index('--root') + 1])\n"
+        "mode = args[args.index('--mode') + 1]\n"
+        "if mode == 'create':\n"
+        "    if '--authorize' not in args:\n"
+        "        raise SystemExit(7)\n"
+        "    (root / 'created.txt').write_text('stable', encoding='utf-8')\n"
+        "elif mode == 'adopt':\n"
+        "    print('nothing to do')\n",
+        encoding="utf-8")
+
+    assert rp._writer_outputs(str(writer), "fixture")
+    rp.verify_installed(str(cache))
 
 
 def test_update_registry_survives_replace_failure(tmp_path, monkeypatch):
