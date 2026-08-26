@@ -25,6 +25,7 @@ REQUIRED_RULE_ANCHORS = {
         ("lane-declaration", "SRL-551"),
         ("merge-through-slot", "SRL-551"),
         ("checkpoint-commits", "SRL-065"),
+        ("worker-output-validation", "SRL-513"),
     ],
     "governance-sweep": [
         ("grep-registry-before-moving", "SRL-680"),
