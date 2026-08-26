@@ -22,9 +22,15 @@ The test runner executes the test suite and reports results. This is a **lightwe
 - After code changes (verify no regression)
 - Before implementation (baseline)
 - After fixes (verify fix worked)
-- Small-sample sanity verification after a change
-- Multi-sample acceptance verification
 - On schedule (nightly/weekly health check)
+
+**Not this agent — measurement runs.** A run whose output is a *distribution compared
+against target bands* routes to an agent permitted to interpret results, never here.
+Small-sample sanity runs and full multi-seed runs alike: they have no pass/fail, only a
+measured value someone must interpret — and this agent is explicitly forbidden to
+interpret (see Strict Rules). **The tell is the output shape, not the name:** if a seed
+count or a target band appears in a run's definition, it is measurement, however it is
+labelled.
 
 ---
 
@@ -48,8 +54,6 @@ Typical registered command roles, by what they are for:
 | fast suite | quick regression signal; excludes long-running scenarios | may be sharded for parallel dispatch |
 | full suite | everything, including slow integration and regression scenarios | sequential |
 | targeted run | one file, class, or pattern, while iterating on a fix | verbose |
-| quick verification | small-sample sanity measurement after a change | single seed |
-| full verification | multi-sample acceptance measurement | multiple seeds |
 
 Read the registered command's `produces` field to know what output to expect, and its
 `requires` field before running it — a missing dependency is a blocker reported up front,

@@ -9,10 +9,15 @@ Use this reference when drafting the project-facing close-out report.
 2. Findings table.
 3. Interpret each non-pass result.
 4. Propose dispositions for user confirmation.
-5. Draft governance updates still needed.
-6. Name the recommended next direction in prose (no pointer code box — that is
+5. Migrate any **Mid-Dispatch Decisions** into their own section — amendment blocks
+   moved verbatim from the sprint's staging file, one block per decision. This is the
+   destination the `virtuoso` and `mid-dispatch-decision` skills name when they migrate
+   an amendment; the section must exist here or that migration has nowhere to land.
+   "None" is a complete entry.
+6. Draft governance updates still needed.
+7. Name the recommended next direction in prose (no pointer code box — that is
    `/next-pointer`'s job).
-7. Check audit / milestone / merge gates.
+8. Check audit / milestone / merge gates.
 
 ## Findings Table
 

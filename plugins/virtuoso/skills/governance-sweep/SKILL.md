@@ -315,6 +315,24 @@ registered command for every regeneration.
 **No action may target a protected path class.** If one appears, it is a defect in
 the plan — remove it and surface it as a question.
 
+<!-- rule:grep-registry-before-moving (registry-before-move) -->
+**Before proposing that any document move, grep the registry contents for its path.**
+The registry is `Virtuoso/workspace-layout.json` plus the `virtuoso-governance-registry`
+machine block in the project-root governance readme. A registered document that moves
+without its registry entry moving in the same change leaves every skill resolving that
+role to a path that no longer exists — and the next heal will either mark the role
+`⬜ not present` or repoint it somewhere nobody chose.
+
+Concretely, for each proposed move:
+
+```bash
+grep -rn "<current/relative/path>" Virtuoso/workspace-layout.json <governance-readme>
+```
+
+If the path appears, the move is not a file operation — it is a **registry amendment
+plus** a file operation, and both land in the same change. If it does not appear, the
+document is unregistered and moving it is safe.
+
 ### Present the work list
 
 ```
