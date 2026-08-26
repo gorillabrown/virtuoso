@@ -197,6 +197,22 @@ Use this as a quick lookup when assigning effort to tasks in a dispatch spec.
 
 ## Sprint-Level Effort Declaration
 
+<!-- rule:size-from-measured-cadence (SRL-233) -->
+**Size from measured cadence, not from the shape of the task list.** Two sizing errors
+recur, both in the same direction:
+
+- **Analytical sprints staffed with two top-tier `{high}` agents underestimate by
+  22–36%.** This is a measured figure, not a feeling — when a plan has two such agents,
+  size up a bracket rather than discovering the gap at the fix round.
+- **Workload volume overrides nominal task type.** Authoring pin-tests across many source
+  patterns, or annotating hundreds of items, sizes by *volume* even when the per-item work
+  is mechanical. Above roughly ten items with multi-pattern reading, default up a tier;
+  above a few hundred, decompose to parallel workers per logical section.
+
+And the corollary for planning horizons: **a buffer counted in sprints is consumed in
+time.** Read a dispatch-ready buffer as days of runway — count ÷ the trailing weekly
+sprint rate — because a buffer of five at fifteen sprints a week is about two days.
+
 Every dispatch spec declares a default effort level in its header. This is the baseline
 for all tasks in the sprint. Individual tasks can override up or down.
 

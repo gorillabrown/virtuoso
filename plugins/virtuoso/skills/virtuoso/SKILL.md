@@ -249,6 +249,20 @@ The same applies to a cited rule or lesson **number**: verify it by content, not
 existence. A number that resolves to unrelated text is worse than a missing citation,
 because it reads as verified.
 
+<!-- rule:state-integrity-by-hash (SRL-703) -->
+**Prove state by content, not by presence.** A recovery, health check, or "did it land"
+check that confirms a file or row *exists* accepts a truncated, tampered, or
+half-completed state as clean. Compare the actual hash against the recorded expectation.
+
+- **Capture evidence at the right point in the lifecycle.** A hash taken before flush,
+  checkpoint, or close reproduces the pre-change value and proves nothing — a "before"
+  and "after" that match after a real change is a measurement error, not a finding.
+- **Hash canonical content, not local bytes.** A pin computed over working-tree bytes
+  fails on a fresh checkout for line-ending reasons alone, which makes the pin useless
+  precisely where it matters.
+- **Truncated output read as absence is a false negative.** An existence check piped
+  through `head` reports "not found" for something present further down.
+
 If you have concerns about the plan, raise them before proceeding. Plans are not sacred —
 they're starting points. But once you start executing, follow the plan unless you hit a
 genuine blocker.

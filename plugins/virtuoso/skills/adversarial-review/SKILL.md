@@ -290,6 +290,25 @@ Phase 2 — [Name] (addresses R3, R4, ...)
 
 ## Behavioral Rules
 
+### Reviewer independence
+
+<!-- rule:reviewer-independence (SRL-284) -->
+**A reviewer who helped define the thing under review cannot supply independent
+confirmation of it** — however mechanically correct the review is. Self-evaluation
+reproduces the blind spots that created the work, and a score or sign-off produced that
+way cannot be taken at face value.
+
+- **Rotate the reviewer** when a review certifies a milestone, a gate, or a remediation
+  the same party specced. If rotation is impossible, say so in the output and cap the
+  confidence claimed — an acknowledged ceiling is worth more than an unqualified score.
+- **Convergence and divergence both carry signal.** Independent reviewers agreeing raises
+  confidence; disagreeing is a decision flag that goes to the operator, not an average to
+  be taken (SRL-286).
+- **An iterate-to-threshold loop needs a pre-registered rubric fixed before round one.**
+  A free-form score that shifts what it rewards between cycles cannot be iterated toward
+  a number: the same underlying progress reads as flat or regressive depending on the
+  cycle, and the comparison is unfalsifiable.
+
 ### Depth Calibration
 
 Adversarial review inherits ULTRATHINK's depth protocol:

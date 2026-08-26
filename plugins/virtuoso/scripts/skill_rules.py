@@ -42,9 +42,19 @@ REQUIRED_RULE_ANCHORS = {
         ("user-gate-is-success", "SRL-553"),
         ("enforcement-not-disclosure", "SRL-633"),
         ("re-derive-dont-restate", "SRL-706"),
+        ("state-integrity-by-hash", "SRL-703"),
     ],
     "governance-sweep": [
         ("grep-registry-before-moving", "SRL-680"),
+    ],
+    "epic": [
+        ("claim-no-broader-than-evidence", "SRL-699"),
+    ],
+    "adversarial-review": [
+        ("reviewer-independence", "SRL-284"),
+    ],
+    "effort-levels": [
+        ("size-from-measured-cadence", "SRL-233"),
     ],
 }
 
