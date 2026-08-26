@@ -1143,6 +1143,46 @@ def _report(created, root, layout, quiet):
         _say(quiet, "virtuoso: layout=%s; workspace already complete — nothing to do." % layout)
 
 
+def registry_divergences(root):
+    """Roles where the curated registry and the computed default disagree, and the
+    REGISTERED path is the one that exists on disk.
+
+    This is a report, never an action. The registry's own Rule 4 tells a human to fix
+    the registry when it diverges from disk; the generator must not make that call
+    itself, because a wrong guess repoints a governance role at an archive and the
+    next skill run edits the wrong document (SRL-557). A registered path that does not
+    resolve is deliberately NOT a divergence -- that is an ordinary "not present" role,
+    and reporting it would train the operator to ignore this line.
+    """
+    # _workspace_paths returns PURE computed defaults -- _build_full applies the overlay
+    # only afterwards -- so these two really are the two sides of the comparison.
+    overlay = _read_registry_overlay(root) or {}
+    defaults = _workspace_paths(root)
+    out = []
+    for role, rel in sorted(overlay.items()):
+        # Scoped to _ROLE_PATHKEY (the 9 document roles skills resolve BY ROLE), not
+        # _KNOWN_PATHKEY: the manifest-only structural keys are directories, where a
+        # divergence is ordinary and benign. A line the operator learns to ignore is
+        # worse than no line. A project-custom role has no computed default at all.
+        pathkey = _ROLE_PATHKEY.get(role)
+        if pathkey is None or pathkey not in defaults:
+            continue
+        computed_rel = _rel(root, defaults[pathkey])
+        if computed_rel == rel:
+            continue
+        if not os.path.exists(os.path.join(root, rel)):
+            continue
+        out.append((role, rel, computed_rel))
+    return out
+
+
+def _report_divergences(root, quiet):
+    for role, registered, computed in registry_divergences(root):
+        _say(quiet, "registry-divergence: %s registered=%s computed=%s "
+                    "(keeping the registered path; fix the registry if it is wrong)"
+             % (role, registered, computed))
+
+
 def preflight(root, mode="create", quiet=False, layout="auto"):
     # PRE-07 / audit D-15: routed to adopt() BEFORE record_root() runs below, so a
     # --mode adopt invocation records the plugin-root bridge exactly once -- inside adopt()
@@ -1164,6 +1204,7 @@ def preflight(root, mode="create", quiet=False, layout="auto"):
             # both the report below and this function's return value).
             created = []
             _heal(root, created)
+            _report_divergences(root, quiet)
             writes = _count_writes(created)
             # D4: `ready` must not be printed when this run actually wrote something.
             _say(quiet, "virtuoso-status: healed" if writes else "virtuoso-status: ready")
@@ -1211,6 +1252,7 @@ def adopt(root, quiet=False):
     created = []
     if _is_project(root):
         _heal(root, created)
+        _report_divergences(root, quiet)
         writes = _count_writes(created)
         # D4: `ready` must not be printed when this run actually wrote something.
         _say(quiet, "virtuoso-status: healed" if writes else "virtuoso-status: ready")

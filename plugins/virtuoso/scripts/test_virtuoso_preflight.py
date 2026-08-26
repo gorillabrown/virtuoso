@@ -2257,3 +2257,74 @@ def test_detect_is_a_true_noop_on_a_settled_tree_with_prose(tmp_path):
 def test_splice_returns_none_when_a_generated_slot_is_absent():
     assert vp._splice_governance_readme(
         "# Registry\n\nno table, no machine block\n", ["| a | b | c |"], ["k: v"]) is None
+
+
+def test_a_registered_path_that_resolves_is_never_repointed(tmp_path):
+    """Registry authority: the curated path wins and stays, divergence or not."""
+    _run(tmp_path, "create")
+    curated = tmp_path / "docs" / "governance" / "ROADMAP.md"
+    curated.parent.mkdir(parents=True)
+    curated.write_text("# The real roadmap\n", encoding="utf-8")
+
+    m = _manifest(tmp_path)
+    m["paths"]["roadmap"] = "docs/governance/ROADMAP.md"
+    (tmp_path / "Virtuoso" / "workspace-layout.json").write_text(
+        json.dumps(m, indent=2), encoding="utf-8")
+
+    _run(tmp_path, "detect")
+
+    assert _manifest(tmp_path)["paths"]["roadmap"] == "docs/governance/ROADMAP.md"
+    assert curated.read_text(encoding="utf-8") == "# The real roadmap\n"
+
+
+def test_divergence_is_reported_not_silently_resolved(tmp_path):
+    _run(tmp_path, "create")
+    curated = tmp_path / "docs" / "governance" / "ROADMAP.md"
+    curated.parent.mkdir(parents=True)
+    curated.write_text("# The real roadmap\n", encoding="utf-8")
+    m = _manifest(tmp_path)
+    m["paths"]["roadmap"] = "docs/governance/ROADMAP.md"
+    (tmp_path / "Virtuoso" / "workspace-layout.json").write_text(
+        json.dumps(m, indent=2), encoding="utf-8")
+
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "detect", root=tmp_path)
+
+    assert rc == 0, out
+    assert "registry-divergence: roadmap" in out
+    assert "registered=docs/governance/ROADMAP.md" in out
+
+
+def test_no_divergence_line_on_a_conventional_tree(tmp_path):
+    _run(tmp_path, "create")
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "detect", root=tmp_path)
+    assert rc == 0, out
+    assert "registry-divergence:" not in out
+
+
+def test_divergence_is_suppressed_when_the_registered_path_is_absent(tmp_path):
+    """A registered path that does NOT resolve is a 'not present' role, not a
+    divergence -- reporting it would train the operator to ignore the line."""
+    _run(tmp_path, "create")
+    m = _manifest(tmp_path)
+    m["paths"]["roadmap"] = "docs/governance/NOT-THERE.md"
+    (tmp_path / "Virtuoso" / "workspace-layout.json").write_text(
+        json.dumps(m, indent=2), encoding="utf-8")
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "detect", root=tmp_path)
+    assert rc == 0, out
+    assert "registry-divergence:" not in out
+
+
+def test_divergence_lines_are_suppressed_by_quiet(tmp_path):
+    """The SessionStart hook runs --quiet; only `writes:` is exempt from it."""
+    _run(tmp_path, "create")
+    curated = tmp_path / "docs" / "governance" / "ROADMAP.md"
+    curated.parent.mkdir(parents=True)
+    curated.write_text("# The real roadmap\n", encoding="utf-8")
+    m = _manifest(tmp_path)
+    m["paths"]["roadmap"] = "docs/governance/ROADMAP.md"
+    (tmp_path / "Virtuoso" / "workspace-layout.json").write_text(
+        json.dumps(m, indent=2), encoding="utf-8")
+    rc, out = _run_capture("--root", str(tmp_path), "--mode", "detect", "--quiet",
+                           root=tmp_path)
+    assert rc == 0, out
+    assert "registry-divergence:" not in out
