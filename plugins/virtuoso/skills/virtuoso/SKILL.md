@@ -161,6 +161,38 @@ deliberately; re-adding it contradicts both that project's governance and its sh
 tooling. Serialized mode survives only as the **default for a dispatch that declares no
 lane**, which is a different rule.
 
+<!-- rule:mechanical-acceptance-criteria (SRL-067) -->
+**Every acceptance criterion and stop gate must be mechanical.** A criterion is
+mechanical when two people reading the same output cannot disagree about whether it was
+met: a numeric threshold, a boolean check, or an enumerable list. Words like
+"reasonable", "approximately", "acceptable", "sufficient" and "significant" are banned
+from a completion condition — if the spec uses one, resolve it to a number before
+Task #1 is marked ✓, or stop and ask.
+
+Two riders:
+
+- **A stop gate that names a rollback must also name what happens when the rollback
+  fails.** An unhandled failed rollback is how a gate turns into an improvised
+  decision under pressure (SRL-071).
+- **A contingency is pre-registered as a decision table covering every axis the
+  measured fact touches** — not only the axis that prompted the contingency. If the
+  measurement can come back high, low, or unreadable, all three rows exist before the
+  measurement runs (SRL-619).
+
+<!-- rule:red-base-procedure (SRL-585) -->
+**If completion depends on a suite gate, measure the base before implementing.**
+Capture the base branch's suite result as its own step, before the first edit, so
+attribution is unambiguous later. Then:
+
+- **Base green** → proceed; any new failure is yours.
+- **Base red** → do **not** diagnose it in-sprint. File it as an issue via the Phase 5
+  contract, escalate, and continue only against the pre-existing-failure list. Verify
+  each suspected pre-existing failure against the base before spending a single debug
+  cycle on it (SRL-058).
+
+A sprint that discovers a red base halfway through cannot tell its own breakage from
+the base's, and every hour after that point is spent on the wrong question.
+
 If you have concerns about the plan, raise them before proceeding. Plans are not sacred —
 they're starting points. But once you start executing, follow the plan unless you hit a
 genuine blocker.

@@ -29,6 +29,8 @@ REQUIRED_RULE_ANCHORS = {
         ("orchestrator-owns-long-runs", "SRL-417"),
         ("inline-safety-into-worker-prompts", "SRL-589"),
         ("tier-by-blast-radius", "SRL-650"),
+        ("mechanical-acceptance-criteria", "SRL-067"),
+        ("red-base-procedure", "SRL-585"),
     ],
     "governance-sweep": [
         ("grep-registry-before-moving", "SRL-680"),
