@@ -1,0 +1,7 @@
+# Generated launchers are compared BYTE-FOR-BYTE against tools/governance/install.py
+# by validate.py (check_launchers_match_source). A checkout that converts their line
+# endings makes that check fail on the developer's machine while the committed blobs
+# are correct — which is what happened on Windows with core.autocrlf=true.
+# Pin them to LF so the shipped bytes are the checked-out bytes on every platform.
+plugins/virtuoso/bin/virtuoso      text eol=lf
+plugins/virtuoso/bin/virtuoso.ps1  text eol=lf
