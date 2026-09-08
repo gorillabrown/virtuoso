@@ -3,9 +3,9 @@
 
 Query subcommands create nothing and heal nothing as a side effect (item 86).
 The commands that write say so explicitly: `snapshot`, `closeout --prepare`,
-`mutation-plan` (opens durable recovery before a host connector write), and
-`mutation-confirm` (records the connector result and resolves recovery only on
-success).
+`create-item` (appends a new item to a LOCAL register), `mutation-plan` (opens
+durable recovery before a host connector write), and `mutation-confirm` (records
+the connector result and resolves recovery only on success).
 
 Subcommands:
   roles                     list every registered role and how it resolves
@@ -20,7 +20,10 @@ Subcommands:
   protected                 hash every protected file (immutable-hash verification)
   snapshot --out PATH       capture a timestamped snapshot of the work register
   recovery                  list unresolved partial-failure recovery records
+  create-item               bring a new item into a LOCAL register (a write)
   mutation-plan             emit a revision-aware host connector instruction
+                            (operations: set-status, store-spec-link,
+                            record-completion, create-item)
   mutation-confirm          durably record the host connector result
 
 Exit codes: 0 ok; 3 the query could not be answered (unregistered role, missing
@@ -41,10 +44,15 @@ from tools.governance import (  # noqa: E402
 )
 from tools.governance.errors import CapabilityError, GovernanceError, RoleNotRegistered  # noqa: E402
 from tools.governance import dependencies, integrity, repostate  # noqa: E402
-from tools.governance.providers import kpi, recovery, snapshot_provider  # noqa: E402
+from tools.governance.providers import (  # noqa: E402
+    base as provider_base, kpi, recovery, snapshot_provider,
+)
 
 EXIT_OK = 0
 EXIT_UNANSWERABLE = 3
+
+#: The planned mutations an external register accepts through the handshake.
+MUTATION_OPERATIONS = ("set-status", "store-spec-link", "record-completion", "create-item")
 
 
 def _load(root: str) -> registry_mod.Registry:
@@ -344,9 +352,47 @@ def cmd_mutation_confirm(args) -> int:
     )
     outcome = provider.confirm(
         plan, succeeded=args.succeeded, actual_revision=args.actual_revision,
-        detail=_json_object(args.detail_json, "--detail-json"))
+        detail=_json_object(args.detail_json, "--detail-json"),
+        provider_item_id=args.provider_id)
     return _emit(outcome, args.as_json,
                  lambda: json.dumps(outcome, indent=2, ensure_ascii=False))
+
+
+def cmd_create_item(args) -> int:
+    """Bring a new item into a LOCAL work register. This is a write.
+
+    An external register is never created into from here: it goes through the
+    host handshake (`mutation-plan --operation create-item`, execute with the
+    host's connector, `mutation-confirm`), so the refusal names that path.
+    """
+    if not args.actor:
+        raise CapabilityError("an explicit ceremony actor is required to create a work item")
+    selection = providers.work_register(_load(args.root), actor=args.actor)
+    provider = selection.provider
+    fields = _json_object(args.fields_json, "--fields-json")
+    fields.setdefault("id", args.item)
+    if str(fields.get("id") or "").strip() != args.item:
+        raise CapabilityError("--item %r and fields.id %r disagree" % (args.item, fields.get("id")))
+    if hasattr(provider, "plan_mutation"):
+        raise CapabilityError(
+            "external register %s is created into through the host handshake: run "
+            "`mutation-plan --operation create-item --item %s --fields-json ...`, execute the "
+            "instruction with the host's connector, then `mutation-confirm`."
+            % (provider.source, args.item),
+            detail={"register": provider.source, "operation": "create-item"})
+    provider.require(provider_base.CREATE_ITEM)
+    existed = provider.get(args.item) is not None
+    item = provider.create_item(fields)
+    payload = {"created": not existed, "item": item.as_dict(),
+               "register": provider.source, "provider": provider.name}
+    if args.as_json:
+        return _emit(payload, True)
+    print("%s %s in %s" % ("created" if payload["created"] else "already present:",
+                           item.id, provider.source))
+    print("  title:         %s" % (item.title or "(untitled)"))
+    print("  status:        %s (%s)" % (item.status, item.raw_status or "—"))
+    print("  specification: %s" % (item.written_status or "unknown"))
+    return EXIT_OK
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -407,10 +453,14 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("protected", parents=[common]).set_defaults(func=cmd_protected)
     sub.add_parser("recovery", parents=[common]).set_defaults(func=cmd_recovery)
 
+    create_item = sub.add_parser("create-item", parents=[common])
+    create_item.add_argument("--item", required=True)
+    create_item.add_argument("--fields-json", required=True,
+                             help="canonical field names; extra keys are project columns")
+    create_item.set_defaults(func=cmd_create_item)
+
     mutation_plan = sub.add_parser("mutation-plan", parents=[common])
-    mutation_plan.add_argument(
-        "--operation", required=True,
-        choices=("set-status", "store-spec-link", "record-completion"))
+    mutation_plan.add_argument("--operation", required=True, choices=MUTATION_OPERATIONS)
     mutation_plan.add_argument("--item", required=True)
     mutation_plan.add_argument("--fields-json", required=True)
     mutation_plan.add_argument("--revision", default="")
@@ -418,13 +468,13 @@ def build_parser() -> argparse.ArgumentParser:
     mutation_plan.set_defaults(func=cmd_mutation_plan)
 
     mutation_confirm = sub.add_parser("mutation-confirm", parents=[common])
-    mutation_confirm.add_argument(
-        "--operation", required=True,
-        choices=("set-status", "store-spec-link", "record-completion"))
+    mutation_confirm.add_argument("--operation", required=True, choices=MUTATION_OPERATIONS)
     mutation_confirm.add_argument("--item", required=True)
     mutation_confirm.add_argument("--idempotency-key", required=True)
     mutation_confirm.add_argument("--recovery-id", required=True)
     mutation_confirm.add_argument("--actual-revision", default="")
+    mutation_confirm.add_argument("--provider-id", default="",
+                                  help="the identifier the external system assigned (creations)")
     mutation_confirm.add_argument("--detail-json", default="{}")
     confirmation = mutation_confirm.add_mutually_exclusive_group(required=True)
     confirmation.add_argument(

@@ -238,3 +238,20 @@ def test_existing_terminal_history_is_never_rewritten(workspace):
     assert before.rstrip("\n") in after or all(
         line in after for line in before.splitlines() if line.strip())
     assert after.count("| ITEM-1 |") == 1
+
+
+# --- the registration crossing: a specification becomes a work item -------------
+
+
+def test_registering_a_new_item_is_idempotent_and_leaves_no_recovery(workspace):
+    reg = registry_mod.load(str(workspace))
+    provider = providers.work_register(reg, actor="pointer-closeout").provider
+    request = {"id": "ITEM-3", "title": "Third thing", "sequence": 3,
+               "prerequisites": ["ITEM-2"], "effort": "S"}
+    for _ in range(3):
+        item = provider.create_item(request)
+        assert item.status == base.QUEUED and item.written_status == base.STUB
+    rows = [i for i in provider.snapshot().items if i.id == "ITEM-3"]
+    assert len(rows) == 1 and rows[0].prerequisites == ["ITEM-2"]
+    assert recovery.outstanding(str(workspace)) == []
+    assert provider.next_eligible().id == "ITEM-1"      # the belt order is unchanged

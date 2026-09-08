@@ -59,6 +59,10 @@ DEFAULTS: dict = {
         "statusMappings": {},           # canonical status -> project vocabulary
         "snapshot": "",                 # optional cached snapshot role name
         "staleAfterHours": 24,
+        # Who may bring a NEW item into existence. None => every writer the
+        # role's allowedWriters names; a list narrows creation to those actors
+        # (an empty list means nobody). Creation is a separately authorized act.
+        "creators": None,
     },
     "roadmap": {
         "dispatchBuffer": 5,            # item 49 — configurable, may be 0 (disabled)

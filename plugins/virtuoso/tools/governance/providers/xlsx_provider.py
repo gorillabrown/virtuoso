@@ -27,9 +27,11 @@ class XlsxWorkRegister(base.WorkRegisterProvider):
     name = "xlsx"
 
     def __init__(self, *, source: str, mapping=None, read_only: bool = False,
-                 sheet: str = "") -> None:
+                 sheet: str = "", may_create: bool = True,
+                 create_denied_reason: str = "") -> None:
         super().__init__(source=source, mapping=mapping or mapping_mod.Mapping(),
-                         read_only=read_only)
+                         read_only=read_only, may_create=may_create,
+                         create_denied_reason=create_denied_reason)
         self.sheet = sheet
         self._available, self._reason = dependency_available()
 
@@ -40,7 +42,7 @@ class XlsxWorkRegister(base.WorkRegisterProvider):
         reads = {base.LIST_ACTIVE, base.READ_SEQUENCE, base.READ_STATUS,
                  base.READ_PREREQUISITES, base.READ_EFFORT, base.NEXT_ELIGIBLE}
         return frozenset(reads | {base.WRITE_STATUS, base.STORE_SPEC_LINK,
-                                  base.RECORD_COMPLETION})
+                                  base.RECORD_COMPLETION, base.CREATE_ITEM})
 
     def require(self, *capabilities: str) -> None:
         if not self._available:
@@ -170,6 +172,47 @@ class XlsxWorkRegister(base.WorkRegisterProvider):
         if evidence:
             item = self._write_field(item_id, "evidence", evidence, "")
         return item
+
+    def create_item(self, fields: dict) -> base.WorkItem:
+        self.require(base.CREATE_ITEM)
+        prepared, _defaults = base.prepare_creation(fields, self.mapping.statuses)
+        supplied = base.supplied_fields(fields)
+        workbook = self._load(data_only=False)
+        worksheet = self._worksheet(workbook)
+        headers = [str(cell.value or "").strip() for cell in worksheet[1]]
+        index = self.mapping.fields.resolve_index(headers)
+        id_column = index["id"]
+        for row_number in range(2, worksheet.max_row + 1):
+            values = [worksheet.cell(row=row_number, column=c + 1).value
+                      for c in range(len(headers))]
+            if str(values[id_column] or "").strip() == prepared["id"]:
+                existing = self._to_item(tuple(values), index)
+                base.check_duplicate(existing, prepared, supplied, self.mapping.statuses,
+                                     self.source)
+                return existing                     # idempotent (item 33)
+
+        lowered = {h.strip().lower(): i for i, h in enumerate(headers) if h.strip()}
+        new_values = [None] * len(headers)
+        for key, value in prepared.items():
+            if key in base.CREATABLE_FIELDS:
+                position = index.get(key)
+            else:
+                position = lowered.get(key.strip().lower())
+            if position is None:
+                if key in supplied:
+                    raise base.CapabilityError(
+                        "%s has no column for %r; configure policy.workRegister."
+                        "fieldMappings.%s, add the column, or omit the field"
+                        % (self.source, key, key))
+                continue
+            new_values[position] = value if isinstance(value, int) else base.cell_text(key, value)
+        worksheet.append(new_values)
+        workbook.save(self.source)
+        created = self.get(prepared["id"])
+        if created is None:
+            raise KeyError("item %r vanished after creation in %s"
+                           % (prepared["id"], self.source))
+        return created
 
     def exists(self) -> bool:
         return os.path.isfile(self.source)

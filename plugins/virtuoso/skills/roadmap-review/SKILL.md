@@ -86,6 +86,7 @@ Read the provider description and **negotiate capabilities up front**:
 | re-sequence the conveyor belt | `read-sequence` **and** `write-status` on a sequence field |
 | replenish the dispatch buffer | `store-spec-link` (or inline specs — see policy) |
 | record completion in Phase A | `record-completion` |
+| register a newly specified item that has no row yet | `create-item` |
 
 If a capability you need is missing, say so plainly and adjust the plan before
 starting. Example: a project whose register is a read-only snapshot can still get
@@ -498,6 +499,19 @@ Mid-dispatch amendments append as `##### Mid-Dispatch Amendment — YYYY-MM-DD`.
 **D.5.3 Update the live work register.** Through the provider, for each newly
 specified item: sequence, title, group, lane, effort, prerequisites, status, the
 specification state, branch, description. Pass the `revision` you read.
+
+An item that is **not yet in the register** — a specification this review authored
+or approved that has no row — is brought into existence through `create-item`,
+never by writing a row into a file by hand and never by calling a connector's raw
+create. For a local register that is one write. For an external register it is
+the handshake: `mutation-plan --operation create-item`, execute the returned
+instruction with the host's connector, `mutation-confirm --succeeded
+--provider-id <ID> --actual-revision <REVISION>`, then refresh the canonical
+snapshot and verify `recovery` is empty. The plan is refused when the snapshot is
+absent or stale, when the id already exists (terminal items included), or when a
+creation under the same idempotency key was already confirmed; each refusal names
+the fix. If `policy.workRegister.creators` does not name this ceremony, say so and
+stop — creation is separately authorized.
 
 Only write fields the provider reports it can write. Field *names* come from
 `policy.workRegister.fieldMappings`; status *words* come from
