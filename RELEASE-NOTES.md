@@ -1,6 +1,6 @@
 # Virtuoso Release Notes
 
-## v1.6.0 (unreleased) — governed work-item creation
+## v1.6.0 (2026-09-08) — governed work-item creation
 
 **Additive. No breaking changes; registry schema stays at v2.** A specification on disk is
 not a work item: until the live register carries a row for it, no ceremony can queue,
