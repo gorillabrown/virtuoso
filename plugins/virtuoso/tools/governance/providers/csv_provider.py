@@ -17,9 +17,11 @@ from . import base, mapping as mapping_mod
 class CsvWorkRegister(base.WorkRegisterProvider):
     name = "csv"
 
-    def __init__(self, *, source: str, mapping=None, read_only: bool = False) -> None:
+    def __init__(self, *, source: str, mapping=None, read_only: bool = False,
+                 may_create: bool = True, create_denied_reason: str = "") -> None:
         super().__init__(source=source, mapping=mapping or mapping_mod.Mapping(),
-                         read_only=read_only)
+                         read_only=read_only, may_create=may_create,
+                         create_denied_reason=create_denied_reason)
 
     @property
     def capabilities(self) -> frozenset[str]:
@@ -201,6 +203,50 @@ class CsvWorkRegister(base.WorkRegisterProvider):
             return changed
 
         return self._mutate(item_id, revision, apply_row)
+
+    def create_item(self, fields: dict) -> base.WorkItem:
+        self.require(base.CREATE_ITEM)
+        prepared, _defaults = base.prepare_creation(fields, self.mapping.statuses)
+        supplied = base.supplied_fields(fields)
+        headers, rows = self._read_rows()
+        index = self.mapping.fields.resolve_index(headers)
+        id_position = index.get("id")
+        if id_position is None or id_position >= len(headers):
+            raise base.CapabilityError(
+                "work register %s has no identifiable id column; configure "
+                "policy.workRegister.fieldMappings.id" % self.source)
+        id_column = headers[id_position]
+
+        for row in rows:
+            if str(row.get(id_column, "") or "").strip() == prepared["id"]:
+                existing = self._to_item(headers, index, row)
+                base.check_duplicate(existing, prepared, supplied, self.mapping.statuses,
+                                     self.source)
+                return existing                     # idempotent (item 33)
+
+        lowered = {str(h).strip().lower(): h for h in headers if str(h).strip()}
+        new_row = {h: "" for h in headers}
+        for key, value in prepared.items():
+            if key in base.CREATABLE_FIELDS:
+                position = index.get(key)
+                column = headers[position] if position is not None else None
+            else:
+                column = lowered.get(key.strip().lower())
+            if column is None:
+                if key in supplied:
+                    raise base.CapabilityError(
+                        "work register %s has no column for %r; configure "
+                        "policy.workRegister.fieldMappings.%s, add the column, or omit "
+                        "the field" % (self.source, key, key))
+                continue                            # a default with nowhere to land
+            new_row[column] = base.cell_text(key, value)
+        rows.append(new_row)
+        self._write_rows(headers, rows)
+        created = self.get(prepared["id"])
+        if created is None:
+            raise KeyError("item %r vanished after creation in %s"
+                           % (prepared["id"], self.source))
+        return created
 
 
 def _row_revision(row: dict) -> str:

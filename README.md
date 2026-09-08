@@ -132,7 +132,8 @@ capabilities before planning work.
 | read-only snapshot | a path to a timestamped capture |
 
 Capabilities: `list-active`, `read-sequence`, `read-status`, `write-status`,
-`read-prerequisites`, `read-effort`, `store-spec-link`, `record-completion`, `next-eligible`.
+`read-prerequisites`, `read-effort`, `store-spec-link`, `record-completion`, `next-eligible`,
+`create-item`.
 
 Three roles, deliberately separate:
 
@@ -148,6 +149,11 @@ Every derived figure states its provider, source, and snapshot time. A figure wh
 are missing is reported as **not computable** with the missing inputs named — never
 approximated. Mutations are optimistically concurrent and idempotent; a cross-system
 partial failure leaves a recovery record naming exactly what remains.
+
+Bringing a **new** item into a register is itself a registered mutation, `create-item`:
+planned against proof of absence in a fresh snapshot, separately authorized through
+`policy.workRegister.creators`, idempotent across the gap before the snapshot shows the new
+item, and never performed by calling a connector's raw create outside the handshake.
 
 ## Locating the plugin
 
@@ -173,7 +179,7 @@ located rather than guessing a path.
 | Script | Purpose |
 |---|---|
 | `virtuoso_preflight.py` | check / adopt / create / repair, plus `--check-document` |
-| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `provider`, `items`, `next`, `kpis`, `closeout`, `repo`, `recovery`; and the explicit writers `snapshot`, `closeout --prepare` |
+| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `provider`, `items`, `next`, `kpis`, `closeout`, `repo`, `recovery`; and the explicit writers `snapshot`, `closeout --prepare`, `create-item`, `mutation-plan`, `mutation-confirm` |
 | `generate_cockpit.py` | the planning cockpit, read from the configured provider |
 | `build_register_report.py` | the generated spreadsheet report (declared generated roles only) |
 | `validate.py` | structural validation of the plugin itself |

@@ -53,7 +53,8 @@ def _resolve_path(reg, spec) -> str:
     return os.path.join(reg.root, *spec.path.split("/"))
 
 
-def _make_local(spec, source: str, mapping, read_only: bool):
+def _make_local(spec, source: str, mapping, read_only: bool, *, may_create: bool = True,
+                create_denied_reason: str = ""):
     factory = _LOCAL_PROVIDERS.get(spec.provider)
     if factory is None:
         raise ProviderError(
@@ -62,7 +63,28 @@ def _make_local(spec, source: str, mapping, read_only: bool):
             detail={"role": spec.name, "provider": spec.provider})
     if factory is SnapshotWorkRegister:
         return SnapshotWorkRegister(source=source, mapping=mapping)
-    return factory(source=source, mapping=mapping, read_only=read_only)
+    return factory(source=source, mapping=mapping, read_only=read_only,
+                   may_create=may_create, create_denied_reason=create_denied_reason)
+
+
+def _creation_permission(policy, actor: str, writable: bool) -> tuple[bool, str]:
+    """Creation is gated separately from writing (``policy.workRegister.creators``).
+
+    ``None`` (the default) lets every allowed writer create. A list names exactly
+    who may; an empty list means nobody. The reason is returned so a refusal can
+    say precisely which policy key to change.
+    """
+    if not writable:
+        return False, ""
+    creators = policy.get("workRegister.creators", None)
+    if creators is None:
+        return True, ""
+    names = [str(c) for c in creators] if isinstance(creators, list) else []
+    if actor in names or "*" in names:
+        return True, ""
+    return False, ("actor %r is not named in policy.workRegister.creators (%s); creating a "
+                   "work item is a separately authorized act"
+                   % (actor, ", ".join(names) or "nobody"))
 
 
 def _snapshot_for(reg, policy) -> SnapshotWorkRegister | None:
@@ -105,13 +127,15 @@ def for_role(reg, role_name: str, *, actor: str = "") -> Selection:
                              % (spec.authority, spec.mutability,
                                 ", ".join(spec.allowed_writers) or "none")))
 
+    may_create, denied = _creation_permission(policy, actor, writable)
     if spec.is_external:
         provider = ExternalWorkRegister(
             source=spec.external, mapping=mapping, provider_kind=spec.provider,
             snapshot_provider=_snapshot_for(reg, policy), read_only=not writable,
-            recovery_root=reg.root)
+            recovery_root=reg.root, may_create=may_create, create_denied_reason=denied)
     else:
-        provider = _make_local(spec, _resolve_path(reg, spec), mapping, not writable)
+        provider = _make_local(spec, _resolve_path(reg, spec), mapping, not writable,
+                               may_create=may_create, create_denied_reason=denied)
 
     return Selection(provider, role_name, spec.authority, notes)
 

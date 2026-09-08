@@ -103,13 +103,14 @@ python <plugin>/scripts/virtuoso_registry.py --root . recovery
 
 All of those are queries: none of them creates a directory, seeds a document, or heals
 anything as a side effect. The commands that write say so explicitly — `snapshot`,
-`closeout --prepare`, `mutation-plan`, and `mutation-confirm`.
+`closeout --prepare`, `create-item`, `mutation-plan`, and `mutation-confirm`.
 
 **Negotiate capabilities before you plan work** (item 28). A provider declares
 which of these it supports: `list-active`, `read-sequence`, `read-status`,
 `write-status`, `read-prerequisites`, `read-effort`, `store-spec-link`,
-`record-completion`, `next-eligible`. If a ceremony needs a capability the
-selected provider lacks, say so up front and stop — do not start and fail halfway.
+`record-completion`, `next-eligible`, `create-item`. If a ceremony needs a
+capability the selected provider lacks, say so up front and stop — do not start
+and fail halfway.
 
 ### Field and status vocabulary
 
@@ -157,6 +158,60 @@ python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> mutatio
 python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> mutation-confirm \
   --operation set-status --item <ID> --idempotency-key <KEY> --recovery-id <RECOVERY-ID> \
   --succeeded --actual-revision <NEW-REVISION> --json
+```
+
+### Bringing a new item into existence
+
+A specification on disk is not a work item. Until the live register carries a row
+for it, no ceremony can queue, sequence, or dispatch it — and the act that creates
+that row is governed exactly like the acts that change it. `create-item` is the
+registered operation; a connector's raw "create" is never called outside it.
+
+- **Absence is the concurrency guard.** A creation has no revision to compare. It
+  is planned only against a snapshot that is present and not stale, and only when
+  the id is absent from that snapshot — terminal items included, because an
+  identifier that has ever been retired is not reusable.
+- **Creation is not an update.** Re-issuing an identical creation is a no-op that
+  returns the existing item; a creation whose fields disagree with an existing item
+  is refused by field name (`duplicate-item`). Change an existing item through
+  `set-status` / `store-spec-link`.
+- **A new item enters the pipeline.** `status` and the specification state default
+  to the project's own spelling of `queued` and `stub`; a status word outside the
+  project's vocabulary is refused, because an item no ceremony can read is invisible
+  to all of them.
+- **Creation is separately authorized.** `policy.workRegister.creators` names who
+  may create; unset, every writer in the role's `allowedWriters` may. A writer
+  entitled to change items is not thereby entitled to bring new ones into existence.
+- **The trail holds idempotency across the refresh gap.** A confirmed creation is
+  never planned twice under the same idempotency key (default
+  `create-item:<register>:<id>`), even before the snapshot shows the new item. A
+  plan whose previous attempt was confirmed *failed* may be retried; the retry's
+  instruction tells the host to verify nothing was created before executing, and
+  the superseded record is resolved with a pointer to its replacement.
+- **The crossing ends with a readable item.** Confirm with the identifier and
+  revision the external system assigned (`--provider-id`, `--actual-revision`),
+  then refresh the canonical snapshot and check that `recovery` is empty.
+
+A local register creates directly — this is a write:
+
+```sh
+python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> create-item \
+  --item <ID> --fields-json '{"title": "...", "sequence": 42, "effort": "M"}' --json
+```
+
+An external register uses the same handshake as every other mutation:
+
+```sh
+python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> mutation-plan \
+  --operation create-item --item <ID> --fields-json '<JSON>' --json
+# the plan carries expectedAbsent, snapshotTakenAt, projectFields (the project's own
+# column names), defaultsApplied, preconditions for the host, and postconditions.
+# Execute it with the host connector; read the created item back.
+python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> mutation-confirm \
+  --operation create-item --item <ID> --idempotency-key <KEY> --recovery-id <RECOVERY-ID> \
+  --succeeded --provider-id <PROVIDER-ITEM-ID> --actual-revision <REVISION> --json
+# then refresh the canonical snapshot and confirm nothing is outstanding:
+python <plugin>/scripts/virtuoso_registry.py --root . recovery
 ```
 
 ## Preflight status contract (items 10, 11)

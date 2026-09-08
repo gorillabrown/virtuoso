@@ -15,7 +15,8 @@ from pathlib import Path
 import pytest
 
 from tools.governance import policy as policy_mod, providers, registry as registry_mod
-from tools.governance.errors import CapabilityError, ConcurrencyError, ProviderError
+from tools.governance.errors import (CapabilityError, ConcurrencyError, DuplicateItemError,
+                                     ProviderError)
 from tools.governance.providers import base, kpi, ledger, mapping as mapping_mod
 from tools.governance.providers import recovery, snapshot_provider
 from tools.governance.providers.csv_provider import CsvWorkRegister
@@ -600,3 +601,312 @@ def test_the_terminal_ledger_is_a_separate_role_from_the_register(project):
     assert book.may_append("roadmap-status") is False
     register = providers.work_register(reg, actor="pointer-closeout")
     assert register.role_name == "workRegister"
+
+
+# --- creation: bringing a new item into existence -------------------------------
+
+
+def test_every_provider_creates_an_item_or_withdraws_the_capability(any_provider):
+    if base.CREATE_ITEM in any_provider.capabilities:
+        created = any_provider.create_item({"id": "ITEM-5", "title": "Fifth thing",
+                                            "sequence": 5, "prerequisites": ["ITEM-4"]})
+        assert created.id == "ITEM-5"
+        assert created.status == base.QUEUED           # born queued, never in flight
+        assert created.written_status == base.STUB     # and unspecified
+        assert created.sequence == 5
+        assert created.prerequisites == ["ITEM-4"]
+        assert created.revision
+        assert [i.id for i in any_provider.snapshot().items][-1] == "ITEM-5"
+    else:
+        with pytest.raises(CapabilityError):
+            any_provider.require(base.CREATE_ITEM)
+        with pytest.raises(CapabilityError):
+            any_provider.create_item({"id": "ITEM-5", "title": "Fifth thing"})
+
+
+def test_an_identical_creation_is_a_no_op(tmp_path):
+    target = tmp_path / "register.csv"
+    target.write_text(CSV_TEXT, encoding="utf-8")
+    provider = CsvWorkRegister(source=str(target))
+    request = {"id": "ITEM-5", "title": "Fifth thing", "sequence": 5, "effort": "M"}
+    first = provider.create_item(request)
+    after_first = target.read_bytes()
+    again = provider.create_item(request)
+    assert target.read_bytes() == after_first
+    assert again.revision == first.revision
+    assert [i.id for i in provider.snapshot().items].count("ITEM-5") == 1
+
+
+def test_a_conflicting_creation_is_refused_by_name(tmp_path):
+    target = tmp_path / "register.csv"
+    target.write_text(CSV_TEXT, encoding="utf-8")
+    provider = CsvWorkRegister(source=str(target))
+    before = target.read_bytes()
+    with pytest.raises(DuplicateItemError) as excinfo:
+        provider.create_item({"id": "ITEM-2", "title": "A different title", "effort": "XL"})
+    assert "effort" in str(excinfo.value) and "title" in str(excinfo.value)
+    assert target.read_bytes() == before                 # nothing was overwritten
+
+
+def test_a_creation_needs_an_id_and_a_title(tmp_path):
+    target = tmp_path / "register.csv"
+    target.write_text(CSV_TEXT, encoding="utf-8")
+    provider = CsvWorkRegister(source=str(target))
+    with pytest.raises(CapabilityError):
+        provider.create_item({"title": "No id"})
+    with pytest.raises(CapabilityError):
+        provider.create_item({"id": "ITEM-9"})
+    assert provider.get("ITEM-9") is None
+
+
+def test_a_creation_speaks_the_projects_own_vocabulary(tmp_path):
+    target = tmp_path / "register.csv"
+    target.write_text("Ticket,Summary,Workflow State,Spec State\nT-1,First,Doing Now,Ready\n",
+                      encoding="utf-8")
+    project_mapping = mapping_mod.Mapping.from_policy({
+        "fieldMappings": {"id": "Ticket", "title": "Summary", "status": "Workflow State",
+                          "written_status": "Spec State"},
+        "statusMappings": {"queued": ["To Do"], "in-flight": ["Doing Now"],
+                           "written": {"stub": ["Outline"], "full-spec": ["Ready"]}},
+    })
+    provider = CsvWorkRegister(source=str(target), mapping=project_mapping)
+    created = provider.create_item({"id": "T-2", "title": "Second", "status": base.QUEUED})
+    assert "T-2,Second,To Do,Outline" in target.read_text(encoding="utf-8")
+    assert created.status == base.QUEUED and created.written_status == base.STUB
+    kept = provider.create_item({"id": "T-3", "title": "Third", "status": "Doing Now"})
+    assert kept.raw_status == "Doing Now"                # a project spelling is kept verbatim
+
+
+def test_a_creation_refuses_a_status_outside_the_vocabulary(tmp_path):
+    target = tmp_path / "register.csv"
+    target.write_text(CSV_TEXT, encoding="utf-8")
+    provider = CsvWorkRegister(source=str(target))
+    before = target.read_bytes()
+    with pytest.raises(CapabilityError) as excinfo:
+        provider.create_item({"id": "ITEM-5", "title": "Fifth", "status": "Limbo"})
+    assert "vocabulary" in str(excinfo.value)
+    assert target.read_bytes() == before
+
+
+def test_a_supplied_field_with_no_column_is_refused_but_a_default_is_not(tmp_path):
+    target = tmp_path / "register.csv"
+    target.write_text("id,title,status\nT-1,First,Queued\n", encoding="utf-8")
+    provider = CsvWorkRegister(source=str(target))
+    created = provider.create_item({"id": "T-2", "title": "Second"})   # no spec column: fine
+    assert created.status == base.QUEUED
+    with pytest.raises(CapabilityError) as excinfo:
+        provider.create_item({"id": "T-3", "title": "Third", "lane": "core"})
+    assert "lane" in str(excinfo.value)
+    assert provider.get("T-3") is None
+
+
+def test_a_creation_keeps_the_registers_own_line_ending(tmp_path):
+    target = tmp_path / "register.csv"
+    target.write_bytes(CSV_TEXT.replace("\n", "\r\n").encode("utf-8"))
+    provider = CsvWorkRegister(source=str(target))
+    provider.create_item({"id": "ITEM-5", "title": "Fifth thing"})
+    raw = target.read_bytes()
+    assert raw.count(b"\r\n") == raw.count(b"\n")
+    assert b"ITEM-5,Fifth thing" in raw
+
+
+def test_a_markdown_creation_preserves_every_other_byte(tmp_path):
+    target = tmp_path / "register.md"
+    target.write_text(MARKDOWN_TEXT, encoding="utf-8")
+    provider = MarkdownWorkRegister(source=str(target))
+    before = target.read_text(encoding="utf-8")
+    created = provider.create_item({"id": "ITEM-5", "title": "Fifth thing", "sequence": 5,
+                                    "effort": "S"})
+    after = target.read_text(encoding="utf-8")
+    assert after.startswith(before)
+    assert after.count("| ITEM-5 |") == 1
+    assert created.status == base.QUEUED and created.effort == "S"
+    with pytest.raises(CapabilityError):
+        provider.create_item({"id": "ITEM-6", "title": "A pipe | in the title"})
+
+
+def test_creation_is_separately_authorized_by_policy(project):
+    (project / "docs").mkdir()
+    (project / "docs" / "register.csv").write_text(CSV_TEXT, encoding="utf-8")
+    reg = _registry(project, {"workRegister": {
+        "path": "docs/register.csv", "provider": "csv", "authority": "live",
+        "mutability": "read-write", "allowedWriters": ["roadmap-review", "pointer-closeout"],
+        "validation": "csv-headers", "classification": "active", "origin": "authored"}},
+        policy={"workRegister": {"creators": ["roadmap-review"]}})
+    closer = providers.work_register(reg, actor="pointer-closeout").provider
+    assert closer.supports(base.WRITE_STATUS)            # may change items
+    assert not closer.supports(base.CREATE_ITEM)         # may not add them
+    with pytest.raises(CapabilityError) as excinfo:
+        closer.create_item({"id": "ITEM-5", "title": "Fifth thing"})
+    assert "policy.workRegister.creators" in str(excinfo.value)
+    assert closer.describe()["mayCreate"] is False
+    planner = providers.work_register(reg, actor="roadmap-review").provider
+    assert planner.supports(base.CREATE_ITEM)
+    assert planner.create_item({"id": "ITEM-5", "title": "Fifth thing"}).id == "ITEM-5"
+
+
+# --- creation in an external register ------------------------------------------
+
+
+def _external_with_snapshot(tmp_path, *, taken_at="2099-01-01T00:00:00Z", **kwargs):
+    from tools.governance.providers.external_provider import ExternalWorkRegister
+    cache = tmp_path / "snap.json"
+    cache.write_text(json.dumps({
+        "snapshotVersion": 1, "takenAt": taken_at, "provider": "connector",
+        "source": "monday:board/1234567890", "fields": ["id", "status", "revision"],
+        "items": [
+            {"id": "123", "title": "Existing", "status": "queued", "raw_status": "Queued",
+             "revision": "rev-1"},
+            {"id": "RETIRED-1", "title": "Retired", "status": "completed",
+             "raw_status": "Completed", "revision": ""},
+        ],
+    }), encoding="utf-8")
+    return ExternalWorkRegister(
+        source="monday:board/1234567890", provider_kind="connector",
+        snapshot_provider=snapshot_provider.SnapshotWorkRegister(source=str(cache)),
+        recovery_root=str(tmp_path), **kwargs)
+
+
+def test_an_external_creation_needs_a_snapshot_to_prove_absence(tmp_path):
+    from tools.governance.providers.external_provider import ExternalWorkRegister
+    provider = ExternalWorkRegister(source="monday:board/1234567890", provider_kind="connector",
+                                    recovery_root=str(tmp_path))
+    assert base.CREATE_ITEM in provider.capabilities
+    assert "create-item" in provider.describe()["plannedOperations"]
+    with pytest.raises(CapabilityError) as excinfo:
+        provider.plan_mutation("create-item", "NEW-1", {"title": "New"})
+    assert "cannot prove" in str(excinfo.value)
+    assert recovery.outstanding(str(tmp_path)) == []
+
+
+def test_an_external_creation_refuses_a_stale_snapshot(tmp_path):
+    provider = _external_with_snapshot(tmp_path, taken_at="2000-01-01T00:00:00Z")
+    with pytest.raises(CapabilityError) as excinfo:
+        provider.plan_mutation("create-item", "NEW-1", {"title": "New"})
+    assert "stale" in str(excinfo.value)
+    assert recovery.outstanding(str(tmp_path)) == []
+
+
+def test_an_external_creation_refuses_an_existing_or_retired_id(tmp_path):
+    provider = _external_with_snapshot(tmp_path)
+    for item_id in ("123", "RETIRED-1"):
+        with pytest.raises(DuplicateItemError):
+            provider.plan_mutation("create-item", item_id, {"title": "Again"})
+    assert recovery.outstanding(str(tmp_path)) == []
+
+
+def test_an_external_creation_carries_no_revision(tmp_path):
+    provider = _external_with_snapshot(tmp_path)
+    with pytest.raises(CapabilityError):
+        provider.plan_mutation("create-item", "NEW-1", {"title": "New"}, revision="rev-1")
+    assert recovery.outstanding(str(tmp_path)) == []
+
+
+def test_an_external_creation_is_planned_with_absence_evidence(tmp_path):
+    project_mapping = mapping_mod.Mapping.from_policy({
+        "fieldMappings": {"id": "Ticket", "title": "Summary", "status": "Workflow State",
+                          "written_status": "Spec State", "prerequisites": "Blocked By"},
+        "statusMappings": {"queued": ["To Do"], "written": {"stub": ["Outline"]}},
+    })
+    provider = _external_with_snapshot(tmp_path, mapping=project_mapping)
+    plan = provider.plan_mutation(
+        "create-item", "NEW-1",
+        {"title": "A new thing", "sequence": 7, "prerequisites": ["123", "GHOST-9"],
+         "Points": 3})
+    payload = plan.as_dict()
+    assert payload["operation"] == "create-item"
+    assert payload["expectedAbsent"] is True
+    assert payload["expectedRevision"] == ""
+    assert payload["snapshotTakenAt"] == "2099-01-01T00:00:00Z"
+    assert payload["idField"] == "Ticket"
+    assert payload["idempotencyKey"] == "create-item:monday:board/1234567890:NEW-1"
+    assert payload["fields"]["status"] == "To Do"
+    assert payload["fields"]["written_status"] == "Outline"
+    assert payload["defaultsApplied"] == {"status": "To Do", "written_status": "Outline"}
+    assert payload["projectFields"]["Ticket"] == "NEW-1"
+    assert payload["projectFields"]["Summary"] == "A new thing"
+    assert payload["projectFields"]["Workflow State"] == "To Do"
+    assert payload["projectFields"]["Blocked By"] == "123, GHOST-9"
+    assert payload["projectFields"]["Points"] == 3
+    assert any("GHOST-9" in w for w in payload["warnings"])
+    assert any("Ticket" in p for p in payload["preconditions"])
+    assert any("refresh the canonical snapshot" in p for p in payload["postconditions"])
+    pending = recovery.outstanding(str(tmp_path))
+    assert len(pending) == 1
+    assert pending[0]["operation"] == "external-create-item"
+    assert pending[0]["detail"]["expectedAbsent"] is True
+    assert pending[0]["detail"]["idempotencyKey"] == payload["idempotencyKey"]
+
+
+def test_confirming_a_creation_records_the_provider_identifier(tmp_path):
+    provider = _external_with_snapshot(tmp_path)
+    plan = provider.plan_mutation("create-item", "NEW-1", {"title": "A new thing"})
+    outcome = provider.confirm(plan, succeeded=True, actual_revision="rev-new",
+                               provider_item_id="987654321")
+    assert outcome["providerItemId"] == "987654321"
+    assert "refresh the canonical snapshot" in outcome["nextStep"]
+    assert recovery.outstanding(str(tmp_path)) == []
+    record = recovery.get_record(str(tmp_path), plan.recovery_id)
+    assert record["detail"]["lastConfirmation"]["providerItemId"] == "987654321"
+
+
+def test_a_confirmed_creation_is_never_planned_twice_before_the_snapshot_catches_up(tmp_path):
+    provider = _external_with_snapshot(tmp_path)
+    plan = provider.plan_mutation("create-item", "NEW-1", {"title": "A new thing"})
+    provider.confirm(plan, succeeded=True, actual_revision="rev-new", provider_item_id="42")
+    # The snapshot still does not show NEW-1; the recovery trail is what protects us.
+    with pytest.raises(DuplicateItemError) as excinfo:
+        provider.plan_mutation("create-item", "NEW-1", {"title": "A new thing"})
+    assert plan.recovery_id in str(excinfo.value) and "42" in str(excinfo.value)
+    assert recovery.outstanding(str(tmp_path)) == []
+
+
+def test_an_unconfirmed_creation_plan_blocks_a_second_plan(tmp_path):
+    provider = _external_with_snapshot(tmp_path)
+    first = provider.plan_mutation("create-item", "NEW-1", {"title": "A new thing"})
+    with pytest.raises(CapabilityError) as excinfo:
+        provider.plan_mutation("create-item", "NEW-1", {"title": "A new thing"})
+    assert first.recovery_id in str(excinfo.value)
+    assert len(recovery.outstanding(str(tmp_path))) == 1
+
+
+def test_a_failed_creation_can_be_retried_with_a_verify_first_precondition(tmp_path):
+    provider = _external_with_snapshot(tmp_path)
+    first = provider.plan_mutation("create-item", "NEW-1", {"title": "A new thing"})
+    provider.confirm(first, succeeded=False, detail={"error": "connector timeout"})
+    retry = provider.plan_mutation("create-item", "NEW-1", {"title": "A new thing"})
+    assert retry.recovery_id != first.recovery_id
+    assert retry.idempotency_key == first.idempotency_key
+    assert any(first.recovery_id in p and "verify" in p for p in retry.preconditions)
+    assert [r["id"] for r in recovery.outstanding(str(tmp_path))] == [retry.recovery_id]
+    old = recovery.get_record(str(tmp_path), first.recovery_id)
+    assert old["resolved"] and old["detail"]["supersededBy"] == retry.recovery_id
+    provider.confirm(retry, succeeded=True, provider_item_id="43")
+    assert recovery.outstanding(str(tmp_path)) == []
+
+
+def test_an_external_creation_is_withdrawn_for_an_unauthorized_creator(project):
+    (project / "Virtuoso").mkdir()
+    (project / "Virtuoso" / "snap.json").write_text(json.dumps({
+        "snapshotVersion": 1, "takenAt": "2099-01-01T00:00:00Z", "provider": "connector",
+        "source": "monday:board/1234567890", "fields": ["id"], "items": []}),
+        encoding="utf-8")
+    reg = _registry(project, {
+        "workRegister": {"external": "monday:board/1234567890", "provider": "connector",
+                         "authority": "live", "mutability": "read-write",
+                         "allowedWriters": ["roadmap-review", "pointer-closeout"],
+                         "validation": "external", "classification": "active",
+                         "origin": "authored"},
+        "workRegisterSnapshot": {"path": "Virtuoso/snap.json", "provider": "snapshot",
+                                 "authority": "report", "mutability": "generated",
+                                 "validation": "exists", "classification": "active",
+                                 "origin": "generated"},
+    }, policy={"workRegister": {"snapshot": "workRegisterSnapshot",
+                                "creators": ["roadmap-review"]}})
+    closer = providers.work_register(reg, actor="pointer-closeout").provider
+    with pytest.raises(CapabilityError) as excinfo:
+        closer.plan_mutation("create-item", "NEW-1", {"title": "New"})
+    assert "creators" in str(excinfo.value)
+    assert recovery.outstanding(str(project)) == []
+    planner = providers.work_register(reg, actor="roadmap-review").provider
+    assert planner.plan_mutation("create-item", "NEW-1", {"title": "New"}).expected_absent

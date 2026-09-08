@@ -1,5 +1,67 @@
 # Virtuoso Release Notes
 
+## v1.6.0 (unreleased) — governed work-item creation
+
+**Additive. No breaking changes; registry schema stays at v2.** A specification on disk is
+not a work item: until the live register carries a row for it, no ceremony can queue,
+sequence, or dispatch it. The plugin governed every change to a registered item but not the
+act that brings one into existence. A ceremony holding an approved specification for an
+unregistered item had no registered operation to promote it, and the only path left was the
+host connector's raw create — outside authorization, recovery, evidence, and revision
+handling. That is the escape hatch the provider architecture exists to close.
+
+### `create-item`
+
+A tenth provider capability, declared at the interface. Local CSV, Markdown-table, and
+spreadsheet registers append a row; a read-only snapshot withdraws it; an external register
+plans it through the same handshake as `set-status`.
+
+- **Absence is the concurrency guard.** An external creation is planned only against a
+  snapshot that is present and not stale, and only when the id is absent from it — terminal
+  items included. The plan carries `expectedAbsent`, `snapshotTakenAt`, the project's own
+  column names (`projectFields`), the defaults applied, preconditions for the host, and
+  postconditions for the ceremony.
+- **Creation is not an update.** An identical re-issue is a no-op that returns the existing
+  item; a conflicting one is refused by field name (`duplicate-item`).
+- **A new item enters the pipeline.** Status and specification state default to the
+  project's spelling of `queued` / `stub`; a status word outside the project's vocabulary is
+  refused rather than written as something no ceremony can read.
+- **Separately authorized.** `policy.workRegister.creators` names who may create (unset:
+  every `allowedWriters` entry). A writer entitled to change items is not thereby entitled
+  to add them.
+- **Idempotent across the refresh gap.** The recovery trail refuses a second plan under an
+  idempotency key whose creation was already confirmed, even before the snapshot shows the
+  new item. A failed attempt may be retried with a verify-first precondition; the superseded
+  record is resolved with a pointer to its replacement, never deleted. Recovery record ids
+  no longer collide when two records for one item land in the same second.
+- **The crossing ends readable.** `mutation-confirm --provider-id` records the identifier the
+  external system assigned; a successful creation names its next step — refresh the
+  canonical snapshot.
+
+### Command-line surface
+
+`virtuoso_registry.py create-item` for local registers (a write, and it says so);
+`mutation-plan` and `mutation-confirm` accept `--operation create-item`; `mutation-confirm`
+gains `--provider-id`; `provider --json` reports `mayCreate` and, for external registers,
+`plannedOperations`.
+
+### Documentation and tests
+
+`references/registry-contract.md` gains *Bringing a new item into existence*; the roadmap
+review's D.5.3 distinguishes creating an item from updating one; the
+documentation-to-code contract test covers the new subcommand; the provider contract,
+crossing, and CLI suites gain creation cases.
+
+## v1.5.1 (2026-08-26) — terminal ledger authority and recoverable external mutations
+
+Shipped without a release-notes entry; recorded here from the commit history. External
+mutation contracts became executable — `mutation-plan` / `mutation-confirm` with durable
+recovery records and revision checks; a terminal ledger may be registered beneath an
+archive directory when its authority is `terminal` and its mutability `append-only`;
+registry repair no longer corrupts CRLF registries; the release pipeline accepts either
+valid dry-run lineage, negotiates writer authorization, and authorizes fresh workspace
+probes.
+
 ## v1.5.0 (2026-08-26) — promoted-rule enforcement
 
 **Additive. No breaking changes; registry schema stays at v2.** A rule promoted into a

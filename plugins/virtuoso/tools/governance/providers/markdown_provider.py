@@ -36,9 +36,11 @@ class MarkdownWorkRegister(base.WorkRegisterProvider):
     name = "markdown"
 
     def __init__(self, *, source: str, mapping=None, read_only: bool = False,
-                 active_section: str = "") -> None:
+                 active_section: str = "", may_create: bool = True,
+                 create_denied_reason: str = "") -> None:
         super().__init__(source=source, mapping=mapping or mapping_mod.Mapping(),
-                         read_only=read_only)
+                         read_only=read_only, may_create=may_create,
+                         create_denied_reason=create_denied_reason)
         self.active_section = active_section
         self._mode = ""
 
@@ -48,7 +50,7 @@ class MarkdownWorkRegister(base.WorkRegisterProvider):
                  base.READ_PREREQUISITES, base.READ_EFFORT, base.NEXT_ELIGIBLE}
         if self._detect_mode() == "table":
             return frozenset(reads | {base.WRITE_STATUS, base.STORE_SPEC_LINK,
-                                      base.RECORD_COMPLETION})
+                                      base.RECORD_COMPLETION, base.CREATE_ITEM})
         return frozenset(reads)
 
     # -- parsing -------------------------------------------------------------
@@ -219,3 +221,58 @@ class MarkdownWorkRegister(base.WorkRegisterProvider):
         if evidence:
             item = self._write_cell(item_id, "evidence", evidence, "")
         return item
+
+    def create_item(self, fields: dict) -> base.WorkItem:
+        """Append one row to the work-item table; every other byte is preserved."""
+        self.require(base.CREATE_ITEM)
+        prepared, _defaults = base.prepare_creation(fields, self.mapping.statuses)
+        supplied = base.supplied_fields(fields)
+        text = self._text()
+        lines = text.splitlines(keepends=True)
+        start, headers, index, rows = self._find_table(text)
+        if start is None:
+            raise base.CapabilityError(
+                "%s has no work-item table; heading-mode registers are read-only" % self.source)
+
+        for _position, cells in rows:
+            if cells[index["id"]].strip().strip("`") == prepared["id"]:
+                existing = self._row_item(headers, index, cells)
+                base.check_duplicate(existing, prepared, supplied, self.mapping.statuses,
+                                     self.source)
+                return existing                     # idempotent (item 33)
+
+        lowered = {str(h).strip().lower(): i for i, h in enumerate(headers) if str(h).strip()}
+        new_cells = [""] * len(headers)
+        for key, value in prepared.items():
+            if key in base.CREATABLE_FIELDS:
+                position = index.get(key)
+            else:
+                position = lowered.get(key.strip().lower())
+            if position is None:
+                if key in supplied:
+                    raise base.CapabilityError(
+                        "%s has no column for %r; configure policy.workRegister."
+                        "fieldMappings.%s, add the column, or omit the field"
+                        % (self.source, key, key))
+                continue
+            cell = base.cell_text(key, value)
+            if "|" in cell or "\n" in cell or "\r" in cell:
+                raise base.CapabilityError(
+                    "value for %r contains a pipe or line break, which a pipe-table "
+                    "register cannot hold; store it elsewhere or omit the field" % key)
+            new_cells[position] = cell
+
+        insert_at = rows[-1][0] + 1 if rows else start + 2
+        previous = lines[insert_at - 1] if 0 < insert_at <= len(lines) else "\n"
+        ending = "\r\n" if previous.endswith("\r\n") else "\n"
+        if not previous.endswith("\n"):
+            lines[insert_at - 1] = previous + ending    # the file ended without a newline
+        lines.insert(insert_at, "| " + " | ".join(new_cells) + " |" + ending)
+        with open(self.source, "w", encoding="utf-8", newline="") as handle:
+            handle.write("".join(lines))
+        self._mode = "table"
+        created = self.get(prepared["id"])
+        if created is None:
+            raise KeyError("item %r vanished after creation in %s"
+                           % (prepared["id"], self.source))
+        return created

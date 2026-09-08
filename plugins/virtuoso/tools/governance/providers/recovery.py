@@ -52,9 +52,16 @@ def _filename_token(value: str) -> str:
 def open_record(root: str, *, operation: str, item_id: str, completed_steps: list[str],
                 remaining_steps: list[str], detail: dict | None = None) -> RecoveryRecord:
     created = base.utc_now()
-    record_id = "%s-%s-%s" % (
+    stem = "%s-%s-%s" % (
         created.replace(":", "").replace("-", ""),
         _filename_token(operation), _filename_token(item_id))
+    # Two records for the same operation and item within one second must not
+    # overwrite each other: a retry planned right after a failure is a second
+    # record, and the trail is only a trail if both survive.
+    record_id, ordinal = stem, 1
+    while os.path.exists(path_for(root, record_id)):
+        ordinal += 1
+        record_id = "%s-%d" % (stem, ordinal)
     record = RecoveryRecord(
         id=record_id, operation=operation, item_id=item_id, created=created,
         completed_steps=list(completed_steps), remaining_steps=list(remaining_steps),
@@ -103,7 +110,7 @@ def resolve(root: str, record_id: str) -> bool:
     return textio.write_if_changed(target, json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
 
 
-def outstanding(root: str) -> list[dict]:
+def _all(root: str) -> list[dict]:
     directory = os.path.join(root, *RECOVERY_DIR.split(os.sep))
     if not os.path.isdir(directory):
         return []
@@ -118,6 +125,29 @@ def outstanding(root: str) -> list[dict]:
             payload = json.loads(text)
         except ValueError:
             continue
-        if not payload.get("resolved"):
+        if isinstance(payload, dict):
             records.append(payload)
     return records
+
+
+def outstanding(root: str) -> list[dict]:
+    return [r for r in _all(root) if not r.get("resolved")]
+
+
+def find(root: str, *, operation: str = "", item_id: str = "",
+         idempotency_key: str = "") -> list[dict]:
+    """Every record — resolved or not — matching the given operation, item, and
+    idempotency key. The trail is what makes a cross-system operation idempotent
+    across the window between a confirmed write and the next snapshot refresh."""
+    out = []
+    for payload in _all(root):
+        if operation and payload.get("operation") != operation:
+            continue
+        if item_id and payload.get("item_id") != item_id:
+            continue
+        if idempotency_key:
+            detail = payload.get("detail") if isinstance(payload.get("detail"), dict) else {}
+            if detail.get("idempotencyKey") != idempotency_key:
+                continue
+        out.append(payload)
+    return out

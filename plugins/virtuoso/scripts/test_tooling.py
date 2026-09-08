@@ -439,3 +439,72 @@ def test_the_spreadsheet_provider_withdraws_capabilities_without_its_dependency(
         provider.require("list-active")
     assert "openpyxl" in str(excinfo.value)
     assert provider.describe()["dependency"]["available"] is False
+
+
+# --- creation through the command line -----------------------------------------
+
+
+def test_external_creation_cli_plans_and_confirms_with_provider_id(external_workspace):
+    planned = run(
+        REGISTRY_CLI, "--root", str(external_workspace), "--actor", "roadmap-review",
+        "mutation-plan", "--operation", "create-item", "--item", "NEW-1",
+        "--fields-json", json.dumps({"title": "A new thing", "sequence": 9}), "--json")
+    assert planned.returncode == 0, planned.stderr
+    plan = json.loads(planned.stdout)
+    assert plan["expectedAbsent"] is True and plan["expectedRevision"] == ""
+    assert plan["fields"]["status"] and plan["projectFields"]["id"] == "NEW-1"
+
+    confirmed = run(
+        REGISTRY_CLI, "--root", str(external_workspace), "--actor", "roadmap-review",
+        "mutation-confirm", "--operation", "create-item", "--item", "NEW-1",
+        "--idempotency-key", plan["idempotencyKey"], "--recovery-id", plan["recoveryId"],
+        "--succeeded", "--provider-id", "555", "--actual-revision", "rev-9", "--json")
+    assert confirmed.returncode == 0, confirmed.stderr
+    outcome = json.loads(confirmed.stdout)
+    assert outcome["providerItemId"] == "555" and "snapshot" in outcome["nextStep"]
+    pending = run(REGISTRY_CLI, "--root", str(external_workspace), "recovery", "--json")
+    assert json.loads(pending.stdout)["outstanding"] == []
+
+    # Re-planning before the snapshot shows the item is refused by the trail.
+    again = run(
+        REGISTRY_CLI, "--root", str(external_workspace), "--actor", "roadmap-review",
+        "mutation-plan", "--operation", "create-item", "--item", "NEW-1",
+        "--fields-json", json.dumps({"title": "A new thing"}), "--json")
+    assert again.returncode == 3 and "already confirmed" in again.stderr
+
+
+def test_external_creation_cli_refuses_an_existing_item(external_workspace):
+    completed = run(
+        REGISTRY_CLI, "--root", str(external_workspace), "--actor", "roadmap-review",
+        "mutation-plan", "--operation", "create-item", "--item", "123",
+        "--fields-json", json.dumps({"title": "Example"}), "--json")
+    assert completed.returncode == 3
+    assert "already exists" in completed.stderr
+    assert not (external_workspace / "Virtuoso" / ".recovery").exists()
+
+
+def test_the_create_item_command_writes_a_local_register(workspace):
+    created = run(
+        REGISTRY_CLI, "--root", str(workspace), "--actor", "roadmap-review",
+        "create-item", "--item", "ITEM-3",
+        "--fields-json", json.dumps({"title": "Third thing", "sequence": 3, "effort": "S"}),
+        "--json")
+    assert created.returncode == 0, created.stderr
+    payload = json.loads(created.stdout)
+    assert payload["created"] is True and payload["item"]["status"] == "queued"
+    listed = run(REGISTRY_CLI, "--root", str(workspace), "items", "--json")
+    assert "ITEM-3" in [i["id"] for i in json.loads(listed.stdout)["items"]]
+    again = run(
+        REGISTRY_CLI, "--root", str(workspace), "--actor", "roadmap-review",
+        "create-item", "--item", "ITEM-3",
+        "--fields-json", json.dumps({"title": "Third thing"}), "--json")
+    assert again.returncode == 0 and json.loads(again.stdout)["created"] is False
+
+
+def test_the_create_item_command_points_an_external_register_at_the_handshake(external_workspace):
+    completed = run(
+        REGISTRY_CLI, "--root", str(external_workspace), "--actor", "roadmap-review",
+        "create-item", "--item", "NEW-1", "--fields-json", json.dumps({"title": "New"}))
+    assert completed.returncode == 3
+    assert "mutation-plan --operation create-item" in completed.stderr
+    assert not (external_workspace / "Virtuoso" / ".recovery").exists()

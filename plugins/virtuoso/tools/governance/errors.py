@@ -66,6 +66,14 @@ class ConcurrencyError(ProviderError):
     code = "concurrent-modification"
 
 
+class DuplicateItemError(ProviderError):
+    """A creation named an item id the register already carries with different
+    content. Creation is not an update: the existing item is changed through its
+    own mutations, never overwritten by a second creation."""
+
+    code = "duplicate-item"
+
+
 class RepairError(GovernanceError):
     code = "repair-failed"
 
