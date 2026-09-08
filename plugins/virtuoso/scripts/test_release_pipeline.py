@@ -130,6 +130,35 @@ def test_release_fixture_writers_explicitly_authorize_create(tmp_path):
     assert rp._writer_outputs(str(legacy), "legacy fixture")
 
 
+def test_regen_diff_ignores_the_writers_own_identity_records(tmp_path):
+    """The install record (v1.4+) and the retired plugin-root bridge record WHERE the
+    running writer lives, so two installs always differ there. The gate compares
+    output, not identity, and must not fail a release on either file."""
+    body = (
+        "from pathlib import Path\n"
+        "import sys\n"
+        "args = sys.argv[1:]\n"
+        "if '--help' in args:\n"
+        "    print('--authorize')\n"
+        "    raise SystemExit(0)\n"
+        "root = Path(args[args.index('--root') + 1])\n"
+        "(root / 'created.txt').write_text('stable', encoding='utf-8')\n"
+        "(root / '.virtuoso').mkdir()\n"
+        "(root / '.virtuoso' / 'installs.json').write_text(__file__, encoding='utf-8')\n"
+        "(root / '.virtuoso' / 'plugin-root').write_text(__file__, encoding='utf-8')\n"
+    )
+    first = tmp_path / "install-a" / "scripts" / "virtuoso_preflight.py"
+    second = tmp_path / "install-b" / "scripts" / "virtuoso_preflight.py"
+    for writer in (first, second):
+        writer.parent.mkdir(parents=True)
+        writer.write_text(body, encoding="utf-8")
+    a = rp._writer_outputs(str(first), "a")
+    b = rp._writer_outputs(str(second), "b")
+    assert a == b
+    assert "created.txt" in a
+    assert ".virtuoso/installs.json" not in a and ".virtuoso/plugin-root" not in a
+
+
 def _write_sweep_fixture(root, body):
     writer = root / rp.WRITER_REL
     writer.parent.mkdir(parents=True, exist_ok=True)

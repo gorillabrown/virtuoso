@@ -157,6 +157,12 @@ def _create_command(writer, root):
     return command
 
 
+#: Files that record WHERE the running writer lives rather than what it produces:
+#: the retired plugin-root bridge (PF-04) and its v1.4 successor, the version-keyed
+#: install record. Two different installs always differ here -- identity, not output.
+IDENTITY_FILES = frozenset({".virtuoso/plugin-root", ".virtuoso/installs.json"})
+
+
 def _writer_outputs(writer, label):
     """Run an explicitly authorized create fixture and return {relpath: sha}."""
     out = {}
@@ -170,10 +176,9 @@ def _writer_outputs(writer, label):
             for fn in files:
                 full = os.path.join(dirpath, fn)
                 rel = os.path.relpath(full, td).replace("\\", "/")
-                # The bridge records the RUNNING writer's own location (PF-04), so it
-                # differs whenever two different installs are compared -- identity, not
-                # output. Excluding it keeps this gate about what the writer PRODUCES.
-                if rel == ".virtuoso/plugin-root":
+                # Identity records differ whenever two different installs are compared.
+                # Excluding them keeps this gate about what the writer PRODUCES.
+                if rel in IDENTITY_FILES:
                     continue
                 out[rel] = norm_sha(full)
     return out
