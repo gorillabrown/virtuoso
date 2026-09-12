@@ -34,6 +34,15 @@ REQUIRED_RULE_ANCHORS = {
     "governance-sweep": [
         ("grep-registry-before-moving", "registry-before-move"),
     ],
+    "pointer-closeout": [
+        ("closeout-never-amends-acceptance", "acceptance-amendment"),
+        ("classify-before-completion", "failure-classification"),
+        ("proportional-evidence", "evidence-proportionality"),
+        ("tested-tree-is-the-published-tree", "integrated-identity"),
+        ("protected-state-over-test-result", "protected-custody"),
+        ("close-only-what-was-verified", "completion-scope"),
+        ("name-populations-not-aggregates", "population-naming"),
+    ],
     "virtuoso": [
         ("lane-declaration", "lane-concurrency"),
         ("mechanical-acceptance-criteria", "mechanical-criteria"),
