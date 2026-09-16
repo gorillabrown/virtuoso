@@ -245,7 +245,10 @@ def do_bump_and_push(target, notes):
         raise Gate("tripwire: dirty set %s != expected %s\nNOTE: the version bump already "
                    "wrote the declared files — `git checkout -- <them>` to restore before "
                    "re-running." % (sorted(actual), sorted(expected)))
-    run(["git", "add", PLUGIN_JSON, MARKETPLACE_JSON])
+    # Stage the SAME derived set the tripwire just checked, not a hand-listed pair:
+    # a manifest the bumper writes but the commit leaves behind is a host installing
+    # last release's plugin while every other surface advertises this one.
+    run(["git", "add", "--", *sorted(expected)])
     msg = "chore(release): v%s — %s" % (target, notes or "release")
     run(["git", "commit", "-m", msg])
     run(["git", "push", "origin", "main"])

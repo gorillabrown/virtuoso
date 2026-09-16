@@ -26,6 +26,14 @@ Two output forms are always available: the legacy human/agent lines
 structured result. ``writes`` counts files under the project root whose bytes
 were created or changed; the machine-global install record is never a project
 write.
+
+A third machine-readable line, ``overlays: <state>``, accompanies those two in
+every mode and survives ``--quiet``. It is not part of :meth:`Result.contract_lines`
+— callers that parse the two-line contract keep working unchanged — but it is
+always printed, and it always states a result. An unregistered project reports
+``not registered`` rather than staying silent, because absent output is
+indistinguishable from an all-clear, which is exactly how a project ends up
+believing overlays are in force when nothing is reading them.
 """
 from __future__ import annotations
 
@@ -78,6 +86,11 @@ class Result:
     schema_version: int | None = None
     plugin_version: str = ""
     error: dict | None = None
+    #: The one-line overlay state. Defaults to the honest answer for a project
+    #: that never registered the role, so a caller that forgets to set it still
+    #: reports something true rather than something reassuring.
+    overlays: str = "not registered"
+    overlays_detail: dict | None = None
 
     def __post_init__(self) -> None:
         if self.status not in STATUSES:
@@ -127,6 +140,8 @@ class Result:
             data["schemaVersion"] = self.schema_version
         if self.plugin_version:
             data["pluginVersion"] = self.plugin_version
+        data["overlays"] = self.overlays_detail if self.overlays_detail is not None \
+            else {"line": self.overlay_line()}
         if self.error is not None:
             data["error"] = self.error
         return data
@@ -137,3 +152,8 @@ class Result:
     def contract_lines(self) -> list[str]:
         """The two lines every caller may parse, in every mode, quiet or not."""
         return ["virtuoso-status: %s" % self.status, "writes: %d" % self.writes]
+
+    def overlay_line(self) -> str:
+        """The overlay state line, printed beside the contract lines in every mode
+        and never suppressed by ``--quiet``. Always non-empty."""
+        return "overlays: %s" % (self.overlays or "not registered")

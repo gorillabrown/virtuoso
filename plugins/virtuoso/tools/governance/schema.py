@@ -333,6 +333,23 @@ DEFAULT_ROLES: dict[str, dict] = {
         "origin": "authored",
         "label": "Reference (directory)",
     },
+    "overlays": {
+        # Project-owned additions to shipped skills and agents, addressed by
+        # mirroring the shipped file's own relative path. Registered read-only
+        # with no writers, so the guard that already refuses writes to a
+        # read-only role refuses these too — the plugin reads a project's
+        # overlays and never edits them. Deliberately absent from
+        # CREATE_ROLE_ORDER: a project that has not asked for overlays must not
+        # be handed an empty directory it never wanted.
+        "provider": "directory",
+        "authority": "reference",
+        "mutability": "read-only",
+        "allowedWriters": [],
+        "validation": "exists",
+        "classification": "active",
+        "origin": "authored",
+        "label": "Project overlays (read-only; mirrors shipped skill/agent paths)",
+    },
     "governance": {
         "provider": "directory",
         "authority": "reference",
@@ -400,6 +417,11 @@ DEFAULT_ROLES: dict[str, dict] = {
 }
 
 #: Roles created by ``create`` on a brand-new workspace, in readme order.
+#:
+#: ``overlays`` is deliberately not here. It is opt-in: a project registers it
+#: when it has something to overlay, and until then `create` lays down no empty
+#: directory for it. Leaving a role out of this tuple is how the plugin says
+#: "supported, not assumed".
 CREATE_ROLE_ORDER = (
     "roadmap",
     "workRegister",

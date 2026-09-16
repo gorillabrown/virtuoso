@@ -99,6 +99,7 @@ python <plugin>/scripts/virtuoso_registry.py --root . repo --expect <paths>
 python <plugin>/scripts/virtuoso_registry.py --root . deps
 python <plugin>/scripts/virtuoso_registry.py --root . protected
 python <plugin>/scripts/virtuoso_registry.py --root . recovery
+python <plugin>/scripts/virtuoso_registry.py --root . overlays
 ```
 
 All of those are queries: none of them creates a directory, seeds a document, or heals
@@ -214,13 +215,81 @@ python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> mutatio
 python <plugin>/scripts/virtuoso_registry.py --root . recovery
 ```
 
+## Project overlays
+
+A project that needs a shipped skill or agent to behave differently registers an
+**overlay** instead of forking the file. The `overlays` role points at one
+directory; inside it, a file at the *same relative path* as a shipped file carries
+that project's additions:
+
+| shipped file | its overlay |
+|---|---|
+| `skills/<skill>/SKILL.md` | `<overlays>/skills/<skill>/SKILL.md` |
+| `agents/<Agent>.md` | `<overlays>/agents/<Agent>.md` |
+
+```jsonc
+"overlays": {
+  "path": "Virtuoso/overlays",
+  "provider": "directory",
+  "authority": "reference",
+  "mutability": "read-only",     // no ceremony writes a project's overlays
+  "allowedWriters": [],
+  "validation": "exists",
+  "classification": "active",
+  "origin": "authored"
+}
+```
+
+Rules:
+
+1. **Optional, and opt-in.** `create` does not register the role or lay down the
+   directory. An unregistered role, an absent directory, and no matching file all
+   mean the same thing: proceed on the shipped file alone.
+2. **Read-only.** The role is registered `read-only` with no `allowedWriters`, so
+   rule 4 above already refuses every ceremony write to it. Overlays are the
+   project's files; the plugin reads them and never edits them.
+3. **Case-exact everywhere.** Lookup compares each path segment against the names
+   the filesystem reports, not against a case-folded match. `skills/Epic/SKILL.md`
+   never stands in for `skills/epic/SKILL.md` — a mismatch is reported on every
+   platform instead of working on one and vanishing on another.
+4. **Additive, and bounded.** An overlay adds to a shipped instruction and wins on
+   conflict, with one exception: it may not loosen a shared-contract safety rule —
+   registry resolution, read-only preflight, write permission, git safety,
+   provenance, or the issue contract. Anyone who can write the project folder can
+   write an overlay; without that floor, so could anyone who can switch off the
+   plugin's own guards.
+5. **Only `skills/` and `agents/` are addressable.** An overlay elsewhere under the
+   directory mirrors nothing, is never applied, and is reported.
+
+Resolve them — both are read-only queries, and neither creates the directory:
+
+```sh
+python <plugin>/scripts/virtuoso_registry.py --root . overlays
+python <plugin>/scripts/virtuoso_registry.py --root . overlays --for skills/<skill>/SKILL.md
+```
+
+Findings are informational or warnings, never errors: an overlay problem is the
+project's to fix and must not turn a working registry into one that reports
+`repair-needed`, because repair has nothing to propose for a file the project owns.
+
+| finding | meaning |
+|---|---|
+| `overlays-absent` | the role is registered; the directory does not exist yet |
+| `overlay-orphan` | the overlay mirrors no shipped file and is never applied |
+| `overlay-case-mismatch` | it differs from a shipped file only in case |
+| `overlay-outside-mirror` | it is not under `skills/` or `agents/`, so nothing addresses it |
+| `overlays-external` | the role registers an external identifier; overlays are read as files |
+| `overlays-writable` / `overlays-has-writers` | registered writable; register it read-only |
+
 ## Preflight status contract (items 10, 11)
 
-`scripts/virtuoso_preflight.py` always prints two parseable lines:
+`scripts/virtuoso_preflight.py` always prints two parseable lines, plus a third
+line reporting overlays:
 
 ```
 virtuoso-status: <status>
 writes: <N>
+overlays: <state>
 ```
 
 | status | meaning | writes |
@@ -236,8 +305,21 @@ writes: <N>
 | `none` | nothing here and nothing to adopt | 0 |
 | `failed` | could not complete; nothing partial was written | 0 |
 
-`--json` adds the full structured result. Modes: `check` (read-only; `detect` is
-a retained alias), `adopt`, `create --authorize`, `repair [--apply]`.
+The `overlays:` line is printed in every mode and survives `--quiet`. It always
+states a result — `not registered` for a project that never declared the role —
+because no output is indistinguishable from an all-clear, which is how a project
+ends up believing its overlays are in force while nothing reads them.
+
+| overlay state | meaning |
+|---|---|
+| `not registered` | the project declares no `overlays` role |
+| `registered but absent (<path>)` | declared; the directory is not there |
+| `registered, none present (<path>)` | the directory exists and holds nothing that applies |
+| `<N> applied (<path>)` | N overlays mirror a shipped file; findings are appended |
+
+`--json` adds the full structured result, including the resolved overlays and the
+safety floor they may not loosen. Modes: `check` (read-only; `detect` is a
+retained alias), `adopt`, `create --authorize`, `repair [--apply]`.
 
 ## Locating the plugin
 

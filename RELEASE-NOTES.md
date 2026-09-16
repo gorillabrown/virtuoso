@@ -1,5 +1,98 @@
 # Virtuoso Release Notes
 
+## v1.7.0 (2026-09-16) — project overlays
+
+**Additive. No breaking changes; registry schema stays at v2.** A project that needed a
+shipped skill or agent to behave differently had one option: copy the whole file into its
+own tree and edit it. The fork then drifted from the plugin in both directions — the plugin
+gained rules the fork never saw, the fork gained rules the plugin never saw — and both
+loaded at once, so the agent read two contradictory copies of the same instruction and
+followed whichever it hit first. The existing overlay mechanism covered exactly one skill,
+by telling the caller to paste extra rules into a dispatch prompt, which saved nothing.
+
+An **overlay** replaces the fork. The project registers one optional, read-only directory;
+inside it, a file at the same relative path as a shipped file carries only that project's
+additions. The shipped file stays the plugin's. Nothing is duplicated.
+
+### The `overlays` role
+
+```jsonc
+"overlays": { "path": "Virtuoso/overlays", "provider": "directory",
+              "authority": "reference", "mutability": "read-only", "allowedWriters": [] }
+```
+
+- **Opt-in.** `overlays` is deliberately absent from `CREATE_ROLE_ORDER`, so `create`
+  neither registers the role nor lays down a directory a project never asked for.
+- **Read-only by the machinery already here.** Registering it `read-only` with no
+  `allowedWriters` means the guard that already refuses writes to a read-only role refuses
+  these too. No new write path was added, because none should exist: overlays are the
+  project's files.
+- **Case-exact on every filesystem.** Lookup compares each path segment against the names
+  the filesystem reports rather than trusting a case-folding existence check, so
+  `skills/Epic/SKILL.md` can no longer resolve on Windows and macOS and then silently
+  resolve to nothing on Linux. A case-only mismatch is reported everywhere.
+- **Only `skills/` and `agents/` are addressable.** An overlay elsewhere mirrors nothing and
+  is reported rather than quietly ignored.
+- **Bounded.** An overlay adds to a shipped instruction and wins on conflict, with one
+  exception: it may not loosen a shared-contract safety rule — registry resolution,
+  read-only preflight, write permission, git safety, provenance, or the issue contract.
+  Anyone who can write the project folder can write an overlay; without that floor, that is
+  also permission to switch off the plugin's own guards. This narrows what an overlay can
+  do relative to a plain "the overlay wins" rule, deliberately.
+
+### Reading them
+
+`virtuoso_registry.py overlays` lists what applies, what is inert, and why.
+`overlays --for <path>` resolves one shipped file's overlay; "there is no overlay" is an
+answer with exit 0, not a failure. Both are queries and neither creates the directory.
+
+Overlay findings are informational or warnings, never errors: an overlay problem is the
+project's to fix and must not turn a working registry into one reporting `repair-needed`,
+because repair has nothing to propose for a file the project owns.
+
+### The clause, in every skill and agent
+
+All 15 skills and all 10 agents carry the same anchored clause telling them to read their
+own overlay. `validate.py` enumerates both rosters **from the folders on disk**, not from a
+list kept in the validator — so a sixteenth skill cannot ship without the clause, and the
+clause has one home (`tools/governance/overlays.py`) that CI compares shipped bodies
+against, so "present" and "still says the same thing" are one check.
+
+### A status line that always says something
+
+Preflight now prints a third parseable line beside `virtuoso-status:` and `writes:`, in
+every mode, surviving `--quiet`:
+
+```
+overlays: not registered
+overlays: registered but absent (<path>)
+overlays: registered, none present (<path>)
+overlays: 2 applied (<path>); 3 finding(s)
+```
+
+It states a result even when there is nothing to report. Printing nothing would have been
+indistinguishable from an all-clear — which is exactly how a project ends up believing its
+overlays are in force while nothing is reading them. The published two-line contract is
+unchanged; callers that parse it keep working.
+
+### Release integrity
+
+- **Every install surface is bumped together.** `.codex-plugin/plugin.json` is a shipped
+  manifest again (it had been swept into `.gitignore` as local WIP) and is declared in
+  `.version-bump.json`, so a release advertises one version everywhere. `validate.py` fails
+  when two install surfaces disagree, and checks every hook file under `hooks/` — again by
+  scanning the folder — for a read-only `SessionStart`.
+- **The release commit stages what the bumper wrote.** `release.py` derived its dirty-tree
+  tripwire from `.version-bump.json` but staged a hand-listed pair, so a newly declared
+  manifest would be bumped and then left out of the release commit. Staging now uses the
+  same derived set the tripwire checks.
+- **Agent memory names are audited against disk *and* git's index.** A memory directory
+  spelled with the wrong case reads back as correct on Windows and macOS and resolves to
+  nothing on Linux, where the agent then starts every session with an empty memory and says
+  so to no one. Git's index records the spelling it was given, so it catches a case-only
+  rename the filesystem hides; the filesystem catches what was never added. The audit found
+  a live gap: `Hippocrates` declared persistent memory and documented no location for it.
+
 ## v1.6.0 (2026-09-08) — governed work-item creation
 
 **Additive. No breaking changes; registry schema stays at v2.** A specification on disk is

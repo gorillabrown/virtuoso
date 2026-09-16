@@ -11,10 +11,14 @@ Four separate operations, each with one job (redesign item 3):
   create   initialize a new workspace. Requires --authorize (item 3).
   repair   preview proposed repairs; apply them only with --apply (items 7, 8).
 
-Every invocation prints the two machine-readable contract lines, quiet or not:
+Every invocation prints the machine-readable status lines, quiet or not:
 
     virtuoso-status: <status>
     writes: <N>
+    overlays: <state>
+
+The overlay line always states a result — `not registered` when the project never
+declared the role — so silence can never be read as "overlays are in force".
 
 `--json` additionally emits the full structured result (item 11): status, mode,
 writes, files written, findings, and the resolved role table. The complete list
@@ -35,9 +39,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.governance import (  # noqa: E402
-    backup as backup_mod, discovery, install, policy as policy_mod, providers,
-    registry as registry_mod, repair as repair_mod, result as result_mod, schema,
-    textio, workspace,
+    backup as backup_mod, discovery, install, overlays as overlays_mod,
+    policy as policy_mod, providers, registry as registry_mod, repair as repair_mod,
+    result as result_mod, schema, textio, workspace,
 )
 from tools.governance.errors import GovernanceError  # noqa: E402
 
@@ -95,6 +99,26 @@ def _status_for(reg: registry_mod.Registry) -> str:
 def _is_registered(root: str) -> bool:
     return os.path.isfile(os.path.join(root, *schema.MANIFEST_RELPATH.split("/"))) or \
         os.path.isfile(os.path.join(root, *schema.MARKER_RELPATH.split("/")))
+
+
+def _overlay_status(root: str) -> overlays_mod.OverlayStatus:
+    """The project's overlay state. Read-only and deliberately total: a registry
+    this cannot read reports `not registered`, never an exception. Reporting
+    overlays is a side observation, and a side observation must not be able to
+    fail the operation the user actually asked for."""
+    try:
+        return overlays_mod.audit(registry_mod.load(root), PLUGIN_ROOT)
+    except (GovernanceError, OSError, ValueError):
+        return overlays_mod.OverlayStatus()
+
+
+def _attach_overlays(outcome: result_mod.Result, root: str) -> result_mod.Result:
+    """Give every outcome, in every mode, an overlay line. Attached in exactly one
+    place so no branch — including the error branch — can be the one that forgets."""
+    status = _overlay_status(root)
+    outcome.overlays = status.state
+    outcome.overlays_detail = status.as_dict()
+    return outcome
 
 
 # --- modes -------------------------------------------------------------------
@@ -306,15 +330,18 @@ def preflight(root: str, mode: str = "check", *, quiet: bool = False,
         outcome = result_mod.Result(
             status=result_mod.FAILED, mode=mode, root=root, message=str(exc),
             error=exc.as_dict(), plugin_version=plugin_version())
+    _attach_overlays(outcome, root)
     outcome.assert_contract()
     return outcome
 
 
 def emit(outcome: result_mod.Result, *, quiet: bool, as_json: bool) -> None:
-    # The two contract lines are EXEMPT from --quiet: they are what hooks and
-    # tools parse, and the SessionStart hook runs quiet.
+    # The status lines are EXEMPT from --quiet: they are what hooks and tools
+    # parse, and the SessionStart hook runs quiet. The overlay line is printed
+    # unconditionally for the same reason the others are.
     for line in outcome.contract_lines():
         print(line)
+    print(outcome.overlay_line())
     if as_json:
         print(outcome.to_json())
         return

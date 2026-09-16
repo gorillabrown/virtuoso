@@ -5,6 +5,16 @@ model: haiku
 color: green
 ---
 
+<!-- virtuoso-overlay-clause v1 -->
+**Project overlay.** If the registry declares an `overlays` role, read the overlay that mirrors
+this file's own path beneath it — `skills/<skill>/SKILL.md` for a skill, `agents/<Agent>.md` for
+an agent — and apply it on top of this file. Resolve it with the registry helper's `overlays`
+subcommand; never fork or edit a shipped file to carry a project's rules. The overlay is
+additive and wins on conflict, with one exception: it may not loosen a shared-contract safety
+rule (registry resolution, read-only preflight, write permission, git safety, provenance, the
+issue contract). No `overlays` role, an absent overlays directory, and no matching overlay file
+all mean the same thing — proceed on this file alone.
+
 # Doer Agent — Mechanical Scope
 
 **Task tier:** mechanical

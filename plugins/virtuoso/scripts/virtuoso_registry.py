@@ -10,6 +10,7 @@ the connector result and resolves recovery only on success).
 Subcommands:
   roles                     list every registered role and how it resolves
   resolve <role>            print one role's absolute path or external identifier
+  overlays [--for PATH]     the project's overlays for shipped skills and agents
   provider [--role R]       describe the provider serving a role, and its capabilities
   items [--all]             list work items from the work register
   next                      the next eligible work item
@@ -40,13 +41,16 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.governance import (  # noqa: E402
-    policy as policy_mod, providers, registry as registry_mod, schema, textio,
+    overlays as overlays_mod, policy as policy_mod, providers, registry as registry_mod,
+    schema, textio,
 )
 from tools.governance.errors import CapabilityError, GovernanceError, RoleNotRegistered  # noqa: E402
 from tools.governance import dependencies, integrity, repostate  # noqa: E402
 from tools.governance.providers import (  # noqa: E402
     base as provider_base, kpi, recovery, snapshot_provider,
 )
+
+PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 EXIT_OK = 0
 EXIT_UNANSWERABLE = 3
@@ -85,6 +89,49 @@ def cmd_roles(args) -> int:
 def cmd_resolve(args) -> int:
     reg = _load(args.root)
     print(reg.resolve(args.role))
+    return EXIT_OK
+
+
+def cmd_overlays(args) -> int:
+    """Resolve the project's overlays for shipped skills and agents. Read-only.
+
+    Always answers. An unregistered role, an absent directory, and no matching file
+    are three different messages and all of them are a result — printing nothing
+    would be indistinguishable from "everything is applied".
+    """
+    reg = _load(args.root)
+    status = overlays_mod.audit(reg, PLUGIN_ROOT)
+
+    if args.for_path:
+        mirror = overlays_mod.mirror_path(args.for_path)
+        if not mirror:
+            print("--for %r is not a usable mirror path: give a path relative to the plugin "
+                  "root, such as skills/<skill>/SKILL.md or agents/<Agent>.md"
+                  % args.for_path, file=sys.stderr)
+            return EXIT_UNANSWERABLE
+        overlay = overlays_mod.find(reg, PLUGIN_ROOT, mirror)
+        payload = {"mirror": mirror, "overlay": overlay.as_dict() if overlay else None,
+                   "safetyFloor": list(overlays_mod.SAFETY_FLOOR), "line": status.line()}
+        if args.as_json:
+            return _emit(payload, True)
+        if overlay is None:
+            print("no overlay for %s (%s)" % (mirror, status.line()))
+            return EXIT_OK
+        print(overlay.path)
+        return EXIT_OK
+
+    if args.as_json:
+        return _emit(status.as_dict(), True)
+
+    print(status.line())
+    for overlay in status.overlays:
+        print("  %-10s %s" % ("applies" if overlay.mirrors_shipped_file else "inert",
+                              overlay.mirror))
+    for finding in status.findings:
+        print("  [%s] %s" % (finding.severity, finding.message))
+    if status.applied:
+        print("\nan overlay may not loosen these shared-contract rules: %s"
+              % ", ".join(overlays_mod.SAFETY_FLOOR))
     return EXIT_OK
 
 
@@ -420,6 +467,11 @@ def build_parser() -> argparse.ArgumentParser:
     resolve = sub.add_parser("resolve", parents=[common])
     resolve.add_argument("role")
     resolve.set_defaults(func=cmd_resolve)
+
+    overlays = sub.add_parser("overlays", parents=[common])
+    overlays.add_argument("--for", dest="for_path", default="",
+                          help="a shipped file's plugin-relative path, e.g. agents/<Agent>.md")
+    overlays.set_defaults(func=cmd_overlays)
 
     provider = sub.add_parser("provider", parents=[common])
     provider.add_argument("--role", default="workRegister")

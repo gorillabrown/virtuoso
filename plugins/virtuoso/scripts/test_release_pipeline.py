@@ -84,9 +84,21 @@ def test_porcelain_paths_immune_to_first_line_strip():
 
 def test_tripwire_derivation_matches_bump_config():
     # Calls the REAL derivation (SR-1 loop 2: an inline re-implementation would let the
-    # actual code regress unnoticed).
+    # actual code regress unnoticed). Every per-host install manifest is in the set:
+    # one left out is a host advertising the previous release.
     assert rp._expected_release_files() == {"plugins/virtuoso/.claude-plugin/plugin.json",
+                                            "plugins/virtuoso/.codex-plugin/plugin.json",
                                             ".claude-plugin/marketplace.json"}
+
+
+def test_the_release_commit_stages_every_file_the_bumper_wrote():
+    """The tripwire set and the staged set must be the same list. They were two
+    lists, and the second one was short by a manifest — so a release could bump a
+    host's manifest and then commit without it."""
+    source = (Path(rp.__file__).read_text(encoding="utf-8")
+              if hasattr(rp, "__file__") else "")
+    assert 'run(["git", "add", "--", *sorted(expected)])' in source
+    assert 'run(["git", "add", PLUGIN_JSON, MARKETPLACE_JSON])' not in source
 
 
 def test_release_fixture_writers_explicitly_authorize_create(tmp_path):

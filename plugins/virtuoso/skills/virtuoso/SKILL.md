@@ -24,6 +24,16 @@ description: >
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
 - **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
+<!-- virtuoso-overlay-clause v1 -->
+**Project overlay.** If the registry declares an `overlays` role, read the overlay that mirrors
+this file's own path beneath it — `skills/<skill>/SKILL.md` for a skill, `agents/<Agent>.md` for
+an agent — and apply it on top of this file. Resolve it with the registry helper's `overlays`
+subcommand; never fork or edit a shipped file to carry a project's rules. The overlay is
+additive and wins on conflict, with one exception: it may not loosen a shared-contract safety
+rule (registry resolution, read-only preflight, write permission, git safety, provenance, the
+issue contract). No `overlays` role, an absent overlays directory, and no matching overlay file
+all mean the same thing — proceed on this file alone.
+
 # Virtuoso
 
 You are about to execute a multi-step task. This skill keeps you disciplined throughout
@@ -1021,23 +1031,33 @@ Before skipping narration, skipping a reprint, or taking a shortcut, check this 
 
 ## Project-Specific Overlays
 
-This skill provides the generic execution framework. Projects can layer additional
-requirements on top without modifying this skill.
+This skill provides the generic execution framework. A project layers its own requirements
+on top of it without copying or editing this file. Copying it forks it, and a fork drifts
+from the plugin in both directions while both copies load at once.
 
-**How to add a project overlay:**
-In your dispatch prompt or agent brief, add an `EXECUTION RULES` block that references
-this skill and adds project-specific constraints. Example:
+**The durable mechanism — a registered overlay.** The project registers an `overlays` role
+and puts its additions at this file's own mirror path, `skills/virtuoso/SKILL.md`, beneath
+that directory. Every session reads it automatically; nothing has to be restated per
+dispatch. Check what is in force:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . overlays
+
+The overlay inherits everything here and adds to it, winning on conflict — except that it
+may not loosen a shared-contract safety rule. See the overlay clause at the top of this file
+and the plugin's `references/registry-contract.md`.
+
+**For one run only — an `EXECUTION RULES` block.** When a constraint applies to a single
+dispatch rather than to the project, state it in the dispatch prompt or agent brief instead
+of registering it:
 
 ```
-### EXECUTION RULES (Virtuoso + project overlay)
-- All rules from Virtuoso skill apply
-- Additional: clear __pycache__ after every engine edit
-- Additional: run segmented 4-shard test suite, not single pytest command
-- Additional: include worker utilization in summary (which child workers were used)
+### EXECUTION RULES (Virtuoso + this dispatch)
+- All rules from the Virtuoso skill and any registered overlay apply
+- Additional: <constraint that is true for this run only>
 ```
 
-The overlay inherits everything from this skill and adds to it. The skill handles the
-universal execution discipline; the overlay handles project-specific requirements.
+A constraint that turns out to be true every time belongs in the registered overlay, not
+re-pasted into every brief.
 
 ---
 

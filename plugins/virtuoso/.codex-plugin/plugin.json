@@ -6,5 +6,8 @@
   "homepage": "https://github.com/gorillabrown/virtuoso",
   "repository": "https://github.com/gorillabrown/virtuoso",
   "license": "MIT",
-  "keywords": ["governance", "roadmap", "sprint", "dispatch", "cowork", "workflow"]
+  "keywords": ["governance", "roadmap", "sprint", "dispatch", "workflow"],
+  "skills": "./skills",
+  "hooks": "./hooks/hooks-codex.json",
+  "interface": { "commands": [] }
 }

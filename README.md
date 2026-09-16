@@ -81,6 +81,32 @@ The rules every skill follows:
    id is never reported as a missing file.
 7. **Project extensions live under `x-`** and survive plugin upgrades verbatim.
 
+### Project overlays
+
+A project that needs a shipped skill or agent to behave differently registers an optional,
+read-only `overlays` directory instead of forking the file. Inside it, a file at the same
+relative path as a shipped one carries that project's additions — `skills/<skill>/SKILL.md`
+for a skill, `agents/<Agent>.md` for an agent — and every skill and agent reads its own
+overlay on top of itself.
+
+```jsonc
+"overlays": { "path": "Virtuoso/overlays", "provider": "directory",
+              "authority": "reference", "mutability": "read-only", "allowedWriters": [] }
+```
+
+Opt-in: `create` neither registers the role nor makes the directory, and an unregistered
+role, an absent directory, and no matching file all mean "use the shipped file alone".
+Lookup is case-exact on every filesystem, so an overlay cannot work on one platform and
+silently vanish on another. An overlay adds to a shipped instruction and wins on conflict,
+with one exception — it may not loosen a shared-contract safety rule (registry resolution,
+read-only preflight, write permission, git safety, provenance, the issue contract), because
+anyone who can write the project folder can write an overlay.
+
+```sh
+python <plugin>/scripts/virtuoso_registry.py --root . overlays
+python <plugin>/scripts/virtuoso_registry.py --root . overlays --for agents/<Agent>.md
+```
+
 Full contract: [`plugins/virtuoso/references/registry-contract.md`](plugins/virtuoso/references/registry-contract.md).
 
 ## Four separate operations
@@ -179,7 +205,7 @@ located rather than guessing a path.
 | Script | Purpose |
 |---|---|
 | `virtuoso_preflight.py` | check / adopt / create / repair, plus `--check-document` |
-| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `provider`, `items`, `next`, `kpis`, `closeout`, `repo`, `recovery`; and the explicit writers `snapshot`, `closeout --prepare`, `create-item`, `mutation-plan`, `mutation-confirm` |
+| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `overlays`, `provider`, `items`, `next`, `kpis`, `closeout`, `repo`, `recovery`; and the explicit writers `snapshot`, `closeout --prepare`, `create-item`, `mutation-plan`, `mutation-confirm` |
 | `generate_cockpit.py` | the planning cockpit, read from the configured provider |
 | `build_register_report.py` | the generated spreadsheet report (declared generated roles only) |
 | `validate.py` | structural validation of the plugin itself |

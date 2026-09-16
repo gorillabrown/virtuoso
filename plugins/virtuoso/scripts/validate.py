@@ -15,6 +15,8 @@ portability and single-authority rules the v2 redesign introduced (item 99):
   * retired tools still referenced anywhere
   * unsafe fallback path creation (a helper that creates a directory to answer
     a query)
+  * the project-overlay clause, in every shipped skill and agent
+  * agent memory directory names, against both disk and git's index
 
 Run from anywhere: paths resolve from __file__.
 """
@@ -23,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,10 +33,14 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import skill_rules  # noqa: E402
 
-from tools.governance import result as result_mod  # noqa: E402
+from tools.governance import overlays as overlays_mod, result as result_mod  # noqa: E402
 
 fails: list[str] = []
 oks: list[str] = []
+
+#: The per-host plugin manifests this plugin ships. Each is an install surface,
+#: and every one of them must advertise the same version.
+INSTALL_MANIFESTS = (".claude-plugin/plugin.json", ".codex-plugin/plugin.json")
 
 TEXT_SUFFIXES = (".md", ".json", ".py", ".txt", ".yaml", ".yml", ".ps1", ".sh")
 SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", ".venv", "node_modules"}
@@ -170,12 +177,13 @@ def check_frontmatter_and_manifests(skills_dir: str) -> list[str]:
             fail("skill %s: name %r != folder" % (name, match.group(1).strip()))
     ok("%d skills; frontmatter/folder names checked" % len(skill_names))
 
-    manifests = [
-        (".claude-plugin/plugin.json", os.path.join(ROOT, ".claude-plugin", "plugin.json")),
+    manifests = [(rel, os.path.join(ROOT, *rel.split("/"))) for rel in INSTALL_MANIFESTS]
+    manifests += [
         (".claude-plugin/marketplace.json",
          os.path.join(ROOT, "..", "..", ".claude-plugin", "marketplace.json")),
         ("hooks/hooks.json", os.path.join(ROOT, "hooks", "hooks.json")),
     ]
+    versions = {}
     for rel, path in manifests:
         try:
             data = json.load(open(path, encoding="utf-8"))
@@ -184,36 +192,62 @@ def check_frontmatter_and_manifests(skills_dir: str) -> list[str]:
             fail("json INVALID: %s: %s" % (rel, exc))
             continue
         if rel.endswith("plugin.json") and data.get("name") != "virtuoso":
-            fail("plugin name = %r" % data.get("name"))
+            fail("plugin name = %r in %s" % (data.get("name"), rel))
+        if rel in INSTALL_MANIFESTS:
+            versions[rel] = data.get("version")
         if rel.endswith("marketplace.json"):
             plugins = data.get("plugins", [])
+            versions[rel] = plugins[0].get("version") if plugins else None
             if not (plugins and plugins[0].get("source") == "./plugins/virtuoso"):
                 fail("marketplace source = %r (want './plugins/virtuoso')"
                      % (plugins and plugins[0].get("source")))
+
+    # Every install surface advertises one version. A host that installs from a
+    # manifest left behind at the previous release ships last release's plugin
+    # while every other surface claims the new one.
+    distinct = sorted({v for v in versions.values() if v is not None})
+    if len(distinct) > 1 or None in versions.values():
+        fail("install surfaces advertise different versions: %s"
+             % {k: v for k, v in sorted(versions.items())})
+    elif distinct:
+        ok("%d install surface(s) all advertise %s" % (len(versions), distinct[0]))
     return skill_names
 
 
 def check_session_hook() -> None:
-    """The SessionStart hook must run a read-only mode (item 2)."""
-    path = os.path.join(ROOT, "hooks", "hooks.json")
-    try:
-        data = json.load(open(path, encoding="utf-8"))
-    except Exception as exc:  # noqa: BLE001
-        fail("hooks.json unreadable: %s" % exc)
+    """Every shipped hook file's SessionStart command must run a read-only mode (item 2).
+
+    The hook files are enumerated from the folder rather than named here: the
+    plugin ships one install surface per host, each with its own hook file, and a
+    rule that only covers the ones this function remembers is a rule the next
+    surface ships without.
+    """
+    hooks_dir = os.path.join(ROOT, "hooks")
+    hook_files = sorted(f for f in os.listdir(hooks_dir)) if os.path.isdir(hooks_dir) else []
+    hook_files = [f for f in hook_files if f.endswith(".json")]
+    if not hook_files:
+        fail("no hook configuration found under hooks/")
         return
-    commands = [h.get("command", "")
-                for entry in data.get("hooks", {}).get("SessionStart", [])
-                for h in entry.get("hooks", [])]
-    if not commands:
-        fail("no SessionStart hook command found")
-        return
-    for command in commands:
-        mode = re.search(r"--mode\s+(\S+)", command)
-        if not mode or mode.group(1) not in ("check", "detect"):
-            fail("SessionStart hook runs --mode %s; it must be read-only (check/detect)"
-                 % (mode.group(1) if mode else "<unset>"))
+
+    for name in hook_files:
+        try:
+            data = json.load(open(os.path.join(hooks_dir, name), encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            fail("hooks/%s unreadable: %s" % (name, exc))
             return
-    ok("SessionStart hook runs a read-only mode")
+        commands = [h.get("command", "")
+                    for entry in data.get("hooks", {}).get("SessionStart", [])
+                    for h in entry.get("hooks", [])]
+        if not commands:
+            fail("hooks/%s declares no SessionStart hook command" % name)
+            return
+        for command in commands:
+            mode = re.search(r"--mode\s+(\S+)", command)
+            if not mode or mode.group(1) not in ("check", "detect"):
+                fail("hooks/%s runs SessionStart with --mode %s; it must be read-only "
+                     "(check/detect)" % (name, mode.group(1) if mode else "<unset>"))
+                return
+    ok("%d hook file(s); every SessionStart command runs a read-only mode" % len(hook_files))
 
 
 def check_relative_resources() -> None:
@@ -431,6 +465,143 @@ def check_commands() -> None:
     ok("%d commands; all map to skills" % len(commands))
 
 
+#: The one file under agents/ that is guidance about agents, not an agent.
+AGENT_GUIDE = "AGENT_MEMORY_GUIDE.md"
+#: A documented memory directory, e.g. `.claude/agent-memory/socrates/`.
+MEMORY_DIR_RE = re.compile(r"agent-memory/([^/`\s]+)/")
+#: The agent frontmatter field that turns persistent memory on.
+MEMORY_FIELD_RE = re.compile(r"(?m)^memory:\s*(\S+)\s*$")
+
+
+def shipped_skill_names() -> list[str]:
+    """Skill folders, read off disk."""
+    skills_dir = os.path.join(ROOT, "skills")
+    return sorted(d for d in os.listdir(skills_dir)
+                  if os.path.isdir(os.path.join(skills_dir, d)))
+
+
+def shipped_agent_files() -> list[str]:
+    """Agent bodies, read off disk. The memory guide is documentation, not an agent."""
+    agents_dir = os.path.join(ROOT, "agents")
+    if not os.path.isdir(agents_dir):
+        return []
+    return sorted(f for f in os.listdir(agents_dir)
+                  if f.endswith(".md") and f != AGENT_GUIDE)
+
+
+def check_overlay_clause() -> None:
+    """Every shipped skill and agent carries the project-overlay clause, verbatim.
+
+    Both rosters are enumerated from the folders, never from a list kept here. A
+    list is exactly the thing a sixteenth skill gets added without touching — and
+    the clause it would then be missing is the one telling it to read its project's
+    overlay instead of being forked. Comparing against
+    ``overlays.OVERLAY_CLAUSE`` rather than a second copy of the words means the
+    clause has one home, so "present" and "still says the same thing" are the same
+    check.
+    """
+    targets = ["skills/%s/SKILL.md" % name for name in shipped_skill_names()]
+    targets += ["agents/%s" % name for name in shipped_agent_files()]
+    if not targets:
+        fail("no skills or agents found to check for the overlay clause")
+        return
+
+    missing, drifted = [], []
+    for rel in targets:
+        try:
+            with open(os.path.join(ROOT, *rel.split("/")), encoding="utf-8") as handle:
+                text = handle.read()
+        except OSError:
+            missing.append(rel)
+            continue
+        if overlays_mod.CLAUSE_MARKER not in text:
+            missing.append(rel)
+        elif overlays_mod.OVERLAY_CLAUSE not in text:
+            drifted.append(rel)
+
+    if missing:
+        fail("overlay clause missing from: %s" % missing)
+    if drifted:
+        fail("overlay clause has drifted from tools/governance/overlays.py in: %s" % drifted)
+    if not missing and not drifted:
+        ok("overlay clause present and verbatim in %d skill(s) and %d agent(s)"
+           % (len(shipped_skill_names()), len(shipped_agent_files())))
+
+
+def _git_tracked(relative_dir: str) -> list[str] | None:
+    """Paths git's index carries under ``relative_dir``, or ``None`` when there is
+    no index to ask (an export, a tarball, git absent)."""
+    try:
+        completed = subprocess.run(
+            ["git", "-C", ROOT, "ls-files", "-z", "--", relative_dir],
+            capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    return [p for p in completed.stdout.split("\0") if p]
+
+
+def check_agent_memory_names() -> None:
+    """Agent memory directory names must be the agent's own name, lowercased.
+
+    Audited against two records, because either one alone can lie. The filesystem
+    answers case-insensitively on Windows and on a default macOS volume, so a
+    memory directory spelled with the wrong case reads back as correct there and
+    resolves to nothing on Linux — where the agent then starts every session with
+    an empty memory and says nothing about it. Git's index stores the case it was
+    given, so it catches a case-only rename the filesystem hides; but it only knows
+    tracked files, so it cannot see one that was never added. Agreement between the
+    two is the check.
+    """
+    problems = []
+    agent_files = shipped_agent_files()
+    for name in agent_files:
+        stem = name[:-3]
+        rel = "agents/%s" % name
+        with open(os.path.join(ROOT, "agents", name), encoding="utf-8") as handle:
+            text = handle.read()
+
+        declared = re.search(r"(?m)^name:\s*(.+?)\s*$", text)
+        if not declared:
+            problems.append("%s: no name: field" % rel)
+            continue
+        if declared.group(1).strip() != stem:
+            problems.append("%s: frontmatter name %r != filename"
+                            % (rel, declared.group(1).strip()))
+
+        directories = set(MEMORY_DIR_RE.findall(text))
+        wrong = sorted(d for d in directories if d != stem.lower())
+        if wrong:
+            problems.append("%s: memory directory %s should be %r"
+                            % (rel, wrong, stem.lower()))
+        if MEMORY_FIELD_RE.search(text) and not directories:
+            problems.append("%s: declares a memory: field but documents no memory location, "
+                            "so nothing tells the agent where to read or write it" % rel)
+
+    tracked = _git_tracked("agents")
+    if tracked is None:
+        note = " (git index unavailable; disk only)"
+    else:
+        note = " (disk and git index agree)"
+        on_disk = set(agent_files)
+        if os.path.isfile(os.path.join(ROOT, "agents", AGENT_GUIDE)):
+            on_disk.add(AGENT_GUIDE)
+        in_index = {p.split("/")[-1] for p in tracked}
+        # Compared as exact strings: a case-only rename is invisible to the
+        # filesystem on Windows and macOS but plainly visible here.
+        for missing in sorted(on_disk - in_index):
+            problems.append("agents/%s is on disk but not in git's index (untracked, or "
+                            "tracked under a different spelling)" % missing)
+        for stale in sorted(in_index - on_disk):
+            problems.append("agents/%s is in git's index but not on disk under that exact "
+                            "name" % stale)
+
+    (ok if not problems else fail)(
+        "%d agent memory name(s) audited%s" % (len(agent_files), note) if not problems
+        else "agent memory name audit: %s" % problems)
+
+
 def check_promoted_rule_anchors() -> None:
     """Every promoted rule must still be present in its skill body.
 
@@ -449,6 +620,8 @@ def check_promoted_rule_anchors() -> None:
 def main() -> int:
     skill_names = check_frontmatter_and_manifests(os.path.join(ROOT, "skills"))
     check_session_hook()
+    check_overlay_clause()
+    check_agent_memory_names()
     check_promoted_rule_anchors()
     check_text_scans(skill_names)
     check_relative_resources()
