@@ -176,7 +176,8 @@ the project's to fix and `repair` has nothing to propose for a file the plugin d
 | finding | severity | meaning |
 |---|---|---|
 | `pairing-body-missing` | warning | `policy.<key>` declares `<id>`; the overlay has no section for it |
-| `pairing-body-orphan` | info | the overlay has a section for `<id>`, which no policy key declares |
+| ~~`pairing-body-orphan`~~ | — | **Not implemented.** Dropped during Stage 3; see the implementation notes |
+| `pairing-body-stub` | warning | the section exists but is empty, or still the scaffold's placeholder |
 | `pairing-mirror-unregistered` | info | ids are declared but no `overlays` role exists to hold their bodies |
 
 **Plugin-side half.** `validate.py` asserts every `Pairing.mirror` names a file the plugin
@@ -192,9 +193,10 @@ The `Pairing` shape leaves room for a role-sourced variant later; this stage doe
 ### Done when
 
 - A project declaring `rubric.extensions: ["db-migration"]` with no body sees
-  `pairing-body-missing` in the session-start overlay line and in `overlays`.
+  `pairing-body-missing` named in the session-start overlay line and in `overlays`, in
+  every registration state — including with no `overlays` role and with the directory
+  absent.
 - Adding the heading clears it with no other change.
-- An undeclared body reports `pairing-body-orphan` and nothing else.
 - `validate.py` fails if `PAIRINGS` names a path the plugin does not ship.
 
 ---
@@ -264,7 +266,9 @@ keystrokes. Recorded so the trade stays visible if the friction later proves rea
 - `project-profile` reports an unconfigured project's full specificity surface without
   writing anything.
 - An interview run produces a preview; nothing is written without approval.
-- Approval writes only policy, transactionally, with a backup.
+- Approval writes only policy, transactionally, with a backup — through
+  `virtuoso_registry.py policy-set <key> --value-json <json> --apply`, which validates the
+  resulting policy, backs the manifest up, and rolls back if the registry would not reload.
 - `overlays --scaffold` emits a skeleton carrying one section per declared id, and
   `writes: 0` holds for every invocation.
 - 16 skills; the clause check covers the new one with no edit to the validator.
@@ -297,7 +301,7 @@ mid-release:
 | Overlayable references become a way to quietly restate a shared contract | `SAFETY_FLOOR` already forbids loosening one; `registry-contract.md` is excluded outright; `check_single_rubric` still guards the plugin's own tree |
 | Projects push enforceable constraints into prose because prose is easier | The corollary is stated in the contract reference, and Stage 3's interview routes each answer to a *declaration* first |
 | Clause v2 regeneration silently drops a file | CI compares all 25 bodies against the single constant; a missed file fails the build |
-| The pairing convention (a heading containing the id) is too loose or too strict | Documented beside the extension table; `pairing-body-orphan` catches the strict direction, `pairing-body-missing` the loose one |
+| The pairing convention is too loose or too strict | Documented beside the extension table; a body must be a single-line depth 2–4 heading outside a code fence, matched case-insensitively, with prose under it. The reverse direction is deliberately unchecked — see the implementation notes |
 | Stage 3's interview grows unbounded | The catalogue is fixed and each entry names the one declaration it writes; a question with no declaration does not belong in it |
 
 
@@ -327,3 +331,42 @@ clause check enumerates the skills folder rather than a list. The three edit sit
 listed in advance (marketplace description, README table, the `len(found) == 15` hardcode in
 `test_overlays.py`) were the only ones, and the hardcode is now a comparison against the
 folder contents.
+
+### Found by reviewing the release rather than the plan (2026-09-17)
+
+Five things the completion report claimed were not true when measured on Windows, which
+is the platform this plugin is maintained from. All five are fixed in the release that
+actually shipped.
+
+The suite was green on Linux only. A fixture wrote two overlay paths differing only in
+case, which are one file on NTFS and on a default macOS volume, so five tests asserted
+against content the fixture had not produced. `windows-latest` had been red since v1.6.0
+on an unrelated cross-drive path, so it had stopped working as a gate and absorbed these
+without anyone reading it. A red gate is not a gate.
+
+The documented redirect produced an unreadable overlay. `--scaffold --for X > X` is the
+whole write, and on Windows it wrote a legacy code page under pwsh and UTF-16 under
+PowerShell 5.1. Both made `read_text` return `None`, and the audit then reported
+`pairing-body-missing` about a file carrying exactly the right heading. Scaffolds are now
+emitted as UTF-8 bytes, a BOM is honoured on read, and genuinely undecodable bytes are
+reported as `overlay-unreadable` rather than laundered into a misleading finding.
+
+The status line was silent in two of three states. The finding suffix was computed after
+the early returns, so the two states a project is in the moment it declares its first
+extension reported a clean line. It now applies everywhere and names the undefined ids.
+
+Body detection passed what is not a body: a heading split across a newline, a heading
+inside a fenced code block — including the one this plugin's own rubric shows as an
+example — a section with nothing under it, and, in the other direction, rejected
+`## Deployment` for `deployment`. The empty-section case mattered most: deleting the
+placeholder is the obvious way to clear the stub warning, so the gate still had a second
+route its own remedy could satisfy.
+
+`project-profile` Phase 4 had no mechanism. It is now `policy-set`, built on `apply_plan`
+so a policy write inherits the same transaction repair has.
+
+A version bump is not a release. 1.8.0 was bumped inside feature commits on a branch while
+`origin/main` sat at v1.6.0 and the installed plugin on the maintainer's machine was
+v1.6.0. `release.py` exists because two releases once shipped on red CI; it was bypassed.
+That release step remains outstanding and is the last thing between this work and a
+plugin anyone actually runs.

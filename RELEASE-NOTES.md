@@ -49,15 +49,30 @@ has it:
 | finding | meaning |
 |---|---|
 | `pairing-body-missing` | the id is declared and nothing defines it |
-| `pairing-body-stub` | a section exists but is still the scaffold's placeholder |
+| `pairing-body-stub` | a section exists but is empty, or still the scaffold's placeholder |
+| `overlay-unreadable` | the overlay's bytes are not decodable as text; re-save it as UTF-8 |
 | `pairing-mirror-unregistered` | ids are declared with no `overlays` role to hold them |
 
-A body is a depth 2–4 heading that **starts with** the id. Anchoring is the point:
-`## Why we dropped db-migration` discusses a check and must not satisfy it, and
-`## db-migration-rollback` is a different id. Findings are warnings or information, never
+A body is a depth 2–4 heading that **starts with** the id, on one line, outside any code
+fence, with prose under it. Anchoring is the point: `## Why we dropped db-migration`
+discusses a check and must not satisfy it, and `## db-migration-rollback` is a different
+id. Case is not: `## Deployment` defines `deployment`, because the id is an identifier and
+the heading is prose a person writes. Findings are warnings or information, never
 errors — an undefined check is the project's to write, and no repair the plugin could run
 would write it. `validate.py` rejects a pairing naming a policy key with no documented
 default, a file the plugin does not ship, or one the exclusion covers.
+
+### Writing the declaration half
+
+`virtuoso_registry.py --actor <ceremony> policy-set <key> --value-json <json>` previews a
+policy change; `--apply` writes it. It runs on the same transaction `repair` does — the
+candidate registry is validated before anything is touched, the manifest is backed up, and
+a registry that would not reload cleanly is rolled back. It refuses a key the plugin does
+not document, because a key no ceremony reads is configuration that looks live and is
+inert.
+
+This is what `project-profile` Phase 4 uses. Before it existed, the only way to set a
+policy value was to hand-edit the manifest, which every ceremony is forbidden to do.
 
 ### `project-profile`, the sixteenth skill
 
