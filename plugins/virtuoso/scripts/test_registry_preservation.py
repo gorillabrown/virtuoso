@@ -16,7 +16,7 @@ import pytest
 
 from conftest import PLUGIN_ROOT, snapshot_tree
 from tools.governance import identifiers, readme as readme_mod, registry as registry_mod
-from tools.governance import repair as repair_mod, schema, textio, workspace
+from tools.governance import repair as repair_mod, safepath, schema, textio, workspace
 from tools.governance.errors import RoleNotRegistered, SchemaVersionError
 
 PREFLIGHT = str(Path(PLUGIN_ROOT) / "scripts" / "virtuoso_preflight.py")
@@ -340,6 +340,35 @@ def test_unsafe_registered_paths_are_rejected(project, path, code):
                                                                 encoding="utf-8")
     reg = registry_mod.load(str(project))
     assert any(f.code == code for f in reg.findings), [f.as_dict() for f in reg.findings]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="drive letters are a Windows concept")
+def test_normalize_survives_a_path_on_another_drive():
+    """os.path.relpath raises across Windows drives; normalize must not.
+
+    Pure string work -- D: need not exist. On a GitHub Windows runner the
+    checkout is on C: and the temp directory is on D:, so a project root under
+    tmp_path and an absolute path resolving against the checkout's drive are on
+    different mounts. That is why windows-latest has been red since v1.6.0.
+    """
+    rel, absolute = safepath.normalize("C:\\project", "D:\\elsewhere\\file.md")
+    assert absolute.upper().startswith("D:")
+    assert rel                                   # an answer, not an exception
+    assert safepath.is_inside("C:\\project", absolute) is False
+
+
+def test_normalize_reports_rather_than_raises_when_there_is_no_relative_form(monkeypatch):
+    """The same guard, exercised on the Linux leg too.
+
+    Patched rather than skipped, because the guard is the thing under test and a
+    guard only one CI leg ever executes is a guard half-tested.
+    """
+    def no_relative_form(path, start=None):
+        raise ValueError("path is on mount 'D:', start on mount 'C:'")
+
+    monkeypatch.setattr(safepath.os.path, "relpath", no_relative_form)
+    rel, absolute = safepath.normalize("/project", "/elsewhere/file.md")
+    assert rel and absolute
 
 
 def test_an_append_only_terminal_ledger_may_live_beneath_an_archive_directory(project):

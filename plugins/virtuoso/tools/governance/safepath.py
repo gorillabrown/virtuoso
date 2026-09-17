@@ -93,7 +93,15 @@ def normalize(root: str, raw: str) -> tuple[str, str]:
         absolute = os.path.abspath(candidate)
     else:
         absolute = os.path.abspath(os.path.join(root_abs, candidate))
-    rel = os.path.relpath(absolute, root_abs)
+    try:
+        rel = os.path.relpath(absolute, root_abs)
+    except ValueError:
+        # Different Windows drives: there is no relative form, and a path with no
+        # relative form to the root is definitionally outside it. Answer with the
+        # absolute path as its own normalized form and let the caller's
+        # is_inside() check -- which already guards this -- do the rejecting. The
+        # alternative, raising, turns "report this path as unsafe" into a crash.
+        return _to_posix(absolute), absolute
     return _to_posix(rel), absolute
 
 
