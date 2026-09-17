@@ -41,7 +41,17 @@ OVERLAY_ROLE = "overlays"
 #: The shipped subtrees an overlay may mirror. An overlay file outside these is
 #: reported, never silently applied — the mirror path is the whole addressing
 #: scheme, so an unaddressable file is a mistake worth naming.
-MIRROR_ROOTS = ("skills", "agents")
+MIRROR_ROOTS = ("skills", "agents", "references")
+
+#: Shipped files inside a mirror root that still may not be overlaid.
+#:
+#: ``registry-contract.md`` defines what an overlay is and what it may do. A
+#: project able to overlay it could rewrite the rules governing its own overlay,
+#: including the safety floor below — the contract would become something the
+#: thing it governs can edit. Excluding it is a bootstrap argument, not a
+#: judgement about the file's content, and it is the only such exclusion: every
+#: other shipped reference is a project's to extend.
+NON_OVERLAYABLE = frozenset({"references/registry-contract.md"})
 
 #: Directory and file names never treated as overlay content.
 _IGNORED_NAMES = frozenset({".git", "__pycache__", ".pytest_cache", ".DS_Store", "Thumbs.db"})
@@ -60,20 +70,27 @@ SAFETY_FLOOR = (
 
 #: The marker CI scans for. Present in every shipped skill and agent body; the
 #: scan enumerates those folders from disk, so a new skill cannot ship without it.
-CLAUSE_MARKER = "<!-- virtuoso-overlay-clause v1 -->"
+#:
+#: v2 generalized the clause from "this file's overlay" to "the overlay of any
+#: shipped file you read". A reference is never read on its own — a skill follows
+#: a pointer to it — so under v1 nothing told that skill to check the reference's
+#: overlay, and a project's rubric extensions would have been silently ignored.
+CLAUSE_MARKER = "<!-- virtuoso-overlay-clause v2 -->"
 
 #: The canonical clause, verbatim, in every shipped skill and agent. This module
 #: is its single home: `validate.py` and the test suite compare shipped bodies
 #: against this string rather than against a second copy that could drift.
 OVERLAY_CLAUSE = """%s
-**Project overlay.** If the registry declares an `overlays` role, read the overlay that mirrors
-this file's own path beneath it — `skills/<skill>/SKILL.md` for a skill, `agents/<Agent>.md` for
-an agent — and apply it on top of this file. Resolve it with the registry helper's `overlays`
-subcommand; never fork or edit a shipped file to carry a project's rules. The overlay is
-additive and wins on conflict, with one exception: it may not loosen a shared-contract safety
-rule (registry resolution, read-only preflight, write permission, git safety, provenance, the
-issue contract). No `overlays` role, an absent overlays directory, and no matching overlay file
-all mean the same thing — proceed on this file alone.""" % CLAUSE_MARKER
+**Project overlay.** If the registry declares an `overlays` role, read the overlay mirroring
+every shipped file you read beneath it — this file at its own path (`skills/<skill>/SKILL.md`,
+`agents/<Agent>.md`) and any `references/<file>.md` this one sends you to — and apply each on
+top of the file it mirrors. Resolve them with the registry helper's `overlays` subcommand;
+never fork or edit a shipped file to carry a project's rules. An overlay is additive and
+wins on conflict, with one exception: it may not loosen a shared-contract safety rule
+(registry resolution, read-only preflight, write permission, git safety, provenance, the
+issue contract), and `references/registry-contract.md` may not be overlaid at all. No
+`overlays` role, an absent overlays directory, and no matching overlay file all mean the
+same thing — proceed on the shipped file alone.""" % CLAUSE_MARKER
 
 
 # --- case-exact resolution ----------------------------------------------------
@@ -128,12 +145,24 @@ def mirror_path(relative: str) -> str:
 
 
 def in_mirror_root(relative: str) -> bool:
-    """Whether a mirror path addresses one of the overlayable shipped subtrees."""
+    """Whether a mirror path addresses one of the shipped subtrees at all.
+
+    Structural only. A path can be in a mirror root and still not be overlayable —
+    see :func:`is_overlayable`. The two are kept apart so a project overlaying the
+    registry contract is told *why*, rather than told its file mirrors nothing.
+    """
     normalized = mirror_path(relative)
     if not normalized:
         return False
     head = normalized.split("/", 1)[0]
     return head in MIRROR_ROOTS
+
+
+def is_overlayable(relative: str) -> bool:
+    """Whether a shipped file at this mirror path may carry an overlay."""
+    normalized = mirror_path(relative)
+    return bool(normalized) and in_mirror_root(normalized) \
+        and normalized not in NON_OVERLAYABLE
 
 
 # --- resolution against a registry --------------------------------------------
@@ -231,7 +260,7 @@ def find(reg, plugin_root: str, relative: str) -> Overlay | None:
     decide what to do next.
     """
     mirror = mirror_path(relative)
-    if not mirror:
+    if not mirror or not is_overlayable(mirror):
         return None
     root = overlay_root(reg)
     if not root:
@@ -335,7 +364,8 @@ def audit(reg, plugin_root: str) -> OverlayStatus:
     for mirror in discover(status.root):
         resolved = case_exact_join(status.root, mirror)
         exact = shipped.get(mirror.lower(), "")
-        plugin_path = case_exact_join(plugin_root, mirror) if exact == mirror else ""
+        applies = exact == mirror and is_overlayable(mirror)
+        plugin_path = case_exact_join(plugin_root, mirror) if applies else ""
         status.overlays.append(Overlay(mirror=mirror, path=resolved, plugin_path=plugin_path))
 
         if not in_mirror_root(mirror):
@@ -343,6 +373,14 @@ def audit(reg, plugin_root: str) -> OverlayStatus:
                 "overlay-outside-mirror", "warning",
                 "overlay %s is not under %s, so no shipped file can address it. Nothing is "
                 "applied from it." % (mirror, " or ".join(MIRROR_ROOTS)), role=OVERLAY_ROLE))
+            continue
+        if not is_overlayable(mirror):
+            status.findings.append(Finding(
+                "overlay-not-overlayable", "warning",
+                "overlay %s mirrors a shipped file that may not be overlaid: it defines what "
+                "an overlay may do, so overlaying it would let a project rewrite the rules "
+                "governing its own overlay. Nothing is applied from it." % mirror,
+                role=OVERLAY_ROLE))
             continue
         if exact and exact != mirror:
             status.findings.append(Finding(

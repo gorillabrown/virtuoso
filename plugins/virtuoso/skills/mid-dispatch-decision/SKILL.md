@@ -24,15 +24,17 @@ description: >
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
 - **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
-<!-- virtuoso-overlay-clause v1 -->
-**Project overlay.** If the registry declares an `overlays` role, read the overlay that mirrors
-this file's own path beneath it — `skills/<skill>/SKILL.md` for a skill, `agents/<Agent>.md` for
-an agent — and apply it on top of this file. Resolve it with the registry helper's `overlays`
-subcommand; never fork or edit a shipped file to carry a project's rules. The overlay is
-additive and wins on conflict, with one exception: it may not loosen a shared-contract safety
-rule (registry resolution, read-only preflight, write permission, git safety, provenance, the
-issue contract). No `overlays` role, an absent overlays directory, and no matching overlay file
-all mean the same thing — proceed on this file alone.
+<!-- virtuoso-overlay-clause v2 -->
+**Project overlay.** If the registry declares an `overlays` role, read the overlay mirroring
+every shipped file you read beneath it — this file at its own path (`skills/<skill>/SKILL.md`,
+`agents/<Agent>.md`) and any `references/<file>.md` this one sends you to — and apply each on
+top of the file it mirrors. Resolve them with the registry helper's `overlays` subcommand;
+never fork or edit a shipped file to carry a project's rules. An overlay is additive and
+wins on conflict, with one exception: it may not loosen a shared-contract safety rule
+(registry resolution, read-only preflight, write permission, git safety, provenance, the
+issue contract), and `references/registry-contract.md` may not be overlaid at all. No
+`overlays` role, an absent overlays directory, and no matching overlay file all mean the
+same thing — proceed on the shipped file alone.
 
 # Mid-Dispatch Decision
 

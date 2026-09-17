@@ -83,11 +83,13 @@ The rules every skill follows:
 
 ### Project overlays
 
-A project that needs a shipped skill or agent to behave differently registers an optional,
-read-only `overlays` directory instead of forking the file. Inside it, a file at the same
-relative path as a shipped one carries that project's additions — `skills/<skill>/SKILL.md`
-for a skill, `agents/<Agent>.md` for an agent — and every skill and agent reads its own
-overlay on top of itself.
+A project that needs a shipped skill, agent, or reference to behave differently registers an
+optional, read-only `overlays` directory instead of forking the file. Inside it, a file at the
+same relative path as a shipped one carries that project's additions — `skills/<skill>/SKILL.md`,
+`agents/<Agent>.md`, `references/<file>.md` — and every skill and agent applies its own overlay
+plus the overlay of any reference it reads. The one exception is
+`references/registry-contract.md`: it defines what an overlay may do, so a project cannot
+overlay it and thereby rewrite its own limits.
 
 ```jsonc
 "overlays": { "path": "Virtuoso/overlays", "provider": "directory",

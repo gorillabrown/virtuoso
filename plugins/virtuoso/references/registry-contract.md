@@ -226,6 +226,10 @@ that project's additions:
 |---|---|
 | `skills/<skill>/SKILL.md` | `<overlays>/skills/<skill>/SKILL.md` |
 | `agents/<Agent>.md` | `<overlays>/agents/<Agent>.md` |
+| `references/<file>.md` | `<overlays>/references/<file>.md` |
+
+A reference is read by whichever skill follows a pointer to it, so a skill applies its own
+overlay *and* the overlay of every reference it is sent to.
 
 ```jsonc
 "overlays": {
@@ -258,8 +262,14 @@ Rules:
    provenance, or the issue contract. Anyone who can write the project folder can
    write an overlay; without that floor, so could anyone who can switch off the
    plugin's own guards.
-5. **Only `skills/` and `agents/` are addressable.** An overlay elsewhere under the
-   directory mirrors nothing, is never applied, and is reported.
+5. **Only `skills/`, `agents/`, and `references/` are addressable.** An overlay elsewhere
+   under the directory mirrors nothing, is never applied, and is reported.
+6. **`references/registry-contract.md` cannot be overlaid.** This file defines what an
+   overlay is and what it may do, including rule 4 above. A project able to overlay it could
+   rewrite the rules governing its own overlay. The exclusion is a bootstrap argument rather
+   than a judgement about the file, and it is the only one: every other shipped reference —
+   the readiness rubric, the git policy, the actor vocabulary, the workflow reference — is a
+   project's to extend.
 
 Resolve them — both are read-only queries, and neither creates the directory:
 
@@ -277,7 +287,8 @@ project's to fix and must not turn a working registry into one that reports
 | `overlays-absent` | the role is registered; the directory does not exist yet |
 | `overlay-orphan` | the overlay mirrors no shipped file and is never applied |
 | `overlay-case-mismatch` | it differs from a shipped file only in case |
-| `overlay-outside-mirror` | it is not under `skills/` or `agents/`, so nothing addresses it |
+| `overlay-outside-mirror` | it is not under `skills/`, `agents/`, or `references/`, so nothing addresses it |
+| `overlay-not-overlayable` | it mirrors a shipped file that may not be overlaid (rule 6) |
 | `overlays-external` | the role registers an external identifier; overlays are read as files |
 | `overlays-writable` / `overlays-has-writers` | registered writable; register it read-only |
 

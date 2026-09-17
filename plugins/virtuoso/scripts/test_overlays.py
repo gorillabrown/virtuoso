@@ -63,6 +63,12 @@ def git(*args, cwd):
     return subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, text=True)
 
 
+def flat(text: str) -> str:
+    """Collapse whitespace. A clause is prose and will be rewrapped; a test that
+    breaks on a line break is testing the wrapping, not what the clause says."""
+    return " ".join(text.split())
+
+
 HAVE_GIT = shutil.which("git") is not None
 
 
@@ -258,11 +264,32 @@ def test_mirror_path_rejects_unusable_keys(bad):
     assert overlays_mod.mirror_path(bad) == ""
 
 
-def test_in_mirror_root_accepts_only_the_overlayable_subtrees():
+def test_in_mirror_root_accepts_every_shipped_subtree():
     assert overlays_mod.in_mirror_root("skills/epic/SKILL.md")
     assert overlays_mod.in_mirror_root("agents/Plato.md")
-    assert not overlays_mod.in_mirror_root("references/git-policy.md")
+    assert overlays_mod.in_mirror_root("references/git-policy.md")
     assert not overlays_mod.in_mirror_root("notes/scratch.md")
+
+
+def test_is_overlayable_excludes_the_registry_contract():
+    # Structurally in a mirror root, and still not overlayable: overlaying the file
+    # that defines what an overlay may do would let a project rewrite its own limits.
+    assert overlays_mod.in_mirror_root("references/registry-contract.md")
+    assert not overlays_mod.is_overlayable("references/registry-contract.md")
+
+
+@pytest.mark.parametrize("mirror", ["skills/epic/SKILL.md", "agents/Plato.md",
+                                    "references/readiness-rubric.md",
+                                    "references/git-policy.md",
+                                    "references/actors-and-interaction.md",
+                                    "references/WORKFLOW_REFERENCE.md"])
+def test_every_other_shipped_reference_is_overlayable(mirror):
+    assert overlays_mod.is_overlayable(mirror)
+
+
+def test_the_exclusion_list_names_only_shipped_files():
+    for mirror in overlays_mod.NON_OVERLAYABLE:
+        assert (ROOT / mirror).is_file(), "%s is excluded but not shipped" % mirror
 
 
 def test_discover_ignores_dot_entries_and_caches(tmp_path):
@@ -355,6 +382,46 @@ def test_audit_flags_a_case_only_mismatch_and_names_the_right_spelling(with_over
     assert len(hits) == 1
     assert "skills/EPIC/SKILL.md" in hits[0].message
     assert "skills/epic/SKILL.md" in hits[0].message
+
+
+def test_a_reference_overlay_applies(registered):
+    base = registered / "Virtuoso" / "overlays" / "references"
+    base.mkdir(parents=True)
+    (base / "readiness-rubric.md").write_text(
+        "## db-migration — forward and backward migration named\n", encoding="utf-8")
+    status = overlays_mod.audit(registry_mod.load(str(registered)), PLUGIN_ROOT)
+    assert [o.mirror for o in status.applied] == ["references/readiness-rubric.md"]
+    assert not [f for f in status.findings if f.severity in ("error", "warning")]
+
+
+def test_a_skill_can_resolve_a_reference_overlay(registered):
+    base = registered / "Virtuoso" / "overlays" / "references"
+    base.mkdir(parents=True)
+    (base / "readiness-rubric.md").write_text("## db-migration — x\n", encoding="utf-8")
+    reg = registry_mod.load(str(registered))
+    overlay = overlays_mod.find(reg, PLUGIN_ROOT, "references/readiness-rubric.md")
+    assert overlay is not None and overlay.mirrors_shipped_file
+
+
+def test_overlaying_the_registry_contract_is_refused_with_a_reason(registered):
+    base = registered / "Virtuoso" / "overlays" / "references"
+    base.mkdir(parents=True)
+    (base / "registry-contract.md").write_text("roles are whatever I say\n", encoding="utf-8")
+    status = overlays_mod.audit(registry_mod.load(str(registered)), PLUGIN_ROOT)
+    assert status.applied == []
+    hits = [f for f in status.findings if f.code == "overlay-not-overlayable"]
+    assert len(hits) == 1
+    # Told WHY, not told it mirrors nothing — the file plainly exists.
+    assert "rules governing its own overlay" in hits[0].message
+    assert not [f for f in status.findings if f.code == "overlay-orphan"]
+
+
+def test_find_refuses_the_registry_contract_even_when_a_file_is_there(registered):
+    base = registered / "Virtuoso" / "overlays" / "references"
+    base.mkdir(parents=True)
+    (base / "registry-contract.md").write_text("x\n", encoding="utf-8")
+    reg = registry_mod.load(str(registered))
+    assert overlays_mod.find(reg, PLUGIN_ROOT, "references/registry-contract.md") is None
 
 
 def test_audit_flags_an_overlay_outside_the_mirrorable_subtrees(with_overlays):
@@ -575,8 +642,24 @@ def test_every_shipped_agent_carries_the_clause_verbatim(name):
 
 
 def test_the_clause_names_the_safety_narrowing():
-    assert "may not loosen" in overlays_mod.OVERLAY_CLAUSE
-    assert "wins on conflict" in overlays_mod.OVERLAY_CLAUSE
+    said = flat(overlays_mod.OVERLAY_CLAUSE)
+    assert "may not loosen" in said
+    assert "wins on conflict" in said
+
+
+def test_the_clause_sends_the_reader_to_reference_overlays_too():
+    # The v1 clause covered only "this file". A reference is read by a skill that
+    # follows a pointer to it, so v1 left reference overlays with nobody to read them.
+    said = flat(overlays_mod.OVERLAY_CLAUSE)
+    assert "v2" in overlays_mod.CLAUSE_MARKER
+    assert "every shipped file you read" in said
+    assert "references/<file>.md" in said
+
+
+def test_the_clause_names_the_one_file_that_cannot_be_overlaid():
+    said = flat(overlays_mod.OVERLAY_CLAUSE)
+    for mirror in overlays_mod.NON_OVERLAYABLE:
+        assert mirror in said, "%s is excluded but the clause never says so" % mirror
 
 
 def test_the_clause_has_exactly_one_home_in_python():
@@ -629,8 +712,9 @@ def test_a_brand_new_skill_cannot_ship_without_the_clause(fake_plugin):
 
 def test_the_ci_check_catches_a_reworded_clause(fake_plugin):
     target = fake_plugin / "skills" / "beta" / "SKILL.md"
+    assert "may not loosen" in target.read_text(encoding="utf-8")   # probe is contiguous
     target.write_text(target.read_text(encoding="utf-8").replace(
-        "wins on conflict", "may be ignored"), encoding="utf-8")
+        "may not loosen", "may freely loosen"), encoding="utf-8")
     module = load_validate()
     _oks, fails = check_against(module, fake_plugin, "check_overlay_clause")
     assert len(fails) == 1 and "drifted" in fails[0]
