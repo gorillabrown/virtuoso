@@ -16,6 +16,7 @@ portability and single-authority rules the v2 redesign introduced (item 99):
   * unsafe fallback path creation (a helper that creates a directory to answer
     a query)
   * the project-overlay clause, in every shipped skill and agent
+  * overlay pairings: every declared policy key and mirror path actually exists
   * agent memory directory names, against both disk and git's index
 
 Run from anywhere: paths resolve from __file__.
@@ -33,7 +34,9 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import skill_rules  # noqa: E402
 
-from tools.governance import overlays as overlays_mod, result as result_mod  # noqa: E402
+from tools.governance import (  # noqa: E402
+    overlays as overlays_mod, policy as policy_mod, result as result_mod,
+)
 
 fails: list[str] = []
 oks: list[str] = []
@@ -528,6 +531,32 @@ def check_overlay_clause() -> None:
            % (len(shipped_skill_names()), len(shipped_agent_files())))
 
 
+def check_overlay_pairings() -> None:
+    """Every pairing must name a real policy key and a real, overlayable file.
+
+    A pairing is a promise to a project: declare an id under this policy key and
+    define it in that overlay, and the plugin will tell you when one is missing. A
+    pairing pointing at a policy key with no documented default, or at a file the
+    plugin does not ship, or at one overlays exclude, cannot keep that promise —
+    and would report every declared id as undefined forever.
+    """
+    defaults = policy_mod.load({})
+    problems = []
+    for pairing in overlays_mod.PAIRINGS:
+        if defaults.get(pairing.policy_key, None) is None:
+            problems.append("policy.%s has no documented default, so nothing can declare it"
+                            % pairing.policy_key)
+        if not os.path.isfile(os.path.join(ROOT, *pairing.mirror.split("/"))):
+            problems.append("pairing %s names %s, which this plugin does not ship"
+                            % (pairing.policy_key, pairing.mirror))
+        elif not overlays_mod.is_overlayable(pairing.mirror):
+            problems.append("pairing %s names %s, which overlays exclude, so its bodies "
+                            "could never be read" % (pairing.policy_key, pairing.mirror))
+    (ok if not problems else fail)(
+        "%d overlay pairing(s) resolve" % len(overlays_mod.PAIRINGS) if not problems
+        else "overlay pairing problems: %s" % problems)
+
+
 def _git_tracked(relative_dir: str) -> list[str] | None:
     """Paths git's index carries under ``relative_dir``, or ``None`` when there is
     no index to ask (an export, a tarball, git absent)."""
@@ -621,6 +650,7 @@ def main() -> int:
     skill_names = check_frontmatter_and_manifests(os.path.join(ROOT, "skills"))
     check_session_hook()
     check_overlay_clause()
+    check_overlay_pairings()
     check_agent_memory_names()
     check_promoted_rule_anchors()
     check_text_scans(skill_names)

@@ -30,8 +30,10 @@ Nothing in this module writes, creates, or heals anything.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 
+from . import policy as policy_mod, textio
 from .registry import Finding
 
 #: The registry role that declares where a project keeps its overlays. Optional:
@@ -67,6 +69,55 @@ SAFETY_FLOOR = (
     "provenance",            # every derived figure cites provider, source, snapshot time
     "issue-contract",        # every stop, hold, block, or elevation becomes an issue
 )
+
+# --- pairings -----------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Pairing:
+    """A policy key whose declared identifiers must have prose bodies in an overlay.
+
+    ``policy_key`` is a dotted key holding a list of ids. ``mirror`` is the overlay
+    mirror path whose headings carry their bodies. ``label`` names one entry, so a
+    finding reads as a sentence rather than as a key path.
+    """
+
+    policy_key: str
+    mirror: str
+    label: str
+
+
+#: Declarations whose bodies live in an overlay. A declaration in this table is
+#: *enforceable*: the plugin can say, on the project that has it, that an id was
+#: declared and never defined. Adding a row is how a new policy key stops being a
+#: list of names pointing at nothing.
+PAIRINGS = (
+    Pairing("rubric.extensions", "references/readiness-rubric.md",
+            "readiness-rubric extension check"),
+)
+
+
+def body_heading(identifier: str) -> re.Pattern:
+    """The heading that counts as ``identifier``'s body: a depth 2-4 heading whose
+    text *starts with* the id.
+
+    Anchored at the start on purpose. Matching the id anywhere in the heading would
+    let ``## Why we dropped db-migration`` satisfy ``db-migration`` — a heading that
+    says the opposite of a body. The trailing guard rejects a longer id standing in
+    for a shorter one, so ``## db-migration-rollback`` is not ``db-migration``.
+    """
+    return re.compile(r"(?m)^#{2,4}\s+%s(?![\w-])" % re.escape(identifier))
+
+
+def declared_ids(reg, pairing: Pairing) -> list[str]:
+    """The ids a project declares for ``pairing``. A non-list, or a list with
+    non-string members, yields only what is usable rather than raising: a malformed
+    policy value is a finding elsewhere, not a crash here."""
+    value = policy_mod.load(reg.policy).get(pairing.policy_key, [])
+    if not isinstance(value, list):
+        return []
+    return [v.strip() for v in value if isinstance(v, str) and v.strip()]
+
 
 #: The marker CI scans for. Present in every shipped skill and agent body; the
 #: scan enumerates those folders from disk, so a new skill cannot ship without it.
@@ -312,12 +363,64 @@ def _shipped_index(plugin_root: str) -> dict[str, str]:
 
 
 def audit(reg, plugin_root: str) -> OverlayStatus:
-    """Resolve and audit every overlay. Read-only; never creates the directory.
+    """Resolve and audit every overlay, then check every declared pairing.
 
-    Findings are informational or warnings and never errors: an overlay problem
-    must not turn a working registry into one that needs repair, because repair has
-    nothing to propose for a file the project owns.
+    Read-only; never creates the directory. Findings are informational or warnings
+    and never errors: an overlay problem must not turn a working registry into one
+    that needs repair, because repair has nothing to propose for a file the project
+    owns.
+
+    Pairings are checked whatever the overlay state, including when no ``overlays``
+    role exists at all — a project that declares readiness extensions and never
+    registered anywhere to define them is the exact case worth reporting.
     """
+    status = _audit_overlay_files(reg, plugin_root)
+    status.findings.extend(_pairing_findings(reg, status))
+    return status
+
+
+def _pairing_findings(reg, status: OverlayStatus) -> list[Finding]:
+    """Declared identifiers with no prose body.
+
+    Only the missing direction is checked. The reverse — a body for an id no longer
+    declared — has no reliable signal: nothing distinguishes a project's ordinary
+    section heading from a stale body, and telling someone their own prose is dead
+    when it is not is worse than staying quiet about a heading nobody reads.
+    """
+    found: list[Finding] = []
+    for pairing in PAIRINGS:
+        ids = declared_ids(reg, pairing)
+        if not ids:
+            continue
+
+        if not status.registered:
+            found.append(Finding(
+                "pairing-mirror-unregistered", "info",
+                "policy.%s declares %d %s(s) (%s) but this project registers no %r role, so "
+                "there is nowhere to define them. Register one and add %s."
+                % (pairing.policy_key, len(ids), pairing.label, ", ".join(ids),
+                   OVERLAY_ROLE, pairing.mirror), role=OVERLAY_ROLE))
+            continue
+
+        overlay = next((o for o in status.overlays
+                        if o.mirror == pairing.mirror and o.present), None)
+        text = textio.read_text(overlay.path) if overlay else None
+        for identifier in ids:
+            if text is not None and body_heading(identifier).search(text):
+                continue
+            found.append(Finding(
+                "pairing-body-missing", "warning",
+                "policy.%s declares the %s %r, which nothing defines. Add a heading starting "
+                "with %r to %s in the overlays directory; until then the check is an "
+                "identifier no ceremony can apply."
+                % (pairing.policy_key, pairing.label, identifier, identifier, pairing.mirror),
+                role=OVERLAY_ROLE))
+    return found
+
+
+def _audit_overlay_files(reg, plugin_root: str) -> OverlayStatus:
+    """The overlay half of :func:`audit`: resolve the directory and classify what is
+    in it. Split out so every early return here still gets a pairing check."""
     status = OverlayStatus()
     spec = reg.roles.get(OVERLAY_ROLE)
     if spec is None:

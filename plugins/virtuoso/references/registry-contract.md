@@ -291,6 +291,24 @@ project's to fix and must not turn a working registry into one that reports
 | `overlay-not-overlayable` | it mirrors a shipped file that may not be overlaid (rule 6) |
 | `overlays-external` | the role registers an external identifier; overlays are read as files |
 | `overlays-writable` / `overlays-has-writers` | registered writable; register it read-only |
+| `pairing-body-missing` | a policy key declares an id that no overlay section defines |
+| `pairing-mirror-unregistered` | ids are declared but no `overlays` role exists to hold their bodies |
+
+### Declarations and bodies
+
+A project-specific rule has two halves. The **declaration** — a registry role or a `policy.*`
+key — is typed and validated, so the machinery can count it and gate on it. The **body** is
+prose in an overlay, which only an agent reads. A declaration with no body is an identifier
+no ceremony can apply; a body with no declaration is prose no gate consults.
+
+Where the plugin can check the pair, it does. `policy.rubric.extensions` declares readiness
+extension ids; their bodies are sections in the overlay of `references/readiness-rubric.md`,
+and a declared id with no section is reported at session start.
+
+The corollary matters as much as the rule: **if a project constraint can be a policy value or
+a mechanical check, make it one.** An overlay is prose applied at the agent's discretion; a
+policy value is enforced. A dispatch buffer is a value. "Migrations need a data-loss analysis"
+is prose. Do not ship the first as the second because prose is easier to write.
 
 ## Preflight status contract (items 10, 11)
 

@@ -476,6 +476,170 @@ def test_the_safety_floor_is_carried_in_the_audit_payload(with_overlays):
 
 
 # =============================================================================
+# Pairings — a declared id must have a prose body
+# =============================================================================
+
+
+def _declare(root, ids):
+    manifest = root / "Virtuoso" / "workspace-layout.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data.setdefault("policy", {})["rubric"] = {"version": "1.0", "extensions": list(ids)}
+    manifest.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _rubric_overlay(root, text):
+    base = root / "Virtuoso" / "overlays" / "references"
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "readiness-rubric.md").write_text(text, encoding="utf-8")
+
+
+def _codes(root):
+    return [f.code for f in overlays_mod.audit(
+        registry_mod.load(str(root)), PLUGIN_ROOT).findings]
+
+
+def test_the_pairing_table_is_declared_not_scattered():
+    assert overlays_mod.PAIRINGS
+    pairing = overlays_mod.PAIRINGS[0]
+    assert pairing.policy_key == "rubric.extensions"
+    assert pairing.mirror == "references/readiness-rubric.md"
+
+
+@pytest.mark.parametrize("heading,defines", [
+    ("## db-migration — forward and backward", True),
+    ("### db-migration", True),
+    ("#### db-migration (both directions)", True),
+    ("## Why we dropped db-migration", False),      # discusses it; does not define it
+    ("## db-migration-rollback — a different id", False),
+    ("## db-migrations", False),
+    ("# db-migration", False),                      # depth 1 is the document title
+    ("db-migration", False),                        # not a heading at all
+])
+def test_what_counts_as_a_body(heading, defines):
+    assert bool(overlays_mod.body_heading("db-migration").search(heading)) is defines
+
+
+def test_a_declared_id_with_a_body_is_clean(registered):
+    _declare(registered, ["db-migration"])
+    _rubric_overlay(registered, "## db-migration — forward and backward migration\n")
+    assert "pairing-body-missing" not in _codes(registered)
+
+
+def test_a_declared_id_with_no_body_is_reported(registered):
+    _declare(registered, ["db-migration"])
+    _rubric_overlay(registered, "## house style\n\nsome prose\n")
+    status = overlays_mod.audit(registry_mod.load(str(registered)), PLUGIN_ROOT)
+    hits = [f for f in status.findings if f.code == "pairing-body-missing"]
+    assert len(hits) == 1
+    assert "db-migration" in hits[0].message
+    assert "references/readiness-rubric.md" in hits[0].message   # names the fix
+    assert hits[0].severity == "warning"
+
+
+def test_a_heading_that_merely_mentions_the_id_is_not_a_body(registered):
+    _declare(registered, ["db-migration"])
+    _rubric_overlay(registered, "## Why we dropped db-migration as a blocker\n")
+    assert "pairing-body-missing" in _codes(registered)
+
+
+def test_each_undefined_id_is_reported_separately(registered):
+    _declare(registered, ["db-migration", "deployment", "accessibility"])
+    _rubric_overlay(registered, "## deployment — environment and rollback\n")
+    hits = [c for c in _codes(registered) if c == "pairing-body-missing"]
+    assert len(hits) == 2
+
+
+def test_declaring_nothing_reports_nothing(registered):
+    _declare(registered, [])
+    _rubric_overlay(registered, "")
+    assert not [c for c in _codes(registered) if c.startswith("pairing-")]
+
+
+def test_ids_declared_with_no_overlays_role_are_reported(project):
+    run(PREFLIGHT, "--root", str(project), "--mode", "create", "--authorize")
+    _declare(project, ["deployment"])
+    status = overlays_mod.audit(registry_mod.load(str(project)), PLUGIN_ROOT)
+    assert [f.code for f in status.findings] == ["pairing-mirror-unregistered"]
+    assert status.findings[0].severity == "info"
+    assert "deployment" in status.findings[0].message
+
+
+def test_a_declared_id_with_the_overlay_file_absent_is_reported(registered):
+    _declare(registered, ["deployment"])            # role registered, no directory
+    assert "pairing-body-missing" in _codes(registered)
+
+
+def test_a_malformed_policy_value_is_ignored_not_raised(registered):
+    manifest = registered / "Virtuoso" / "workspace-layout.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data.setdefault("policy", {})["rubric"] = {"extensions": "db-migration"}   # not a list
+    manifest.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    assert not [c for c in _codes(registered) if c.startswith("pairing-")]
+
+
+def test_pairing_findings_are_never_errors(registered):
+    _declare(registered, ["db-migration"])
+    status = overlays_mod.audit(registry_mod.load(str(registered)), PLUGIN_ROOT)
+    assert not [f for f in status.findings if f.severity == "error"]
+
+
+def test_a_missing_body_shows_in_the_session_start_line(registered):
+    _declare(registered, ["db-migration"])
+    _rubric_overlay(registered, "## unrelated\n")
+    completed = run(PREFLIGHT, "--root", str(registered), "--mode", "check", "--quiet")
+    assert "virtuoso-status: ready" in completed.stdout
+    assert "finding(s)" in completed.stdout
+
+
+def test_the_pairing_check_creates_nothing(registered):
+    _declare(registered, ["db-migration"])
+    before = snapshot_tree(str(registered))
+    overlays_mod.audit(registry_mod.load(str(registered)), PLUGIN_ROOT)
+    assert snapshot_tree(str(registered)) == before
+
+
+# --- the plugin-side half ------------------------------------------------------
+
+
+def test_every_shipped_pairing_resolves():
+    module = load_validate()
+    oks, fails = check_against(module, ROOT, "check_overlay_pairings")
+    assert fails == []
+    assert "pairing(s) resolve" in oks[0]
+
+
+def test_ci_rejects_a_pairing_naming_an_unshipped_file(monkeypatch):
+    module = load_validate()
+    monkeypatch.setattr(module.overlays_mod, "PAIRINGS", (
+        overlays_mod.Pairing("rubric.extensions", "references/no-such-file.md", "check"),))
+    _oks, fails = check_against(module, ROOT, "check_overlay_pairings")
+    assert len(fails) == 1 and "does not ship" in fails[0]
+
+
+def test_ci_rejects_a_pairing_naming_an_excluded_file(monkeypatch):
+    module = load_validate()
+    monkeypatch.setattr(module.overlays_mod, "PAIRINGS", (
+        overlays_mod.Pairing("rubric.extensions", "references/registry-contract.md", "check"),))
+    _oks, fails = check_against(module, ROOT, "check_overlay_pairings")
+    assert len(fails) == 1 and "overlays exclude" in fails[0]
+
+
+def test_ci_rejects_a_pairing_naming_an_undocumented_policy_key(monkeypatch):
+    module = load_validate()
+    monkeypatch.setattr(module.overlays_mod, "PAIRINGS", (
+        overlays_mod.Pairing("rubric.notAKey", "references/readiness-rubric.md", "check"),))
+    _oks, fails = check_against(module, ROOT, "check_overlay_pairings")
+    assert len(fails) == 1 and "no documented default" in fails[0]
+
+
+def test_the_body_convention_is_documented_where_projects_read_about_extensions():
+    text = (ROOT / "references" / "readiness-rubric.md").read_text(encoding="utf-8")
+    assert "starts with" in text
+    assert "<overlays>/references/readiness-rubric.md" in text
+    assert "pairing-body-missing" in text
+
+
+# =============================================================================
 # The status line
 # =============================================================================
 

@@ -92,6 +92,34 @@ Extensions exist because domains differ. Examples a project might declare:
 
 Declaring none is normal and correct for many projects.
 
+### Where an extension is defined
+
+Declaring the id is half of it. The id tells every ceremony that a check exists and must
+pass; it does not say what passing means. The other half is prose, and it lives in the
+project's overlay of *this file*:
+
+    <overlays>/references/readiness-rubric.md
+
+A section counts as an extension's definition when its heading **starts with** the declared
+id, at depth 2 to 4:
+
+```markdown
+## db-migration — forward and backward migration
+
+- both migrations are written and named in the specification
+- the data-loss analysis states which columns can and cannot be reconstructed
+- run order relative to the deploy is stated
+```
+
+The heading must start with the id, so `## Why we dropped db-migration` does not count —
+a heading that discusses a check is not a definition of it. A longer id does not stand in
+for a shorter one either: `## db-migration-rollback` does not define `db-migration`.
+
+A declared id with no definition is reported at session start as `pairing-body-missing`,
+and an id declared with no `overlays` role registered at all as `pairing-mirror-unregistered`.
+Both are warnings or information, never errors: an undefined check is the project's to write,
+and no repair the plugin could run would write it.
+
 ---
 
 ## Reporting
