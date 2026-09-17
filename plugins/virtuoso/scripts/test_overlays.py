@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -73,6 +74,32 @@ def flat(text: str) -> str:
 HAVE_GIT = shutil.which("git") is not None
 
 
+def _probe_case_sensitivity() -> bool:
+    """Whether the temp filesystem distinguishes ``probe`` from ``PROBE``.
+
+    Measured, never inferred from ``sys.platform``: a case-sensitive volume can
+    be mounted on Windows or macOS and a case-insensitive one on Linux, and the
+    fixtures below create two files whose names differ only in case. pytest's
+    tmp_path lives under the same temp root this probes.
+    """
+    base = tempfile.mkdtemp()
+    try:
+        with open(os.path.join(base, "probe"), "w", encoding="utf-8") as handle:
+            handle.write("lower")
+        return not os.path.exists(os.path.join(base, "PROBE"))
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+#: True where two names differing only in case are two files.
+CASE_SENSITIVE_FS = _probe_case_sensitivity()
+
+#: Overlay files `with_overlays` lays down, and findings the audit then reports.
+#: Both are two fewer where the case-only pair collapses into one file.
+EXPECTED_OVERLAYS = 5 if CASE_SENSITIVE_FS else 4
+EXPECTED_FINDINGS = 3 if CASE_SENSITIVE_FS else 2
+
+
 # --- fixtures ------------------------------------------------------------------
 
 
@@ -89,15 +116,23 @@ def registered(project):
 
 @pytest.fixture
 def with_overlays(registered):
-    """Four overlays: one that applies, one spelled with the wrong case, one that
-    mirrors nothing, and one outside the mirrorable subtrees."""
+    """Overlays covering every classification the audit makes.
+
+    One applies, one mirrors nothing, one is outside the mirrorable subtrees, and
+    one agent overlay applies. The case-only duplicate is laid down ONLY on a
+    case-sensitive filesystem: elsewhere it is the same file as its lowercase
+    twin, so writing it would overwrite that file's content and quietly change
+    what every test built on this fixture is asserting about.
+    """
     base = registered / "Virtuoso" / "overlays"
-    for relative, body in (
+    files = [
         ("skills/epic/SKILL.md", "always name the ticket\n"),
-        ("skills/EPIC/SKILL.md", "wrong case\n"),
         ("skills/no-such-skill/SKILL.md", "mirrors nothing\n"),
         ("notes/scratch.md", "not addressable\n"),
-    ):
+    ]
+    if CASE_SENSITIVE_FS:
+        files.append(("skills/EPIC/SKILL.md", "wrong case\n"))
+    for relative, body in files:
         target = base.joinpath(*relative.split("/"))
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(body, encoding="utf-8")
@@ -396,6 +431,9 @@ def test_audit_flags_an_overlay_that_mirrors_nothing(with_overlays):
     assert "skills/no-such-skill/SKILL.md" in orphans[0].message
 
 
+@pytest.mark.skipif(not CASE_SENSITIVE_FS,
+                    reason="two names differing only in case are one file here, so the "
+                           "condition under test cannot be created")
 def test_audit_flags_a_case_only_mismatch_and_names_the_right_spelling(with_overlays):
     status = overlays_mod.audit(registry_mod.load(str(with_overlays)), PLUGIN_ROOT)
     hits = [f for f in status.findings if f.code == "overlay-case-mismatch"]
@@ -442,6 +480,27 @@ def test_find_refuses_the_registry_contract_even_when_a_file_is_there(registered
     (base / "registry-contract.md").write_text("x\n", encoding="utf-8")
     reg = registry_mod.load(str(registered))
     assert overlays_mod.find(reg, PLUGIN_ROOT, "references/registry-contract.md") is None
+
+
+def test_case_exactness_itself_is_covered_on_every_filesystem(with_overlays):
+    """The audit's case-mismatch FINDING needs a case-sensitive volume to exist.
+    The module's case-exactness does not, and is what actually protects a project.
+
+    Skipping the finding test where the condition cannot be built is honest.
+    Skipping it and testing nothing in its place would mean the property silently
+    lost its coverage on the maintainer's own platform.
+    """
+    reg = registry_mod.load(str(with_overlays))
+    exact = overlays_mod.find(reg, PLUGIN_ROOT, "skills/epic/SKILL.md")
+    assert exact is not None and exact.mirrors_shipped_file
+
+    # A wrongly-cased request never stands in for the shipped file. On a
+    # case-sensitive volume the uppercase directory exists as its own overlay, so
+    # find() may return it — but it must never claim to mirror a shipped file,
+    # because the plugin ships no `skills/EPIC/`.
+    assert overlays_mod.find(reg, PLUGIN_ROOT, "skills/epic/skill.md") is None
+    wrong_case = overlays_mod.find(reg, PLUGIN_ROOT, "skills/EPIC/SKILL.md")
+    assert wrong_case is None or not wrong_case.mirrors_shipped_file
 
 
 def test_audit_flags_an_overlay_outside_the_mirrorable_subtrees(with_overlays):
@@ -691,7 +750,7 @@ def test_the_status_line_distinguishes_absent_from_empty(registered):
 def test_the_status_line_counts_applied_overlays_and_findings(with_overlays):
     line = overlays_mod.audit(registry_mod.load(str(with_overlays)), PLUGIN_ROOT).line()
     assert line.startswith("overlays: 2 applied")
-    assert "3 finding(s)" in line
+    assert "%d finding(s)" % EXPECTED_FINDINGS in line
 
 
 def test_preflight_prints_the_overlay_line_on_an_unregistered_project(project):
@@ -727,7 +786,7 @@ def test_the_json_result_carries_the_overlay_detail(with_overlays):
     completed = run(PREFLIGHT, "--root", str(with_overlays), "--mode", "check", "--json")
     payload = json.loads(completed.stdout.split("\n", 3)[3])
     assert payload["overlays"]["registered"] is True
-    assert len(payload["overlays"]["overlays"]) == 5
+    assert len(payload["overlays"]["overlays"]) == EXPECTED_OVERLAYS
     assert payload["overlays"]["line"].startswith("overlays: 2 applied")
 
 
