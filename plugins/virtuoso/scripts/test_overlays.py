@@ -614,6 +614,46 @@ def test_a_heading_inside_a_code_fence_is_an_example_not_a_definition(registered
     assert "pairing-body-missing" in _codes(registered)
 
 
+@pytest.mark.parametrize("newline", ["\n", "\r\n"], ids=["lf", "crlf"])
+def test_body_detection_is_identical_under_both_line_endings(registered, newline):
+    """Written as explicit bytes, so every platform exercises both endings.
+
+    `Path.write_text` translates newlines, so a test that writes "\n" produces CRLF
+    on Windows and LF elsewhere -- each platform then tests only its own ending and
+    neither tests the other. The fenced-example case failed exactly this way: `$`
+    in multiline mode matches before the "\n" with the "\r" still ahead of it, so
+    the closing fence never matched, the block was never blanked, and an example
+    defined a check on Windows only.
+    """
+    _declare(registered, ["db-migration"])
+    base = registered / "Virtuoso" / "overlays" / "references"
+    base.mkdir(parents=True, exist_ok=True)
+    body = ("# additions", "", "```markdown", "## db-migration", "example", "```", "")
+    (base / "readiness-rubric.md").write_bytes(newline.join(body).encode("utf-8"))
+    assert "pairing-body-missing" in _codes(registered), \
+        "a fenced example defined the check under %r line endings" % newline
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n"], ids=["lf", "crlf"])
+def test_a_real_section_is_found_under_both_line_endings(registered, newline):
+    _declare(registered, ["db-migration"])
+    base = registered / "Virtuoso" / "overlays" / "references"
+    base.mkdir(parents=True, exist_ok=True)
+    body = ("## db-migration", "", "both directions named", "")
+    (base / "readiness-rubric.md").write_bytes(newline.join(body).encode("utf-8"))
+    assert not [c for c in _codes(registered) if c.startswith("pairing-")]
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n"], ids=["lf", "crlf"])
+def test_an_empty_section_is_a_stub_under_both_line_endings(registered, newline):
+    _declare(registered, ["db-migration"])
+    base = registered / "Virtuoso" / "overlays" / "references"
+    base.mkdir(parents=True, exist_ok=True)
+    body = ("## db-migration", "", "", "## something else", "", "prose", "")
+    (base / "readiness-rubric.md").write_bytes(newline.join(body).encode("utf-8"))
+    assert "pairing-body-stub" in _codes(registered)
+
+
 def test_a_real_section_after_a_fenced_example_still_counts(registered):
     _declare(registered, ["db-migration"])
     _rubric_overlay(registered,

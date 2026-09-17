@@ -514,7 +514,13 @@ def audit(reg, plugin_root: str) -> OverlayStatus:
 
 #: A fenced code block, closed by a fence of the same character. Matched lazily so
 #: two separate blocks are two matches rather than one spanning the prose between.
-_FENCE_RE = re.compile(r"(?ms)^(?P<fence>```+|~~~+).*?^(?P=fence)[ \t]*$")
+#:
+#: ``\r`` is in the trailing class because a governance document written on Windows
+#: has CRLF line endings, and ``$`` in multiline mode matches before the ``\n`` with
+#: the ``\r`` still ahead of it. Without it the closing fence never matches there,
+#: the block is not blanked, and a fenced *example* of a heading defines a check --
+#: on the one platform this plugin is maintained from.
+_FENCE_RE = re.compile(r"(?ms)^(?P<fence>```+|~~~+).*?^(?P=fence)[ \t\r]*$")
 
 
 def without_fenced_blocks(text: str) -> str:
