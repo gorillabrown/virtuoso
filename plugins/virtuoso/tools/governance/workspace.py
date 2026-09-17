@@ -39,6 +39,20 @@ def _posix(*parts: str) -> str:
     return "/".join(p for p in parts if p)
 
 
+def _drop_empty_writers(meta: dict) -> None:
+    """Remove a defaults-supplied ``allowedWriters: []`` before scaffolding a role.
+
+    ``RoleSpec`` preserves an ``allowedWriters`` key the manifest actually carried,
+    including an empty one, so a project that writes "nobody may write this" keeps
+    saying it. That preservation is about a *project's* file. A freshly scaffolded
+    manifest expresses the same thing by omission, exactly as it does for an empty
+    ``owner``, and making `create` start emitting a new key would change its output
+    bytes for no gain — the release pipeline compares those bytes across versions.
+    """
+    if not meta.get("allowedWriters"):
+        meta.pop("allowedWriters", None)
+
+
 def create_registry(root: str, *, doc_root: str = "", layout: str = "plugin-only") -> registry_mod.Registry:
     """The registry a brand-new workspace starts from. All authority is declared."""
     docs = doc_root or DEFAULT_DOC_ROOT
@@ -67,6 +81,7 @@ def create_registry(root: str, *, doc_root: str = "", layout: str = "plugin-only
         meta = schema.default_role(name)
         meta.pop("generatedFrom", None)
         meta.pop("generatedBy", None)
+        _drop_empty_writers(meta)
         roles[name] = schema.RoleSpec.from_manifest(name, dict(meta, path=targets[name]))
 
     reg = registry_mod.Registry(
@@ -105,6 +120,7 @@ def adopt_registry(root: str) -> tuple[registry_mod.Registry, list[str]]:
         meta = schema.default_role(name)
         meta.pop("generatedFrom", None)
         meta.pop("generatedBy", None)
+        _drop_empty_writers(meta)
         meta.update(overrides)
         roles[name] = schema.RoleSpec.from_manifest(name, dict(meta, path=target))
         notes.append("%s -> %s (%s)" % (name, target, note))

@@ -126,6 +126,13 @@ class RoleSpec:
     # computed, never persisted
     presence: str = "unverifiable"
     absolute: str = ""
+    #: Whether the manifest entry this was built from carried an ``allowedWriters``
+    #: key at all. An empty list and an absent key are the same answer to
+    #: :meth:`writable_by`, so without this the serializer cannot tell them apart
+    #: and drops an empty one — silently removing a key a project wrote on purpose.
+    #: The registry already round-trips unrecognized keys verbatim (item 18); a
+    #: recognized one deserves at least as much.
+    declares_allowed_writers: bool = False
 
     # -- derived properties --------------------------------------------------
 
@@ -174,7 +181,7 @@ class RoleSpec:
         data["mutability"] = self.mutability
         if self.owner:
             data["owner"] = self.owner
-        if self.allowed_writers:
+        if self.allowed_writers or self.declares_allowed_writers:
             data["allowedWriters"] = list(self.allowed_writers)
         data["validation"] = self.validation
         data["classification"] = self.classification
@@ -214,6 +221,7 @@ class RoleSpec:
             mutability=str(data.get("mutability") or "read-only"),
             owner=str(data.get("owner") or ""),
             allowed_writers=[str(w) for w in data.get("allowedWriters", []) if isinstance(w, str)],
+            declares_allowed_writers="allowedWriters" in data,
             validation=str(data.get("validation") or "exists"),
             classification=str(data.get("classification") or "unknown"),
             origin=str(data.get("origin") or "unknown"),

@@ -1522,15 +1522,13 @@ def _roles_meaning(root):
 
 
 def test_policy_set_preserves_unrelated_manifest_content(registered):
-    """Roles and schema survive a policy write, meaning for meaning.
+    """Roles and schema survive a policy write, byte value for byte value.
 
-    Compared through the loaded registry rather than by raw-JSON equality. Writing
-    the manifest re-serializes it, and `RoleSpec.to_manifest` omits an
-    explicitly-empty `allowedWriters` because an empty list and an absent key are
-    the same answer to `writable_by`. That normalization belongs to the manifest
-    serializer, not to this command -- see the test below -- so asserting raw
-    equality here would assert that policy-set must not do what the sanctioned
-    write path already does.
+    Raw-JSON equality, not meaning-for-meaning. It once had to be the weaker form,
+    because the serializer dropped an explicitly-empty `allowedWriters` -- which
+    the `overlays` role in this fixture carries, straight from the documented
+    shape. A project's own key is now preserved, so the strict assertion is the
+    true one and the weaker one would hide a regression.
     """
     before_meaning = _roles_meaning(registered)
     before_raw = _manifest(registered)
@@ -1538,10 +1536,67 @@ def test_policy_set_preserves_unrelated_manifest_content(registered):
         "policy-set", "rubric.extensions", "--value-json", '["db-migration"]', "--apply")
     after_raw = _manifest(registered)
     assert _roles_meaning(registered) == before_meaning
-    assert sorted(after_raw["roles"]) == sorted(before_raw["roles"])
+    assert after_raw["roles"] == before_raw["roles"]
     assert after_raw["schemaVersion"] == before_raw["schemaVersion"]
     assert after_raw["layout"] == before_raw["layout"]
     assert after_raw["documentationRoot"] == before_raw["documentationRoot"]
+
+
+@pytest.mark.parametrize("writer_path", ["repair", "policy-set"])
+def test_an_explicit_empty_allowed_writers_survives_a_manifest_write(registered, writer_path):
+    """A project that writes "nobody may write this" keeps saying it.
+
+    The registry contract documents the `overlays` role with `"allowedWriters": []`
+    and a project copying that shape had it stripped by the next manifest write --
+    the file stopped matching the documentation it came from. textio's opening
+    paragraph promises the governance layer does not churn user files; dropping a
+    key someone deliberately wrote is that churn, meaning preserved or not.
+    """
+    assert _manifest(registered)["roles"]["overlays"]["allowedWriters"] == []
+    if writer_path == "repair":
+        run(PREFLIGHT, "--root", str(registered), "--mode", "repair", "--apply")
+    else:
+        run(REGISTRY_CLI, "--root", str(registered), "--actor", "project-profile",
+            "policy-set", "rubric.extensions", "--value-json", '["x"]', "--apply")
+    assert _manifest(registered)["roles"]["overlays"]["allowedWriters"] == []
+
+
+def test_a_role_that_never_declared_writers_does_not_gain_the_key(registered):
+    """Preservation, not invention. The key appears only where it was written."""
+    manifest = registered / "Virtuoso" / "workspace-layout.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data["roles"]["governance"].pop("allowedWriters", None)
+    manifest.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    run(PREFLIGHT, "--root", str(registered), "--mode", "repair", "--apply")
+    assert "allowedWriters" not in _manifest(registered)["roles"]["governance"]
+
+
+@pytest.mark.parametrize("entry,writable", [
+    ({"path": "x"}, False),
+    ({"path": "x", "allowedWriters": []}, False),
+    ({"path": "x", "allowedWriters": ["a"]}, True),
+])
+def test_declaring_the_key_does_not_change_who_may_write(entry, writable):
+    """An empty list and an absent key remain the same answer. The distinction is
+    about what the file says, never about what a ceremony may do."""
+    spec = schema.RoleSpec.from_manifest(
+        "r", dict(entry, mutability="read-write", authority="reference"))
+    assert spec.writable_by("a") is writable
+
+
+def test_a_scaffolded_workspace_does_not_gain_an_empty_writers_key(project):
+    """`create`'s output bytes are unchanged by the preservation above.
+
+    Preservation is about a project's own file. A fresh scaffold says "no writers"
+    by omission, as it does for an empty owner, and the release pipeline compares
+    create's bytes across versions -- so a new key here would be a release-gate
+    failure bought for nothing.
+    """
+    run(PREFLIGHT, "--root", str(project), "--mode", "create", "--authorize")
+    roles = json.loads((project / "Virtuoso" / "workspace-layout.json")
+                       .read_text(encoding="utf-8"))["roles"]
+    empty = [name for name, role in roles.items() if role.get("allowedWriters") == []]
+    assert empty == [], "create started emitting an empty allowedWriters for %s" % empty
 
 
 def test_a_policy_write_churns_no_more_than_repair_already_does(project, tmp_path):
