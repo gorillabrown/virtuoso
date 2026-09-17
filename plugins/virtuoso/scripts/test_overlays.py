@@ -265,6 +265,25 @@ def test_mirror_path_rejects_unusable_keys(bad):
     assert overlays_mod.mirror_path(bad) == ""
 
 
+@pytest.mark.parametrize("bad", [
+    "/skills/epic/SKILL.md",
+    "\\skills\\epic\\SKILL.md",
+    "C:/skills/epic/SKILL.md",
+    "C:\\skills\\epic\\SKILL.md",
+])
+def test_a_rooted_or_drive_qualified_key_is_refused_everywhere(bad):
+    """Refused by both resolvers, on every OS and every interpreter.
+
+    `os.path.isabs` is not a portable test for this: it answers differently per
+    platform AND per interpreter, because Python 3.13 stopped treating a lone
+    leading slash as absolute on Windows. A key one interpreter accepts and
+    another drops is the divergence this module exists to prevent, and CI's
+    3.12 cannot see it.
+    """
+    assert overlays_mod.mirror_path(bad) == ""
+    assert overlays_mod.case_exact_join(str(ROOT), bad) == ""
+
+
 def test_in_mirror_root_accepts_every_shipped_subtree():
     assert overlays_mod.in_mirror_root("skills/epic/SKILL.md")
     assert overlays_mod.in_mirror_root("agents/Plato.md")

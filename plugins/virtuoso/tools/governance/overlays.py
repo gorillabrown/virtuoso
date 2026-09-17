@@ -221,6 +221,23 @@ same thing — proceed on the shipped file alone.""" % CLAUSE_MARKER
 # --- case-exact resolution ----------------------------------------------------
 
 
+def _rooted(candidate: str) -> bool:
+    """Whether ``candidate`` is anchored to a filesystem root or a drive.
+
+    Tested explicitly rather than with :func:`os.path.isabs`, which answers
+    differently per platform *and* per interpreter: Python 3.13 stopped treating
+    a lone leading slash as absolute on Windows. A mirror key is a relative
+    address by definition, so anything anchored is refused identically
+    everywhere. The ``candidate[1] == ":"`` form matches ``safepath``'s own
+    drive-letter idiom.
+    """
+    if not candidate:
+        return False
+    if candidate[0] in "/\\":
+        return True
+    return len(candidate) > 1 and candidate[1] == ":"
+
+
 def case_exact_join(root: str, relative: str) -> str:
     """The absolute path of ``relative`` beneath ``root``, or ``""``.
 
@@ -235,8 +252,11 @@ def case_exact_join(root: str, relative: str) -> str:
     """
     if not isinstance(relative, str) or not relative.strip():
         return ""
-    normalized = relative.replace("\\", "/").strip().strip("/")
-    if not normalized or os.path.isabs(relative.strip()):
+    candidate = relative.strip()
+    if _rooted(candidate):
+        return ""
+    normalized = candidate.replace("\\", "/").strip("/")
+    if not normalized:
         return ""
     current = os.path.abspath(root)
     for segment in normalized.split("/"):
@@ -255,15 +275,15 @@ def case_exact_join(root: str, relative: str) -> str:
 def mirror_path(relative: str) -> str:
     """Normalize a shipped file's path to the posix form overlays are keyed by.
 
-    Returns ``""`` when the path is unusable as a mirror key: absolute, empty, or
-    containing a traversal segment.
+    Returns ``""`` when the path is unusable as a mirror key: rooted at a
+    filesystem root or a drive, empty, or containing a traversal segment.
     """
     if not isinstance(relative, str):
         return ""
-    normalized = relative.replace("\\", "/").strip().strip("/")
-    if not normalized or os.path.isabs(relative.strip()):
+    candidate = relative.strip()
+    if not candidate or _rooted(candidate):
         return ""
-    segments = [s for s in normalized.split("/") if s]
+    segments = [s for s in candidate.replace("\\", "/").split("/") if s]
     if not segments or any(s in (".", "..") for s in segments):
         return ""
     return "/".join(segments)
