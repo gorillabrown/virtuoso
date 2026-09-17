@@ -188,9 +188,11 @@ it and are fixed in what shipped:
 
 ## Open Questions
 
-- Should an overlay be able to address `references/` as well as `skills/` and `agents/`?
-  Deferred: references are shared contracts, and a project-specific variant of one is a
-  registry policy question rather than a document question.
+- ~~Should an overlay be able to address `references/` as well as `skills/` and `agents/`?~~
+  **Resolved 2026-09-17: yes.** The deferral reasoned that references are shared contracts and
+  a project variant is a policy question — but the policy question is already answered
+  (`policy.rubric.extensions` declares the id) and what is missing is exactly a document. See
+  `2026-09-17-project-specificity-architecture-design.md`, Stage 1.
 - Should the audit's findings appear in `registry.validate()` rather than only in the overlay
   status? Deferred: the registry validates *registration*, the overlays module audits
   *content*, and merging them would require the registry to know the plugin root.
