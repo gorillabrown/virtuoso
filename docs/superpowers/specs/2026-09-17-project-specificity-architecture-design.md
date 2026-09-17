@@ -1,6 +1,6 @@
 # Project Specificity — Architecture
 
-**Status:** approved, unimplemented · **Date:** 2026-09-17 · **Follows:** `2026-09-16-project-overlays-design.md`
+**Status:** implemented in v1.8.0 · **Date:** 2026-09-17 · **Follows:** `2026-09-16-project-overlays-design.md`
 
 ## Decisions (2026-09-17)
 
@@ -299,3 +299,31 @@ mid-release:
 | Clause v2 regeneration silently drops a file | CI compares all 25 bodies against the single constant; a missed file fails the build |
 | The pairing convention (a heading containing the id) is too loose or too strict | Documented beside the extension table; `pairing-body-orphan` catches the strict direction, `pairing-body-missing` the loose one |
 | Stage 3's interview grows unbounded | The catalogue is fixed and each entry names the one declaration it writes; a question with no declaration does not belong in it |
+
+
+---
+
+## Implementation notes (v1.8.0)
+
+Two things changed from this plan, both found by running it rather than reading it.
+
+**`pairing-body-orphan` was dropped.** The plan proposed reporting a body for an id no longer
+declared. There is no reliable signal: nothing distinguishes a project's ordinary section
+heading from a stale body, and a single-word id like `deployment` or `accessibility` — both
+from the rubric's own example table — cannot be told apart from a heading that happens to
+start with that word. Telling someone their own prose is dead when it is not is worse than
+staying quiet about a heading nobody reads. Only the unambiguous direction is checked.
+
+**`pairing-body-stub` was added, and was not in the plan.** The first end-to-end run of Stage
+3 exposed it: saving the scaffold cleared the warning that produced the scaffold. The stub
+heading reads as a definition to any "does a section exist" check, so a project could reach
+green with nothing written. The scaffold's placeholder is now a sentinel, and a section still
+carrying it is reported until real prose replaces it. A gate its own remedy satisfies is not a
+gate.
+
+Everything else shipped as planned, including the property this was partly a test of: adding
+`project-profile` as the sixteenth skill required **no edit to `validate.py`**, because the
+clause check enumerates the skills folder rather than a list. The three edit sites the plan
+listed in advance (marketplace description, README table, the `len(found) == 15` hardcode in
+`test_overlays.py`) were the only ones, and the hardcode is now a comparison against the
+folder contents.

@@ -1,5 +1,83 @@
 # Virtuoso Release Notes
 
+## v1.8.0 (2026-09-17) — project specificity
+
+**Additive. No breaking changes; registry schema stays at v2.** v1.7.0 gave projects a place
+to put prose. This release establishes the architecture around it, because one mechanism was
+not enough and the plugin was already inviting project rules it had nowhere to keep.
+
+Virtuoso has three kinds of project specificity. **Location** — where this project's register,
+ledger and issues are — is a registry role. **Value** — dispatch buffer, branch template,
+status words, git policy — is a `policy.*` key. **Behavior** — what this project additionally
+requires, in prose — is an overlay. The first two were finished; the third was not.
+
+### The pairing rule
+
+Every project-specific thing has two halves. A **declaration** in a role or a `policy.*` key is
+typed and validated, so the machinery can count it and gate on it. A **body** in an overlay is
+prose only an agent reads. A declaration with no body is an identifier no ceremony can apply;
+a body with no declaration is prose no gate consults.
+
+The corollary binds the plugin as much as a project: **if a constraint can be a policy value or
+a mechanical check, make it one.** An overlay is applied at the agent's discretion; a policy
+value is enforced. A dispatch buffer is a value. "Migrations need a data-loss analysis" is
+prose. Shipping the first as the second because prose is easier is how you get a tidy way to
+write rules nobody enforces.
+
+### References are overlayable
+
+`policy.rubric.extensions` declared readiness checks by id and gave them nowhere to be
+defined. `references/readiness-rubric.md` is the natural home, and 1.7.0 overlays covered only
+`skills/` and `agents/`; a skill overlay half-worked, because `roadmap-review` reads the same
+policy key and would never have seen it.
+
+`references/` is now a mirror root. One file is excluded — `references/registry-contract.md`,
+which defines what an overlay may do, so overlaying it would let a project rewrite the rules
+governing its own overlay. That is a bootstrap argument, not a judgement about the file, and it
+is the only exclusion. Attempting it reports `overlay-not-overlayable` and says why, rather
+than claiming the file mirrors nothing when it plainly exists.
+
+The clause in every skill and agent is **v2**: it now covers the overlay of any shipped file
+the reader reads, including a reference it is sent to. Under v1 a reference overlay would have
+had nobody to read it.
+
+### Pairing checks
+
+A declared identifier with no prose body is now reported, at session start, on the project that
+has it:
+
+| finding | meaning |
+|---|---|
+| `pairing-body-missing` | the id is declared and nothing defines it |
+| `pairing-body-stub` | a section exists but is still the scaffold's placeholder |
+| `pairing-mirror-unregistered` | ids are declared with no `overlays` role to hold them |
+
+A body is a depth 2–4 heading that **starts with** the id. Anchoring is the point:
+`## Why we dropped db-migration` discusses a check and must not satisfy it, and
+`## db-migration-rollback` is a different id. Findings are warnings or information, never
+errors — an undefined check is the project's to write, and no repair the plugin could run
+would write it. `validate.py` rejects a pairing naming a policy key with no documented
+default, a file the plugin does not ship, or one the exclusion covers.
+
+### `project-profile`, the sixteenth skill
+
+A front door. It reports what is already specific about a project, interviews from a fixed
+catalogue where every question maps to exactly one declaration, previews both halves, and then
+writes only the machine-readable one — through the existing previewed, backed-up repair path.
+
+**It never writes a project's overlays.** They are registered read-only precisely so no
+ceremony edits what a project authored, and that sentence has no exception clause. The
+skeleton is emitted instead: `overlays --scaffold` prints it, and with `--for` the output is
+exactly that file's content, so the operator's own redirect is the whole write.
+
+A scaffolded section carries a placeholder and is reported as `pairing-body-stub` until real
+prose replaces it. The first end-to-end run showed why: without it, saving the skeleton cleared
+the very warning that produced the skeleton, and a project could go green with nothing written.
+A gate its own remedy satisfies is not a gate.
+
+Adding the sixteenth skill required **no change to `validate.py`** — the clause check
+enumerates the skills folder rather than a list, which is what that design was for.
+
 ## v1.7.0 (2026-09-16) — project overlays
 
 **Additive. No breaking changes; registry schema stays at v2.** A project that needed a

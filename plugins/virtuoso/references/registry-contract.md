@@ -276,7 +276,17 @@ Resolve them — both are read-only queries, and neither creates the directory:
 ```sh
 python <plugin>/scripts/virtuoso_registry.py --root . overlays
 python <plugin>/scripts/virtuoso_registry.py --root . overlays --for skills/<skill>/SKILL.md
+python <plugin>/scripts/virtuoso_registry.py --root . overlays --scaffold
 ```
+
+`--scaffold` prints an overlay skeleton and **writes nothing**. With `--for`, the output is
+exactly that file's content, so the operator's own redirect is the whole write. The plugin
+never writes a project's overlays, and there is no flag that makes it: that sentence has no
+exception clause, and scaffolding was not worth adding one.
+
+A scaffolded section carries a placeholder, and the pairing check reports it as
+`pairing-body-stub` until real prose replaces it. A remedy that satisfies the gate it was
+produced by is not a gate, so saving the skeleton does not clear the warning that produced it.
 
 Findings are informational or warnings, never errors: an overlay problem is the
 project's to fix and must not turn a working registry into one that reports
@@ -292,6 +302,7 @@ project's to fix and must not turn a working registry into one that reports
 | `overlays-external` | the role registers an external identifier; overlays are read as files |
 | `overlays-writable` / `overlays-has-writers` | registered writable; register it read-only |
 | `pairing-body-missing` | a policy key declares an id that no overlay section defines |
+| `pairing-body-stub` | the section exists but is still the scaffold's placeholder |
 | `pairing-mirror-unregistered` | ids are declared but no `overlays` role exists to hold their bodies |
 
 ### Declarations and bodies

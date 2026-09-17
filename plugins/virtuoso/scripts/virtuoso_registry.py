@@ -10,7 +10,8 @@ the connector result and resolves recovery only on success).
 Subcommands:
   roles                     list every registered role and how it resolves
   resolve <role>            print one role's absolute path or external identifier
-  overlays [--for PATH]     the project's overlays for shipped skills and agents
+  overlays [--for PATH]     the project's overlays for shipped skills, agents, references
+           [--scaffold]     print an overlay skeleton to stdout (writes nothing)
   provider [--role R]       describe the provider serving a role, and its capabilities
   items [--all]             list work items from the work register
   next                      the next eligible work item
@@ -101,6 +102,34 @@ def cmd_overlays(args) -> int:
     """
     reg = _load(args.root)
     status = overlays_mod.audit(reg, PLUGIN_ROOT)
+
+    if args.scaffold:
+        if args.for_path:
+            mirror = overlays_mod.mirror_path(args.for_path)
+            # Prefer the seeded skeleton when the audit already knows what this file
+            # is missing, so --for and the full plan never disagree about one path.
+            seeded = dict(overlays_mod.scaffold_plan(reg, status))
+            content = (seeded.get(mirror) or overlays_mod.scaffold(reg, mirror)) if mirror else ""
+            if not content:
+                print("--for %r is not a shipped file that may carry an overlay"
+                      % args.for_path, file=sys.stderr)
+                return EXIT_UNANSWERABLE
+            # Exactly the file's content, so `... > <path>` is the whole write.
+            sys.stdout.write(content)
+            return EXIT_OK
+        plan = overlays_mod.scaffold_plan(reg, status)
+        if not plan:
+            print("nothing to scaffold (%s)" % status.line())
+            print("Every declared identifier already has a body. Use --for <path> to "
+                  "scaffold an overlay for a specific shipped file.")
+            return EXIT_OK
+        root = status.root or "<overlays>"
+        for mirror, content in plan:
+            # Named, not written: re-run with --for <mirror> and redirect.
+            print("# ==== %s ====" % os.path.join(root, *mirror.split("/")))
+            sys.stdout.write(content)
+            print()
+        return EXIT_OK
 
     if args.for_path:
         mirror = overlays_mod.mirror_path(args.for_path)
@@ -471,6 +500,9 @@ def build_parser() -> argparse.ArgumentParser:
     overlays = sub.add_parser("overlays", parents=[common])
     overlays.add_argument("--for", dest="for_path", default="",
                           help="a shipped file's plugin-relative path, e.g. agents/<Agent>.md")
+    overlays.add_argument("--scaffold", action="store_true",
+                          help="print an overlay skeleton (writes nothing; redirect it "
+                               "yourself). With --for, prints that one file's content.")
     overlays.set_defaults(func=cmd_overlays)
 
     provider = sub.add_parser("provider", parents=[common])

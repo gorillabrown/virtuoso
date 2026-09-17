@@ -104,10 +104,21 @@ with one exception — it may not loosen a shared-contract safety rule (registry
 read-only preflight, write permission, git safety, provenance, the issue contract), because
 anyone who can write the project folder can write an overlay.
 
+A project-specific rule has two halves: a **declaration** (a registry role or a `policy.*`
+key — typed, validated, gate-able) and a **body** (prose in an overlay). A declaration with no
+body is an identifier no ceremony can apply, and the plugin reports it. The corollary matters
+as much: if a constraint can be a policy value or a mechanical check, make it one — an overlay
+is applied at the agent's discretion, a policy value is enforced.
+
 ```sh
 python <plugin>/scripts/virtuoso_registry.py --root . overlays
 python <plugin>/scripts/virtuoso_registry.py --root . overlays --for agents/<Agent>.md
+python <plugin>/scripts/virtuoso_registry.py --root . overlays --scaffold
 ```
+
+`/virtuoso:project-profile` walks a project through both halves: it reports what is already
+specific, interviews from a fixed catalogue, previews every change, writes only the policy
+half, and emits the overlay half for you to save.
 
 Full contract: [`plugins/virtuoso/references/registry-contract.md`](plugins/virtuoso/references/registry-contract.md).
 
@@ -207,7 +218,7 @@ located rather than guessing a path.
 | Script | Purpose |
 |---|---|
 | `virtuoso_preflight.py` | check / adopt / create / repair, plus `--check-document` |
-| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `overlays`, `provider`, `items`, `next`, `kpis`, `closeout`, `repo`, `recovery`; and the explicit writers `snapshot`, `closeout --prepare`, `create-item`, `mutation-plan`, `mutation-confirm` |
+| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `overlays` (incl. `--scaffold`), `provider`, `items`, `next`, `kpis`, `closeout`, `repo`, `recovery`; and the explicit writers `snapshot`, `closeout --prepare`, `create-item`, `mutation-plan`, `mutation-confirm` |
 | `generate_cockpit.py` | the planning cockpit, read from the configured provider |
 | `build_register_report.py` | the generated spreadsheet report (declared generated roles only) |
 | `validate.py` | structural validation of the plugin itself |
@@ -233,6 +244,7 @@ Invoked through the plugin namespace, e.g. `/virtuoso:roadmap-review`.
 | `git-handoff` | — | Hand-off packet for a session that cannot mutate the repository |
 | `delayed-start` | `/virtuoso:delayed-start` | Defer execution to a clock time or delay |
 | `virtuoso-init` | `/virtuoso:virtuoso-init` | Register a project, or initialize a workspace |
+| `project-profile` | `/virtuoso:project-profile` | Establish what makes this project different — declarations and their bodies |
 
 ## Shared references
 

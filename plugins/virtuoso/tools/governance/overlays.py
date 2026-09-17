@@ -70,6 +70,80 @@ SAFETY_FLOOR = (
     "issue-contract",        # every stop, hold, block, or elevation becomes an issue
 )
 
+# --- scaffolding ---------------------------------------------------------------
+#
+# Scaffolds are *emitted*, never written. The overlays role is registered read-only
+# with no writers so that "no ceremony edits a project's overlays" is a sentence
+# with no exception clause. A helper that created these files would buy a
+# copy-paste's convenience at the cost of that sentence, so the caller redirects
+# the output instead and the write is the operator's.
+
+
+#: The placeholder a scaffolded section carries until someone writes the check.
+#:
+#: It exists so the pairing check can tell a *definition* from a *heading shaped
+#: like one*. Without it, scaffolding would clear the very warning that produced
+#: the scaffold: the id would read as defined the moment the stub was saved, and
+#: the project would be green with nothing written. A gate that its own remedy
+#: satisfies is not a gate.
+SCAFFOLD_PLACEHOLDER = "(state what must be true for this check to pass)"
+
+
+_SCAFFOLD_HEADER = """<!-- Virtuoso project overlay for %s -->
+<!-- Read on top of the plugin's own %s. Additive, and it wins on conflict —
+     except that it may not loosen a shared-contract safety rule:
+     %s. -->
+"""
+
+
+def scaffold(reg, mirror: str, *, missing_ids: list[str] | None = None) -> str:
+    """The skeleton of an overlay for ``mirror``. Pure text; writes nothing.
+
+    ``missing_ids`` seeds one section per undefined identifier, so a project fills
+    in prose rather than inventing a layout.
+    """
+    normalized = mirror_path(mirror)
+    if not normalized or not is_overlayable(normalized):
+        return ""
+    head = _SCAFFOLD_HEADER % (normalized, normalized, ", ".join(SAFETY_FLOOR))
+    title = normalized.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    body = ["", "# %s — this project's additions" % title, ""]
+    if missing_ids:
+        body.append("<!-- A heading that STARTS WITH a declared id defines it. Until one")
+        body.append("     exists, the id is a check no ceremony can apply. -->")
+        body.append("")
+        for identifier in missing_ids:
+            body.append("## %s" % identifier)
+            body.append("")
+            body.append(SCAFFOLD_PLACEHOLDER)
+            body.append("")
+    else:
+        body.append("## (replace this heading with what the project additionally requires)")
+        body.append("")
+    return head + "\n".join(body)
+
+
+def scaffold_plan(reg, status: "OverlayStatus") -> list[tuple[str, str]]:
+    """``(mirror, content)`` for every overlay this project is currently missing.
+
+    Derived from the pairing findings, so the skeleton always matches what the audit
+    is actually complaining about rather than a second idea of what is needed.
+    """
+    wanted: dict[str, list[str]] = {}
+    for pairing in PAIRINGS:
+        undefined = []
+        overlay = next((o for o in status.overlays
+                        if o.mirror == pairing.mirror and o.present), None)
+        text = textio.read_text(overlay.path) if overlay else None
+        for identifier in declared_ids(reg, pairing):
+            if text is None or not body_heading(identifier).search(text):
+                undefined.append(identifier)
+        if undefined:
+            wanted[pairing.mirror] = undefined
+    return [(mirror, scaffold(reg, mirror, missing_ids=ids))
+            for mirror, ids in sorted(wanted.items())]
+
+
 # --- pairings -----------------------------------------------------------------
 
 
@@ -379,6 +453,17 @@ def audit(reg, plugin_root: str) -> OverlayStatus:
     return status
 
 
+def _body_section(text: str, pattern: re.Pattern) -> str | None:
+    """The prose under the matched heading, up to the next heading of any depth.
+    ``None`` when the heading is absent."""
+    match = pattern.search(text)
+    if not match:
+        return None
+    rest = text[match.end():]
+    following = re.search(r"(?m)^#{1,6}\s", rest)
+    return rest[:following.start()] if following else rest
+
+
 def _pairing_findings(reg, status: OverlayStatus) -> list[Finding]:
     """Declared identifiers with no prose body.
 
@@ -406,15 +491,24 @@ def _pairing_findings(reg, status: OverlayStatus) -> list[Finding]:
                         if o.mirror == pairing.mirror and o.present), None)
         text = textio.read_text(overlay.path) if overlay else None
         for identifier in ids:
-            if text is not None and body_heading(identifier).search(text):
-                continue
-            found.append(Finding(
-                "pairing-body-missing", "warning",
-                "policy.%s declares the %s %r, which nothing defines. Add a heading starting "
-                "with %r to %s in the overlays directory; until then the check is an "
-                "identifier no ceremony can apply."
-                % (pairing.policy_key, pairing.label, identifier, identifier, pairing.mirror),
-                role=OVERLAY_ROLE))
+            section = (_body_section(text, body_heading(identifier))
+                       if text is not None else None)
+            if section is None:
+                found.append(Finding(
+                    "pairing-body-missing", "warning",
+                    "policy.%s declares the %s %r, which nothing defines. Add a heading "
+                    "starting with %r to %s in the overlays directory; until then the check "
+                    "is an identifier no ceremony can apply."
+                    % (pairing.policy_key, pairing.label, identifier, identifier,
+                       pairing.mirror), role=OVERLAY_ROLE))
+            elif SCAFFOLD_PLACEHOLDER in section:
+                found.append(Finding(
+                    "pairing-body-stub", "warning",
+                    "policy.%s declares the %s %r and %s has a section for it that is still "
+                    "the scaffold's placeholder. Replace it with what must actually be true; "
+                    "a heading shaped like a definition is not one."
+                    % (pairing.policy_key, pairing.label, identifier, pairing.mirror),
+                    role=OVERLAY_ROLE))
     return found
 
 

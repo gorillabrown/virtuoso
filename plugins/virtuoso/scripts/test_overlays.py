@@ -16,6 +16,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -973,6 +974,212 @@ def test_every_shipped_agent_that_declares_memory_documents_where_it_lives():
 
 
 # =============================================================================
+# Scaffolding — emitted, never written
+# =============================================================================
+
+
+def test_scaffold_returns_text_for_an_overlayable_file(registered):
+    reg = registry_mod.load(str(registered))
+    content = overlays_mod.scaffold(reg, "agents/%s" % AGENT_FILES[0])
+    assert content.startswith("<!-- Virtuoso project overlay for agents/")
+    assert "may not loosen" in content
+
+
+def test_scaffold_refuses_a_file_that_cannot_be_overlaid(registered):
+    reg = registry_mod.load(str(registered))
+    assert overlays_mod.scaffold(reg, "references/registry-contract.md") == ""
+    assert overlays_mod.scaffold(reg, "notes/scratch.md") == ""
+    assert overlays_mod.scaffold(reg, "../escape.md") == ""
+
+
+def test_scaffold_seeds_a_section_per_undefined_id(registered):
+    reg = registry_mod.load(str(registered))
+    content = overlays_mod.scaffold(reg, "references/readiness-rubric.md",
+                                    missing_ids=["db-migration", "deployment"])
+    assert "## db-migration" in content and "## deployment" in content
+    # The seeded heading must actually satisfy the check it is seeding.
+    assert overlays_mod.body_heading("db-migration").search(content)
+
+
+def test_scaffold_plan_matches_what_the_audit_is_complaining_about(registered):
+    _declare(registered, ["db-migration", "deployment"])
+    _rubric_overlay(registered, "## deployment — environment and rollback\n")
+    reg = registry_mod.load(str(registered))
+    status = overlays_mod.audit(reg, PLUGIN_ROOT)
+    plan = overlays_mod.scaffold_plan(reg, status)
+    assert [mirror for mirror, _ in plan] == ["references/readiness-rubric.md"]
+    content = plan[0][1]
+    assert "## db-migration" in content          # the one the audit reports
+    assert "## deployment" not in content        # already defined; not re-scaffolded
+
+
+def test_a_saved_scaffold_does_not_silence_the_warning_that_produced_it(registered):
+    """The remedy must not satisfy the gate. A stub heading reads as a definition to
+    any 'does a section exist' check, so scaffolding would clear the warning with
+    nothing written."""
+    _declare(registered, ["db-migration"])
+    reg = registry_mod.load(str(registered))
+    content = overlays_mod.scaffold(reg, "references/readiness-rubric.md",
+                                    missing_ids=["db-migration"])
+    _rubric_overlay(registered, content)
+    codes = _codes(registered)
+    assert "pairing-body-stub" in codes
+    assert "pairing-body-missing" not in codes      # the section does exist
+
+
+def test_replacing_the_placeholder_clears_the_stub_finding(registered):
+    _declare(registered, ["db-migration"])
+    _rubric_overlay(registered,
+                    "## db-migration\n\nboth migrations named; data-loss analysis stated\n")
+    assert not [c for c in _codes(registered) if c.startswith("pairing-")]
+
+
+def test_a_stub_for_one_id_does_not_mask_a_real_body_for_another(registered):
+    _declare(registered, ["db-migration", "deployment"])
+    _rubric_overlay(registered,
+                    "## db-migration\n\n%s\n\n## deployment\n\nrollback command stated\n"
+                    % overlays_mod.SCAFFOLD_PLACEHOLDER)
+    hits = [f for f in overlays_mod.audit(registry_mod.load(str(registered)), PLUGIN_ROOT).findings
+            if f.code == "pairing-body-stub"]
+    assert len(hits) == 1 and "db-migration" in hits[0].message
+
+
+def test_scaffold_plan_is_empty_when_everything_is_defined(registered):
+    _declare(registered, ["db-migration"])
+    _rubric_overlay(registered, "## db-migration — both directions\n")
+    reg = registry_mod.load(str(registered))
+    assert overlays_mod.scaffold_plan(reg, overlays_mod.audit(reg, PLUGIN_ROOT)) == []
+
+
+def test_the_scaffold_verb_writes_nothing(registered):
+    """The load-bearing claim: the overlays role is read-only with no writers, and
+    scaffolding must not become the exception that qualifies that sentence."""
+    _declare(registered, ["db-migration"])
+    before = snapshot_tree(str(registered))
+    for args in (["overlays", "--scaffold"],
+                 ["overlays", "--scaffold", "--for", "agents/%s" % AGENT_FILES[0]],
+                 ["overlays", "--scaffold", "--for", "references/readiness-rubric.md"]):
+        completed = run(REGISTRY_CLI, "--root", str(registered), *args)
+        assert completed.returncode == 0, completed.stderr
+    assert snapshot_tree(str(registered)) == before
+    assert not (registered / "Virtuoso" / "overlays").exists()
+
+
+def test_no_ceremony_can_write_the_overlays_role_even_now(registered):
+    reg = registry_mod.load(str(registered))
+    for actor in ("project-profile", "roadmap-review", "*", ""):
+        assert reg.writable("overlays", actor) is False
+
+
+def test_the_single_file_scaffold_is_exactly_the_files_content(registered, tmp_path):
+    """`... --scaffold --for <path> > <file>` must produce a usable overlay with no
+    header lines to strip — the operator's redirect is the whole write."""
+    completed = run(REGISTRY_CLI, "--root", str(registered), "overlays", "--scaffold",
+                    "--for", "references/readiness-rubric.md")
+    assert completed.returncode == 0
+    assert not completed.stdout.startswith("# ====")
+    target = registered / "Virtuoso" / "overlays" / "references" / "readiness-rubric.md"
+    target.parent.mkdir(parents=True)
+    target.write_text(completed.stdout, encoding="utf-8")
+    status = overlays_mod.audit(registry_mod.load(str(registered)), PLUGIN_ROOT)
+    assert [o.mirror for o in status.applied] == ["references/readiness-rubric.md"]
+
+
+def test_the_single_file_scaffold_seeds_declared_ids_too(registered):
+    # --for and the full plan must not disagree about the same path.
+    _declare(registered, ["db-migration"])
+    completed = run(REGISTRY_CLI, "--root", str(registered), "overlays", "--scaffold",
+                    "--for", "references/readiness-rubric.md")
+    assert completed.returncode == 0
+    assert "## db-migration" in completed.stdout
+    assert overlays_mod.body_heading("db-migration").search(completed.stdout)
+
+
+def test_the_multi_file_scaffold_names_every_path(registered):
+    _declare(registered, ["db-migration"])
+    completed = run(REGISTRY_CLI, "--root", str(registered), "overlays", "--scaffold")
+    assert "# ==== " in completed.stdout
+    assert "references/readiness-rubric.md" in completed.stdout
+
+
+def test_scaffolding_an_unscaffoldable_file_is_unanswerable(registered):
+    completed = run(REGISTRY_CLI, "--root", str(registered), "overlays", "--scaffold",
+                    "--for", "references/registry-contract.md")
+    assert completed.returncode == 3
+    assert "may carry an overlay" in completed.stderr
+
+
+def test_nothing_to_scaffold_says_so(registered):
+    completed = run(REGISTRY_CLI, "--root", str(registered), "overlays", "--scaffold")
+    assert completed.returncode == 0
+    assert "nothing to scaffold" in completed.stdout
+
+
+# =============================================================================
+# The project-profile ceremony
+# =============================================================================
+
+
+PROFILE = ROOT / "skills" / "project-profile" / "SKILL.md"
+
+
+def test_project_profile_ships():
+    assert PROFILE.is_file()
+    assert "project-profile" in SKILL_NAMES
+
+
+def test_project_profile_carries_the_shared_contract_and_the_clause():
+    text = PROFILE.read_text(encoding="utf-8")
+    assert "<!-- virtuoso-shared-contract v2 -->" in text
+    assert overlays_mod.OVERLAY_CLAUSE in text
+
+
+def test_project_profiles_contract_block_is_identical_to_every_other_skill():
+    def block(path):
+        text = path.read_text(encoding="utf-8")
+        start = text.index("<!-- virtuoso-shared-contract v2 -->")
+        return text[start:text.index("\n", text.index("- **Effort levels** —"))]
+    reference = block(ROOT / "skills" / "virtuoso-init" / "SKILL.md")
+    assert block(PROFILE) == reference
+
+
+def test_project_profile_states_that_it_never_writes_an_overlay():
+    said = flat(PROFILE.read_text(encoding="utf-8"))
+    assert "never writes a project's overlays" in said
+    assert "Never writes an overlay" in said
+
+
+def test_project_profile_routes_an_unregistered_project_to_init():
+    said = flat(PROFILE.read_text(encoding="utf-8"))
+    assert "virtuoso-init" in said
+    assert "repair-needed" in said
+
+
+def test_every_catalogue_question_names_a_real_policy_key():
+    from tools.governance import policy as policy_mod
+    text = PROFILE.read_text(encoding="utf-8")
+    declared = set(re.findall(r"`policy\.([A-Za-z][A-Za-z0-9_.]*)`", text))
+    assert declared, "the catalogue declares no policy keys at all"
+    defaults = policy_mod.load({})
+    for key in sorted(declared):
+        assert defaults.get(key, None) is not None, \
+            "the catalogue names policy.%s, which has no documented default" % key
+
+
+def test_the_catalogue_covers_every_pairing():
+    text = PROFILE.read_text(encoding="utf-8")
+    for pairing in overlays_mod.PAIRINGS:
+        assert "`policy.%s`" % pairing.policy_key in text, \
+            "%s is checkable but the interview never asks about it" % pairing.policy_key
+
+
+def test_project_profile_documents_the_declaration_and_body_rule():
+    said = flat(PROFILE.read_text(encoding="utf-8"))
+    assert "Declaration" in said and "Body" in said
+    assert "make it one" in said           # the corollary
+
+
+# =============================================================================
 # Install surfaces
 # =============================================================================
 
@@ -1015,8 +1222,10 @@ def test_the_alternate_host_manifest_serves_every_shipped_skill():
     manifest = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
     skills_dir = ROOT / manifest["skills"].lstrip("./")
     found = sorted(p.parent.name for p in skills_dir.glob("*/SKILL.md"))
+    # Compared against the folders on disk, never a literal: a hardcoded count is a
+    # second roster that the next skill has to remember to update.
     assert found == SKILL_NAMES
-    assert len(found) == 15
+    assert found, "the alternate-host manifest serves no skills at all"
 
 
 @pytest.mark.skipif(not HAVE_GIT, reason="git is not installed")

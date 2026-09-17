@@ -115,10 +115,16 @@ The heading must start with the id, so `## Why we dropped db-migration` does not
 a heading that discusses a check is not a definition of it. A longer id does not stand in
 for a shorter one either: `## db-migration-rollback` does not define `db-migration`.
 
-A declared id with no definition is reported at session start as `pairing-body-missing`,
-and an id declared with no `overlays` role registered at all as `pairing-mirror-unregistered`.
-Both are warnings or information, never errors: an undefined check is the project's to write,
-and no repair the plugin could run would write it.
+A declared id with no definition is reported at session start as `pairing-body-missing`, and
+an id declared with no `overlays` role registered at all as `pairing-mirror-unregistered`. A
+section left as the scaffold's placeholder is reported as `pairing-body-stub` — a heading
+shaped like a definition is not one, so generating the skeleton does not clear the warning
+that produced it. All three are warnings or information, never errors: an undefined check is
+the project's to write, and no repair the plugin could run would write it.
+
+To generate the skeleton (it writes nothing; redirect it yourself):
+
+    <launcher> virtuoso_registry --root . overlays --scaffold --for references/readiness-rubric.md
 
 ---
 
