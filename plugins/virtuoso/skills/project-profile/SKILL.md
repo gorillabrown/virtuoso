@@ -109,7 +109,11 @@ declaration does not belong here — it produces prose nothing can act on.
 | How much may a ceremony touch the repository? | `policy.git.policy` |
 | What do you call the people and agents in this workflow? | `policy.actors` |
 | Where should a stop, hold, or block be recorded? | `policy.issues.targets` |
-| What must every agent know here that the plugin cannot know? | overlay bodies under `agents/` |
+| What must every agent know here that the plugin cannot? Which shipped file does each rule belong on top of? | no declaration — these are **bodies**, recorded in Phase 3 and emitted in Phase 5 |
+
+The last row is the exception that proves the rule, and it is marked as one: it collects
+bodies rather than declarations. Every other row names exactly one `policy.*` key, and a
+question that named none would produce prose nothing consults.
 
 Batch the questions; do not interrogate one at a time. Carry forward what Phase 1 already
 found and ask only about what is missing or looks wrong — re-asking a settled question is how
@@ -146,11 +150,23 @@ Stop here for explicit approval. Approval covers this plan, not future ones.
 
 ## Phase 4 — write the policy half
 
-Only after approval, and only the machine-readable half. Policy lives in the manifest, so it
-is written through the previewed, backed-up repair path — never by hand-editing the file:
+Only after approval, and only the machine-readable half. Policy lives in the manifest, so
+it is written through the registry helper's explicit writer — never by hand-editing the
+file. Preview first; `--apply` is what writes:
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode repair
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode repair --apply
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor project-profile \
+        policy-set rubric.extensions --value-json '["db-migration"]'
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor project-profile \
+        policy-set rubric.extensions --value-json '["db-migration"]' --apply
+
+One key per invocation, so each approved line in the Phase 3 preview is one write you can
+point at. The value is JSON, so a list stays a list. The write validates the resulting
+policy before touching anything, backs the manifest up, and rolls back if the registry
+would not reload cleanly.
+
+The helper refuses a key the plugin does not document, because a key no ceremony reads is
+configuration that looks live and is inert. If an answer has nowhere documented to go, it
+is a body, not a declaration — take it to Phase 5.
 
 Re-run `--mode check` afterwards and confirm the status is `ready` or `warning`. A profile
 that leaves a registry in `repair-needed` has made the project worse.

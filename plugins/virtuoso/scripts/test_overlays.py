@@ -1410,6 +1410,207 @@ def test_project_profile_documents_the_declaration_and_body_rule():
 
 
 # =============================================================================
+# policy-set — the declaration half, written
+# =============================================================================
+
+
+def _manifest(root):
+    return json.loads((root / "Virtuoso" / "workspace-layout.json")
+                      .read_text(encoding="utf-8"))
+
+
+def test_assign_sets_a_dotted_key_without_mutating_its_input():
+    from tools.governance import policy as policy_mod
+    original = {"rubric": {"version": "1.0"}}
+    updated = policy_mod.assign(original, "rubric.extensions", ["db-migration"])
+    assert updated["rubric"]["extensions"] == ["db-migration"]
+    assert updated["rubric"]["version"] == "1.0"       # siblings survive
+    assert "extensions" not in original["rubric"]      # pure
+
+
+def test_assign_creates_intermediate_levels():
+    from tools.governance import policy as policy_mod
+    assert policy_mod.assign({}, "a.b.c", 1) == {"a": {"b": {"c": 1}}}
+
+
+def test_is_documented_distinguishes_a_real_key_from_a_storage_slot():
+    from tools.governance import policy as policy_mod
+    assert policy_mod.is_documented("rubric.extensions")
+    assert not policy_mod.is_documented("rubric.notAKey")
+
+
+def test_policy_set_previews_without_writing(registered):
+    before = snapshot_tree(str(registered))
+    completed = run(REGISTRY_CLI, "--root", str(registered), "--actor", "project-profile",
+                    "policy-set", "rubric.extensions", "--value-json", '["db-migration"]')
+    assert completed.returncode == 0, completed.stderr
+    assert "rubric.extensions" in completed.stdout
+    assert snapshot_tree(str(registered)) == before
+
+
+def test_policy_set_writes_the_value_and_backs_the_manifest_up(registered):
+    from tools.governance import backup as backup_mod
+    completed = run(REGISTRY_CLI, "--root", str(registered), "--actor", "project-profile",
+                    "policy-set", "rubric.extensions", "--value-json", '["db-migration"]',
+                    "--apply")
+    assert completed.returncode == 0, completed.stderr
+    assert _manifest(registered)["policy"]["rubric"]["extensions"] == ["db-migration"]
+    backups = registered.joinpath(*backup_mod.BACKUP_DIRNAME.split(os.sep))
+    assert backups.is_dir() and any(backups.iterdir())
+
+
+def test_policy_set_feeds_the_pairing_check(registered):
+    """The half this writes must be the half the audit reads.
+
+    This is the whole loop in one assertion: the ceremony writes the declaration,
+    and session start immediately reports that its body is missing.
+    """
+    completed = run(REGISTRY_CLI, "--root", str(registered), "--actor", "project-profile",
+                    "policy-set", "rubric.extensions", "--value-json", '["db-migration"]',
+                    "--apply")
+    assert completed.returncode == 0, completed.stderr
+    assert "pairing-body-missing" in _codes(registered)
+
+
+def _roles_meaning(root):
+    """Every role's meaning, as the registry reads it back."""
+    reg = registry_mod.load(str(root))
+    return {name: (spec.target, spec.provider, spec.authority, spec.mutability,
+                   sorted(spec.allowed_writers), spec.validation,
+                   spec.classification, spec.origin)
+            for name, spec in reg.roles.items()}
+
+
+def test_policy_set_preserves_unrelated_manifest_content(registered):
+    """Roles and schema survive a policy write, meaning for meaning.
+
+    Compared through the loaded registry rather than by raw-JSON equality. Writing
+    the manifest re-serializes it, and `RoleSpec.to_manifest` omits an
+    explicitly-empty `allowedWriters` because an empty list and an absent key are
+    the same answer to `writable_by`. That normalization belongs to the manifest
+    serializer, not to this command -- see the test below -- so asserting raw
+    equality here would assert that policy-set must not do what the sanctioned
+    write path already does.
+    """
+    before_meaning = _roles_meaning(registered)
+    before_raw = _manifest(registered)
+    run(REGISTRY_CLI, "--root", str(registered), "--actor", "project-profile",
+        "policy-set", "rubric.extensions", "--value-json", '["db-migration"]', "--apply")
+    after_raw = _manifest(registered)
+    assert _roles_meaning(registered) == before_meaning
+    assert sorted(after_raw["roles"]) == sorted(before_raw["roles"])
+    assert after_raw["schemaVersion"] == before_raw["schemaVersion"]
+    assert after_raw["layout"] == before_raw["layout"]
+    assert after_raw["documentationRoot"] == before_raw["documentationRoot"]
+
+
+def test_a_policy_write_churns_no_more_than_repair_already_does(project, tmp_path):
+    """The new writer must introduce no normalization of its own.
+
+    Two identical workspaces: one written by `repair --apply`, one by `policy-set
+    --apply`. Whatever the serializer normalizes, it must normalize the same way
+    for both -- a new write path that churned a manifest differently from the
+    established one would be a second, quieter definition of "preserved".
+    """
+    def build(root):
+        run(PREFLIGHT, "--root", str(root), "--mode", "create", "--authorize")
+        manifest = root / "Virtuoso" / "workspace-layout.json"
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        data["roles"]["overlays"] = dict(schema.default_role("overlays"),
+                                         path="Virtuoso/overlays")
+        manifest.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        return manifest
+
+    via_repair = build(project)
+    other = tmp_path / "other"
+    other.mkdir()
+    via_policy = build(other)
+
+    run(PREFLIGHT, "--root", str(project), "--mode", "repair", "--apply")
+    run(REGISTRY_CLI, "--root", str(other), "--actor", "project-profile",
+        "policy-set", "rubric.extensions", "--value-json", '["db-migration"]', "--apply")
+
+    repaired = json.loads(via_repair.read_text(encoding="utf-8"))
+    policied = json.loads(via_policy.read_text(encoding="utf-8"))
+    assert policied["roles"] == repaired["roles"]
+
+
+def test_policy_set_refuses_without_an_actor(registered):
+    completed = run(REGISTRY_CLI, "--root", str(registered),
+                    "policy-set", "rubric.extensions", "--value-json", "[]", "--apply")
+    assert completed.returncode == 3
+    assert "actor" in completed.stderr
+
+
+def test_policy_set_refuses_an_undocumented_key(registered):
+    """A key nothing documents is a storage slot: no ceremony reads it, so writing
+    it produces configuration that looks live and is inert."""
+    before = snapshot_tree(str(registered))
+    completed = run(REGISTRY_CLI, "--root", str(registered), "--actor", "project-profile",
+                    "policy-set", "rubric.notAKey", "--value-json", '"x"', "--apply")
+    assert completed.returncode == 3
+    assert "documented" in completed.stderr
+    assert snapshot_tree(str(registered)) == before
+
+
+def test_policy_set_refuses_a_value_that_fails_validation(registered):
+    before = snapshot_tree(str(registered))
+    completed = run(REGISTRY_CLI, "--root", str(registered), "--actor", "project-profile",
+                    "policy-set", "git.policy", "--value-json", '"yolo"', "--apply")
+    assert completed.returncode == 3
+    assert "not valid" in completed.stderr
+    assert snapshot_tree(str(registered)) == before
+
+
+def test_policy_set_refuses_malformed_json(registered):
+    completed = run(REGISTRY_CLI, "--root", str(registered), "--actor", "project-profile",
+                    "policy-set", "rubric.extensions", "--value-json", "[not json",
+                    "--apply")
+    assert completed.returncode == 3
+    assert "valid JSON" in completed.stderr
+
+
+def test_policy_set_never_writes_an_overlay(registered):
+    """The role stays read-only with no writers. A ceremony that can write policy
+    must not have acquired the ability to write the other half."""
+    run(REGISTRY_CLI, "--root", str(registered), "--actor", "project-profile",
+        "policy-set", "rubric.extensions", "--value-json", '["db-migration"]', "--apply")
+    reg = registry_mod.load(str(registered))
+    assert reg.writable("overlays", "project-profile") is False
+    assert not (registered / "Virtuoso" / "overlays").exists()
+
+
+def _catalogue_rows() -> list[str]:
+    """The Phase 2 interview table's data rows, header and rule excluded."""
+    body = PROFILE.read_text(encoding="utf-8").split("## Phase 2")[1].split("## Phase 3")[0]
+    return [line for line in body.splitlines()
+            if line.startswith("|") and not line.startswith("|---")
+            and not line.startswith("| Ask")]
+
+
+def test_every_catalogue_row_either_names_a_declaration_or_says_it_has_none():
+    """The catalogue's own rule is that each question maps to exactly one
+    declaration. One row collects bodies instead, which is legitimate — but it has
+    to SAY so, or it quietly contradicts the rule it is printed underneath.
+    """
+    rows = _catalogue_rows()
+    assert rows, "the catalogue has no rows"
+    for row in rows:
+        assert "`policy." in row or "no declaration" in row, \
+            "catalogue row neither names a policy key nor admits it has none: %s" % row
+
+
+def test_exactly_one_catalogue_row_collects_bodies():
+    """If a second row ever stops naming a declaration, that is drift, not design."""
+    assert sum(1 for row in _catalogue_rows() if "no declaration" in row) == 1
+
+
+def test_project_profile_names_the_command_that_writes_policy():
+    said = flat(PROFILE.read_text(encoding="utf-8"))
+    assert "policy-set" in said
+
+
+# =============================================================================
 # Install surfaces
 # =============================================================================
 

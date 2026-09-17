@@ -12,6 +12,7 @@ Subcommands:
   resolve <role>            print one role's absolute path or external identifier
   overlays [--for PATH]     the project's overlays for shipped skills, agents, references
            [--scaffold]     print an overlay skeleton to stdout (writes nothing)
+  policy-set <key> --value-json V   set one policy value (preview; --apply writes)
   provider [--role R]       describe the provider serving a role, and its capabilities
   items [--all]             list work items from the work register
   next                      the next eligible work item
@@ -43,7 +44,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.governance import (  # noqa: E402
     overlays as overlays_mod, policy as policy_mod, providers, registry as registry_mod,
-    schema, textio,
+    repair as repair_mod, schema, textio,
 )
 from tools.governance.errors import CapabilityError, GovernanceError, RoleNotRegistered  # noqa: E402
 from tools.governance import dependencies, integrity, repostate  # noqa: E402
@@ -489,6 +490,72 @@ def cmd_create_item(args) -> int:
     return EXIT_OK
 
 
+def _json_value(raw: str, label: str):
+    """Any JSON value. A policy value may be a list, string, number, or object, so
+    this deliberately does not require an object the way ``_json_object`` does."""
+    try:
+        return json.loads(raw)
+    except ValueError as exc:
+        raise GovernanceError("%s must be valid JSON: %s" % (label, exc)) from exc
+
+
+def cmd_policy_set(args) -> int:
+    """Set one policy value in the manifest. Previews by default; ``--apply`` writes.
+
+    Policy is the machine-readable half of a project rule. Until now the only way
+    to set one was to hand-edit the manifest — which every ceremony is forbidden to
+    do, and which skips validation, the backup, and the rollback. This routes it
+    through the same transaction repair uses, so the ceremony that documents a
+    previewed, backed-up write actually performs one.
+    """
+    if not args.actor:
+        raise CapabilityError(
+            "an explicit ceremony actor is required to set a policy value, for example "
+            "--actor project-profile")
+    reg = _load(args.root)
+    if [f for f in reg.findings if f.severity == "error"]:
+        raise GovernanceError(
+            "this registry reports errors; run `virtuoso_preflight.py --mode repair` first. "
+            "Writing policy onto an invalid registry buries the invalidity under a change "
+            "that looks successful.")
+    if not policy_mod.is_documented(args.key):
+        raise GovernanceError(
+            "policy.%s is not a documented key, so no ceremony reads it. Project-owned "
+            "configuration belongs under an `x-` extension key." % args.key)
+
+    value = _json_value(args.value_json, "--value-json")
+    before = policy_mod.load(reg.policy).get(args.key)
+    candidate = policy_mod.assign(reg.policy, args.key, value)
+    problems = policy_mod.load(candidate).validate()
+    if problems:
+        raise GovernanceError("the resulting policy is not valid; nothing was written:\n  %s"
+                              % "\n  ".join(problems))
+
+    reg.policy = candidate
+    plan = repair_mod.policy_plan(reg, args.key, before, value)
+
+    if not args.apply:
+        payload = {"key": args.key, "current": before, "proposed": value,
+                   "applied": False, "plan": plan.as_dict()}
+        if args.as_json:
+            return _emit(payload, True)
+        print(plan.render())
+        print("Nothing was written. Re-run with --apply to write it.")
+        return EXIT_OK
+
+    written, backup_set = repair_mod.apply_plan(reg, plan, label="policy-set")
+    payload = {"key": args.key, "current": before, "proposed": value, "applied": True,
+               "filesWritten": written, "backup": backup_set.as_dict()}
+    if args.as_json:
+        return _emit(payload, True)
+    print("policy.%s set" % args.key)
+    print("  was:    %s" % json.dumps(before, ensure_ascii=False))
+    print("  now:    %s" % json.dumps(value, ensure_ascii=False))
+    print("  wrote:  %s" % (", ".join(written) or "(already that value)"))
+    print("  backup: %s" % backup_set.relative_directory)
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     # The global flags are attached to every subparser via `parents` so they work
     # both before and after the subcommand. They default to SUPPRESS so a
@@ -522,6 +589,14 @@ def build_parser() -> argparse.ArgumentParser:
                           help="print an overlay skeleton (writes nothing; redirect it "
                                "yourself). With --for, prints that one file's content.")
     overlays.set_defaults(func=cmd_overlays)
+
+    policy_set = sub.add_parser("policy-set", parents=[common])
+    policy_set.add_argument("key", help="dotted policy key, e.g. rubric.extensions")
+    policy_set.add_argument("--value-json", required=True,
+                            help='the new value as JSON, e.g. \'["db-migration"]\'')
+    policy_set.add_argument("--apply", action="store_true",
+                            help="write it; without this the change is previewed only")
+    policy_set.set_defaults(func=cmd_policy_set)
 
     provider = sub.add_parser("provider", parents=[common])
     provider.add_argument("--role", default="workRegister")

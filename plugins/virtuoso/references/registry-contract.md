@@ -104,7 +104,19 @@ python <plugin>/scripts/virtuoso_registry.py --root . overlays
 
 All of those are queries: none of them creates a directory, seeds a document, or heals
 anything as a side effect. The commands that write say so explicitly — `snapshot`,
-`closeout --prepare`, `create-item`, `mutation-plan`, and `mutation-confirm`.
+`closeout --prepare`, `create-item`, `policy-set --apply`, `mutation-plan`, and
+`mutation-confirm`.
+
+`policy-set` writes the **declaration** half of a project rule. It runs on the same
+transaction `repair` does: the candidate registry is validated before anything is touched,
+the manifest is backed up, and a registry that would not reload cleanly is rolled back. It
+refuses a key the plugin does not document, because a key no ceremony reads is
+configuration that looks live and is inert.
+
+```sh
+python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> \
+  policy-set rubric.extensions --value-json '["db-migration"]' --apply
+```
 
 **Negotiate capabilities before you plan work** (item 28). A provider declares
 which of these it supports: `list-active`, `read-sequence`, `read-status`,

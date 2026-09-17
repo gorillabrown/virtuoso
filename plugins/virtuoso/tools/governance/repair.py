@@ -29,7 +29,7 @@ from .errors import RepairError
 class RepairAction:
     kind: str          # migrate-schema | adopt-readme-role | sync-readme-view |
                        # append-generated-region | create-registry-view |
-                       # create-directory | manual
+                       # create-directory | set-policy | manual
     role: str
     detail: str
     current: str = ""
@@ -219,9 +219,39 @@ def _ordered_roles(reg: registry_mod.Registry) -> list[schema.RoleSpec]:
     return [reg.roles[n] for n in known + rest]
 
 
+def policy_plan(reg: registry_mod.Registry, key: str, before, after) -> RepairPlan:
+    """A one-action plan that writes ``reg``'s current policy to the manifest.
+
+    Built as a RepairPlan so a policy write inherits :func:`apply_plan`'s
+    transaction exactly — validate the reconstruction before touching anything,
+    back up every affected file, write, re-validate, roll back on any failure.
+    A second write path would be a second set of those guarantees to keep true.
+
+    The readme view carries roles, not policy, so the manifest is the only file
+    affected and the human view needs no resynchronization.
+    """
+    return RepairPlan(
+        root=reg.root,
+        actions=[RepairAction(
+            kind="set-policy",
+            role="",
+            detail="set policy.%s" % key,
+            current="(unset)" if before is None else json.dumps(before, ensure_ascii=False),
+            proposed=json.dumps(after, ensure_ascii=False),
+        )],
+        files_affected=[schema.MANIFEST_RELPATH],
+        manifest_text=reg.manifest_json(),
+    )
+
+
 def apply_plan(reg: registry_mod.Registry, repair_plan: RepairPlan, *,
-               plugin_version: str = "", now=None) -> tuple[list[str], backup_mod.BackupSet]:
-    """Apply an approved plan transactionally. Returns ``(files_written, backup_set)``."""
+               plugin_version: str = "", now=None,
+               label: str = "repair") -> tuple[list[str], backup_mod.BackupSet]:
+    """Apply an approved plan transactionally. Returns ``(files_written, backup_set)``.
+
+    ``label`` names the backup directory, so a restore is traceable to the
+    operation that caused it rather than to whichever machinery performed it.
+    """
     # -- 1. validate the reconstruction BEFORE any write ----------------------
     try:
         candidate_data = json.loads(repair_plan.manifest_text)
@@ -235,9 +265,9 @@ def apply_plan(reg: registry_mod.Registry, repair_plan: RepairPlan, *,
             "untouched", detail={"findings": errors})
 
     # -- 2. back up every existing target ------------------------------------
-    backup_set = backup_mod.open_set(reg.root, "repair", now=now)
+    backup_set = backup_mod.open_set(reg.root, label, now=now)
     for rel in repair_plan.files_affected:
-        backup_set.add(os.path.join(reg.root, *rel.split("/")), "repair")
+        backup_set.add(os.path.join(reg.root, *rel.split("/")), label)
     backup_set.write_manifest()
     problems = backup_mod.verify(backup_set)
     if problems:

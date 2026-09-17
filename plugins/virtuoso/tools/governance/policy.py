@@ -135,6 +135,37 @@ def _deep_merge(base: dict, overlay: dict) -> dict:
     return out
 
 
+def assign(raw: dict | None, path: str, value) -> dict:
+    """``raw`` with the dotted ``path`` set to ``value``. Pure; returns a new dict.
+
+    Intermediate levels are created as needed. A non-dict standing where a level
+    must go is replaced, because the caller has just declared what that level is.
+    Siblings at every level survive, so setting one key never silently drops the
+    rest of a project's configuration.
+    """
+    parts = [p for p in path.split(".") if p]
+    if not parts:
+        raise ValueError("an empty policy key sets nothing")
+    out = copy.deepcopy(raw or {})
+    cursor = out
+    for part in parts[:-1]:
+        if not isinstance(cursor.get(part), dict):
+            cursor[part] = {}
+        cursor = cursor[part]
+    cursor[parts[-1]] = copy.deepcopy(value)
+    return out
+
+
+def is_documented(path: str) -> bool:
+    """Whether ``path`` names a key the defaults document.
+
+    A key nothing documents is a storage slot rather than a setting: no ceremony
+    reads it, so writing one produces configuration that looks live and is inert.
+    Project-owned configuration has the ``x-`` extension prefix and its own rules.
+    """
+    return Policy(DEFAULTS).get(path, None) is not None
+
+
 @dataclass
 class Policy:
     data: dict
