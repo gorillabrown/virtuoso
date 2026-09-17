@@ -589,14 +589,61 @@ def test_the_pairing_table_is_declared_not_scattered():
     ("## db-migration — forward and backward", True),
     ("### db-migration", True),
     ("#### db-migration (both directions)", True),
+    ("##\tdb-migration", True),                     # a tab is a valid heading separator
+    ("## DB-Migration — capitalized by a human", True),
     ("## Why we dropped db-migration", False),      # discusses it; does not define it
     ("## db-migration-rollback — a different id", False),
     ("## db-migrations", False),
     ("# db-migration", False),                      # depth 1 is the document title
     ("db-migration", False),                        # not a heading at all
+    ("##\ndb-migration", False),                    # a bare ## and then a paragraph
 ])
 def test_what_counts_as_a_body(heading, defines):
     assert bool(overlays_mod.body_heading("db-migration").search(heading)) is defines
+
+
+def test_a_heading_inside_a_code_fence_is_an_example_not_a_definition(registered):
+    """This plugin's own rubric shows `## db-migration` inside a fence.
+
+    A project that copies that example into its overlay is showing what a section
+    looks like, not writing one, and must not thereby satisfy the check.
+    """
+    _declare(registered, ["db-migration"])
+    _rubric_overlay(registered,
+                    "# additions\n\n```markdown\n## db-migration\nexample\n```\n")
+    assert "pairing-body-missing" in _codes(registered)
+
+
+def test_a_real_section_after_a_fenced_example_still_counts(registered):
+    _declare(registered, ["db-migration"])
+    _rubric_overlay(registered,
+                    "# additions\n\n```markdown\n## db-migration\nexample\n```\n\n"
+                    "## db-migration\n\nboth directions named\n")
+    assert not [c for c in _codes(registered) if c.startswith("pairing-")]
+
+
+def test_a_heading_with_nothing_under_it_is_a_stub(registered):
+    """Deleting the placeholder is the obvious way to 'fix' the stub warning.
+
+    If an empty section passed, the gate's own remedy would satisfy it by a second
+    route -- the same failure pairing-body-stub was added to close.
+    """
+    _declare(registered, ["db-migration"])
+    _rubric_overlay(registered, "## db-migration\n\n\n## something else\n\nprose\n")
+    codes = _codes(registered)
+    assert "pairing-body-stub" in codes
+    assert "pairing-body-missing" not in codes
+
+
+def test_a_capitalized_heading_defines_the_declared_id(registered):
+    """An id is an identifier; a heading is prose a person writes.
+
+    Requiring the prose to match the identifier's case reports the natural way to
+    write the section as undefined, which is a false report about correct work.
+    """
+    _declare(registered, ["deployment"])
+    _rubric_overlay(registered, "## Deployment — environment and rollback\n\nrehearsed\n")
+    assert not [c for c in _codes(registered) if c.startswith("pairing-")]
 
 
 def test_a_declared_id_with_a_body_is_clean(registered):

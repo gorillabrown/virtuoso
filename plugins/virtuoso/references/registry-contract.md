@@ -303,7 +303,7 @@ project's to fix and must not turn a working registry into one that reports
 | `overlays-external` | the role registers an external identifier; overlays are read as files |
 | `overlays-writable` / `overlays-has-writers` | registered writable; register it read-only |
 | `pairing-body-missing` | a policy key declares an id that no overlay section defines |
-| `pairing-body-stub` | the section exists but is still the scaffold's placeholder |
+| `pairing-body-stub` | the section exists but is empty, or still the scaffold's placeholder |
 | `pairing-mirror-unregistered` | ids are declared but no `overlays` role exists to hold their bodies |
 
 ### Declarations and bodies

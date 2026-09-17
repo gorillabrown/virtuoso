@@ -85,7 +85,8 @@ SAFETY_FLOOR = (
 #: like one*. Without it, scaffolding would clear the very warning that produced
 #: the scaffold: the id would read as defined the moment the stub was saved, and
 #: the project would be green with nothing written. A gate that its own remedy
-#: satisfies is not a gate.
+#: satisfies is not a gate. An empty section is reported for the same reason: the
+#: obvious way to clear the stub warning is to delete the placeholder line.
 SCAFFOLD_PLACEHOLDER = "(state what must be true for this check to pass)"
 
 
@@ -173,14 +174,23 @@ PAIRINGS = (
 
 def body_heading(identifier: str) -> re.Pattern:
     """The heading that counts as ``identifier``'s body: a depth 2-4 heading whose
-    text *starts with* the id.
+    text *starts with* the id, on one line, in any case.
 
     Anchored at the start on purpose. Matching the id anywhere in the heading would
     let ``## Why we dropped db-migration`` satisfy ``db-migration`` — a heading that
     says the opposite of a body. The trailing guard rejects a longer id standing in
     for a shorter one, so ``## db-migration-rollback`` is not ``db-migration``.
+
+    ``[ \t]`` rather than ``\s``: ``\s`` matches a newline, so a bare ``##`` line
+    followed by a paragraph beginning with the id read as a heading.
+
+    Case-insensitive because an id is an identifier and a heading is prose. A
+    person writing the section calls it ``## Deployment``; reporting that as
+    undefined is a false report about correct work, and two ids differing only in
+    case would be a collision inside one project's own list.
     """
-    return re.compile(r"(?m)^#{2,4}\s+%s(?![\w-])" % re.escape(identifier))
+    return re.compile(r"(?m)^#{2,4}[ \t]+%s(?![\w-])" % re.escape(identifier),
+                      re.IGNORECASE)
 
 
 def declared_ids(reg, pairing: Pairing) -> list[str]:
@@ -502,15 +512,41 @@ def audit(reg, plugin_root: str) -> OverlayStatus:
     return status
 
 
+#: A fenced code block, closed by a fence of the same character. Matched lazily so
+#: two separate blocks are two matches rather than one spanning the prose between.
+_FENCE_RE = re.compile(r"(?ms)^(?P<fence>```+|~~~+).*?^(?P=fence)[ \t]*$")
+
+
+def without_fenced_blocks(text: str) -> str:
+    """``text`` with fenced code blocks blanked out, every offset preserved.
+
+    A heading inside a fence is an *example* of a heading. This plugin's own
+    readiness rubric shows ``## db-migration`` inside one, so a project that copies
+    that example is showing what a section looks like rather than writing one.
+
+    Non-newline characters become spaces rather than being deleted, so the result
+    is the same length as the input and an offset found here indexes the original
+    text unchanged. That is what lets the caller detect on this string and slice
+    the real prose out of the original.
+    """
+    return _FENCE_RE.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), text)
+
+
 def _body_section(text: str, pattern: re.Pattern) -> str | None:
     """The prose under the matched heading, up to the next heading of any depth.
-    ``None`` when the heading is absent."""
-    match = pattern.search(text)
+    ``None`` when the heading is absent.
+
+    Headings are located in the fence-blanked copy and the body is sliced out of
+    the original, so a fenced example never defines anything and a real section's
+    own fenced content is still returned intact.
+    """
+    scan = without_fenced_blocks(text)
+    match = pattern.search(scan)
     if not match:
         return None
-    rest = text[match.end():]
-    following = re.search(r"(?m)^#{1,6}\s", rest)
-    return rest[:following.start()] if following else rest
+    following = re.search(r"(?m)^#{1,6}[ \t]", scan[match.end():])
+    end = match.end() + following.start() if following else len(text)
+    return text[match.end():end]
 
 
 def _pairing_findings(reg, status: OverlayStatus) -> list[Finding]:
@@ -556,13 +592,16 @@ def _pairing_findings(reg, status: OverlayStatus) -> list[Finding]:
                     "is an identifier no ceremony can apply."
                     % (pairing.policy_key, pairing.label, identifier, identifier,
                        pairing.mirror), role=OVERLAY_ROLE, identifier=identifier))
-            elif SCAFFOLD_PLACEHOLDER in section:
+            elif not section.strip() or SCAFFOLD_PLACEHOLDER in section:
+                reason = ("has nothing under it" if not section.strip()
+                          else "is still the scaffold's placeholder")
                 found.append(Finding(
                     "pairing-body-stub", "warning",
-                    "policy.%s declares the %s %r and %s has a section for it that is still "
-                    "the scaffold's placeholder. Replace it with what must actually be true; "
-                    "a heading shaped like a definition is not one."
-                    % (pairing.policy_key, pairing.label, identifier, pairing.mirror),
+                    "policy.%s declares the %s %r and %s has a section for it that %s. "
+                    "Write what must actually be true; a heading shaped like a definition "
+                    "is not one."
+                    % (pairing.policy_key, pairing.label, identifier, pairing.mirror,
+                       reason),
                     role=OVERLAY_ROLE, identifier=identifier))
     return found
 

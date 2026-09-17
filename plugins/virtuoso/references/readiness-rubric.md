@@ -115,6 +115,15 @@ The heading must start with the id, so `## Why we dropped db-migration` does not
 a heading that discusses a check is not a definition of it. A longer id does not stand in
 for a shorter one either: `## db-migration-rollback` does not define `db-migration`.
 
+Case does not matter, so `## Deployment — environment and rollback` defines `deployment`:
+the id is an identifier and the heading is prose you write. The id and the `#` marks must
+be on the same line, and a heading inside a fenced code block is an example of a heading
+rather than one — the block just above is exactly that, and copying it verbatim into your
+overlay defines nothing.
+
+A section with a heading and no prose under it is reported too. The placeholder is not
+the only way to leave a check undefined; deleting it is the other.
+
 A declared id with no definition is reported at session start as `pairing-body-missing`, and
 an id declared with no `overlays` role registered at all as `pairing-mirror-unregistered`. A
 section left as the scaffold's placeholder is reported as `pairing-body-stub` — a heading
