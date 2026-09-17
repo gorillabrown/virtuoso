@@ -510,6 +510,11 @@ def _pairing_findings(reg, status: OverlayStatus) -> list[Finding]:
         overlay = next((o for o in status.overlays
                         if o.mirror == pairing.mirror and o.present), None)
         text = textio.read_text(overlay.path) if overlay else None
+        if overlay is not None and text is None:
+            # The audit already reported this file as unreadable. Reporting each
+            # id as undefined on top of that would send the operator to write
+            # sections that are already there.
+            continue
         for identifier in ids:
             section = (_body_section(text, body_heading(identifier))
                        if text is not None else None)
@@ -610,4 +615,12 @@ def _audit_overlay_files(reg, plugin_root: str) -> OverlayStatus:
                 "overlay-orphan", "warning",
                 "overlay %s mirrors no shipped file. It is never applied — the shipped file may "
                 "have been renamed or removed." % mirror, role=OVERLAY_ROLE))
+
+        if applies and textio.read_text(resolved) is None:
+            status.findings.append(Finding(
+                "overlay-unreadable", "warning",
+                "overlay %s exists but its bytes are not decodable as text, so nothing in "
+                "it can be applied or define anything. A shell redirect on Windows can "
+                "write a legacy code page; re-save the file as UTF-8." % mirror,
+                role=OVERLAY_ROLE))
     return status

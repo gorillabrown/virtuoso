@@ -299,6 +299,7 @@ project's to fix and must not turn a working registry into one that reports
 | `overlay-case-mismatch` | it differs from a shipped file only in case |
 | `overlay-outside-mirror` | it is not under `skills/`, `agents/`, or `references/`, so nothing addresses it |
 | `overlay-not-overlayable` | it mirrors a shipped file that may not be overlaid (rule 6) |
+| `overlay-unreadable` | the file's bytes are not decodable as text; re-save it as UTF-8 |
 | `overlays-external` | the role registers an external identifier; overlays are read as files |
 | `overlays-writable` / `overlays-has-writers` | registered writable; register it read-only |
 | `pairing-body-missing` | a policy key declares an id that no overlay section defines |

@@ -13,6 +13,7 @@ Four layers, one per way the old whole-file fork failed:
 """
 from __future__ import annotations
 
+import codecs
 import importlib.util
 import json
 import os
@@ -654,6 +655,68 @@ def test_a_malformed_policy_value_is_ignored_not_raised(registered):
     data.setdefault("policy", {})["rubric"] = {"extensions": "db-migration"}   # not a list
     manifest.write_text(json.dumps(data, indent=2), encoding="utf-8")
     assert not [c for c in _codes(registered) if c.startswith("pairing-")]
+
+
+def test_a_utf16_overlay_is_read_rather_than_called_missing(registered):
+    """Windows PowerShell 5.1's `>` writes UTF-16 with a BOM.
+
+    That is the documented way to save a scaffold, so a reader that rejects a BOM
+    turns the documented workflow into a file the plugin calls absent -- and the
+    operator, who wrote a correct heading, is told nothing defines it.
+    """
+    _declare(registered, ["db-migration"])
+    base = registered / "Virtuoso" / "overlays" / "references"
+    base.mkdir(parents=True)
+    (base / "readiness-rubric.md").write_bytes(
+        "## db-migration\n\nboth directions named\n".encode("utf-16"))
+    codes = _codes(registered)
+    assert "pairing-body-missing" not in codes
+    assert "overlay-unreadable" not in codes
+
+
+def test_a_utf8_bom_overlay_is_read(registered):
+    _declare(registered, ["db-migration"])
+    base = registered / "Virtuoso" / "overlays" / "references"
+    base.mkdir(parents=True)
+    (base / "readiness-rubric.md").write_bytes(
+        codecs.BOM_UTF8 + "## db-migration\n\nboth directions named\n".encode("utf-8"))
+    assert "pairing-body-missing" not in _codes(registered)
+
+
+def test_an_undecodable_overlay_says_so_instead_of_saying_missing(registered):
+    """pwsh 7 redirects a legacy code page when the console is not UTF-8.
+
+    Those bytes carry no BOM and are not valid UTF-8, so nothing can read them.
+    The operator must be told the file is unreadable -- "nothing defines this id"
+    sends them to rewrite a section that is already there.
+    """
+    _declare(registered, ["db-migration"])
+    base = registered / "Virtuoso" / "overlays" / "references"
+    base.mkdir(parents=True)
+    (base / "readiness-rubric.md").write_bytes(
+        "## db-migration \u2014 both directions\n".encode("cp1252"))
+    codes = _codes(registered)
+    assert "overlay-unreadable" in codes
+    assert "pairing-body-missing" not in codes
+
+
+def test_the_scaffold_redirect_round_trips_through_a_byte_stream(registered):
+    """`--scaffold --for X > X` must produce a file this plugin can read back.
+
+    The redirect is the whole write, so stdout here is a file the audit will
+    later parse. Capturing bytes rather than text is the point: a console
+    encoding must not be able to change what lands on disk.
+    """
+    _declare(registered, ["db-migration"])
+    completed = subprocess.run(
+        [sys.executable, REGISTRY_CLI, "--root", str(registered), "overlays",
+         "--scaffold", "--for", "references/readiness-rubric.md"],
+        capture_output=True, env=dict(os.environ))
+    assert completed.returncode == 0, completed.stderr
+    target = registered / "Virtuoso" / "overlays" / "references" / "readiness-rubric.md"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(completed.stdout)
+    assert "pairing-body-stub" in _codes(registered)
 
 
 def test_pairing_findings_are_never_errors(registered):

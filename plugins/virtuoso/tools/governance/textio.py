@@ -11,6 +11,7 @@ The governance layer's central promise is that it does not churn user files
 """
 from __future__ import annotations
 
+import codecs
 import hashlib
 import os
 
@@ -23,10 +24,38 @@ def read_bytes(path: str) -> bytes | None:
         return None
 
 
+#: BOMs, longest first. UTF-32 LE begins with the UTF-16 LE BOM, so testing
+#: UTF-16 first would decode a UTF-32 file as UTF-16 and produce mojibake.
+_BOMS = (
+    (codecs.BOM_UTF8, "utf-8-sig"),
+    (codecs.BOM_UTF32_LE, "utf-32"),
+    (codecs.BOM_UTF32_BE, "utf-32"),
+    (codecs.BOM_UTF16_LE, "utf-16"),
+    (codecs.BOM_UTF16_BE, "utf-16"),
+)
+
+
 def read_text(path: str) -> str | None:
+    """The file's text, or ``None`` when its bytes are not decodable as text.
+
+    A byte-order mark is honoured rather than rejected. Governance documents are
+    written by people and by their shells: Windows PowerShell's ``>`` writes
+    UTF-16 with a BOM, and several editors add a UTF-8 one. Refusing those made
+    the plugin report a file it could plainly see as absent, which is a worse
+    answer than reading it.
+
+    ``None`` still means "these bytes are not text I can read", and callers
+    report that; it no longer also means "these bytes are text with a BOM".
+    """
     raw = read_bytes(path)
     if raw is None:
         return None
+    for bom, encoding in _BOMS:
+        if raw.startswith(bom):
+            try:
+                return raw.decode(encoding)
+            except (UnicodeDecodeError, LookupError):
+                return None
     try:
         return raw.decode("utf-8")
     except UnicodeDecodeError:

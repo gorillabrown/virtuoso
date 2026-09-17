@@ -93,6 +93,24 @@ def cmd_resolve(args) -> int:
     return EXIT_OK
 
 
+def _write_bytes_to_stdout(content: str) -> None:
+    """Write ``content`` to stdout as UTF-8, whatever the console's encoding is.
+
+    The documented workflow is ``... --scaffold --for <path> > <path>``, so this
+    stdout is a file the plugin will later read back. A Windows console defaults
+    to a legacy code page, and the text layer would then encode the scaffold's
+    own punctuation into bytes no reader can decode -- the operator saves a
+    correct overlay and is told the section does not exist.
+    """
+    buffer = getattr(sys.stdout, "buffer", None)
+    if buffer is None:              # a replaced stdout (capture); text is all there is
+        sys.stdout.write(content)
+        return
+    sys.stdout.flush()
+    buffer.write(content.encode("utf-8"))
+    buffer.flush()
+
+
 def cmd_overlays(args) -> int:
     """Resolve the project's overlays for shipped skills and agents. Read-only.
 
@@ -115,7 +133,7 @@ def cmd_overlays(args) -> int:
                       % args.for_path, file=sys.stderr)
                 return EXIT_UNANSWERABLE
             # Exactly the file's content, so `... > <path>` is the whole write.
-            sys.stdout.write(content)
+            _write_bytes_to_stdout(content)
             return EXIT_OK
         plan = overlays_mod.scaffold_plan(reg, status)
         if not plan:
@@ -127,7 +145,7 @@ def cmd_overlays(args) -> int:
         for mirror, content in plan:
             # Named, not written: re-run with --for <mirror> and redirect.
             print("# ==== %s ====" % os.path.join(root, *mirror.split("/")))
-            sys.stdout.write(content)
+            _write_bytes_to_stdout(content)
             print()
         return EXIT_OK
 
