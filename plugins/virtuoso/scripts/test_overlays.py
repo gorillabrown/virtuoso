@@ -810,6 +810,48 @@ def test_the_status_line_distinguishes_absent_from_empty(registered):
     assert absent != empty
 
 
+def test_an_undefined_id_is_named_when_no_overlays_role_exists(project):
+    """The state a project is in the moment it declares its first extension.
+
+    Printing only "not registered" here is the loop's second step saying nothing
+    at the exact point the operator needs to be told what to do.
+    """
+    run(PREFLIGHT, "--root", str(project), "--mode", "create", "--authorize")
+    _declare(project, ["deployment"])
+    line = overlays_mod.audit(registry_mod.load(str(project)), PLUGIN_ROOT).line()
+    assert "not registered" in line
+    assert "deployment" in line
+
+
+def test_an_undefined_id_is_named_when_the_directory_is_absent(registered):
+    _declare(registered, ["deployment"])
+    line = overlays_mod.audit(registry_mod.load(str(registered)), PLUGIN_ROOT).line()
+    assert "registered but absent" in line
+    assert "deployment" in line
+
+
+def test_every_undefined_id_is_named(registered):
+    _declare(registered, ["deployment", "db-migration"])
+    line = overlays_mod.audit(registry_mod.load(str(registered)), PLUGIN_ROOT).line()
+    assert "db-migration" in line and "deployment" in line
+
+
+def test_a_clean_project_says_nothing_extra(registered):
+    """The suffix must be absent, not empty-but-present: a line that always ends
+    in punctuation trains the reader to stop looking at the end of it."""
+    _declare(registered, ["db-migration"])
+    _rubric_overlay(registered, "## db-migration\n\nboth directions named\n")
+    line = overlays_mod.audit(registry_mod.load(str(registered)), PLUGIN_ROOT).line()
+    assert "undefined" not in line and "finding(s)" not in line
+
+
+def test_the_session_start_line_names_the_undefined_id(registered):
+    _declare(registered, ["deployment"])
+    completed = run(PREFLIGHT, "--root", str(registered), "--mode", "check", "--quiet")
+    assert "virtuoso-status: ready" in completed.stdout
+    assert "deployment" in completed.stdout
+
+
 def test_the_status_line_counts_applied_overlays_and_findings(with_overlays):
     line = overlays_mod.audit(registry_mod.load(str(with_overlays)), PLUGIN_ROOT).line()
     assert line.startswith("overlays: 2 applied")

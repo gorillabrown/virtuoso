@@ -48,11 +48,16 @@ class Finding:
     severity: str          # "error" | "warning" | "info"
     message: str
     role: str = ""
+    #: The project identifier this finding is about, when it is about one. Carried
+    #: as data so a caller can name it without parsing the message back out.
+    identifier: str = ""
 
     def as_dict(self) -> dict:
         data = {"code": self.code, "severity": self.severity, "message": self.message}
         if self.role:
             data["role"] = self.role
+        if self.identifier:
+            data["identifier"] = self.identifier
         return data
 
 

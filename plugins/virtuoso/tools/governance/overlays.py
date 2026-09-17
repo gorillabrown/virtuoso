@@ -366,19 +366,48 @@ class OverlayStatus:
     def state(self) -> str:
         """The result, without the label. Always states something: an unregistered
         project reports ``not registered`` rather than nothing, because no output is
-        indistinguishable from an all-clear."""
+        indistinguishable from an all-clear.
+
+        The finding suffix is appended in EVERY state. It used to be computed only
+        after the early returns, so the two states a project is actually in when it
+        first declares an extension -- no role, and a role with no directory --
+        reported a clean line while the audit was holding a finding about them.
+        """
+        suffix = self._finding_suffix()
         if not self.registered:
-            return "not registered"
+            return "not registered%s" % suffix
         if self.external:
-            return "registered externally (%s); not readable as files" % self.external
+            return "registered externally (%s); not readable as files%s" % (self.external, suffix)
         if not self.root_present:
-            return "registered but absent (%s)" % self.root
-        problems = sum(1 for f in self.findings if f.severity in ("error", "warning"))
-        suffix = "; %d finding(s)" % problems if problems else ""
+            return "registered but absent (%s)%s" % (self.root, suffix)
         count = len(self.applied)
         if not count:
             return "registered, none present (%s)%s" % (self.root, suffix)
         return "%d applied (%s)%s" % (count, self.root, suffix)
+
+    def _finding_suffix(self) -> str:
+        """The finding count, and the undefined identifiers by name.
+
+        Named, not merely counted: the operator's next action is to define one, and
+        "1 finding(s)" tells them something is wrong where "undefined: deployment"
+        tells them what to write. Absent entirely when there is nothing to say, so
+        the end of the line stays worth reading.
+        """
+        undefined = []
+        for finding in self.findings:
+            if not finding.code.startswith("pairing-") or not finding.identifier:
+                continue
+            for name in finding.identifier.split(","):
+                name = name.strip()
+                if name and name not in undefined:
+                    undefined.append(name)
+        problems = sum(1 for f in self.findings if f.severity in ("error", "warning"))
+        parts = []
+        if problems:
+            parts.append("%d finding(s)" % problems)
+        if undefined:
+            parts.append("undefined: %s" % ", ".join(sorted(undefined)))
+        return ("; " + "; ".join(parts)) if parts else ""
 
     def line(self) -> str:
         """The labelled one-line result, as preflight and the CLI print it."""
@@ -504,7 +533,8 @@ def _pairing_findings(reg, status: OverlayStatus) -> list[Finding]:
                 "policy.%s declares %d %s(s) (%s) but this project registers no %r role, so "
                 "there is nowhere to define them. Register one and add %s."
                 % (pairing.policy_key, len(ids), pairing.label, ", ".join(ids),
-                   OVERLAY_ROLE, pairing.mirror), role=OVERLAY_ROLE))
+                   OVERLAY_ROLE, pairing.mirror), role=OVERLAY_ROLE,
+                identifier=", ".join(ids)))
             continue
 
         overlay = next((o for o in status.overlays
@@ -525,7 +555,7 @@ def _pairing_findings(reg, status: OverlayStatus) -> list[Finding]:
                     "starting with %r to %s in the overlays directory; until then the check "
                     "is an identifier no ceremony can apply."
                     % (pairing.policy_key, pairing.label, identifier, identifier,
-                       pairing.mirror), role=OVERLAY_ROLE))
+                       pairing.mirror), role=OVERLAY_ROLE, identifier=identifier))
             elif SCAFFOLD_PLACEHOLDER in section:
                 found.append(Finding(
                     "pairing-body-stub", "warning",
@@ -533,7 +563,7 @@ def _pairing_findings(reg, status: OverlayStatus) -> list[Finding]:
                     "the scaffold's placeholder. Replace it with what must actually be true; "
                     "a heading shaped like a definition is not one."
                     % (pairing.policy_key, pairing.label, identifier, pairing.mirror),
-                    role=OVERLAY_ROLE))
+                    role=OVERLAY_ROLE, identifier=identifier))
     return found
 
 
