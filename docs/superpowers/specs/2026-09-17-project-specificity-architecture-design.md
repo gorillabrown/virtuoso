@@ -2,6 +2,18 @@
 
 **Status:** approved, unimplemented · **Date:** 2026-09-17 · **Follows:** `2026-09-16-project-overlays-design.md`
 
+## Decisions (2026-09-17)
+
+Four questions were open when this plan was written. All are now settled; the body below
+reflects them.
+
+| Question | Decision |
+|---|---|
+| How does the Stage 3 scaffold reach disk? | **Emitted, never written.** `overlays --scaffold` prints; the operator redirects. The read-only invariant stays unqualified. |
+| Which references are overlayable? | **All but `references/registry-contract.md`**, on the bootstrap argument below. |
+| How is a pairing body marked? | **A heading that *starts with* the declared id.** Not merely contains — see Stage 2. |
+| How does this ship? | **One release, 1.8.0, all three stages.** Supersedes the two-release split this plan originally proposed. |
+
 ## Problem Statement
 
 Virtuoso is a governance plugin for projects that differ from each other. Project
@@ -147,9 +159,16 @@ PAIRINGS = (
 `policy.py` imports nothing from the governance package (verified: `copy` and `dataclass`
 only), so `overlays.py` can import it with no cycle.
 
-**What counts as a body.** A markdown heading at depth 2–4 whose text contains the declared
-id: `(?m)^#{2,4}\s+.*\b<id>\b`. Documented in `references/readiness-rubric.md` beside the
-extension table, so the convention ships where a project reads about extensions.
+**What counts as a body.** A markdown heading at depth 2–4 whose text **starts with** the
+declared id: `(?m)^#{2,4}\s+<id>\b`. Anchoring to the start rather than matching anywhere in
+the heading is deliberate — `## Why we dropped db-migration` must not count as a body for
+`db-migration`. Documented in `references/readiness-rubric.md` beside the extension table, so
+the convention ships where a project reads about extensions.
+
+An anchor comment (`<!-- extension:<id> -->`, matching `skill_rules.py`'s promoted-rule
+pattern) was considered and rejected: it is exact, but it is HTML syntax imposed on someone
+whose only task is writing a rubric section, and lowering that friction is the point of the
+stage.
 
 **New findings** (severity discipline unchanged — never `error`, because an overlay problem is
 the project's to fix and `repair` has nothing to propose for a file the plugin does not own):
@@ -235,10 +254,10 @@ PATH]`** prints the skeleton to stdout, and the operator's own shell redirects i
 stays read-only, the invariant stays unqualified, and the ceremony still produces a file the
 operator only has to fill in.
 
-*Rejected:* a narrow create-if-absent exception under `--authorize`, matching `create`'s
-never-overwrite behaviour. It is defensible, and it costs the plain sentence "the plugin never
-writes a project's overlays" — which is worth more than the keystrokes. Open to being
-overruled; recorded here so the trade is visible.
+*Rejected (settled 2026-09-17):* a narrow create-if-absent exception under `--authorize`,
+matching `create`'s never-overwrite behaviour. It is defensible, and it costs the plain
+sentence "the plugin never writes a project's overlays" — which is worth more than the
+keystrokes. Recorded so the trade stays visible if the friction later proves real.
 
 ### Done when
 
@@ -255,15 +274,15 @@ overruled; recorded here so the trade is visible.
 ## Sequencing, versions, edit sites
 
 Stage 2 needs Stage 1's overlayable rubric. Stage 3 scaffolds from Stage 2's pairing table.
-Strictly ordered.
+Strictly ordered in implementation, shipped together.
 
-| Release | Contents | Why grouped |
-|---|---|---|
-| **1.8.0** | Stages 1 + 2 | Both are small, and Stage 1 alone would ship an overlayable rubric with nothing checking that it is used |
-| **1.9.0** | Stage 3 | A larger design; must not hold up 1 + 2 |
+**One release: 1.8.0, all three stages.** The build order is still 1 → 2 → 3, each gated on
+the full suite and `validate.py` before the next begins, so a stage that turns out harder than
+planned is visible as a stalled gate rather than as a half-finished release. Commits stay
+per-stage for reviewability; the version bump happens once, at the end.
 
-**Edit sites for Stage 3's sixteenth skill** (found by inspection now, so the count is not
-discovered mid-release):
+**Edit sites for the sixteenth skill** — listed now, so the count is not discovered
+mid-release:
 
 - `.claude-plugin/marketplace.json` — description says "15 skills"
 - `README.md` — the skills table
