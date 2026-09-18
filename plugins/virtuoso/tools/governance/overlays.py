@@ -173,7 +173,7 @@ PAIRINGS = (
 
 
 def body_heading(identifier: str) -> re.Pattern:
-    """The heading that counts as ``identifier``'s body: a depth 2-4 heading whose
+    r"""The heading that counts as ``identifier``'s body: a depth 2-4 heading whose
     text *starts with* the id, on one line, in any case.
 
     Anchored at the start on purpose. Matching the id anywhere in the heading would

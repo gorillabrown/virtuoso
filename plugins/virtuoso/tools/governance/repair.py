@@ -246,11 +246,13 @@ def policy_plan(reg: registry_mod.Registry, key: str, before, after) -> RepairPl
 
 def apply_plan(reg: registry_mod.Registry, repair_plan: RepairPlan, *,
                plugin_version: str = "", now=None,
-               label: str = "repair") -> tuple[list[str], backup_mod.BackupSet]:
+               label: str = "repair",
+               actor: str = "") -> tuple[list[str], backup_mod.BackupSet]:
     """Apply an approved plan transactionally. Returns ``(files_written, backup_set)``.
 
-    ``label`` names the backup directory, so a restore is traceable to the
-    operation that caused it rather than to whichever machinery performed it.
+    ``label`` names the backup directory and ``actor`` records who asked, so a
+    restore is traceable to the operation and to the ceremony that caused it
+    rather than to whichever machinery performed it.
     """
     # -- 1. validate the reconstruction BEFORE any write ----------------------
     try:
@@ -265,7 +267,7 @@ def apply_plan(reg: registry_mod.Registry, repair_plan: RepairPlan, *,
             "untouched", detail={"findings": errors})
 
     # -- 2. back up every existing target ------------------------------------
-    backup_set = backup_mod.open_set(reg.root, label, now=now)
+    backup_set = backup_mod.open_set(reg.root, label, now=now, actor=actor)
     for rel in repair_plan.files_affected:
         backup_set.add(os.path.join(reg.root, *rel.split("/")), label)
     backup_set.write_manifest()

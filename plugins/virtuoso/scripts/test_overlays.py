@@ -1675,6 +1675,128 @@ def test_policy_set_never_writes_an_overlay(registered):
     assert not (registered / "Virtuoso" / "overlays").exists()
 
 
+def _backup_dirs(root):
+    from tools.governance import backup as backup_mod
+    base = root.joinpath(*backup_mod.BACKUP_DIRNAME.split(os.sep))
+    return sorted(d for d in base.iterdir() if d.is_dir()) if base.is_dir() else []
+
+
+def test_two_applies_in_one_second_do_not_share_a_backup(registered):
+    """The original must survive two chained writes.
+
+    Backup directories are stamped to the second. Two applies inside one second
+    shared a directory, so the second copied the FIRST APPLY'S OUTPUT over the
+    pristine original and the state before either write was gone. The skill tells
+    a ceremony to set one key per invocation, which makes chaining the normal
+    shape rather than an unlucky one; this reproduced in three trials of three.
+    """
+    manifest = registered / "Virtuoso" / "workspace-layout.json"
+    pristine = manifest.read_text(encoding="utf-8")
+    for key, value in (("rubric.extensions", '["a"]'),
+                       ("roadmap.dispatchBuffer", "3")):
+        completed = run(REGISTRY_CLI, "--root", str(registered), "--actor", "project-profile",
+                        "policy-set", key, "--value-json", value, "--apply")
+        assert completed.returncode == 0, completed.stderr
+
+    dirs = _backup_dirs(registered)
+    assert len(dirs) == 2, "two applies produced %d backup set(s)" % len(dirs)
+    saved = [copy.read_text(encoding="utf-8")
+             for d in dirs for copy in d.rglob("workspace-layout.json")]
+    assert pristine in saved, "the state before either write is not recoverable"
+
+
+def test_a_backup_set_never_reuses_an_existing_directory(project):
+    """The guarantee is "this directory is mine", so it is an existence check.
+
+    A finer timestamp would make a collision unlikely rather than impossible, and
+    a backup that is merely unlikely to be overwritten is not a backup.
+    """
+    from tools.governance import backup as backup_mod
+    import datetime as dt
+    frozen = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)
+    seen = set()
+    for _ in range(3):
+        opened = backup_mod.open_set(str(project), "policy-set", now=frozen)
+        os.makedirs(opened.directory, exist_ok=True)
+        assert opened.directory not in seen
+        seen.add(opened.directory)
+
+
+def test_a_backup_records_the_ceremony_that_asked(registered):
+    """A label says what happened; the actor says who asked. A restore needs both."""
+    run(REGISTRY_CLI, "--root", str(registered), "--actor", "project-profile",
+        "policy-set", "rubric.extensions", "--value-json", '["a"]', "--apply")
+    manifest = json.loads((_backup_dirs(registered)[0] / "manifest.json")
+                          .read_text(encoding="utf-8"))
+    assert manifest["label"] == "policy-set"
+    assert manifest["actor"] == "project-profile"
+
+
+@pytest.mark.parametrize("key,value,why", [
+    ("rubric.extensions", '"db-migration"', "a string where a list is documented"),
+    ("rubric", '"everything"', "a string replacing a whole section"),
+    ("roadmap.dispatchBuffer", '"five"', "a string where a number is documented"),
+    ("actors", '["planner"]', "a list replacing a mapping"),
+    ("roadmap.eagerSpec", "1", "a number where a flag is documented"),
+])
+def test_a_value_of_the_wrong_shape_is_refused(registered, key, value, why):
+    """Stored-and-ignored is the failure this whole architecture is about.
+
+    A string in `rubric.extensions` declared a readiness check that no ceremony
+    could read and that session start never mentioned: the project believed it had
+    a gate and had an inert string. The documented-KEY check stopped one field
+    short of the documented TYPE.
+    """
+    before = snapshot_tree(str(registered))
+    completed = run(REGISTRY_CLI, "--root", str(registered), "--actor", "project-profile",
+                    "policy-set", key, "--value-json", value, "--apply")
+    assert completed.returncode == 3, why
+    assert "documented as" in completed.stderr
+    assert snapshot_tree(str(registered)) == before
+
+
+@pytest.mark.parametrize("value", ['["roadmap-review"]', "null"])
+def test_a_documented_key_whose_default_is_none_can_be_set(registered, value):
+    """`workRegister.creators` is documented, meaningful, and defaults to None.
+
+    is_documented read the VALUE, so the one key governing who may create work
+    items could never be set at all -- a documented setting the writer refused.
+    """
+    completed = run(REGISTRY_CLI, "--root", str(registered), "--actor", "project-profile",
+                    "policy-set", "workRegister.creators", "--value-json", value, "--apply")
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_policy_set_prunes_old_backups_as_repair_does(registered):
+    """Retention is policy, and a new writer must not be the one path that ignores it."""
+    manifest = registered / "Virtuoso" / "workspace-layout.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data.setdefault("policy", {}).setdefault("sweep", {})["backupRetention"] = 2
+    manifest.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    for n in range(4):
+        run(REGISTRY_CLI, "--root", str(registered), "--actor", "project-profile",
+            "policy-set", "roadmap.dispatchBuffer", "--value-json", str(n + 1), "--apply")
+    assert len(_backup_dirs(registered)) <= 2
+
+
+def test_the_body_heading_docstring_keeps_its_escapes():
+    """It explains why the pattern uses a tab class instead of a whitespace class.
+
+    Written as a non-raw docstring, the escape for tab became a literal tab
+    character and the one for whitespace became an invalid escape -- so the
+    explanation of the fix was itself corrupted, and Python 3.12+ warns about it.
+    Asserted with chr(92) rather than backslash literals, because a test about
+    escaping that is itself hard to escape is a test nobody can read.
+    """
+    backslash = chr(92)
+    text = overlays_mod.body_heading.__doc__
+    assert backslash + "t" in text, "the tab escape did not survive as written"
+    assert backslash + "s" in text, "the whitespace escape did not survive"
+    assert backslash * 2 not in text, "the escapes were doubled instead"
+    assert not [c for c in text if ord(c) < 32 and c != chr(10)], \
+        "an escape was consumed into a literal control character"
+
+
 def _catalogue_rows() -> list[str]:
     """The Phase 2 interview table's data rows, header and rule excluded."""
     body = PROFILE.read_text(encoding="utf-8").split("## Phase 2")[1].split("## Phase 3")[0]

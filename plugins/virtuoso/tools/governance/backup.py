@@ -47,6 +47,9 @@ class BackupSet:
     directory: str       # absolute path of this backup set
     label: str
     created: str
+    #: The ceremony that asked for the write, when one identified itself. Recorded
+    #: so a restore can answer "who changed this", which a label alone cannot.
+    actor: str = ""
     entries: list[BackupEntry] = field(default_factory=list)
 
     @property
@@ -99,6 +102,8 @@ class BackupSet:
             "projectRoot": os.path.basename(self.root),
             "entries": [asdict(e) for e in self.entries],
         }
+        if self.actor:
+            payload["actor"] = self.actor
         os.makedirs(self.directory, exist_ok=True)
         with open(self.manifest_path, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
@@ -139,10 +144,30 @@ def _tree_digest(path: str) -> str:
     return textio.sha256_bytes("\n".join(parts).encode("utf-8"))
 
 
-def open_set(root: str, label: str, *, now: _dt.datetime | None = None) -> BackupSet:
+def open_set(root: str, label: str, *, now: _dt.datetime | None = None,
+             actor: str = "") -> BackupSet:
+    """A fresh backup set. The directory is always one that did not already exist.
+
+    The name is stamped to the second, so two operations inside the same second
+    would otherwise share a directory — and the second would copy the *first
+    operation's output* over the pristine original, leaving no way back to the
+    state before either. Two writes chained in one shell command collide reliably,
+    and a ceremony that sets one policy key per invocation makes that routine.
+
+    A suffix is appended rather than the stamp made finer, because the guarantee
+    wanted here is "this directory is mine", which only an existence check can
+    give: a nanosecond stamp makes a collision unlikely instead of impossible, and
+    a backup that is merely unlikely to be overwritten is not a backup.
+    """
     stamp = utc_stamp(now)
-    directory = os.path.join(root, *BACKUP_DIRNAME.split(os.sep), "%s-%s" % (stamp, label))
-    return BackupSet(root=root, directory=directory, label=label, created=stamp)
+    base = os.path.join(root, *BACKUP_DIRNAME.split(os.sep))
+    directory = os.path.join(base, "%s-%s" % (stamp, label))
+    suffix = 2
+    while os.path.exists(directory):
+        directory = os.path.join(base, "%s-%s-%d" % (stamp, label, suffix))
+        suffix += 1
+    return BackupSet(root=root, directory=directory, label=label, created=stamp,
+                     actor=actor)
 
 
 def load_set(directory: str, root: str) -> BackupSet:

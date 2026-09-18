@@ -156,6 +156,68 @@ def assign(raw: dict | None, path: str, value) -> dict:
     return out
 
 
+#: What a documented default's type means for a value replacing it. ``bool`` is
+#: tested before ``int`` because ``isinstance(True, int)`` is true in Python, and
+#: a flag is not a count.
+_KINDS = ((bool, "a true/false flag"), (dict, "a mapping"), (list, "a list"),
+          (str, "a string"), ((int, float), "a number"))
+
+
+def value_kind(value) -> tuple[str, str]:
+    """``(kind, human name)`` for ``value``. ``kind`` is an opaque comparison key."""
+    for types, name in _KINDS:
+        if isinstance(value, types):
+            return (name, name)
+    return ("null", "null")
+
+
+def type_problem(path: str, value) -> str:
+    """Why ``value`` is the wrong shape for ``path``, or ``""`` when it is right.
+
+    A key check is not enough. Every documented key has a documented *type*, and a
+    value of the wrong one is stored happily and then ignored: a string where
+    ``rubric.extensions`` wants a list declares a readiness check that no ceremony
+    can read and that session start never mentions, so the project believes it has
+    a gate and has an inert string. That is precisely the "looks live, is inert"
+    failure the documented-key check exists to prevent — the check simply stopped
+    one field short.
+
+    A default of ``None`` carries no type information (it encodes "unset", as
+    ``workRegister.creators`` does), so anything is accepted there and said so.
+    """
+    default = documented_default(path)
+    if default is _MISSING or default is None:
+        return ""
+    wanted, wanted_name = value_kind(default)
+    got, got_name = value_kind(value)
+    if wanted == got:
+        return ""
+    return ("policy.%s is documented as %s and this value is %s. A value of the wrong "
+            "shape is stored and then ignored, which reads as configured and is not."
+            % (path, wanted_name, got_name))
+
+
+#: Distinguishes "the defaults have no such key" from "the default is None".
+_MISSING = object()
+
+
+def documented_default(path: str):
+    """The documented default at ``path``, or :data:`_MISSING` when undocumented.
+
+    Presence is walked rather than read through :meth:`Policy.get`, which cannot
+    tell an absent key from one whose documented default is ``None`` — and
+    ``workRegister.creators`` is exactly that: documented, meaningful, and
+    ``None`` to mean "unset". Testing the value made the one key that governs who
+    may create work items impossible to set.
+    """
+    cursor = DEFAULTS
+    for part in path.split("."):
+        if not isinstance(cursor, dict) or part not in cursor:
+            return _MISSING
+        cursor = cursor[part]
+    return cursor
+
+
 def is_documented(path: str) -> bool:
     """Whether ``path`` names a key the defaults document.
 
@@ -163,7 +225,7 @@ def is_documented(path: str) -> bool:
     reads it, so writing one produces configuration that looks live and is inert.
     Project-owned configuration has the ``x-`` extension prefix and its own rules.
     """
-    return Policy(DEFAULTS).get(path, None) is not None
+    return documented_default(path) is not _MISSING
 
 
 @dataclass

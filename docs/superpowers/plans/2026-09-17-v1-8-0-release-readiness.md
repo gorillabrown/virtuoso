@@ -60,15 +60,20 @@ git status --short
 
 Expected: no output from `git status --short`. If anything else is listed, stop and resolve it before continuing.
 
-- [ ] **Step 2: Create the working branch**
+- [ ] **Step 2: Check out the branch the work is on**
+
+This plan originally created `fix/v1.8.0-release-readiness`. It was executed on
+`eb/zealous-einstein-zxvy3w` instead — the executing session's designated branch — so that
+is the branch that exists and the one Task 9 merges. Track it rather than branching from it.
 
 ```bash
 git fetch origin
-git checkout -b fix/v1.8.0-release-readiness origin/eb/zealous-einstein-zxvy3w
+git checkout -B eb/zealous-einstein-zxvy3w origin/eb/zealous-einstein-zxvy3w
 git log --oneline -1
 ```
 
-Expected: `0be47b1 feat(profile): project-profile skill and read-only overlay scaffolding`
+Expected: the branch tip, whatever it currently is. `0be47b1` was the tip when this plan was
+written; Tasks 1-8 and the review remediation have landed on top of it since.
 
 - [ ] **Step 3: Confirm the starting failure count**
 
@@ -481,19 +486,19 @@ A path with no relative form to the root is outside it; normalize now says so
 and lets is_inside reject it.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
-git push -u origin fix/v1.8.0-release-readiness
+git push -u origin eb/zealous-einstein-zxvy3w
 ```
 
 - [ ] **Step 7: GATE — both CI legs green**
 
 ```bash
-gh run list --repo gorillabrown/virtuoso --branch fix/v1.8.0-release-readiness --limit 1
+gh run list --repo gorillabrown/virtuoso --branch eb/zealous-einstein-zxvy3w --limit 1
 ```
 
 Wait for completion, then:
 
 ```bash
-gh run view --repo gorillabrown/virtuoso $(gh run list --repo gorillabrown/virtuoso --branch fix/v1.8.0-release-readiness --limit 1 --json databaseId -q '.[0].databaseId')
+gh run view --repo gorillabrown/virtuoso $(gh run list --repo gorillabrown/virtuoso --branch eb/zealous-einstein-zxvy3w --limit 1 --json databaseId -q '.[0].databaseId')
 ```
 
 Expected: `✓ validate (windows-latest)` and `✓ validate (ubuntu-latest)`.
@@ -1827,7 +1832,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Create: `C:\Users\estra\Projects\Virtuoso\Close-Outs\CloseOut.V18-READINESS.2026-09-17.md`
 
 **Interfaces:**
-- Consumes: green CI on `fix/v1.8.0-release-readiness`.
+- Consumes: green CI on `eb/zealous-einstein-zxvy3w`.
 - Produces: v1.8.0 installed and verified on this machine.
 
 `origin/main` is at v1.6.0 and the plugin installed here is v1.6.0, so the SessionStart hook the user runs today has no overlays support at all. The version was bumped inside feature commits, so `release.py 1.8.0` would refuse as "already released"; `--redeploy` is the mode built for exactly this — bump and push done, deploy and verify not.
@@ -1836,7 +1841,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ```bash
 git push
-gh run list --repo gorillabrown/virtuoso --branch fix/v1.8.0-release-readiness --limit 1
+gh run list --repo gorillabrown/virtuoso --branch eb/zealous-einstein-zxvy3w --limit 1
 ```
 
 Wait for completion. Expected: both `validate (windows-latest)` and `validate (ubuntu-latest)` green. **Do not merge on a red leg.**
@@ -1845,7 +1850,7 @@ Wait for completion. Expected: both `validate (windows-latest)` and `validate (u
 
 ```bash
 git checkout main
-git merge --ff-only fix/v1.8.0-release-readiness
+git merge --ff-only eb/zealous-einstein-zxvy3w
 git log --oneline -1
 ```
 
@@ -1876,13 +1881,33 @@ python plugins/virtuoso/scripts/release.py 1.8.0 --redeploy 2>&1 | tail -30
 
 Expected: `RELEASE v1.8.0 COMPLETE.` `--redeploy` is required because the version already equals the repo's current version; without it the preflight refuses with "already released? resume an incomplete deploy with --redeploy".
 
-- [ ] **Step 6: Verify the installed copy is the one that runs**
+- [ ] **Step 6: Verify the installed copies — both of them**
 
 ```bash
 python -c "import json,os; d=json.load(open(os.path.expanduser('~/.claude/plugins/installed_plugins.json'))); print(d['virtuoso@virtuoso-marketplace'][0]['version'], d['virtuoso@virtuoso-marketplace'][0]['installPath'])"
 ```
 
 Expected: `1.8.0` and a path under `cache/virtuoso-marketplace/virtuoso/1.8.0`.
+
+`installed_plugins.json` is the CLI's install record. **The desktop app runs its own copy**
+and is currently on 1.3.6, so a green CLI check here does not mean the app you work in is
+running 1.8.0. Confirm the app's copy separately:
+
+```bash
+python - <<'PY'
+import glob, json, os
+for path in glob.glob(os.path.expanduser("~/**/plugins/**/virtuoso/**/plugin.json"),
+                      recursive=True):
+    try:
+        print(json.load(open(path, encoding="utf-8")).get("version"), path)
+    except (OSError, ValueError):
+        pass
+PY
+```
+
+If the app does not pick 1.8.0 up, say so in the close-out rather than recording that the
+app runs it. An unverified claim about the installed version is the same failure as the
+unverified claim about the test suite that produced this plan.
 
 Then, from the governance workspace, confirm session start reports overlays:
 
@@ -1894,7 +1919,7 @@ Expected: three lines, the third beginning `overlays:`. Restart the app afterwar
 
 - [ ] **Step 7: Record the work in the governance workspace**
 
-Append a row to `C:\Users\estra\Projects\Virtuoso\sprint-catalog.csv` matching the existing column order, with sprint id `V18-READINESS`, branch `fix/v1.8.0-release-readiness`, and a note naming the five blocking concerns closed.
+Append a row to `C:\Users\estra\Projects\Virtuoso\sprint-catalog.csv` matching the existing column order, with sprint id `V18-READINESS`, branch `eb/zealous-einstein-zxvy3w`, and a note naming the five blocking concerns closed.
 
 Write `C:\Users\estra\Projects\Virtuoso\Close-Outs\CloseOut.V18-READINESS.2026-09-17.md` covering: what the adversarial review found, which of the fourteen gaps this plan closed, which it deliberately did not (G13 the Codex-manifest publish decision, G14 whether any agent applies an overlay), and the released version.
 

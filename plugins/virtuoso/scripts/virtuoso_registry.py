@@ -43,8 +43,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.governance import (  # noqa: E402
-    overlays as overlays_mod, policy as policy_mod, providers, registry as registry_mod,
-    repair as repair_mod, schema, textio,
+    backup as backup_mod, overlays as overlays_mod, policy as policy_mod, providers,
+    registry as registry_mod, repair as repair_mod, schema, textio,
 )
 from tools.governance.errors import CapabilityError, GovernanceError, RoleNotRegistered  # noqa: E402
 from tools.governance import dependencies, integrity, repostate  # noqa: E402
@@ -524,6 +524,9 @@ def cmd_policy_set(args) -> int:
             "configuration belongs under an `x-` extension key." % args.key)
 
     value = _json_value(args.value_json, "--value-json")
+    mismatch = policy_mod.type_problem(args.key, value)
+    if mismatch:
+        raise GovernanceError("%s Nothing was written." % mismatch)
     before = policy_mod.load(reg.policy).get(args.key)
     candidate = policy_mod.assign(reg.policy, args.key, value)
     problems = policy_mod.load(candidate).validate()
@@ -543,7 +546,10 @@ def cmd_policy_set(args) -> int:
         print("Nothing was written. Re-run with --apply to write it.")
         return EXIT_OK
 
-    written, backup_set = repair_mod.apply_plan(reg, plan, label="policy-set")
+    written, backup_set = repair_mod.apply_plan(reg, plan, label="policy-set",
+                                                actor=args.actor)
+    backup_mod.prune(args.root, keep=int(
+        policy_mod.load(reg.policy).get("sweep.backupRetention", 10)))
     payload = {"key": args.key, "current": before, "proposed": value, "applied": True,
                "filesWritten": written, "backup": backup_set.as_dict()}
     if args.as_json:

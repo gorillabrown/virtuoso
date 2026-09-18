@@ -370,3 +370,32 @@ A version bump is not a release. 1.8.0 was bumped inside feature commits on a br
 v1.6.0. `release.py` exists because two releases once shipped on red CI; it was bypassed.
 That release step remains outstanding and is the last thing between this work and a
 plugin anyone actually runs.
+
+### Found by reviewing the remediation (2026-09-18)
+
+The first review checked the read paths. A second pass probed the one thing Tasks 1-8 added
+that *writes*, and found two defects there and none anywhere else — which is itself the
+finding: the new writer had not been probed the way the readers had.
+
+**A backup could destroy the thing it was taken to protect.** Backup directories are named to
+the second. Two `policy-set --apply` calls inside one second shared a directory, so the second
+copied the first apply's output over the pristine original and the state before either write
+was gone — three times in three trials. `policy-set`'s own guidance, one key per invocation,
+makes chaining the normal shape. The naming predates this work and `repair` shared it; the new
+writer only made it routine. Fixed by an existence check rather than a finer timestamp,
+because the guarantee wanted is "this directory is mine", and a collision made unlikely is not
+a collision made impossible.
+
+**The type gate was missing.** `policy-set` refused an undocumented key and accepted any
+value. A string in `rubric.extensions` declared a readiness check that `declared_ids` cannot
+read, so the project believed it had a gate and had an inert string — the "looks live, is
+inert" failure this whole architecture is organized against, reintroduced by the writer built
+to prevent it. A value must now match the documented default's type.
+
+**And one the review did not catch.** `is_documented` tested whether a documented default was
+non-``None``, not whether the key existed. `workRegister.creators` is documented, governs who
+may create work items, and defaults to ``None`` — so it was the one documented setting
+`policy-set` could never set. Presence is now walked directly.
+
+The pattern across both reviews is consistent: every defect was in a path that had been
+reasoned about but not probed, and every probe that ran found what reasoning had missed.

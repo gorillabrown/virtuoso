@@ -74,6 +74,19 @@ inert.
 This is what `project-profile` Phase 4 uses. Before it existed, the only way to set a
 policy value was to hand-edit the manifest, which every ceremony is forbidden to do.
 
+It refuses a value whose **type** differs from the documented default's, not only an
+undocumented key. A string where `rubric.extensions` wants a list was stored happily and
+then ignored — the project had declared a readiness check that no ceremony could read and
+that session start never mentioned. A declaration that looks live and is inert is the exact
+failure the pairing rule exists to prevent, and the key check stopped one field short of it.
+
+**Backup directories are now unique.** They are stamped to the second, so two applies inside
+one second shared a directory: the second copied the first apply's output over the pristine
+original, and the state before either write was unrecoverable. One key per invocation makes
+chaining the normal shape, so this was reliable rather than unlucky. `repair` shared the
+defect and is fixed with it. Each set also records the `--actor` that asked, so a restore can
+answer who changed something and not only what happened.
+
 ### `project-profile`, the sixteenth skill
 
 A front door. It reports what is already specific about a project, interviews from a fixed
