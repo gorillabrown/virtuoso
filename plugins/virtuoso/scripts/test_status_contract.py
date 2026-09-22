@@ -163,6 +163,23 @@ def test_warning_is_reachable(project, isolated_home):
     assert status == result_mod.WARNING and writes == 0
 
 
+def test_a_stale_vendored_closeout_script_is_a_warning(project, isolated_home):
+    """A pre-1.4 vendored copy of the retired close-out helper reads the v1 `paths`
+    map, so against a v2 registry it answers from a fallback directory and restarts
+    the lesson counter — exiting 0. Its presence must surface; it is never deleted."""
+    run(project, "--mode", "create", "--authorize", env_home=isolated_home)
+    stale = project / "Virtuoso" / "scripts" / "prepare_closeout_files.py"
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_text("data['paths']['closeOuts']\n", encoding="utf-8")
+
+    check = run(project, "--mode", "check", "--json", env_home=isolated_home)
+    status, writes = parse_contract(check.stdout)
+    assert status == result_mod.WARNING and writes == 0
+    assert "retired-vendored-tool" in check.stdout
+    assert "virtuoso_registry.py closeout" in check.stdout
+    assert stale.is_file()
+
+
 # --- the session-start guarantee ---------------------------------------------
 
 
