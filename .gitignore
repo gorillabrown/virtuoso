@@ -9,5 +9,11 @@ skills.zip
 
 # Dogfooding workspace & local WIP — dev clone only, never published
 /Virtuoso/
+# Anchored on purpose. A dev clone's repository-root .codex-plugin/ is local WIP and
+# stays out of the repo; plugins/virtuoso/.codex-plugin/ is the shipped alternate-host
+# manifest and must not match. An unanchored `.codex-plugin/` ignores both, and
+# deleting it un-ignores both -- which put local WIP in front of release.py's
+# clean-tree gate on every dev clone that had one.
+/.codex-plugin/
 .superpowers/
 .claude/

@@ -399,3 +399,24 @@ may create work items, and defaults to ``None`` — so it was the one documented
 
 The pattern across both reviews is consistent: every defect was in a path that had been
 reasoned about but not probed, and every probe that ran found what reasoning had missed.
+
+### Found while releasing (2026-09-22)
+
+`release.py 1.8.0 --redeploy` stopped at its first gate on the maintainer's machine:
+`working tree not clean: ?? .codex-plugin/`. Nothing was released, which is the gate doing
+its job.
+
+The cause was in 1.7.0. The June `.gitignore` carried an unanchored `.codex-plugin/`, which
+ignores that directory at any depth. It existed to keep a dev clone's repository-root
+`.codex-plugin/` — local WIP, "never published" — out of the repo. To track the plugin's
+own manifest at `plugins/virtuoso/.codex-plugin/`, 1.7.0 deleted the whole line, which
+un-ignored both. The first review flagged that un-ignore (G13) as an unexplained reversal
+of the June decision; it was left open as a governance question. It was also a defect with
+a concrete cost, and that cost arrived at the release gate.
+
+The fix is an anchored `/.codex-plugin/`: the root directory stays ignored and the plugin's
+manifest does not match. The test that was meant to guard this ran `git check-ignore`
+without `--no-index`, which skips tracked files entirely, so it passed even under a pattern
+that ignored the manifest. It now checks the patterns, and a second test pins the root
+directory as ignored. Neither half can regress silently again.
+

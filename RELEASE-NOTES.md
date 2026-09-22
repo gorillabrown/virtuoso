@@ -183,9 +183,11 @@ unchanged; callers that parse it keep working.
 
 ### Release integrity
 
-- **Every install surface is bumped together.** `.codex-plugin/plugin.json` is a shipped
-  manifest again (it had been swept into `.gitignore` as local WIP) and is declared in
-  `.version-bump.json`, so a release advertises one version everywhere. `validate.py` fails
+- **Every install surface is bumped together.** `plugins/virtuoso/.codex-plugin/plugin.json`
+  is a shipped manifest, declared in `.version-bump.json`, so a release advertises one
+  version everywhere. A dev clone's repository-root `.codex-plugin/` is a different
+  directory — local WIP, never published — and stays ignored; the pattern is anchored so
+  the two cannot be confused. `validate.py` fails
   when two install surfaces disagree, and checks every hook file under `hooks/` — again by
   scanning the folder — for a read-only `SessionStart`.
 - **The release commit stages what the bumper wrote.** `release.py` derived its dirty-tree

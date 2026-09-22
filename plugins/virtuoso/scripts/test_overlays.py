@@ -1878,8 +1878,30 @@ def test_the_alternate_host_manifest_serves_every_shipped_skill():
 
 @pytest.mark.skipif(not HAVE_GIT, reason="git is not installed")
 def test_the_alternate_host_manifest_is_shipped_not_ignored():
-    completed = git("check-ignore", "-q", ".codex-plugin/plugin.json", cwd=ROOT)
+    """Checked with --no-index, i.e. against the ignore PATTERNS themselves.
+
+    Without --no-index, check-ignore skips tracked files entirely, so this test
+    passed even under a pattern that ignored the manifest -- it could never have
+    caught the regression it is named for.
+    """
+    completed = git("check-ignore", "--no-index", "-q", ".codex-plugin/plugin.json",
+                    cwd=ROOT)
     assert completed.returncode != 0, "the alternate-host manifest is gitignored"
+
+
+@pytest.mark.skipif(not HAVE_GIT, reason="git is not installed")
+def test_the_dev_clones_root_codex_directory_stays_ignored():
+    """The June decision holds: a repository-root .codex-plugin/ is local WIP.
+
+    Un-ignoring the plugin's own manifest deleted an unanchored `.codex-plugin/`
+    line, which un-ignored the root directory too. A dev clone that had one then
+    failed release.py's clean-tree gate -- the release was blocked by a file that
+    was never meant to be seen. The anchored pattern keeps the two apart, and the
+    test above pins the other half.
+    """
+    completed = git("check-ignore", "--no-index", "-q", ".codex-plugin/plugin.json",
+                    cwd=ROOT.parent.parent)
+    assert completed.returncode == 0, "the repository-root .codex-plugin/ is not ignored"
 
 
 def test_every_shipped_hook_file_runs_a_read_only_session_start():
