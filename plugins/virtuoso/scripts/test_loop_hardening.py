@@ -7,6 +7,7 @@ from __future__ import annotations
 import codecs
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -24,8 +25,13 @@ SPRINT_GUARDS = str(ROOT / "scripts" / "sprint_guards.py")
 
 
 def run(script, *args, cwd=None):
+    """Run a plugin script; the child writes UTF-8 and the output is read as UTF-8.
+
+    Both halves matter: a piped child on Windows otherwise writes the console code
+    page, where the plugin's em dash is byte 0x97 and no UTF-8 reader can decode it."""
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
     return subprocess.run([sys.executable, script, *args], capture_output=True, text=True,
-                          encoding="utf-8", cwd=cwd)
+                          encoding="utf-8", cwd=cwd, env=env)
 
 
 def load_script(name):

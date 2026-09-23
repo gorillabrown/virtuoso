@@ -269,7 +269,8 @@ def record_completion(root, *extra, actor="pointer-closeout"):
     return subprocess.run([sys.executable, REGISTRY_CLI, "--root", str(root), "--actor", actor,
                            "record-completion", "--item", "ITEM-1", "--date", "2026-01-01",
                            "--result", "shipped", "--evidence", "CloseOut.ITEM-1.2026-01-01.md",
-                           *extra], capture_output=True, text=True, encoding="utf-8")
+                           *extra], capture_output=True, text=True, encoding="utf-8",
+                          env=dict(os.environ, PYTHONIOENCODING="utf-8"))
 
 
 def test_record_completion_previews_without_writing(workspace):
