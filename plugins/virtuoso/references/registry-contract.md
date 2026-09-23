@@ -450,6 +450,64 @@ silently becomes zero.
 Deadline findings are never `error` severity and never change the registry status: the project
 fixes them, and `repair` has nothing to propose.
 
+## The learning loop: lessons
+
+New work is done by the dispatch ceremonies; the plugin gets *better* at it only if what a
+dispatch taught reaches the next specification. That path is standard practice, and each
+of its three links is checked.
+
+**Where a lesson lives.** The registered `lessons` role — append-only, `reference`
+authority. One entry per lesson, under an identifier `<prefix>-NNN` where the prefix is
+`policy.lessons.idPrefix` (`SRL` by default):
+
+```
+### <prefix>-NNN — Short title (ITEM-ID, YYYY-MM-DD)
+**Verdict:** what was learned
+**Evidence:** what happened, with numbers
+**Recommendation:** the concrete change a future specification should make
+**Applies to:** when it bears on future work
+**Status:** Observation
+```
+
+A status is never edited in place: promoting, retiring, or superseding a lesson appends a
+new entry under the same identifier whose field is its `**Status:**`, and the latest one
+recorded is current. A lesson is **live** until a status beginning `Promoted`, `Retired`,
+or `Superseded` is appended. `virtuoso_registry lessons [--open]` lists them.
+
+**Three links, each checked.**
+
+1. **Close-out records.** `pointer-closeout` appends what the dispatch taught — or its
+   report says `No new lesson — <reason>` — and records how the lessons its specification
+   applied turned out. The crossing's verify step runs
+   `lessons --check <report> --closeout --item <ID>`: a lesson the report names must be in
+   the role (the append happened), or the report must give its reason. A report that fails
+   is not a finished close-out.
+2. **Specification applies.** Readiness check U9, *Lessons applied*, in the shared rubric:
+   a specification names each live lesson that bears on it and the change it made, or
+   states that no live lesson applies. `roadmap-review` reads the live lessons before it
+   drafts and re-checks every existing dispatch-ready specification against lessons
+   recorded since; `next-pointer` checks the head item before it prints.
+   `lessons --check <spec> --item <ID>` is the mechanical half; a live lesson the section
+   leaves uncited is listed, so the author's judgement is made rather than skipped.
+3. **Direction applies.** An `epic` charter carries *Lessons applied* before an unattended
+   run begins, and an epic ends through `pointer-closeout`, so its lessons reach the role.
+
+`lessons --check` exits 0 when the check passes, 1 when it fails, 3 when there is no
+`lessons` role to read. Its findings:
+
+| finding | meaning |
+|---|---|
+| `lessons-section-missing` | no *Lessons applied* (specification) or *Lessons* (close-out) section |
+| `lessons-section-empty` | the section cites no lesson and gives no reason (no live lesson applies; No new lesson — reason) |
+| `lesson-unknown` | a specification cites an identifier no lesson carries |
+| `lesson-not-appended` | a close-out names a lesson that is not in the role — the append did not happen |
+| `lesson-closed-cited` | a specification cites a promoted or retired lesson; cite what it became (warning) |
+| `lessons-not-cited` | live lessons the specification does not cite, listed for the author to confirm (info) |
+| `lessons-item-section-missing` | `--item` names an item the document has no section for |
+
+A lesson the close-out recorded and no specification applied was learned once and paid
+for twice. That is the failure this loop exists to make visible.
+
 ## Preflight status contract (items 10, 11)
 
 `scripts/virtuoso_preflight.py` always prints two parseable lines, plus a line

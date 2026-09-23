@@ -1,5 +1,64 @@
 # Virtuoso Release Notes
 
+## v1.9.0 (2026-09-23) — the learning loop
+
+**Additive. Registry schema stays at v2. The readiness rubric moves to v1.1.** The rubric
+has one new universal check, U9 *Lessons applied*, so a specification that passed under
+v1.0 may need one more section before it is dispatch-ready again.
+
+Virtuoso's ceremonies did new work well and learned from it badly. A close-out could end
+with a "Learned" line in prose and nothing appended anywhere; the roadmap review consulted
+lessons only after its specifications were drafted and rubric-passed; the dispatch pointer
+and the epic charter never consulted them at all; and the ceremonies that did reach for
+lessons named a project's file by name, against the registry rule. A lesson recorded at
+close-out and never applied was learned once and paid for twice. This release makes the
+loop a standard practice with a mechanical half at each link.
+
+### One shape, append-only
+
+A lesson is an entry in the registered `lessons` role under `<prefix>-NNN`
+(`policy.lessons.idPrefix`, default `SRL`), with `Verdict`, `Evidence`, `Recommendation`,
+`Applies to` — the field the next author matches against new work — and `Status`. A status
+is never edited: promoting or retiring a lesson appends a status record under the same
+identifier, and the latest one is current. `virtuoso_registry lessons [--open]` lists
+lessons and which are live.
+
+### Close-out records, or says why not
+
+Every `pointer-closeout` report carries a *Lessons* section naming the lessons the dispatch
+appended, or `No new lesson — <reason>`, plus how each lesson the specification applied
+turned out. The crossing's verify step runs `lessons --check <report> --closeout --item
+<ID>`; a report that fails is not a finished close-out. An unfilled template fails it too:
+`[reason]` is a placeholder, not a reason.
+
+### Specifications apply: rubric U9
+
+`roadmap-review` reads the live lessons before drafting (D.3.0), every new specification
+carries *Lessons applied*, and `lessons --check` must pass before it is saved. The lessons
+review then re-checks every existing dispatch-ready specification against lessons recorded
+since it was written. `next-pointer` reads the live lessons, runs the check, folds them in
+as a closable gap, and prints them with the pointer. Live lessons a specification leaves
+uncited are listed, so declining one is a judgement rather than an omission.
+
+### Epics apply too
+
+The charter template carries *Lessons applied*; the epic skill reads the live lessons while
+sharpening the Definition of Done, and each that bears becomes a constraint, a guard, or an
+escalation trigger. An epic ends through `pointer-closeout`, so what it taught reaches the
+role instead of staying in a journal.
+
+### Fixed along the way
+
+- The shared contract block in all sixteen skills, and two ceremonies besides, restated
+  the rubric's version and count — the exact thing the rubric forbids. They now point at
+  what the rubric declares, and a test keeps it so.
+- `SpecRetro.Lessons_Learned.md` and `LESSONS_LEARNED.md` were named by filename in five
+  skills and agents. Each now resolves the registered role.
+- The promotion rules said to *edit* an earlier entry's status, which the role's
+  append-only mutability forbids.
+
+Tests: 773 passed, 3 skipped (Linux).
+
 ## v1.8.2 (2026-09-23) — no silent zero in the trailing rate
 
 The first real run of 1.8.1 read Gloves of Glory's live board and reported "0 completions,

@@ -282,6 +282,13 @@ def test_the_registry_contract_documents_every_deadline_finding():
         assert "| `%s` |" % code in contract, "deadline finding %r is undocumented" % code
 
 
+def test_the_registry_contract_documents_every_lessons_finding():
+    from tools.governance import lessons
+    contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
+    for code in lessons.FINDING_CODES:
+        assert "| `%s` |" % code in contract, "lessons finding %r is undocumented" % code
+
+
 def test_the_ceremonies_read_pace_rather_than_derive_it():
     for name in ("roadmap-review", "roadmap-status", "next-pointer"):
         text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
