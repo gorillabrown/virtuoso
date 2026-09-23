@@ -165,7 +165,7 @@ the learning loop, `displayName`, author, keywords; the marketplace entry gains 
 and `tags`; the alternate host's page gains its `interface` block (tagline, three prompt
 chips, information panel, icons). A test holds the three equal.
 
-Tests: 874 passed, 3 skipped (Linux).
+Tests: 875 passed, 3 skipped (Linux).
 
 ## v1.10.0, continued — the learning loop (built as 1.9.0; first released in 1.10.0)
 
