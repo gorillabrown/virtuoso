@@ -41,6 +41,18 @@ status: [all-pass | has-regressions | has-discoveries]
 - **New:** [<prefix>-NNN — title] *(or: No new lesson — [reason])*
 - **Applied:** [<prefix>-NNN — held / did not hold: evidence] *(or: the specification applied none)*
 
+## Files Created
+
+<!-- From `sprint_guards created-files --base <ref>` in Wave 1; re-run in Wave 2 Step 6.
+     Every file the dispatch created is accounted for: nothing temporary survives, and
+     nothing is left untracked or uncommitted without a named reason. -->
+
+- **Removed (temporary):** [paths] *(or: none)*
+- **Committed:** [count, or paths]
+- **Ignored:** [patterns added] *(or: none)*
+- **Left for a decision:** [path — why] *(or: none)*
+- **Guard:** `created-files` exit [0 / 1: the files named above]
+
 ## Governance Updates
 
 ## Roadmap & Queue Movement

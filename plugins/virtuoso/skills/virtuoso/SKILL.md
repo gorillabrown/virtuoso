@@ -755,7 +755,7 @@ Two consequences worth stating, because both have been observed:
   to every other lane and to the merge slot. Count them at burst end:
 
 ```bash
-python <registry:scripts>/sprint_guards.py unpushed --root <project-root>
+"$HOME/.virtuoso/bin/virtuoso" sprint_guards unpushed --root <project-root>
 ```
 
 This is the most important habit. Reprinting the plan after each task:
@@ -798,7 +798,7 @@ Silent chains of tool calls are where plans go off the rails.
 **At the end of every burst, count what has not left the machine.**
 
 ```bash
-python <registry:scripts>/sprint_guards.py unpushed --root <project-root>
+"$HOME/.virtuoso/bin/virtuoso" sprint_guards unpushed --root <project-root>
 ```
 
 A non-zero count is not automatically wrong — a sprint mid-flight legitimately holds
@@ -960,7 +960,7 @@ what was learned]
      referenced deliverable has been found never to have existed in git.
      Run:
      ```bash
-     python <registry:scripts>/sprint_guards.py artifacts-exist --ref <merged-branch> <path> [<path> ...]
+     "$HOME/.virtuoso/bin/virtuoso" sprint_guards artifacts-exist --ref <merged-branch> <path> [<path> ...]
      ```
      Removing the worktree before this check passes destroys the evidence that would
      have caught the gap.
@@ -1239,7 +1239,7 @@ and the failure mode is that nobody ever looks. Four lifecycle hazards:
   says its fold-ins were applied is a claim; the target document containing them is
   the evidence. Run:
   ```bash
-  python <registry:scripts>/sprint_guards.py staging-sweep --root <project-root>
+  "$HOME/.virtuoso/bin/virtuoso" sprint_guards staging-sweep --root <project-root>
   ```
   A non-zero exit means resident memos exist. Report them; do not delete a memo you
   did not verify against its targets.

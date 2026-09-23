@@ -521,6 +521,26 @@ or `Superseded` is appended. `virtuoso_registry lessons [--open]` lists them.
 A lesson the close-out recorded and no specification applied was learned once and paid
 for twice. That is the failure this loop exists to make visible.
 
+## Sprint guards
+
+`scripts/sprint_guards.py` holds the executable halves of the execution rules, run
+through the launcher: `"$HOME/.virtuoso/bin/virtuoso" sprint_guards <subcommand>`.
+Paths resolve through the manifest's v2 `roles` (a v1 `paths` map, then the readme's
+machine block, for older workspaces); an external role has no path to inspect. Every
+subcommand is read-only and exits **0** clean, **1** on a finding, **2** when a ref or
+role does not resolve.
+
+| Subcommand | Reports |
+|---|---|
+| `unpushed` | commits on HEAD not on its upstream (2 when no upstream is set) |
+| `artifacts-exist --ref <ref> <path>...` | named artifacts missing from a ref, before a worktree is removed |
+| `staging-sweep` | governance staging memos still resident in the `closeOuts` directory |
+| `created-files --base <ref> [--json]` | every file the dispatch created or left changed since `<ref>`: `committed`, `temporary` (scratch, backup, cache and log names, anything under the registered `temp` role — committed ones included), `untracked` (not ignored), `uncommitted` |
+
+`pointer-closeout` runs `created-files` in Wave 1 to draft the report's *Files Created*
+dispositions and again at Step 6: a close-out ends with nothing temporary and nothing
+unreconciled beyond the files the report names.
+
 ## Preflight status contract (items 10, 11)
 
 `scripts/virtuoso_preflight.py` always prints two parseable lines, plus a line

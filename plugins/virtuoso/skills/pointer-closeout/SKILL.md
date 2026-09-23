@@ -128,9 +128,20 @@ than discovering it mid-crossing.
    to append — or the one line saying it taught nothing, and why — and how each
    lesson the specification applied turned out.
 6. Propose the register and roadmap changes.
-7. State the **crossing plan**: the exact ordered steps Wave 2 will perform, the
+7. **Review every file the dispatch created.** Run, against the ref the
+   specification's *Branch* field says the dispatch started from:
+
+       "$HOME/.virtuoso/bin/virtuoso" sprint_guards created-files --root . --base "<base ref>"
+
+   Draft the report's *Files Created* section from it: each **temporary** (scratch,
+   backup, cache, log, anything under the registered `temp` role) proposed for
+   removal — committed ones included; each **untracked** file proposed to commit,
+   add to the ignore file, or name for the user's decision; each **uncommitted**
+   change proposed to commit or revert. Nothing is left unreconciled by default: a
+   close-out that leaves litter makes the next merge a forensic exercise.
+8. State the **crossing plan**: the exact ordered steps Wave 2 will perform, the
    roles each touches, and what happens on a partial failure.
-8. Ask the user to confirm dispositions, lessons, and the crossing plan.
+9. Ask the user to confirm dispositions, lessons, file dispositions, and the crossing plan.
 
 Wave 1 writes nothing.
 
@@ -269,6 +280,10 @@ edited — then persist per `policy.git`:
 | `explicit-path-commit` | Stage the exact paths and commit. |
 | `push` | As above, then push, subject to `policy.git.networkOperations`. |
 
+Carry out the confirmed file dispositions first: delete each untracked temporary,
+`git rm` each committed one (exact paths), add confirmed ignore patterns, and stage
+the files confirmed for commit with everything else.
+
 Stage **exact paths** — never `git add .` or `-A`. Verify
 `git diff --cached --name-only` matches the expected set before committing, and
 stop on anything unexpected. Unrelated dirty paths are reported and left alone.
@@ -316,7 +331,10 @@ Re-read each thing you wrote, from its source:
       "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --check "<close-out path>" --closeout --item "<ITEM-ID>"
 
 - the item's status in the live register, re-read through the provider, is terminal;
-- the next item is now at the head.
+- the next item is now at the head;
+- `sprint_guards created-files --base "<base ref>"` exits 0 — or lists exactly the
+  files `policy.git` leaves for someone else to commit and the ones the user chose
+  to decide later, each named in the report's *Files Created* section.
 
 ### On partial failure
 

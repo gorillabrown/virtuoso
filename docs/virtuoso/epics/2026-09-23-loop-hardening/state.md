@@ -1,6 +1,6 @@
 ---
 epic: loop-hardening
-last_updated: 2026-09-23 18:30
+last_updated: 2026-09-23 19:40
 updated_by: session 1
 ---
 
@@ -26,20 +26,20 @@ updated_by: session 1
 ## Where we are
 
 ```
-phase:        P2 — Remove the dangling and the unsafe
-next_action:  roadmap-integrity line from one roadmap read (D2)
-blockers:     BLOCKER(USER) #1 (stranded branches) — does not block P1–P6 work
+phase:        P3 — Make the prose links mechanical
+next_action:  lessons --hygiene / --record-status / --candidates (D22, D11), then record-completion (D9)
+blockers:     BLOCKER(USER) #1 (stranded branches) — does not block P3–P6
 session:      1 of ~3 budgeted
-dod:          D1 [met] | D2–D18 [unmet] | D19 [raised] | D20–D22 [unmet]
+dod:          D1–D8 [met] | D9–D18 [unmet] | D19 [raised] | D20–D22 [unmet] | D23 [met]
 ```
 
 ## Next actions — max 5, near horizon only
 
-1. [ ] Open P2: the `roadmap-integrity:` line from the preflight's existing roadmap read (D2)
-2. [ ] Policy validation at preflight as warnings (D3)
-3. [ ] Writer defaults (D4), Decision step (D5), ghost names (D6)
-4. [ ] Epic role (D7), v2 sprint guards (D8); push; gate P2
-5. [ ] P3 includes D22 (lessons hygiene for governance-sweep)
+1. [ ] D22 + D11: `lessons --hygiene`, `--record-status`, `--candidates`; governance-sweep and roadmap-review D.4 run them
+2. [ ] D12: anchored no-lesson reason; `kpis lesson-yield`
+3. [ ] D9: `record-completion`; `test_crossing.py` runs it
+4. [ ] D10: standing-rules pairing; Zeus reads `policy.standingRules.source`
+5. [ ] Push; gate P3
 
 ## Working set — verified facts this epic relies on
 

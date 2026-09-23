@@ -189,3 +189,33 @@ def test_unpushed_exits_2_without_an_upstream(tmp_path):
     rc, out = _run("unpushed", "--root", str(tmp_path))
     assert rc == 2, out
     assert "upstream" in out
+
+
+def _seed_v2(root, close_outs="Virtuoso/closeouts", external=False):
+    """A schema-v2 manifest: roles carry their own paths; no v1 `paths` map."""
+    (root / "Virtuoso").mkdir(exist_ok=True)
+    roles = {"closeOuts": {"path": close_outs, "provider": "directory"},
+             "temp": {"path": "Virtuoso/temp", "provider": "directory"}}
+    if external:
+        roles["closeOuts"] = {"provider": "external", "external": "tracker:board/1"}
+    (root / "Virtuoso" / "workspace-layout.json").write_text(
+        json.dumps({"schemaVersion": 2, "roles": roles}, indent=2), encoding="utf-8")
+
+
+def test_a_v2_manifest_resolves_through_its_roles(tmp_path):
+    _seed_v2(tmp_path)
+    assert sg.resolve_registry_path(str(tmp_path), "closeOuts") == \
+        os.path.normpath(os.path.join(str(tmp_path), "Virtuoso/closeouts"))
+
+
+def test_an_external_v2_role_has_no_path_to_sweep(tmp_path):
+    _seed_v2(tmp_path, external=True)
+    assert sg.resolve_registry_path(str(tmp_path), "closeOuts") is None
+
+
+def test_staging_sweep_runs_on_a_v2_workspace(tmp_path):
+    _seed_v2(tmp_path)
+    (tmp_path / "Virtuoso" / "closeouts").mkdir(parents=True)
+    (tmp_path / "Virtuoso" / "closeouts" / "Memo.A-1.GovernanceStaging.2026-09-23.md").write_text("x")
+    rc, out = _run("staging-sweep", "--root", str(tmp_path))
+    assert rc == 1 and "Memo.A-1.GovernanceStaging" in out, out

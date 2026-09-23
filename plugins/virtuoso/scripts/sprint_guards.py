@@ -10,12 +10,15 @@ states in prose:
   artifacts-exist  a named completion artifact must be on the merged branch before
                    the worktree is removed 
   unpushed         an unpushed commit at burst end is invisible to every other lane
+  created-files    every file a dispatch created is reconciled before it closes:
+                   temporaries removed, the rest committed or deliberately ignored
 
 Each subcommand exits 0 clean / 1 on a finding / 2 on a usage or resolution error, so
 a caller can branch on the code without parsing prose. Paths resolve through the
 governance registry -- never a hardcoded convention.
 """
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -30,15 +33,26 @@ _README_CANDIDATES = ("Virtuoso.Governance.Readme.md", "VIRTUOSO.GOVERNANCE.READ
 
 
 def _read_manifest_paths(root):
+    """Role -> relative path from the manifest: the v2 ``roles`` map first, then a
+    v1 ``paths`` map. An external role carries no path and is left out."""
     path = os.path.join(root, "Virtuoso", "workspace-layout.json")
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, ValueError):
         return {}
+    if not isinstance(data, dict):
+        return {}
+    found = {}
     paths = data.get("paths")
-    return {k: v for k, v in paths.items() if isinstance(v, str)} \
-        if isinstance(paths, dict) else {}
+    if isinstance(paths, dict):
+        found.update({k: v for k, v in paths.items() if isinstance(v, str)})
+    roles = data.get("roles")
+    if isinstance(roles, dict):
+        found.update({k: v["path"] for k, v in roles.items()
+                      if isinstance(v, dict) and isinstance(v.get("path"), str)
+                      and v.get("path")})
+    return found
 
 
 def _read_readme_paths(root):
@@ -181,6 +195,86 @@ def cmd_unpushed(args):
     return 1
 
 
+#: Names a dispatch leaves behind that are never deliverables. Matched against the
+#: file name; a path under one of TEMPORARY_DIRECTORIES, or under the project's
+#: registered `temp` role, is temporary whatever its name.
+TEMPORARY_NAMES = ("*.tmp", "*.temp", "*.bak", "*.orig", "*.rej", "*.swp", "*.swo", "*~",
+                   ".~lock.*", "~$*", "*.pyc", "*.log", ".DS_Store", "Thumbs.db")
+TEMPORARY_DIRECTORIES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
+                         "tmp", "temp", ".tmp", "scratch"}
+
+
+def is_temporary(rel, temp_dir=None):
+    rel = rel.replace("\\", "/")
+    if temp_dir:
+        temp_dir = temp_dir.replace("\\", "/").rstrip("/")
+        if rel == temp_dir or rel.startswith(temp_dir + "/"):
+            return True
+    parts = rel.split("/")
+    if any(part in TEMPORARY_DIRECTORIES for part in parts[:-1]):
+        return True
+    return any(fnmatch.fnmatch(parts[-1], pattern) for pattern in TEMPORARY_NAMES)
+
+
+def _git_paths(root, *args):
+    proc = _git(root, *args, "-z")
+    if proc.returncode:
+        raise LookupError(proc.stderr.strip() or " ".join(args))
+    return sorted(p for p in proc.stdout.split("\0") if p)
+
+
+def created_files(root, base):
+    """Every file a dispatch created or left changed since ``base``, classified.
+
+    ``committed``    added on this branch since it left ``base``
+    ``untracked``    present, not ignored, not committed — commit, ignore, or decide
+    ``uncommitted``  tracked files with changes not yet committed
+    ``temporary``    any of the above that is a temporary (see :func:`is_temporary`),
+                     committed ones included: a committed temporary is still litter
+
+    Raises LookupError when ``base`` does not resolve. Read-only.
+    """
+    if _git(root, "rev-parse", "--verify", "--quiet", base + "^{commit}").returncode:
+        raise LookupError(base)
+    temp_dir = _read_manifest_paths(root).get("temp")
+    committed = _git_paths(root, "diff", "--name-only", "--diff-filter=A", base + "...HEAD")
+    untracked = _git_paths(root, "ls-files", "--others", "--exclude-standard")
+    uncommitted = _git_paths(root, "diff", "--name-only", "HEAD")
+    temporary = sorted(p for p in set(committed) | set(untracked) if is_temporary(p, temp_dir))
+    return {
+        "base": base,
+        "temporary": temporary,
+        "untracked": [p for p in untracked if p not in temporary],
+        "uncommitted": uncommitted,
+        "committed": [p for p in committed if p not in temporary],
+    }
+
+
+def cmd_created_files(args):
+    try:
+        found = created_files(args.root, args.base)
+    except LookupError as exc:
+        print("created-files: %s does not resolve in %s" % (exc.args[0], args.root))
+        return 2
+    open_count = len(found["temporary"]) + len(found["untracked"]) + len(found["uncommitted"])
+    if args.json:
+        print(json.dumps(dict(found, clean=open_count == 0), indent=2))
+        return 0 if open_count == 0 else 1
+    print("created-files: since %s — %d committed, %d temporary, %d untracked, "
+          "%d uncommitted." % (args.base, len(found["committed"]), len(found["temporary"]),
+                               len(found["untracked"]), len(found["uncommitted"])))
+    for label, verdict in (("temporary", "remove"), ("untracked", "commit, ignore, or decide"),
+                           ("uncommitted", "commit or revert")):
+        for rel in found[label]:
+            print("  ! %-11s %s  (%s)" % (label, rel, verdict))
+    if open_count == 0:
+        print("created-files: clean - every created file is committed; nothing temporary.")
+        return 0
+    print("Reconcile each before the item closes: a temporary left behind, or a file "
+          "nobody committed, is what makes the next merge a forensic exercise.")
+    return 1
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -202,6 +296,14 @@ def main(argv=None):
                          help="count commits on HEAD that are not on its upstream")
     unp.add_argument("--root", default=os.getcwd())
     unp.set_defaults(func=cmd_unpushed)
+
+    made = sub.add_parser("created-files",
+                          help="classify every file a dispatch created since a base ref")
+    made.add_argument("--root", default=os.getcwd())
+    made.add_argument("--base", required=True,
+                      help="the ref the dispatch branched from (its specification's Branch field)")
+    made.add_argument("--json", action="store_true")
+    made.set_defaults(func=cmd_created_files)
 
     args = ap.parse_args(argv)
     return args.func(args)

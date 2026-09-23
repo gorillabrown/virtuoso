@@ -321,3 +321,10 @@ def test_ceremony_skills_run_the_read_only_preflight():
         assert "--mode check" in text, "%s does not run the read-only preflight" % name
         assert "--mode adopt\n" not in text.split("## Preflight")[1][:1200], (
             "%s runs adopt from its preflight" % name)
+
+
+def test_every_sprint_guard_is_documented():
+    contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
+    source = (ROOT / "scripts" / "sprint_guards.py").read_text(encoding="utf-8")
+    for name in re.findall(r'add_parser\(\s*"([a-z-]+)"', source):
+        assert "| `%s" % name in contract, "sprint guard %s is undocumented" % name

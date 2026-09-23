@@ -254,3 +254,82 @@ def test_the_epic_skill_names_no_conventional_path():
     text = (ROOT / "skills" / "epic" / "SKILL.md").read_text(encoding="utf-8")
     assert "resolve epics" in text
     assert "2 operational" not in text and "`epics/` at the project root" not in text
+
+
+# --- D23: the close-out reviews every file the dispatch created -------------------------
+
+def git(root, *args):
+    completed = subprocess.run(["git", *args], cwd=str(root), capture_output=True, text=True)
+    assert completed.returncode == 0, completed.stderr
+    return completed.stdout
+
+
+@pytest.fixture
+def dispatch(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    git(root, "init", "-q", "-b", "main")
+    git(root, "config", "user.email", "t@example.invalid")
+    git(root, "config", "user.name", "t")
+    (root / "Virtuoso").mkdir()
+    (root / "Virtuoso" / "workspace-layout.json").write_text(json.dumps(
+        {"schemaVersion": 2, "roles": {"temp": {"path": "Docs/temp", "provider": "directory"}}}))
+    (root / "keep.py").write_text("x = 1\n")
+    (root / ".gitignore").write_text("ignored.dat\n")
+    git(root, "add", "-A")
+    git(root, "commit", "-qm", "base")
+    git(root, "checkout", "-qb", "work")
+    return root
+
+
+def created(root, *extra):
+    return run(SPRINT_GUARDS, "created-files", "--root", str(root), "--base", "main", *extra)
+
+
+def test_created_files_is_clean_when_everything_is_committed(dispatch):
+    (dispatch / "feature.py").write_text("y = 2\n")
+    git(dispatch, "add", "feature.py")
+    git(dispatch, "commit", "-qm", "feature")
+    completed = created(dispatch)
+    assert completed.returncode == 0, completed.stdout
+    assert "1 committed, 0 temporary, 0 untracked, 0 uncommitted" in completed.stdout
+
+
+def test_created_files_classifies_what_a_dispatch_leaves_behind(dispatch):
+    (dispatch / "feature.py").write_text("y = 2\n")
+    (dispatch / "notes.bak").write_text("old")
+    git(dispatch, "add", "feature.py", "notes.bak")
+    git(dispatch, "commit", "-qm", "feature and a backup")
+    (dispatch / "Docs" / "temp").mkdir(parents=True)
+    (dispatch / "Docs" / "temp" / "probe.md").write_text("scratch")    # the temp role
+    (dispatch / "run.log").write_text("log")
+    (dispatch / "report.md").write_text("a real deliverable nobody committed")
+    (dispatch / "ignored.dat").write_text("deliberately ignored")
+    (dispatch / "keep.py").write_text("x = 2\n")
+    completed = created(dispatch, "--json")
+    assert completed.returncode == 1
+    found = json.loads(completed.stdout)
+    assert found["temporary"] == ["Docs/temp/probe.md", "notes.bak", "run.log"]
+    assert found["untracked"] == ["report.md"]
+    assert found["uncommitted"] == ["keep.py"]
+    assert found["committed"] == ["feature.py"]
+    assert found["clean"] is False
+
+
+def test_created_files_refuses_an_unknown_base(dispatch):
+    completed = run(SPRINT_GUARDS, "created-files", "--root", str(dispatch), "--base", "nope")
+    assert completed.returncode == 2 and "does not resolve" in completed.stdout
+
+
+def test_the_close_out_runs_the_review_and_records_it():
+    skill = (ROOT / "skills" / "pointer-closeout" / "SKILL.md").read_text(encoding="utf-8")
+    assert skill.count("sprint_guards created-files") >= 1 and "created-files" in skill
+    template = (ROOT / "skills" / "pointer-closeout" / "assets" /
+                "CloseOut.template.md").read_text(encoding="utf-8")
+    assert "## Files Created" in template
+
+
+def test_the_virtuoso_skill_runs_the_guards_through_the_launcher():
+    text = (ROOT / "skills" / "virtuoso" / "SKILL.md").read_text(encoding="utf-8")
+    assert "registry:scripts" not in text
+    assert text.count('"$HOME/.virtuoso/bin/virtuoso" sprint_guards') == 4
