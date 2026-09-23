@@ -196,7 +196,15 @@ def terminal_ledger(reg, *, actor: str = "") -> ledger.TerminalLedger:
         writers=[str(w) for w in policy.get("terminalLedger.writers", []) or []],
         correction_writers=[str(w) for w in
                             policy.get("terminalLedger.correctionWriters", []) or []],
+        field_mappings=_ledger_mappings(policy),
     )
+
+
+def _ledger_mappings(project_policy) -> dict:
+    """The project's ledger column mapping, or none when it is malformed — an
+    unusable mapping is reported by validation, never half-applied."""
+    value = project_policy.get("terminalLedger.fieldMappings", {})
+    return value if not policy_mod.ledger_mapping_problems(value) else {}
 
 
 def describe_all(reg, *, actor: str = "") -> list[dict]:
@@ -249,7 +257,8 @@ def completion_source(reg, snapshot) -> pace.CompletionSource:
         fmt = str(project_policy.get("terminalLedger.format", "markdown"))
         if spec.provider in ledger.FORMATS:
             fmt = spec.provider
-        records = ledger.TerminalLedger(path, fmt=fmt).records()
+        records = ledger.TerminalLedger(path, fmt=fmt,
+                                        field_mappings=_ledger_mappings(project_policy)).records()
         return pace.CompletionSource(pace.from_ledger(records, statuses), label)
     if "completed" in snapshot.fields:
         return pace.CompletionSource(pace.from_register(snapshot.items),

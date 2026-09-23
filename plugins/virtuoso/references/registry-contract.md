@@ -86,6 +86,27 @@ Each entry under `roles` carries the full metadata set (item 15):
 The local CSV catalog is optional (item 25): it may be the live register, a
 generated mirror, or absent entirely.
 
+### The terminal ledger's columns
+
+A ledger's format is `policy.terminalLedger.format` (or the role's provider): `markdown`,
+`csv`, or `jsonl`. Its fields are `recordId`, `itemId`, `completed` (a `YYYY-MM-DD` date),
+`result`, `evidence` and `corrects`. A CSV or JSONL ledger may use the camelCase names or the
+documented headers `Record`, `Item`, `Completed`, `Result`, `Evidence`, `Corrects`, in any case.
+A ledger kept in the project's own columns names them in `policy.terminalLedger.fieldMappings`,
+for example:
+
+```json
+"terminalLedger": {"format": "csv",
+                   "fieldMappings": {"itemId": "Sprint Code", "completed": "Date Completed",
+                                     "result": "Implementation Status",
+                                     "evidence": "Close-Out File"}}
+```
+
+Every other column is kept, untouched. A mapped field is found by its mapped header and nowhere
+else. An append lays its row out under the file's own header and is refused, naming the missing
+columns, when the file has no column for `itemId`, `completed` or `result` — a record is never
+written under the wrong header.
+
 ## Working through providers
 
 Never open a work register file directly. Ask the provider layer:
@@ -393,7 +414,8 @@ its other figures. It is computed as of the **snapshot's** date, never the reade
 - **Required** — remaining ÷ weeks to the date, in items and in points.
 - **Trailing** — distinct items completed in the last `policy.roadmap.pace.trailingWeeks`
   weeks, divided by that many weeks. It is the project's delivery capacity, not a per-scope
-  rate. Completions come from the terminal ledger when one is registered, with corrections
+  rate. Completions come from the terminal ledger when one is registered (read through
+  `policy.terminalLedger.fieldMappings`), with corrections
   applied and results read through `policy.workRegister.statusMappings`; only a project with no
   ledger uses the register's completion dates, and the two are never mixed. The output breaks
   the count down by the result words recorded, and lists what it excluded.
@@ -412,8 +434,10 @@ its other figures. It is computed as of the **snapshot's** date, never the reade
 
 - **Projection** — the date the remaining work finishes at the trailing rate, per unit.
 
-A figure whose inputs are missing is **not computable**, with the inputs named — an undatable
-completion (append a correction that dates it), an unsized item, a completed item that left the
+A figure whose inputs are missing is **not computable**, with the inputs named — a completion
+source that holds no recorded completion at all (a board that keeps only live items, or a
+ledger whose columns are not mapped), an undatable completion (append a correction that dates
+it), an unsized item, a completed item that left the
 register (trailing points only), a scope that matches nothing. Nothing is estimated, and nothing
 silently becomes zero.
 

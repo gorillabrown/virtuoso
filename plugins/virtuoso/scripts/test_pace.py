@@ -315,6 +315,7 @@ def test_record_date_accepts_a_date_or_a_timestamp_and_nothing_else():
 # =============================================================================
 
 import csv  # noqa: E402
+import io  # noqa: E402
 import json  # noqa: E402
 import os  # noqa: E402
 import subprocess  # noqa: E402
@@ -609,3 +610,138 @@ def test_completions_outside_the_window_still_read_as_zero_and_behind():
 
 def test_the_trailing_source_is_rendered():
     assert "source: terminalLedger: CompletedWork.Ledger.md" in compute().render()
+
+
+# =============================================================================
+# 1.8.2: a ledger in the project's own columns (policy.terminalLedger.fieldMappings)
+# =============================================================================
+
+from tools.governance import policy as policy_mod  # noqa: E402
+from tools.governance.providers import ledger as ledger_mod  # noqa: E402
+
+GOG_HEADER = ("Seq,Sprint Code,Phase,Stage,Title,LOE,Dependencies,Implementation Status,"
+              "Written Status,Branch,Date Started,Date Completed,Close-Out File,Description,Notes")
+GOG_MAPPING = {"itemId": "Sprint Code", "completed": "Date Completed",
+               "result": "Implementation Status", "evidence": "Close-Out File"}
+
+
+def gog_csv(path, rows):
+    lines = [GOG_HEADER]
+    for code, status, done in rows:
+        lines.append(',%s,Phase X,Stage,"Title, with a comma",S,,%s,Full Spec,,,%s,'
+                     'CloseOut.%s.md,"desc","notes"' % (code, status, done, code))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+
+
+def test_gog_columns_read_through_the_mapping(tmp_path):
+    path = tmp_path / "CompletedLedger.csv"
+    gog_csv(path, [("arch-truth", "Completed", "2026-09-22"),
+                   ("SK-AUDIT15", "Superseded", "2026-09-22")])
+    records = ledger_mod.TerminalLedger(str(path), fmt="csv",
+                                        field_mappings=GOG_MAPPING).records()
+    assert [(r.item_id, r.result, r.completed, r.evidence) for r in records] == [
+        ("arch-truth", "Completed", "2026-09-22", "CloseOut.arch-truth.md"),
+        ("SK-AUDIT15", "Superseded", "2026-09-22", "CloseOut.SK-AUDIT15.md")]
+    assert records[0].extra["Title"] == "Title, with a comma"
+
+
+def test_unmapped_gog_columns_read_as_blank_and_pace_says_so(tmp_path):
+    path = tmp_path / "CompletedLedger.csv"
+    gog_csv(path, [("arch-truth", "Completed", "2026-09-22")])
+    records = ledger_mod.TerminalLedger(str(path), fmt="csv").records()
+    assert records[0].item_id == "" and records[0].result == ""
+    report = compute(records=records)
+    assert report.verdict == pace.NOT_COMPUTABLE
+    assert "results seen: (blank)" in report.missing["trailing"][0]
+
+
+def test_the_documented_human_headers_are_recognized_by_default(tmp_path):
+    path = tmp_path / "ledger.csv"
+    path.write_text("Record,Item,Completed,Result,Evidence,Corrects\n"
+                    "TR-1,W-1,2026-09-20,completed,,\n", encoding="utf-8", newline="\n")
+    [record] = ledger_mod.TerminalLedger(str(path), fmt="csv").records()
+    assert (record.record_id, record.item_id, record.completed, record.result) == \
+        ("TR-1", "W-1", "2026-09-20", "completed")
+
+
+def test_a_mapped_field_never_falls_back_to_a_default_header():
+    columns = ledger_mod.column_map(["Item", "Sprint Code"], {"itemId": "Missing Column"})
+    assert "itemId" not in columns
+
+
+def test_an_append_lands_under_the_projects_own_header(tmp_path):
+    path = tmp_path / "CompletedLedger.csv"
+    gog_csv(path, [("arch-truth", "Completed", "2026-09-22")])
+    before = path.read_text(encoding="utf-8")
+    ledger = ledger_mod.TerminalLedger(str(path), fmt="csv", writers=["pointer-closeout"],
+                                       field_mappings=GOG_MAPPING)
+    appended = ledger.append(ledger_mod.LedgerRecord(
+        record_id="", item_id="NEW-1", completed="2026-09-23", result="Completed",
+        evidence="CloseOut.NEW-1.md"), actor="pointer-closeout")
+    assert appended is True
+    text = path.read_text(encoding="utf-8")
+    assert text.startswith(before)                      # history untouched
+    row = next(csv.DictReader(io.StringIO(text.splitlines()[0] + "\n" + text.splitlines()[-1])))
+    assert (row["Sprint Code"], row["Implementation Status"], row["Date Completed"],
+            row["Close-Out File"], row["Title"]) == \
+        ("NEW-1", "Completed", "2026-09-23", "CloseOut.NEW-1.md", "")
+    assert [r.item_id for r in ledger.records()] == ["arch-truth", "NEW-1"]
+
+
+def test_an_append_with_no_column_for_a_field_is_refused_and_writes_nothing(tmp_path):
+    path = tmp_path / "CompletedLedger.csv"
+    gog_csv(path, [("arch-truth", "Completed", "2026-09-22")])
+    before = path.read_bytes()
+    ledger = ledger_mod.TerminalLedger(str(path), fmt="csv", writers=["pointer-closeout"])
+    with pytest.raises(ledger_mod.LedgerError) as refused:
+        ledger.append(ledger_mod.LedgerRecord(record_id="", item_id="NEW-1",
+                                              completed="2026-09-23", result="Completed"),
+                      actor="pointer-closeout")
+    assert "itemId, completed, result" in str(refused.value)
+    assert "policy.terminalLedger.fieldMappings" in str(refused.value)
+    assert path.read_bytes() == before
+
+
+def test_a_new_csv_ledger_still_gets_the_documented_header(tmp_path):
+    path = tmp_path / "new.csv"
+    ledger = ledger_mod.TerminalLedger(str(path), fmt="csv", writers=["pointer-closeout"])
+    ledger.append(ledger_mod.LedgerRecord(record_id="TR-1", item_id="W-1",
+                                          completed="2026-09-23", result="completed"),
+                  actor="pointer-closeout")
+    assert path.read_text(encoding="utf-8").splitlines()[0] == \
+        "recordId,itemId,completed,result,evidence,corrects"
+
+
+@pytest.mark.parametrize("mappings, fragment", [
+    ({"item": "Sprint Code"}, "unknown field(s) item"),
+    ({"itemId": ""}, "fieldMappings.itemId must name a column"),
+    (["Sprint Code"], "is a list"),
+])
+def test_ledger_mapping_validation(mappings, fragment):
+    problems = policy_mod.ledger_mapping_problems(mappings)
+    assert len(problems) == 1 and fragment in problems[0]
+
+
+def test_gog_shaped_workspace_paces_through_the_mapping(paced):
+    ledger_path = paced / "CompletedLedger.csv"
+    gog_csv(ledger_path, [("DONE-A", "Completed", days_ago(2)),
+                          ("DONE-B", "Completed", days_ago(10)),
+                          ("DONE-C", "Superseded", days_ago(5)),
+                          ("OLD-1", "Completed", days_ago(90))])
+
+    def point_at_csv(data):
+        data["roles"]["terminalLedger"].update(path="CompletedLedger.csv", provider="csv")
+        data["policy"]["terminalLedger"] = {"format": "csv"}
+    edit_manifest(paced, point_at_csv)
+    [unmapped] = json.loads(kpis(paced, "--json").stdout)["pace"]
+    assert unmapped["verdict"] == "not computable"
+
+    applied = run(REGISTRY_CLI, "--root", str(paced), "--actor", "project-profile",
+                  "policy-set", "terminalLedger.fieldMappings", "--value-json",
+                  json.dumps(GOG_MAPPING), "--apply")
+    assert applied.returncode == 0, applied.stdout + applied.stderr
+    [report] = json.loads(kpis(paced, "--json").stdout)["pace"]
+    assert report["trailing"]["completions"] == 2
+    assert report["trailing"]["byResult"] == {"Completed": 2}
+    assert report["trailing"]["excluded"] == {"Superseded": 1}
+    assert report["verdict"] == "ahead"

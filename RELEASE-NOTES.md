@@ -13,6 +13,20 @@ source and, when it holds records, the result words it found instead. A project 
 has completions, just none in the window, still reads zero and behind, because that is true.
 The text form of `kpis` now also prints the trailing rate's source.
 
+### A ledger in the project's own columns
+
+The cause, once traced, was the ledger's layout. The project's terminal ledger is a CSV with its
+own columns (`Sprint Code`, `Implementation Status`, `Date Completed`, …); the reader accepted
+only `recordId`, `itemId`, `completed`, `result`, so every field read blank.
+`policy.terminalLedger.fieldMappings` now names the column for each ledger field, and the
+documented human headers (`Record`, `Item`, `Completed`, …) are recognized without one.
+
+The same trace found a write-side defect: an append to such a CSV wrote the six fields in the
+plugin's own order under the project's fifteen-column header, which would have shifted a
+close-out's values into the wrong columns. An append now lays its row out under the file's own
+header, and is refused — naming the missing columns — when the file has no column for the item,
+the date or the result.
+
 ## v1.8.1 (2026-09-23) — deadline support
 
 **Additive. Registry schema stays at v2, and nothing a project already has changes meaning.**

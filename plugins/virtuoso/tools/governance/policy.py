@@ -107,6 +107,9 @@ DEFAULTS: dict = {
         "writers": ["pointer-closeout"],
         "correctionWriters": ["pointer-closeout", "roadmap-review"],
         "format": "markdown",           # "markdown" | "csv" | "jsonl"
+        # ledger field -> the project's own column header, for a CSV or JSONL ledger
+        # whose columns are not the documented ones (see TERMINAL_LEDGER_FIELDS).
+        "fieldMappings": {},
     },
     # --- governance sweep (items 51b, 52b, 53b, 56) --------------------------
     "sweep": {
@@ -137,6 +140,30 @@ DEFAULTS: dict = {
         "openpyxl": ">=3.1",
     },
 }
+
+#: The terminal ledger's fields, in the order the documented format lays them out.
+TERMINAL_LEDGER_FIELDS = ("recordId", "itemId", "completed", "result", "evidence", "corrects")
+
+
+def ledger_mapping_problems(mappings) -> list[str]:
+    """Every reason the value of ``terminalLedger.fieldMappings`` is not usable."""
+    if mappings is None or mappings == {}:
+        return []
+    if not isinstance(mappings, dict):
+        return ["policy.terminalLedger.fieldMappings is %s; it is a mapping of ledger field "
+                "to column header" % value_kind(mappings)[1]]
+    problems = []
+    unknown = sorted(k for k in mappings if k not in TERMINAL_LEDGER_FIELDS)
+    if unknown:
+        problems.append("policy.terminalLedger.fieldMappings has unknown field(s) %s (the "
+                        "ledger's fields are %s)" % (", ".join(unknown),
+                                                     ", ".join(TERMINAL_LEDGER_FIELDS)))
+    for key, column in mappings.items():
+        if key in TERMINAL_LEDGER_FIELDS and (not isinstance(column, str) or not column.strip()):
+            problems.append("policy.terminalLedger.fieldMappings.%s must name a column header"
+                            % key)
+    return problems
+
 
 #: What one deadline holds. The children of ``roadmap.deadlines`` are named by the
 #: project (``game-build``), so the defaults cannot list them; this template
@@ -471,6 +498,7 @@ class Policy:
         if storage not in ("inline", "files", "external"):
             problems.append("policy.roadmap.specStorage=%r is not one of inline, files, external"
                             % (storage,))
+        problems.extend(ledger_mapping_problems(self.get("terminalLedger.fieldMappings", {})))
         problems.extend(deadline_problems(self.get("roadmap.deadlines", {})))
         problems.extend(pace_problems(self.get("roadmap.pace", {})))
         return problems
