@@ -12,7 +12,7 @@ import os
 
 from .. import policy as policy_mod, schema
 from ..errors import ProviderError
-from . import base, kpi, ledger, mapping as mapping_mod, recovery  # noqa: F401  (re-exported)
+from . import base, kpi, ledger, mapping as mapping_mod, pace, recovery  # noqa: F401  (re-exported)
 from .csv_provider import CsvWorkRegister
 from .external_provider import ExternalWorkRegister, PendingMutation  # noqa: F401
 from .markdown_provider import MarkdownWorkRegister
@@ -221,3 +221,40 @@ def describe_all(reg, *, actor: str = "") -> list[dict]:
             entry["generatedBy"] = spec.generated_by
         out.append(entry)
     return out
+
+
+def completion_source(reg, snapshot) -> pace.CompletionSource:
+    """Dated completions for pace (v1.8.1). Read-only, so no actor is needed.
+
+    The terminal ledger is the record of finished work (item 24), so when one is
+    registered it is the source, with corrections applied. Only a project with no
+    ledger falls back to the register's own completion dates. The two are never
+    mixed: a count drawn from both could count one delivery twice.
+    """
+    project_policy = policy_mod.load(reg.policy)
+    statuses = mapping_mod.Mapping.from_policy(project_policy.section("workRegister")).statuses
+    spec = reg.roles.get(TERMINAL_LEDGER_ROLE)
+    if spec is not None:
+        if spec.is_external:
+            return pace.CompletionSource(
+                [], "terminalLedger: %s (external)" % spec.external,
+                missing=["dated completions: the terminal ledger is external (%s) and is not "
+                         "read here" % spec.external])
+        path = _resolve_path(reg, spec)
+        label = "terminalLedger: %s" % spec.path
+        if not os.path.isfile(path):
+            return pace.CompletionSource(
+                [], label, missing=["the registered terminal ledger %s does not exist"
+                                    % spec.path])
+        fmt = str(project_policy.get("terminalLedger.format", "markdown"))
+        if spec.provider in ledger.FORMATS:
+            fmt = spec.provider
+        records = ledger.TerminalLedger(path, fmt=fmt).records()
+        return pace.CompletionSource(pace.from_ledger(records, statuses), label)
+    if "completed" in snapshot.fields:
+        return pace.CompletionSource(pace.from_register(snapshot.items),
+                                     "workRegister completion dates: %s" % snapshot.source)
+    return pace.CompletionSource(
+        [], "", missing=["completion dates: no terminal ledger is registered and the register "
+                         "carries no completion date"])
+
