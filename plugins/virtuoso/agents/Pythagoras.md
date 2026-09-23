@@ -106,7 +106,7 @@ At the START of every task, count the total steps and print a progress header. A
 - If a validation FAILS: `===== PROGRESS: [X/N] BLOCKED — V-2 normalization drift on STATE 20 =====`
 
 ## STRICT OUTPUT RULES
-1. **Record findings only.** Write all findings to the project's agent findings document (resolve it through the registry) and save patterns to agent memory.
+1. **Record findings only.** Write all findings to the project's registered `findings` role (resolve it through the registry) and save patterns to agent memory.
 2. **Do NOT suggest next steps or offer to investigate further.** Report and stop.
 3. **Do NOT ask questions.** End with the validation results table. No postamble.
 

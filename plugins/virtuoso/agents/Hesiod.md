@@ -90,7 +90,7 @@ Then for each WARN or FAIL, write a finding with:
 - Actual value vs target
 - The tuning recommendation from the framework document's tuning section
 
-Write findings to the project's registered findings document (resolve it through the registry) under a new `## Behavioral KPI Monitor (BKM)` section.
+Write findings to the project's registered `findings` role (resolve it through the registry) under a new `## Behavioral KPI Monitor (BKM)` section.
 
 ## Key Inputs
 

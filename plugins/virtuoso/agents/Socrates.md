@@ -98,7 +98,7 @@ calibration policy.
    registered generated artifact, **regenerate it** rather than editing it.
 3. Re-run verification at the project's declared authoritative sample size.
 4. Run the test suite (some tests assert specific constant values).
-5. Write findings to the project's registered findings document.
+5. Write findings to the project's registered `findings` role.
 
 ## Isolated-measurement workflow
 
@@ -191,7 +191,7 @@ At the START of every task, count the total steps and print a progress header. A
 - If a run FAILS: `===== PROGRESS: [X/N] BLOCKED — [error] =====`
 
 ## STRICT OUTPUT RULES
-1. **Record findings only.** Write calibration results and recommendations to the project's agent findings document (resolve it through the registry) and save to agent memory.
+1. **Record findings only.** Write calibration results and recommendations to the project's registered `findings` role (resolve it through the registry) and save to agent memory.
 2. **Do NOT suggest next steps or offer to investigate further.** Report and stop.
 3. **Do NOT ask questions.** End with the target-metric results table. No postamble.
 

@@ -572,6 +572,30 @@ promotions above zero, a high held rate, a falling repeated-trap rate. Any one f
 gamed; the set is expensive to game, because yield without holds, or holds without
 promotions, shows.
 
+## Findings
+
+The `findings` role holds what a governance sweep, an adversarial review, or an agent
+finds that is not yet a lesson — one append-only document, scaffolded by `create`
+(`Findings.md` beside the lessons). An existing manifest without it stays valid; a
+ceremony that would record a finding in a project without the role shows the entry to
+add and says the findings exist only in its report.
+
+```
+### F-NNN — Short title (source, YYYY-MM-DD)
+**Source:** governance-sweep / adversarial-review / <agent>
+**Severity:** critical / major / minor / info
+**Where:** path:line, or document § section
+**Finding:** what is wrong, with the evidence
+**Disposition:** open
+```
+
+A disposition changes only by appending a record under the same id —
+`**Disposition:** fixed by <item or commit>`, `accepted — <reason>`, `lesson <prefix>-NNN`.
+Writers by default: `governance-sweep`, `adversarial-review`, `virtuoso` (for the agents it
+dispatches), `pointer-closeout`, `roadmap-review`, `3rd-party-audit`. **Reader:**
+`roadmap-review` B.3 reads every finding whose latest disposition is `open`, with the
+previous review's lessons-applied, and carries each into the plan.
+
 ## Standing rules
 
 `policy.standingRules.ids` declares the rules every item inherits;

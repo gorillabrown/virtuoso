@@ -52,6 +52,6 @@ guide names no paths of its own.
 This applies to ALL agents running SQLite queries, data analysis, calibration scripts, or any Python longer than a single expression.
 
 ## Findings Output
-All agents write findings to the project's registered findings document. Resolve it through
+All agents write findings to the project's registered `findings` role. Resolve it through
 the registry; never assume a path.
 Use the template in that file. Status flow: NEW → TRIAGED → Phase X.Y | DEFERRED | WONTFIX

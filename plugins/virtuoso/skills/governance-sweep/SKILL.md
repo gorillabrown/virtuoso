@@ -481,6 +481,7 @@ what this sweep touched and what it must leave alone:
 - Protected-file hashes: [N] checked, [N] unchanged
 - Verification: [all checks passed | anomalies: …]
 - Deferred (manual): [N] — [list]
+- Findings recorded: [F-NNN … in the registered `findings` role, or "none"]
 
 ### Repository scope
 - Changed paths:            [explicit list]
@@ -489,6 +490,14 @@ what this sweep touched and what it must leave alone:
 - Commit:                   [sha, or "not committed — policy.git is <policy>"]
 - Uncommitted unrelated work present: [explicit list, untouched]
 ```
+
+**Record what outlives the sweep.** Every deferred item, every flag for human review,
+and every audit finding the work list did not fix is appended to the registered
+`findings` role as its own entry — `### F-NNN — title (governance-sweep, YYYY-MM-DD)`
+with **Source**, **Severity**, **Where**, **Finding** and **Disposition:** `open` —
+so the next roadmap review reads it instead of a chat nobody reopens. If the project
+registers no `findings` role, show the entry to add to the manifest and say the findings
+exist only in this report.
 
 Never report "the docs are clean" without this block. Report the exact paths, not a
 count alone, and name any unrelated dirty work that was left alone.

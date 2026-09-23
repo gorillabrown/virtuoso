@@ -301,6 +301,14 @@ Phase 2 — [Name] (addresses R3, R4, ...)
   that warrant their own investigation, note them as "out of scope — recommend separate
   review" rather than folding them into this plan.
 
+### Recording the review
+
+When the project registers a `findings` role, append each blocking concern and each
+gap the remediation plan does not close as its own entry —
+`### F-NNN — title (adversarial-review, YYYY-MM-DD)` with **Source**, **Severity**,
+**Where**, **Finding** and **Disposition:** `open` — so the roadmap review reads them.
+A review that lives only in a conversation is paid for and then forgotten.
+
 ---
 
 ## Behavioral Rules

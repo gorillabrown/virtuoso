@@ -91,7 +91,7 @@ it's always safe. Phase-closeout will process it at close-out.
 | Document | Trigger | What to update |
 |----------|---------|-----------------|
 | [CUSTOMIZE: project principles document] | New principle or edge case discovered | Add FP-NN principle (rarely) |
-| the registered findings document | Audit, independent review | New finding entries, triage status |
+| the registered `findings` role | Audit, independent review | New finding entries, triage status |
 | Benchmark references | Benchmark or calibration run | Results in benchmark output files |
 
 ### Priority 3 (Update as policy directs)

@@ -286,6 +286,22 @@ DEFAULT_ROLES: dict[str, dict] = {
         "origin": "authored",
         "label": "Lessons / retrospective",
     },
+    "findings": {
+        # What the sweep, an adversarial review and the agents find that is not a
+        # lesson yet: one append-only document, one entry per finding, each carrying
+        # a disposition that changes only by an appended record. The roadmap review
+        # reads the open ones; nothing a reviewer finds lives only in a chat.
+        "provider": "markdown",
+        "authority": "reference",
+        "mutability": "append-only",
+        "owner": "governance-sweep",
+        "allowedWriters": ["governance-sweep", "adversarial-review", "virtuoso",
+                           "pointer-closeout", "roadmap-review", "3rd-party-audit"],
+        "validation": "markdown",
+        "classification": "active",
+        "origin": "authored",
+        "label": "Findings (append-only)",
+    },
     "closeOuts": {
         "provider": "directory",
         "authority": "evidence",
@@ -453,6 +469,7 @@ CREATE_ROLE_ORDER = (
     "workRegister",
     "terminalLedger",
     "lessons",
+    "findings",
     "closeOuts",
     "issues",
     "roadmapReviews",

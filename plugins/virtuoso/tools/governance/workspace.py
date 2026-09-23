@@ -31,6 +31,7 @@ CREATE_FILENAMES = {
     "workRegister": "work-register.csv",
     "terminalLedger": "CompletedWork.Ledger.md",
     "lessons": "Retrospective.Lessons.md",
+    "findings": "Findings.md",
     "workflowReference": "WORKFLOW_REFERENCE.md",
 }
 
@@ -64,6 +65,7 @@ def create_registry(root: str, *, doc_root: str = "", layout: str = "plugin-only
         "workRegister": _posix(operational, CREATE_FILENAMES["workRegister"]),
         "terminalLedger": _posix(governance, CREATE_FILENAMES["terminalLedger"]),
         "lessons": _posix(governance, CREATE_FILENAMES["lessons"]),
+        "findings": _posix(governance, CREATE_FILENAMES["findings"]),
         "closeOuts": _posix(operational, "Close-Outs"),
         "issues": _posix(operational, "Issues"),
         "roadmapReviews": _posix(operational, "roadmap-reviews"),
@@ -216,6 +218,9 @@ def seed_contents(reg: registry_mod.Registry) -> dict[str, str]:
     lessons = reg.roles.get("lessons")
     if lessons:
         seeds[lessons.path] = LESSONS_SEED
+    findings = reg.roles.get("findings")
+    if findings:
+        seeds[findings.path] = FINDINGS_SEED
     work = reg.roles.get("workRegister")
     if work and work.provider == "csv":
         seeds[work.path] = WORK_REGISTER_SEED
@@ -262,6 +267,15 @@ reference the record they correct. Nothing here is reordered, rewritten, or dele
 LESSONS_SEED = """# Retrospective — Lessons Learned
 
 (append numbered lesson entries here)
+"""
+
+FINDINGS_SEED = """# Findings
+
+Append-only. One entry per finding — from a governance sweep, an adversarial review,
+or an agent — under `### F-NNN — title (source, YYYY-MM-DD)` with **Source:**,
+**Severity:**, **Where:**, **Finding:** and **Disposition:** (`open` when recorded).
+A disposition changes only by appending a record under the same id. The roadmap
+review reads the open ones.
 """
 
 WORK_REGISTER_SEED = (

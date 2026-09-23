@@ -625,3 +625,39 @@ def test_zeus_reads_standing_rules_from_the_registered_source():
     zeus = (ROOT / "skills" / "virtuoso" / "references" / "zeus.md").read_text(encoding="utf-8")
     assert "policy.standingRules.source" in zeus
     assert "(rules, current state, standing rules)" not in zeus
+
+
+# --- D13: findings have a role and a reader ---------------------------------------------
+
+def test_the_findings_role_is_a_default_with_its_writers():
+    from tools.governance import schema
+    role = schema.DEFAULT_ROLES["findings"]
+    assert role["mutability"] == "append-only"
+    for writer in ("governance-sweep", "adversarial-review", "virtuoso"):
+        assert writer in role["allowedWriters"]
+    assert "findings" in schema.CREATE_ROLE_ORDER
+
+
+def test_create_scaffolds_the_findings_document(workspace):
+    path = role_path(workspace, "findings")
+    assert path.name == "Findings.md" and path.read_text(encoding="utf-8").startswith("# Findings")
+
+
+def test_a_manifest_without_the_findings_role_stays_ready(workspace):
+    data = manifest(workspace)
+    del data["roles"]["findings"]
+    write_manifest(workspace, data)
+    run(PREFLIGHT, "--root", str(workspace), "--mode", "repair", "--apply")   # resync the readme view
+    _, payload = preflight_json(workspace)
+    assert payload["status"] in ("ready", "warning")
+    assert not [f for f in payload["findings"] if f["severity"] == "error"], payload["findings"]
+
+
+def test_the_findings_have_writers_and_a_reader_in_the_skills():
+    review = (ROOT / "skills" / "roadmap-review" / "SKILL.md").read_text(encoding="utf-8")
+    assert "registered `findings` role" in review and "lessons-applied.md" in review
+    for skill in ("governance-sweep", "adversarial-review"):
+        text = (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+        assert "`findings` role" in text and "F-NNN" in text, skill
+    for agent in (ROOT / "agents").glob("*.md"):
+        assert "findings document" not in agent.read_text(encoding="utf-8"), agent.name

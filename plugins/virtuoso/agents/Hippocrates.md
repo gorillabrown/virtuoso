@@ -257,7 +257,7 @@ The test runner MUST:
 
 ### Strict rules
 
-1. **Record findings only.** Write failures to the project's registered findings document.
+1. **Record findings only.** Write failures to the project's registered `findings` role.
 2. **Do NOT suggest next steps or offer to investigate.** Report pass/fail counts and stop.
 3. **Do NOT ask questions.** End with the results summary. No postamble.
 4. **Do NOT invent commands.** Use the project's registered commands. If the requested

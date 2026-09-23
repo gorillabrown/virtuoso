@@ -403,6 +403,14 @@ reads it from the policy, and a copy is a second authority that drifts.
 Forward / sideways / backward deltas since the previous review. Score =
 forward / (forward + sideways + backward).
 
+Then read what the previous cycle left for this one: the previous review's
+`YYYY-MM-DD-lessons-applied.md` in the registered reviews directory (the lessons it
+applied, the candidates it left undecided — decide them in D.4), and every entry in
+the registered `findings` role whose latest **Disposition** is still `open`. Each open
+finding is carried into the plan: fixed by a planned item, accepted with a reason,
+or turned into a lesson — recorded by appending a disposition under its id. A finding
+left open across two reviews is named in the assessment.
+
 ### B.4 Render the assessment
 Write `YYYY-MM-DD-assessment.md` into the registered reviews directory, with the
 provenance block at the top.
