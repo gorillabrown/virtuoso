@@ -384,7 +384,8 @@ The auditor provides line-by-line responses with disposition:
    - CLAUDE.md — system state, phase status, references
    - Roadmap — resequenced phases, new tasks, updated specs
    - Algorithm/design specs — any architecture changes
-   - LESSONS_LEARNED — new entry for this audit cycle
+   - The registered `lessons` role — a new entry for this audit cycle, in the
+     standard shape (pointer-closeout's `references/spec-retro-format.md`)
    - Variable/constants references — if constants affected
 
 4. **Produce `AuditDecisions.N.YYYY-MM-DD.md` summarizing:**

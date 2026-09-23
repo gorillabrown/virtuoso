@@ -54,7 +54,7 @@ The bounded-scope doer handles implementation tasks that require judgment within
 - Diagnose unknown bugs (→ aristotle)
 - Review code quality or spec compliance (→ plato / solon)
 - Run tests (→ hippocrates)
-- Update governing documents like CLAUDE.md or LESSONS_LEARNED.md (→ herodotus)
+- Update governing documents like CLAUDE.md or the registered `lessons` role (→ MarcusAurelius)
 
 ---
 

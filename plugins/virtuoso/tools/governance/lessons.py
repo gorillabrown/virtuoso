@@ -250,7 +250,9 @@ def check(text: str, lessons: list[Lesson], prefix: str, *, item: str = "",
                         "%s is %s; cite what it became instead" % (lesson_id, lesson.status))
 
     if closeout:
-        says_none = re.search(r"no new lesson[ \t]*[—–:-]+[ \t]*\S", text_body, re.IGNORECASE)
+        # A reason must be words, not a template's "[reason]" placeholder.
+        says_none = re.search(r"no new lesson[ \t]*[—–:-]+[ \t]*[^\s\[<(]", text_body,
+                              re.IGNORECASE)
         item_re = re.compile(r"(?<![\w-])%s(?![\w-])" % re.escape(item)) if item else None
         added = [i for i in cited if i in by_id
                  and (item_re is None or item_re.search(by_id[i].source or ""))]

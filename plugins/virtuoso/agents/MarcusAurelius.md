@@ -77,7 +77,7 @@ it's always safe. Phase-closeout will process it at close-out.
 | Document | Trigger | What to update |
 |----------|---------|-----------------|
 | CLAUDE.md | Code change, discovery, phase completion | Current system state, phase status, key configuration values |
-| LESSONS_LEARNED.md | Non-trivial bug fix, design decision, discovery | New LL-NNN entry with context |
+| The registered `lessons` role | Non-trivial bug fix, design decision, discovery | New `<prefix>-NNN` entry in the standard shape (below) |
 | [CUSTOMIZE: project roadmap file] | Code completion, feature verification | Tag [COMPLETED], update phase status |
 
 ### Priority 1.5 (Update after every sprint completion)
@@ -118,36 +118,30 @@ it's always safe. Phase-closeout will process it at close-out.
 
 **Common miss:** Updating top-level status but NOT detailed subsections. After every change, update BOTH high-level status AND specific subsystem details.
 
-### LESSONS_LEARNED.md
+### The registered `lessons` role
 
 **Trigger:** After every non-trivial discovery, bug fix, or design insight
 
-**Template:**
+Resolve the document through the registry (`virtuoso_registry --root . resolve lessons`);
+never by filename. The next identifier is `nextLessonId` from
+`virtuoso_registry --root . closeout --item <ID> --date <date>`, prefixed per
+`policy.lessons.idPrefix`.
+
+**Template** — the standard shape every ceremony reads back
+(pointer-closeout's `references/spec-retro-format.md`):
 ```
-## LL-NNN: [Short title]
-
-**Category:** [BUG / DESIGN / FINDING / PATTERN / TRAP]
-
-**Context:**
-[Background. What subsystem? What problem?]
-
-**Discovery:**
-[How was this learned? Investigation? Code review? Testing?]
-
-**Finding:**
-[The actual insight. Be specific; state as fact, not hypothesis.]
-
-**Implication:**
-[What changed because of this? Code? Configuration? Architecture?]
-
-**Session/Date:** [Session N, YYYY-MM-DD]
-
-**Related:** [LL-NNN, LL-NNN, relevant policy or doc reference]
+### <prefix>-NNN — [Short title] ([ITEM-ID], [YYYY-MM-DD])
+**Verdict:** [The actual insight. Be specific; state as fact, not hypothesis.]
+**Evidence:** [How it was learned — investigation, review, test — with numbers.]
+**Recommendation:** [The concrete change a future specification should make.]
+**Applies to:** [When it bears on future work — a domain, an item kind, a lane.]
+**Status:** Observation
 ```
 
 **Format rules:**
 - One entry per significant discovery
-- Numbered sequentially (LL-NNN)
+- Numbered sequentially (`<prefix>-NNN`); a status change is a new entry under the
+  same identifier, never an edit — the role is append-only
 - All related LL entries must be cross-referenced at bottom
 - When entry no longer relevant, do NOT delete; archive
 
@@ -227,7 +221,7 @@ table below as the working contract.
 | **Observation Only** | Add Validation Log observation. No registry/strategy change. |
 | **Registry Update** | Update Interaction Registry + Validation Log. Verify baseline-scope. |
 | **Strategy Update** | Update Strategy Guide + Validation Log. |
-| **LL Promotion** | LESSONS_LEARNED entry AND relevant KB artifact. |
+| **Lesson promotion** | A status record appended under the lesson's identifier AND the rule written into its destination. |
 
 **Materiality thresholds:** whatever the project declares. This agent carries none of its own.
 

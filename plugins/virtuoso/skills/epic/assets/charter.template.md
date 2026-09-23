@@ -55,3 +55,13 @@ entry and stop cleanly.
 | Assumption | Risk if wrong | Guard |
 |------------|---------------|-------|
 | [what is being assumed] | [what breaks] | [cheap early check, escalation trigger, or both] |
+
+## Lessons applied — the project's own history, read before the run
+
+<!-- From `virtuoso_registry lessons --open`: each live lesson that bears on this outcome,
+     by identifier, and where it landed above — a constraint, an assumption's guard, an
+     escalation trigger. Or: "No live lesson applies — N read." Never leave this blank. -->
+
+| Lesson | Bears on | Applied as |
+|--------|----------|------------|
+| [<prefix>-NNN — title] | [which DoD row, phase, or risk] | [the constraint, guard, or trigger it became] |

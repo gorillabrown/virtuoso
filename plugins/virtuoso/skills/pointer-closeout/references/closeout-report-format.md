@@ -70,6 +70,15 @@ Typical destinations:
 
 If the sprint already updated the docs fully, say so directly and do not invent additional work.
 
+## Lessons
+
+Every report carries a Lessons section. It names the entries this dispatch appended
+to the registered `lessons` role — or says `No new lesson — <reason>` — and records
+the outcome of each lesson the specification applied. It is the one section a later
+ceremony reads mechanically: Wave 2 Step 6 runs
+`virtuoso_registry lessons --check <report> --closeout --item <ID>`, and a report that
+fails it is not a finished close-out.
+
 ## Next Work Check
 
 Three cases:

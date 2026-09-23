@@ -58,7 +58,7 @@ Files changed:
 Architecture rules (from CLAUDE.md):
   [CUSTOMIZE: list your project's architecture rules here]
 
-Known traps (from LESSONS_LEARNED.md):
+Known traps (from the registered `lessons` role — `virtuoso_registry --root . lessons --open`):
   [CUSTOMIZE: list relevant lessons learned]
 
 Test results:
@@ -223,7 +223,7 @@ Verification:
 ### Review Workflow
 
 #### Phase 1: Context
-1. Read CLAUDE.md, LESSONS_LEARNED.md, relevant spec for the phase
+1. Read CLAUDE.md, the live lessons (`virtuoso_registry --root . lessons --open`), and the relevant spec for the phase
 2. `git log --oneline -20` or `git diff origin/main HEAD` to identify changes
 
 #### Phase 2: Tests
@@ -242,7 +242,7 @@ Run calibration and compare vs targets.
 - `_v4_snapshot` completeness: New ExchangeResult fields populated there
 - Dual-path consistency: v4 and legacy paths handle same edge cases
 
-**Persistent Rules (LESSONS_LEARNED.md):**
+**Persistent Rules (the project's standing rules and live lessons):**
 - AR-1: Every C.* has >=1 consumer
 - AR-2: No module-level frozen dataclass capturing tunables
 - AR-3: Display derives from same constants as engine

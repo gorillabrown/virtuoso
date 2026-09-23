@@ -312,6 +312,14 @@ section, append its terminal record, and reconcile the register.
 Inventory every item and its claimed status, from the register and the roadmap
 separately. Record where they disagree; do not silently pick a winner.
 
+Read every close-out written since the last review, and check that each carries
+its Lessons section:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --check <close-out> --closeout --item <ITEM-ID>
+
+One that fails is a gap for D.4: the dispatch taught something nobody recorded, or
+recorded nothing and gave no reason.
+
 ### A.2 Build a candidate completion/archive list
 Classify each item as *likely complete*, *likely dissolved*, or *definitely live*,
 citing the signal for each.
@@ -463,10 +471,20 @@ D.6, and note the buffer will fall short.
 
 ### D.3 Write the dispatch-ready specifications
 
+**D.3.0 Read the live lessons first.** Before drafting anything:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --open
+
+Carry the list into every draft. A lesson is applied while a specification is being
+written, not retrofitted after the specification has passed.
+
 For each item in scope:
 
 **D.3.1 Draft.** Invoke `write-spec` with structural and implementation-detail
-inputs, sourced from close-outs, decision records, standing rules, and archives.
+inputs, sourced from close-outs, decision records, standing rules, and archives —
+and a **Lessons applied** section: each live lesson that bears on the item, by
+identifier, with the concrete change it made to this specification; or the
+statement that no live lesson applies.
 
 **D.3.2 Apply the shared rubric.** Open `references/readiness-rubric.md` and walk
 every universal check plus the project's declared extensions. For each item:
@@ -484,12 +502,16 @@ every universal check plus the project's declared extensions. For each item:
   | Missing rollback | State the revert path for this project's git policy. |
   | Missing source citation | Find it and link it, with an anchor. |
   | Missing project-extension detail | Consult the project's own precedent. |
+  | Missing or empty Lessons applied | From D.3.0: name each live lesson that bears on the item and what it changed here, or that none applies. |
 
 - **STRUCTURAL GAP** → ask the user. Do not invent decisions.
 
 **D.3.3 Re-audit.** Walk the rubric again. Two enrichment passes maximum. A
 specification still failing after two passes is NOT saved as dispatch-ready: flag
-it as a buffer gap in D.6 and continue from the next item.
+it as a buffer gap in D.6 and continue from the next item. U9 has a mechanical
+half, and it must pass before the specification is saved:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --check <spec> --item <ITEM-ID>
 
 **D.3.4 Save.** Store the specification where `policy.roadmap.specStorage` says:
 
@@ -503,23 +525,35 @@ say so and record the links in the roadmap instead.
 
 ### D.4 Lessons-learned review
 
-**D.4.1 Gather.** Read the registered `lessons` role, close-outs, audits, and
-decision records. Resolve each through the registry; do not scan the filesystem
-for lookalike names.
+**D.4.1 Gather.** Read the registered `lessons` role (`lessons --open`), the
+close-outs since the last review, audits, and decision records. Resolve each
+through the registry; do not scan the filesystem for lookalike names.
 
-**D.4.2 Build the checklist.** Deduped, grouped by theme.
+**D.4.2 Build the checklist.** Deduped, grouped by theme. A lesson whose pattern a
+second close-out has now reported is a promotion candidate.
 
 **D.4.3 Update the standing rules.** Rules live where
 `policy.standingRules.source` says, and their identifiers come from
 `policy.standingRules.ids`. Present rules get their wording verified; missing ones
-are added with a source; superseded ones are updated or removed.
+are added with a source; superseded ones are updated or removed. A lesson promoted
+here gets a status record appended under its identifier in the `lessons` role —
+`Promoted -> <rule id>` — never an edit to its original entry.
 
-**D.4.4 Review the new specifications** against the checklist; enrich inline.
+**D.4.4 Confirm the new specifications** applied the lessons: U9 passed for each in
+D.3. Note any live lesson every one of them declined, and whether that is right.
 
-**D.4.5 Review existing specifications** against the same checklist; ask about
-misalignments.
+**D.4.5 Review the existing specifications** — every dispatch-ready item this
+review did not write — against the live lessons:
 
-**D.4.6 Render** `YYYY-MM-DD-lessons-applied.md`.
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --check <spec> --item <ITEM-ID>
+
+One that fails is no longer dispatch-ready: enrich it in place, or flag it as a
+buffer gap in D.6. A lesson recorded after a specification was written is exactly
+what this step exists to catch.
+
+**D.4.6 Render** `YYYY-MM-DD-lessons-applied.md`: the live lessons; which
+specification applied which; the promotions and retirements recorded; and the
+close-outs since the last review that recorded no lesson and gave no reason.
 
 ### D.5 Integrate
 

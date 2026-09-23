@@ -10,15 +10,17 @@ becomes a standing workflow rule.
 
 ## Promotion Workflow
 
-1. Read the current `SpecRetro.Lessons_Learned.md`.
-2. Search for the same pattern or recommendation theme.
+1. List the live lessons — the registered role, never a filename:
+   `virtuoso_registry --root . lessons --open`.
+2. Search them for the same pattern or recommendation theme.
 3. If it already exists:
-   - update the earlier entry status to `Promoted -> [destination]`
-   - cite the second sprint occurrence
-   - write the promoted rule into the destination doc
+   - append a status record under the earlier identifier —
+     `**Status:** Promoted -> [destination]` — citing this second occurrence;
+     never edit the earlier entry
+   - write the promoted rule into the destination document
 4. If it does not exist:
-   - append a new `SRL-NNN`
-   - set status to `Observation`
+   - append a new `<prefix>-NNN` entry
+   - set its status to `Observation`
 
 ## Good Promotion Targets
 

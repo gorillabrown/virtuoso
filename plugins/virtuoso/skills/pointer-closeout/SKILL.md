@@ -94,10 +94,15 @@ This skill never prints a next dispatch pointer — that is `/next-pointer`.
 
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout provider
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . closeout --item "<ITEM-ID>" --date "<YYYY-MM-DD>"
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --open
 
 The second command is **read-only**: it resolves paths and the next lesson
-identifier without creating anything. Pass `--prepare` only in Wave 2, when the
-user has approved the crossing and the directory actually needs to exist.
+identifier (`nextLessonId`, prefixed per `policy.lessons.idPrefix`) without
+creating anything. Pass `--prepare` only in Wave 2, when the user has approved
+the crossing and the directory actually needs to exist. The third lists the live
+lessons: the ones this item's specification applied, whose outcome the close-out
+records, and the ones a new lesson may repeat — a second occurrence is what
+promotes an observation to a rule.
 
 It **fails loudly** rather than guessing: no registry, or a registry with
 error-severity findings, is an error naming the fix — never a silent fallback to
@@ -123,7 +128,9 @@ than discovering it mid-crossing.
 2. Findings table.
 3. Interpret non-pass results; propose dispositions.
 4. Draft the net-new governance updates still needed.
-5. Draft the retrospective entries.
+5. Draft the lessons (deliverable 2): what this dispatch taught, as entries ready
+   to append — or the one line saying it taught nothing, and why — and how each
+   lesson the specification applied turned out.
 6. Propose the register and roadmap changes.
 7. State the **crossing plan**: the exact ordered steps Wave 2 will perform, the
    roles each touches, and what happens on a partial failure.
@@ -138,7 +145,7 @@ Wave 1 writes nothing.
 
 **Goal:** [What the dispatch set out to do — one sentence.]
 **Result:** [What actually happened — name the things, no aggregates.]
-**Learned:** [The durable lesson — a promoted rule, a retired tool, a shifted assumption.]
+**Learned:** [The durable lesson, by identifier: <prefix>-NNN — title. Or: No new lesson — reason.]
 **Recommend:** [Recommended next direction — prose only, no pointer.]
 **Bottom line:** [One-sentence takeaway.]
 ```
@@ -165,14 +172,33 @@ registered `closeOuts` directory.
 - Structure and the finding/disposition model:
   [references/closeout-report-format.md](references/closeout-report-format.md)
 
-### 2. Retrospective entries
+### 2. Lessons
 
-Evaluates the specification, calibrates effort and sizing, reviews routing and
-precision, captures reusable lessons. Appended to the registered `lessons` role.
+What this dispatch taught, recorded where the next specification will read it: the
+registered `lessons` role. This is not optional, and it is not prose in the report
+alone — a lesson that exists only in a close-out is one no specification will ever
+apply. Every close-out produces one of two things:
 
-- Template: [assets/SpecRetro.entry.template.md](assets/SpecRetro.entry.template.md)
-- Categories and promotion rules:
-  [references/spec-retro-format.md](references/spec-retro-format.md),
+- **New lessons**, one entry each, appended to the registered `lessons` role under
+  the identifier `closeout` resolved (`nextLessonId`), in the standard shape:
+  [assets/SpecRetro.entry.template.md](assets/SpecRetro.entry.template.md).
+  `Applies to` is the field the next author matches against new work — say *when*
+  the lesson bears, not only what happened.
+- Or the line **`No new lesson — <reason>`** in the report's Lessons section. The
+  reason is evidence: "followed <prefix>-NNN exactly", "a routine change with no
+  surprise". A close-out that names neither is not finished.
+
+And in either case, **the outcome of every lesson the specification applied** (its
+*Lessons applied* section): each held, or did not. A lesson that failed to prevent
+the trap it names is the second occurrence that promotes it, or the evidence that
+retires it — append a status record under its identifier; never edit the original.
+
+The retrospective evaluates the specification too: effort calibration, sizing,
+routing, dispatch precision, discovery yield.
+
+- Entry shape, status records, and the append-only rule:
+  [references/spec-retro-format.md](references/spec-retro-format.md)
+- When an observation becomes a standing rule:
   [references/promotion-rules.md](references/promotion-rules.md)
 
 ---
@@ -228,8 +254,9 @@ Append **one** record to the registered `terminalLedger`:
 
 ### Step 4 — Persist local governance changes
 
-Apply the confirmed roadmap changes and append the retrospective entries, then
-persist per `policy.git`:
+Apply the confirmed roadmap changes and append the lessons — new entries and
+status records, each appended under the next or the existing identifier, none
+edited — then persist per `policy.git`:
 
 | `policy.git.policy` | What happens |
 |---|---|
@@ -280,6 +307,11 @@ Re-read each thing you wrote, from its source:
 - the terminal ledger carries exactly one new record for this item, and prior
   records are byte-identical to before;
 - the roadmap and lessons changes are present, and committed if policy required it;
+- the report's Lessons section passes the lessons gate — every lesson it names is
+  now in the registered role, or it says "No new lesson" with a reason:
+
+      "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --check "<close-out path>" --closeout --item "<ITEM-ID>"
+
 - the item's status in the live register, re-read through the provider, is terminal;
 - the next item is now at the head.
 
@@ -340,6 +372,11 @@ prose. Wave 2 ends at verification.
 - Propose dispositions; do not decide them unilaterally.
 - Prefer net-new governance updates over ceremonial rewrites.
 - Promote a lesson to a standing rule only after the same pattern appears twice.
+- Change a lesson's status by appending a status record under its identifier; never
+  edit an earlier entry. The role is append-only, and its history is how a second
+  occurrence is recognized.
+- A close-out without its Lessons section is not a close-out. "No new lesson" is an
+  answer; silence is not.
 - Never leave output only in conversation.
 - Never write to a role whose `allowedWriters` does not name this ceremony.
 - Never edit a generated artifact — regenerate it through its registered generator.

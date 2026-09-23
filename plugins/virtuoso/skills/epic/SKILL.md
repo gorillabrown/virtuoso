@@ -116,6 +116,14 @@ Autonomy grants and escalation triggers are the walk-away safety rails — write
 when short. Silence about a decision class means the executor will either stall on it or
 take it; neither should happen by accident.
 
+Then fold in the project's own history. Run
+`"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --open` and read every
+live lesson against the outcome: each that bears on it becomes a constraint, an
+assumption's guard, or an escalation trigger, and is cited by identifier in the charter's
+**Lessons applied** section — or the section says no live lesson applies, with the count
+read. A lesson the project paid for once must not be paid for again across an unattended
+run, and the charter is the cheapest place to apply it.
+
 ### Step 3 — Walk-away preflight (before the user leaves)
 
 Verify **now**, while a human can still answer in five seconds, everything the run would

@@ -39,20 +39,37 @@ Each recommendation must say:
 
 Avoid vague advice like "be more specific."
 
-## Running Lessons Document
+## The lessons document
 
-Retrospective lessons are appended to:
+Lessons are appended to the registered `lessons` role. Resolve it through the
+registry, never by filename, and read it before appending:
 
-- `SpecRetro.Lessons_Learned.md`
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --open
 
-Use sequential IDs:
+Identifiers are `<prefix>-NNN`. The prefix is `policy.lessons.idPrefix` (`SRL` by
+default) and the next free identifier is `nextLessonId` in
+`virtuoso_registry closeout --item <ID> --date <date>`, which reads the registered
+document and never creates it.
 
-- `<prefix>-001`
-- `<prefix>-002`
+One entry per lesson, in this shape — these fields are what `lessons` reads back:
 
-The prefix is project configuration — `SRL` is only the default. Resolve the next
-identifier with `virtuoso_registry closeout --lesson-prefix <prefix>`, which reads the
-registered lessons document and never creates it.
-- ...
+    ### <prefix>-NNN — Short title (ITEM-ID, YYYY-MM-DD)
+    **Verdict:** what was learned, in a sentence or two
+    **Evidence:** what happened, with numbers or scope
+    **Recommendation:** the concrete change a future specification should make
+    **Applies to:** when it bears on future work
+    **Status:** Observation
 
-Check the existing document before appending new entries.
+`Applies to` is the field a future author matches against a new item. Write *when*
+it bears — "any item that adds a gate", "continuations on a red base" — not a category.
+
+**Status records, never edits.** The role is append-only. To promote, retire, or
+supersede a lesson, append a new entry under the same identifier whose field is its
+status; the latest status recorded is the current one, and the history shows why:
+
+    ### <prefix>-NNN — status (ITEM-ID, YYYY-MM-DD)
+    **Status:** Promoted -> standing rule <rule id> (second occurrence in ITEM-ID)
+
+A lesson is **live** until a status beginning `Promoted`, `Retired`, or `Superseded`
+is appended. The live lessons are what readiness check U9 holds every specification
+to.

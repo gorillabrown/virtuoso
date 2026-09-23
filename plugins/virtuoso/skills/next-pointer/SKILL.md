@@ -229,6 +229,9 @@ is ready only when all five pass.
 6. The terminal ledger — for what is already final.
 7. The project codebase — for rubric verification.
 8. `policy.git` — for what this ceremony may do to the repository.
+9. The registered `lessons` role — the live lessons, through
+   `virtuoso_registry lessons --open`, which readiness check U9 holds the
+   specification to.
 
 ## Outputs
 
@@ -377,6 +380,14 @@ item's domain. The rule identifiers are the project's own
 (`policy.standingRules.ids`); this skill never invents or hardcodes one. Pick the
 one or two most relevant.
 
+### 1.6 Live lessons
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --open
+
+Match them against the head item the way the standing rules were matched. They are
+what the specification's *Lessons applied* section must account for (U9): each that
+bears on the item, and the change it made — or the statement that none applies.
+
 ---
 
 ## Phase 2 — READINESS AUDIT
@@ -389,6 +400,14 @@ For each check:
 - **CLOSABLE GAP** → a verifiable assertion investigation can settle. Flag for
   Phase 3.
 - **STRUCTURAL GAP** → a real deferred decision. Halt the print and ask.
+
+U9 has a mechanical half. Run it and read its findings into the audit:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --check <spec> --item <ITEM-ID>
+
+A missing or empty *Lessons applied* section is a closable gap. A live lesson whose
+recommendation demands a decision the specification does not make is a structural
+gap.
 
 ### 2.1 Prerequisite readiness
 
@@ -439,6 +458,7 @@ structure and formatting.
 | Missing source citation | Find it; link it with an anchor. |
 | Missing project-extension detail | Consult the project's own precedent, not another project's. |
 | Missing reconciliation recipe | Fill the template above from `policy.git` and detected repository state. Pure text; no git mutation. |
+| Missing lessons applied | From 1.6: name each live lesson that bears on the item and the change it makes here, or state that none applies; re-run `lessons --check`. |
 
 ### 3.1 Re-audit
 Walk the rubric again. Two passes maximum. Still failing → ask, or escalate to
@@ -597,9 +617,14 @@ something to improvise around.
 ## Standing rules that apply
 - **[project rule id] — [short title].** [One-sentence statement.]
 
+## Lessons applied
+- **[<prefix>-NNN — title].** [How this specification applies it.]
+*(or: No live lesson applies — [N] live lesson(s) read.)*
+
 ## Pre-flight
 
 - [resolved] Readiness rubric ([universal + extensions]) re-confirmed against current state
+- [resolved] Lessons applied (U9) — `lessons --check` passes
 - [resolved] Prerequisites
 - [resolved] Specification reachable from the execution base
 - [resolved] Figures computed through the provider, with provenance

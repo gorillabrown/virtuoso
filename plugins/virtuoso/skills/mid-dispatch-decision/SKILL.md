@@ -260,16 +260,18 @@ unexpected → "discovery", "hypothesis";
 scope → "scope", "expansion", "pre-authorized".
 
 **Pre-authorization lookup:** Don't enumerate patterns here — they go stale.
-Instead, search the live `SpecRetro.Lessons_Learned.md` for SRLs that govern
-the specific decision surface (escalation thresholds, pre-committed decision
-rules, trip-gate clauses, mechanism-class criteria). The SRL catalog is
-authoritative; this skill defers to it.
+Instead, search the live lessons — `virtuoso_registry --root . lessons --open`,
+the registered `lessons` role — for the ones that govern the specific decision
+surface (escalation thresholds, pre-committed decision rules, trip-gate clauses,
+mechanism-class criteria). The lessons catalog is authoritative; this skill defers
+to it.
 
 #### Staleness Check (Deep mode only)
 
 Before analyzing, run a 30-second freshness check: compare file modification
-dates on the operational docs directory and `SpecRetro.Lessons_Learned.md`
-against the last known planner-session timestamp. If anything was touched since
+dates on the operational docs directory and the registered lessons document
+(`virtuoso_registry --root . resolve lessons`) against the last known
+planner-session timestamp. If anything was touched since
 the last session, surface it — a new standing rule or roadmap revision could
 flip the recommendation.
 
@@ -750,7 +752,7 @@ then walks each amendment/fold-in below and processes it.
 #### 6c. Update Lessons Learned (hard execution when warranted)
 
 Check whether the decision produced a reusable lesson. If yes, the planner **must
-execute the append** to `SpecRetro.Lessons_Learned.md` — not just describe it.
+execute the append** to the registered `lessons` role — not just describe it.
 
 **Update triggers:**
 - Pre-authorization was wrong or incomplete
@@ -760,10 +762,13 @@ execute the append** to `SpecRetro.Lessons_Learned.md` — not just describe it.
 
 **Skip triggers:**
 - Straightforward Type 1a following the pre-authorization exactly
-- Lesson already captured by existing SRL
+- Lesson already captured by an existing lesson
 
-**If updating:** Append with sequential SRL-NNN ID, check promotion rules.
-Print confirmation: "Added SRL-NNN to lessons learned: [one-line summary]."
+**If updating:** Append an entry under the next identifier
+(`virtuoso_registry --root . closeout --item <ID> --date <date>` resolves
+`nextLessonId`) in the standard shape — pointer-closeout's
+`references/spec-retro-format.md` — and check the promotion rules.
+Print confirmation: "Added <prefix>-NNN to the lessons: [one-line summary]."
 
 **If skipping:** Print: "No new lesson — [reason]."
 

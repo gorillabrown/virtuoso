@@ -389,3 +389,55 @@ def test_closeout_check_through_the_cli(workspace):
 def test_a_missing_document_is_unanswerable(workspace):
     completed = lessons_cli(workspace, "--check", "nope.md")
     assert completed.returncode == 3 and "cannot be read" in completed.stderr
+
+
+# =============================================================================
+# The shipped templates and ceremonies honour the loop
+# =============================================================================
+
+
+def test_the_unfilled_closeout_template_does_not_pass_the_gate():
+    """"No new lesson — [reason]" is a placeholder, not a reason."""
+    template = (ROOT / "skills" / "pointer-closeout" / "assets" / "CloseOut.template.md")
+    result = lessons_mod.check(template.read_text(encoding="utf-8"), LESSONS, "LSN",
+                               item="SPRINT-1", closeout=True)
+    assert result.passed is False
+
+
+def test_the_shipped_templates_carry_the_lessons_sections():
+    closeout_template = (ROOT / "skills" / "pointer-closeout" / "assets"
+                         / "CloseOut.template.md").read_text(encoding="utf-8")
+    assert "\n## Lessons\n" in closeout_template
+    charter = (ROOT / "skills" / "epic" / "assets" / "charter.template.md").read_text(
+        encoding="utf-8")
+    assert "## Lessons applied" in charter
+    entry = (ROOT / "skills" / "pointer-closeout" / "assets"
+             / "SpecRetro.entry.template.md").read_text(encoding="utf-8")
+    [lesson] = lessons_mod.parse(entry.replace("<prefix>-NNN", "LSN-001"), "LSN")
+    assert lesson.status == "Observation" and "applies to" in lesson.fields
+
+
+@pytest.mark.parametrize("skill, fragment", [
+    ("pointer-closeout", "lessons --check"),
+    ("pointer-closeout", "--closeout --item"),
+    ("roadmap-review", "lessons --open"),
+    ("roadmap-review", "lessons --check <spec> --item"),
+    ("next-pointer", "lessons --open"),
+    ("next-pointer", "lessons --check <spec> --item"),
+    ("epic", "lessons --open"),
+    ("mid-dispatch-decision", "lessons --open"),
+])
+def test_each_ceremony_reads_or_checks_the_lessons(skill, fragment):
+    text = (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+    assert fragment in text, "%s does not run `%s`" % (skill, fragment)
+
+
+def test_no_shipped_file_names_a_lessons_document_by_filename():
+    """The lessons document is a registered role, resolved through the registry."""
+    offenders = []
+    for path in list((ROOT / "skills").rglob("*.md")) + list((ROOT / "agents").glob("*.md")) \
+            + list((ROOT / "references").glob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        if "LESSONS_LEARNED" in text or "Lessons_Learned.md" in text:
+            offenders.append(str(path.relative_to(ROOT)))
+    assert offenders == []

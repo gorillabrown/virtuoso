@@ -61,6 +61,10 @@ always.
 4. Final journal entry, then stop. **`done.md` existing is the stop signal** for any
    loop or scheduler driving sessions: check it before launching another session. Never
    create it under any other circumstances.
+5. Close the epic through `/pointer-closeout`, with journal.md and done.md as its
+   evidence. That ceremony records what the epic taught in the registered `lessons`
+   role — where the next charter reads it — or says why it taught nothing. An epic
+   that ends without it leaves its lessons in a journal no future run consults.
 
 ## Monitoring — for the user
 
