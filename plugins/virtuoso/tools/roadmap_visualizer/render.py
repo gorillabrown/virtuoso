@@ -75,6 +75,8 @@ def render_html(model: PlanningModel) -> str:
     }}
     .metric span {{ display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; }}
     .metric strong {{ display: block; margin-top: 6px; font-size: 26px; }}
+    .metric small {{ display: block; margin-top: 4px; color: var(--muted); font-size: 13px; }}
+    .metric.compact strong {{ font-size: 20px; white-space: nowrap; }}
     .notice {{ margin-bottom: 16px; }}
     .notice strong {{ color: var(--accent); }}
     table {{
@@ -171,19 +173,27 @@ def render_html(model: PlanningModel) -> str:
       return `passed ${{-days}} day${{days === -1 ? "" : "s"}} ago`;
     }}
 
-    function deadlineText(report) {{
-      if (!report) return "none declared";
-      const d = report.deadline || {{}};
-      return `${{text(d.label)}} ${{text(d.date)}} (${{daysText(report.daysRemaining)}})`;
+    // A tile is a short headline value and, under it, the detail that explains it.
+    function deadlineValue(report) {{
+      return report ? text((report.deadline || {{}}).date) : "none declared";
     }}
 
-    function paceText(report) {{
-      if (!report) return "no deadline";
+    function deadlineDetail(report) {{
+      if (!report) return "";
+      return `${{text((report.deadline || {{}}).label)}} · ${{daysText(report.daysRemaining)}}`;
+    }}
+
+    function paceValue(report) {{
+      return report ? text(report.verdict) : "no deadline";
+    }}
+
+    function paceDetail(report) {{
+      if (!report) return "";
       const unit = (report.basis || [])[0];
-      if (!unit) return text(report.verdict);
+      if (!unit) return text(report.reason);
       const trailing = (report.trailing || {{}})[unit];
       const required = (report.required || {{}})[unit];
-      return `${{report.verdict}}: ${{Number(trailing).toFixed(2)}} vs ${{Number(required).toFixed(2)}} ${{unit}}/week`;
+      return `${{Number(trailing).toFixed(2)}} vs ${{Number(required).toFixed(2)}} ${{unit}}/week required`;
     }}
 
     function renderMetrics() {{
@@ -196,15 +206,20 @@ def render_html(model: PlanningModel) -> str:
         ["In Flight", counts["in-flight"]],
         ["Blocked", counts["blocked"]],
         ["Drift Findings", health.drift_count],
-        ["Deadline", deadlineText(nextPace())],
-        ["Pace", paceText(nextPace())],
+        ["Deadline", deadlineValue(nextPace()), deadlineDetail(nextPace()), "compact"],
+        ["Pace", paceValue(nextPace()), paceDetail(nextPace()), "compact"],
       ];
       const container = document.getElementById("metrics");
-      metrics.forEach(([label, value]) => {{
+      metrics.forEach(([label, value, detail, variant]) => {{
         const item = document.createElement("div");
-        item.className = "metric";
+        item.className = variant ? `metric ${{variant}}` : "metric";
         item.innerHTML = `<span>${{label}}</span><strong></strong>`;
         item.querySelector("strong").textContent = text(value);
+        if (detail) {{
+          const small = document.createElement("small");
+          small.textContent = detail;
+          item.appendChild(small);
+        }}
         container.appendChild(item);
       }});
       document.getElementById("recommendation").textContent = text(health.recommendation);

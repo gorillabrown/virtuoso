@@ -542,8 +542,9 @@ def test_the_cockpit_model_carries_pace(paced):
 
 def test_the_cockpit_renders_deadline_and_pace_tiles(paced):
     html = cockpit_html(paced)
-    assert '["Deadline", deadlineText(nextPace())]' in html
-    assert '["Pace", paceText(nextPace())]' in html
+    assert '["Deadline", deadlineValue(nextPace()), deadlineDetail(nextPace()), "compact"]' \
+        in html
+    assert '["Pace", paceValue(nextPace()), paceDetail(nextPace()), "compact"]' in html
     assert "none declared" in html and "no deadline" in html
 
 
