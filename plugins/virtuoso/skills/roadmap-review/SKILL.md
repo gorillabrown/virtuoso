@@ -23,7 +23,7 @@ description: |
 - **Providers** — work items come from the configured work-register provider (local file, spreadsheet, connector-backed task manager, issue tracker, database, or read-only snapshot). Negotiate capabilities before planning work; never open a register file directly. The live work register, the append-only terminal ledger, and any compatibility export are three different roles.
 - **Provenance** — every derived figure cites its provider, source, and snapshot time. A figure whose inputs are missing is reported as *not computable* with the missing inputs named, never approximated.
 - **Git** — behaviour is `policy.git`, not a fixed rule of this plugin. See `references/git-policy.md`. Under every policy: inspect first, stage exact paths, preserve unrelated work, no destructive flags, no force-push without explicit authorization.
-- **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (v1.0 — 8 universal checks plus the project's declared extensions). No skill restates it in its own words.
+- **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (its universal checks, at the version it declares, plus the project's declared extensions). No skill restates it in its own words.
 - **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
 - **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
@@ -196,9 +196,10 @@ Stub  →  Specification  →  Dispatch-ready  →  Close-out
 ## Dispatch-Readiness Rubric
 
 **Do not restate the rubric here.** There is exactly one rubric, versioned, in
-the plugin's `references/readiness-rubric.md` (v1.0: eight universal checks U1–U8
-plus whatever the project declares in `policy.rubric.extensions`). Open it and
-apply it. `/next-pointer` applies the same file — that is the point.
+the plugin's `references/readiness-rubric.md` — its universal checks, at the version
+it declares at its top, plus whatever the project declares in
+`policy.rubric.extensions`. Open it and apply it. `/next-pointer` applies the same
+file — that is the point.
 
 Report readiness as the five separate findings the rubric defines
 (specification, prerequisite, repository, external-register,
@@ -468,7 +469,7 @@ For each item in scope:
 inputs, sourced from close-outs, decision records, standing rules, and archives.
 
 **D.3.2 Apply the shared rubric.** Open `references/readiness-rubric.md` and walk
-U1–U8 plus the project's declared extensions. For each item:
+every universal check plus the project's declared extensions. For each item:
 - **PASS** → move on.
 - **CLOSABLE GAP** → resolve by investigation:
 

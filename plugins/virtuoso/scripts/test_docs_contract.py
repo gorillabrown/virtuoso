@@ -62,7 +62,7 @@ def test_every_documented_registry_subcommand_exists():
     pattern = re.compile(r"virtuoso_registry[^\n]*?(?:--json\s+|--actor \S+\s+|--root \S+\s+)*"
                          r"\b(roles|resolve|provider|items|next|kpis|closeout|snapshot|"
                          r"recovery|repo|deps|protected|overlays|create-item|"
-                         r"mutation-plan|mutation-confirm|policy-set)\b")
+                         r"mutation-plan|mutation-confirm|policy-set|lessons)\b")
     for path in DOCS:
         documented.update(pattern.findall(path.read_text(encoding="utf-8")))
     assert documented, "no registry subcommands are documented at all"
@@ -207,6 +207,25 @@ def test_the_rubric_version_matches_the_policy_default():
     text = (ROOT / "references" / "readiness-rubric.md").read_text(encoding="utf-8")
     version = re.search(r"(?m)^\s*version:\s*(\S+)", text).group(1)
     assert policy_mod.DEFAULTS["rubric"]["version"] == version
+
+
+def test_no_ceremony_restates_the_rubrics_version_or_count():
+    """The rubric says no skill carries its own count of checks. Two did, and a new
+    check would have left both describing a rubric that no longer exists."""
+    for path in SKILLS:
+        text = path.read_text(encoding="utf-8")
+        assert not re.search(r"\bv1\.\d+\b[^\n]{0,40}universal checks", text), path
+        # "walk U1–U8 plus the extensions" is a count in disguise; the five-findings
+        # mapping ("U1–U4, U6, U7, U9 plus") is checked against the rubric below.
+        assert not re.search(r"\bU1[–-]U\d+\s+plus\b", text), (
+            "%s restates the rubric's range of universal checks" % path)
+
+
+def test_the_specification_finding_matches_the_rubric():
+    rubric = (ROOT / "references" / "readiness-rubric.md").read_text(encoding="utf-8")
+    wanted = re.search(r"\*\*Specification readiness\*\* — ([^.]+?) plus", rubric).group(1)
+    pointer = (ROOT / "skills" / "next-pointer" / "SKILL.md").read_text(encoding="utf-8")
+    assert "| **Specification readiness** | %s plus" % wanted in pointer
 
 
 def test_the_rubric_reports_five_separate_findings():

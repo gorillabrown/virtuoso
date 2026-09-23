@@ -19,7 +19,7 @@ description: |
 - **Providers** — work items come from the configured work-register provider (local file, spreadsheet, connector-backed task manager, issue tracker, database, or read-only snapshot). Negotiate capabilities before planning work; never open a register file directly. The live work register, the append-only terminal ledger, and any compatibility export are three different roles.
 - **Provenance** — every derived figure cites its provider, source, and snapshot time. A figure whose inputs are missing is reported as *not computable* with the missing inputs named, never approximated.
 - **Git** — behaviour is `policy.git`, not a fixed rule of this plugin. See `references/git-policy.md`. Under every policy: inspect first, stage exact paths, preserve unrelated work, no destructive flags, no force-push without explicit authorization.
-- **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (v1.0 — 8 universal checks plus the project's declared extensions). No skill restates it in its own words.
+- **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (its universal checks, at the version it declares, plus the project's declared extensions). No skill restates it in its own words.
 - **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
 - **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
@@ -196,10 +196,10 @@ Manual only: `/next-pointer`, "next pointer", "show next", "what's next".
 
 ## Dispatch-Readiness Rubric
 
-**One rubric, one home:** the plugin's `references/readiness-rubric.md` (v1.0 —
-universal checks U1–U8 plus the project's declared extensions). Open it and apply
-it. `/roadmap-review` applies the same file; the two cannot disagree because
-there is only one.
+**One rubric, one home:** the plugin's `references/readiness-rubric.md` — its
+universal checks, at the version it declares at its top, plus the project's declared
+extensions. Open it and apply it. `/roadmap-review` applies the same file; the two
+cannot disagree because there is only one.
 
 ### Report readiness as five separate findings (item 39)
 
@@ -207,7 +207,7 @@ Never collapse these into a single verdict:
 
 | Finding | What it covers |
 |---|---|
-| **Specification readiness** | U1–U4, U6, U7 plus declared project extensions |
+| **Specification readiness** | U1–U4, U6, U7, U9 plus declared project extensions |
 | **Prerequisite readiness** | U5, resolved against the live register through the provider |
 | **Repository readiness** | U8 plus the repository's actual current state, under `policy.git` |
 | **External-register readiness** | can the register be read; is the snapshot fresh; does the provider support the mutations this dispatch needs |

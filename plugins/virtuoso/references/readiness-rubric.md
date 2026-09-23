@@ -1,13 +1,15 @@
-# Dispatch Readiness Rubric — v1.0
+# Dispatch Readiness Rubric — v1.1
 
 **One rubric, one version, one home.** Every ceremony that assesses readiness
 reads *this* file. No skill restates the checks in its own words, and no skill
 carries its own count of them. If you change a check, change it here and bump
 `version` below; `policy.rubric.version` in a project's registry pins the
-version that project expects.
+version that project expects. A ceremony always applies the current version; when a
+project pins an earlier one, it names the checks added since before assessing, so no
+project meets a new check by surprise. **v1.1** added U9, *Lessons applied*.
 
-    version: 1.0
-    universal-checks: 8
+    version: 1.1
+    universal-checks: 9
     extension-checks: project-defined (policy.rubric.extensions)
 
 A specification is **dispatch-ready** when every universal check passes and every
@@ -18,7 +20,7 @@ host (redesign item 75).
 
 ---
 
-## Universal checks (U1–U8)
+## Universal checks (U1–U9)
 
 These apply to every project.
 
@@ -69,6 +71,23 @@ These apply to every project.
 - The staging plan is explicit paths, per the project's git policy
   (see `git-policy.md` — the policy is registry configuration, not a fixed rule).
 - The commit/push expectations match what that policy permits.
+
+### U9 — Lessons applied
+- The specification carries a **Lessons applied** section. It names, by identifier,
+  each live lesson in the registered `lessons` role that bears on this item and the
+  concrete change each one made to *this* specification — or it states that no live
+  lesson applies.
+- Every identifier it cites resolves to a recorded lesson. A lesson since promoted is
+  cited as the standing rule it became; a retired lesson is not cited.
+- Live lessons the section leaves uncited were considered and judged not to apply.
+  The check lists them, so that judgement is made rather than skipped.
+- Verify it mechanically — exit 0 passes, exit 1 names what is missing; `--item`
+  locates a specification stored inline in the roadmap:
+
+      "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --check <spec> --item <ITEM-ID>
+
+This is where a project's own history reaches its next piece of work. A lesson the
+close-out recorded and no specification applied was learned once and paid for twice.
 
 ---
 
@@ -142,7 +161,7 @@ To generate the skeleton (it writes nothing; redirect it yourself):
 Report readiness as separate findings, never as one blended verdict
 (redesign item 39):
 
-1. **Specification readiness** — U1–U4, U6, U7 plus declared extensions.
+1. **Specification readiness** — U1–U4, U6, U7, U9 plus declared extensions.
 2. **Prerequisite readiness** — U5, resolved against the live work register.
 3. **Repository readiness** — U8 plus the repository's actual current state.
 4. **External-register readiness** — whether the register can be read, whether
