@@ -72,12 +72,8 @@ guess a path.
 never write to a role whose `allowedWriters` does not name this ceremony; never treat a
 `mirror`, `report`, `archive`, or `unknown` role as truth.
 
-Read the `roadmap-integrity:` line. On `fail` (null bytes, non-UTF-8, or missing — exit 3), STOP and report the corruption to the user; do not migrate or rewrite a corrupt roadmap. On `warn` (empty or unusually large — exit 2), surface it and confirm with the user before proceeding. On `ok`, continue.
+Read the `roadmap-integrity:` line the preflight printed (it follows the `deadlines:` line; `--json` carries it as `roadmapIntegrity`). On `fail` (missing, not text, or null bytes), STOP and report the corruption to the user; do not migrate or rewrite a corrupt roadmap. On `warn` (empty or unusually large), surface it and confirm with the user before proceeding. On `ok`, or `external` (a roadmap the preflight does not read), continue. Before rewriting the roadmap, re-check it: `virtuoso_preflight --check-document <path>` prints the same state for one file.
 
-
-Heavyweight, periodic recalibration of an entire project. The ceremony
-you run when you need to know — with confidence — where the project
-has been, where it's going, and what to dispatch next.
 The dispatch gate. It reads the next eligible item **through the configured
 provider**, finalizes its specification so it can be executed without inventing
 decisions, completes every pre-flight check (or elevates it as a question), and

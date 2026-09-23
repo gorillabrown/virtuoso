@@ -1,0 +1,185 @@
+"""Loop hardening (v1.10.0): the gaps the loop's SWOT and gap analysis ranked.
+
+Each section names the Definition-of-Done row of the loop-hardening epic it holds.
+"""
+from __future__ import annotations
+
+import codecs
+import importlib.util
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from conftest import PLUGIN_ROOT
+from tools.governance import registry as registry_mod, textio
+
+ROOT = Path(PLUGIN_ROOT)
+PREFLIGHT = str(ROOT / "scripts" / "virtuoso_preflight.py")
+REGISTRY_CLI = str(ROOT / "scripts" / "virtuoso_registry.py")
+SPRINT_GUARDS = str(ROOT / "scripts" / "sprint_guards.py")
+
+
+def run(script, *args, cwd=None):
+    return subprocess.run([sys.executable, script, *args], capture_output=True, text=True,
+                          encoding="utf-8", cwd=cwd)
+
+
+def load_script(name):
+    spec = importlib.util.spec_from_file_location(name, str(ROOT / "scripts" / (name + ".py")))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def manifest(root):
+    return json.loads((root / "Virtuoso" / "workspace-layout.json").read_text(encoding="utf-8"))
+
+
+def write_manifest(root, data):
+    (root / "Virtuoso" / "workspace-layout.json").write_text(json.dumps(data, indent=2),
+                                                            encoding="utf-8")
+
+
+def role_path(root, role):
+    return root.joinpath(*manifest(root)["roles"][role]["path"].split("/"))
+
+
+@pytest.fixture
+def workspace(project):
+    completed = run(PREFLIGHT, "--root", str(project), "--mode", "create", "--authorize")
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    return project
+
+
+def preflight_json(root, *extra):
+    completed = run(PREFLIGHT, "--root", str(root), "--mode", "check", "--json", *extra)
+    return completed, json.loads(completed.stdout[completed.stdout.index("{"):])
+
+
+# --- D2: the roadmap-integrity line ------------------------------------------------
+
+def integrity_line(stdout):
+    return [line for line in stdout.splitlines() if line.startswith("roadmap-integrity: ")]
+
+
+@pytest.mark.parametrize("mode", ["check", "detect", "repair"])
+@pytest.mark.parametrize("quiet", [True, False])
+def test_the_integrity_line_is_printed_in_every_mode_and_survives_quiet(workspace, mode, quiet):
+    args = ["--root", str(workspace), "--mode", mode] + (["--quiet"] if quiet else [])
+    completed = run(PREFLIGHT, *args)
+    [line] = integrity_line(completed.stdout)
+    assert re.match(r"^roadmap-integrity: ok size=\d+$", line), line
+    lines = completed.stdout.splitlines()
+    deadlines = [i for i, l in enumerate(lines) if l.startswith("deadlines: ")][0]
+    assert lines[deadlines + 1] == line
+
+
+def test_an_unregistered_project_is_not_registered(project):
+    completed = run(PREFLIGHT, "--root", str(project), "--mode", "check", "--quiet")
+    assert integrity_line(completed.stdout) == ["roadmap-integrity: not registered"]
+
+
+@pytest.mark.parametrize("content, state", [
+    (b"", r"warn \(empty\) size=0"),
+    (b"# Roadmap\n\x00\x00 trailing", r"fail \(null-bytes\) size=\d+"),
+    (b"\x80\x81\xfa not text", r"fail \(not-text\) size=\d+"),
+    (codecs.BOM_UTF16_LE + "# Roadmap\n".encode("utf-16-le"), r"ok size=\d+"),
+])
+def test_the_integrity_states(workspace, content, state):
+    role_path(workspace, "roadmap").write_bytes(content)
+    completed = run(PREFLIGHT, "--root", str(workspace), "--mode", "check", "--quiet")
+    [line] = integrity_line(completed.stdout)
+    assert re.match("^roadmap-integrity: %s$" % state, line), line
+    assert completed.returncode == 0, "a side observation never fails preflight"
+
+
+def test_a_missing_roadmap_fails_and_names_its_path(workspace):
+    role_path(workspace, "roadmap").unlink()
+    completed = run(PREFLIGHT, "--root", str(workspace), "--mode", "check", "--quiet")
+    path = manifest(workspace)["roles"]["roadmap"]["path"]
+    assert integrity_line(completed.stdout) == ["roadmap-integrity: fail (missing: %s)" % path]
+
+
+def test_the_json_carries_the_integrity_state(workspace):
+    _, payload = preflight_json(workspace)
+    assert re.match(r"^ok size=\d+$", payload["roadmapIntegrity"]["state"])
+
+
+def test_session_start_reads_the_roadmap_once(workspace, monkeypatch):
+    """Charter assumption A3: the integrity line and the deadline check share one read."""
+    preflight = load_script("virtuoso_preflight")
+    roadmap = str(role_path(workspace, "roadmap"))
+    data = manifest(workspace)
+    data.setdefault("policy", {})["roadmap"] = {"deadlines": {"g": {
+        "date": "2099-01-01", "owner": "o", "finishLine": "Nowhere", "recorded": "2026-09-23"}}}
+    write_manifest(workspace, data)
+    reads = []
+    real_bytes, real_text = textio.read_bytes, textio.read_text
+
+    def counting_bytes(path):
+        if Path(path) == Path(roadmap):
+            reads.append(path)
+        return real_bytes(path)
+
+    def counting_text(path):
+        if Path(path) == Path(roadmap):
+            reads.append(path)
+        return real_text(path)
+
+    monkeypatch.setattr(textio, "read_bytes", counting_bytes)
+    monkeypatch.setattr(textio, "read_text", counting_text)
+    outcome = preflight.preflight(str(workspace), "check")
+    assert outcome.roadmap_integrity.startswith("ok")
+    assert "; 1 finding" in outcome.deadlines          # the finish line was looked up
+    assert len(reads) == 1, reads
+
+
+def test_the_ceremonies_read_the_line_the_preflight_prints():
+    for skill in ("next-pointer", "roadmap-status", "roadmap-review", "pointer-closeout"):
+        text = (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+        assert "`roadmap-integrity:` line" in text, skill
+        assert "exit 3" not in text and "exit 2" not in text, (
+            "%s describes the line with --check-document's exit codes" % skill)
+
+
+# --- D3: policy validated at every load ---------------------------------------------
+
+def set_policy(root, policy):
+    data = manifest(root)
+    data["policy"] = policy
+    write_manifest(root, data)
+
+
+@pytest.mark.parametrize("policy, key", [
+    ({"rubric": {"extensions": "coverage-gate"}}, "rubric.extensions"),
+    ({"git": {"policy": "yolo"}}, "policy.git.policy"),
+    ({"roadmap": {"dispatchBuffer": "five"}}, "roadmap.dispatchBuffer"),
+])
+def test_a_hand_edited_invalid_policy_is_a_warning_at_preflight(workspace, policy, key):
+    set_policy(workspace, policy)
+    completed, payload = preflight_json(workspace)
+    assert completed.returncode == 0
+    assert payload["status"] == "warning"
+    [finding] = [f for f in payload["findings"] if f["code"] == "policy-invalid"]
+    assert finding["severity"] == "warning" and finding["identifier"] == key
+
+
+def test_a_valid_policy_raises_nothing(workspace):
+    set_policy(workspace, {"rubric": {"extensions": ["coverage-gate"]}, "roadmap": {"dispatchBuffer": 3}})
+    _, payload = preflight_json(workspace)
+    assert not [f for f in payload["findings"] if f["code"] == "policy-invalid"]
+
+
+def test_deadline_problems_stay_on_the_deadline_line(workspace):
+    set_policy(workspace, {"roadmap": {"deadlines": {"g": {"date": "soon"}}}})
+    completed, payload = preflight_json(workspace)
+    assert payload["status"] == "ready"
+    assert "deadlines: invalid (" in completed.stdout
+
+
+def test_undocumented_keys_are_inert_not_invalid():
+    assert registry_mod.policy_findings({"somethingNew": 1}) == []

@@ -95,7 +95,12 @@ def invalid_findings(problems: list[str]) -> list[Finding]:
     return [Finding(INVALID, "warning", problem, role="", identifier="") for problem in problems]
 
 
-def anchor_findings(reg, deadlines: list[Deadline]) -> list[Finding]:
+#: "The caller has not read the roadmap; read it here." Distinct from ``None``,
+#: which is a read that found nothing.
+UNREAD = object()
+
+
+def anchor_findings(reg, deadlines: list[Deadline], *, roadmap_raw=UNREAD) -> list[Finding]:
     """The body half of each deadline: its ``finishLine`` must name a heading in the
     registered roadmap, matched as the pairing rule matches every body — a depth
     2-4 heading that starts with the text, in any case, outside fenced examples.
@@ -107,7 +112,7 @@ def anchor_findings(reg, deadlines: list[Deadline]) -> list[Finding]:
     findings: list[Finding] = []
     text, why_unreadable = None, ""
     if any(d.finish_line for d in deadlines):
-        text, why_unreadable = _roadmap_text(reg)
+        text, why_unreadable = _roadmap_text(reg, roadmap_raw)
     for d in deadlines:
         if not d.finish_line:
             findings.append(Finding(
@@ -130,13 +135,19 @@ def anchor_findings(reg, deadlines: list[Deadline]) -> list[Finding]:
     return findings
 
 
-def _roadmap_text(reg) -> tuple[str | None, str]:
+def _roadmap_text(reg, raw=UNREAD) -> tuple[str | None, str]:
+    """The roadmap's text outside fenced examples, or ``(None, why not)``.
+
+    ``raw`` is the file's bytes when the caller has already read them — session
+    start reads the roadmap once, for its integrity line and for this."""
     spec = reg.roles.get("roadmap")
     if spec is None:
         return None, "no roadmap role is registered"
     if spec.is_external:
         return None, "the registered roadmap is external and is not read here"
-    raw = textio.read_text(os.path.join(reg.root, *spec.path.split("/")))
+    if raw is UNREAD:
+        raw = textio.read_bytes(os.path.join(reg.root, *spec.path.split("/")))
+    raw = textio.decode(raw) if raw is not None else None
     if raw is None:
         return None, "the registered roadmap %s cannot be read" % spec.path
     return overlays_mod.without_fenced_blocks(raw), ""
@@ -179,11 +190,11 @@ def summary(usable: list[Deadline], problems: list[str], findings: list, on: _dt
     return text
 
 
-def status(reg, on: _dt.date | None = None) -> tuple[str, dict]:
+def status(reg, on: _dt.date | None = None, *, roadmap_raw=UNREAD) -> tuple[str, dict]:
     """``(line state, JSON detail)`` for a loaded registry."""
     on = on or today()
     usable, problems = declared(policy_mod.load(reg.policy))
-    findings = anchor_findings(reg, usable)
+    findings = anchor_findings(reg, usable, roadmap_raw=roadmap_raw)
     state = summary(usable, problems, findings, on)
     detail = {
         "state": state,

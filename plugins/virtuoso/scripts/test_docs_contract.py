@@ -262,7 +262,8 @@ def test_the_machine_lines_and_their_json_keys_are_documented():
     outcome = result_mod.Result(status=result_mod.READY, mode="check", root="/tmp")
     payload = outcome.as_dict()
     for line, key in ((outcome.overlay_line(), "overlays"),
-                      (outcome.deadline_line(), "deadlines")):
+                      (outcome.deadline_line(), "deadlines"),
+                      (outcome.roadmap_integrity_line(), "roadmapIntegrity")):
         token = line.split(":")[0] + ":"
         assert token in contract, "%s is undocumented" % token
         assert key in payload and "`%s`" % key in contract, "JSON key %s" % key

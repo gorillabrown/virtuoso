@@ -536,6 +536,43 @@ class Policy:
         return problems
 
 
+def audit(raw) -> list[tuple[str, str]]:
+    """``(key, problem)`` for every wrong-typed value in a project's own policy block
+    and every problem :meth:`Policy.validate` finds — the checks ``policy-set``
+    applies before a write, applied to whatever is on disk, however it got there.
+
+    A hand-edited value of the wrong shape is stored and then ignored; without this,
+    only a value written through ``policy-set`` was ever checked. Deadline problems
+    are left to the ``deadlines:`` line, which already reports each one.
+    Undocumented keys are not reported here: they are inert, not wrong.
+    """
+    if not isinstance(raw, dict):
+        return [("policy", "the policy block is %s, not a mapping" % value_kind(raw)[1])]
+    found: list[tuple[str, str]] = []
+
+    def walk(node: dict, prefix: str) -> None:
+        for key, value in node.items():
+            path = "%s.%s" % (prefix, key) if prefix else str(key)
+            if path in OPEN_MAPPINGS:
+                continue
+            default = documented_default(path)
+            if default is _MISSING:
+                continue
+            if isinstance(default, dict) and default and isinstance(value, dict):
+                walk(value, path)
+                continue
+            problem = type_problem(path, value)
+            if problem:
+                found.append((path, problem))
+
+    walk(raw, "")
+    if not found:
+        for problem in load(raw).validate():
+            if not problem.startswith("policy.roadmap.deadlines"):
+                found.append((problem.split("=", 1)[0].split(" ", 1)[0], problem))
+    return found
+
+
 def load(raw: dict | None) -> Policy:
     """Merge a project's ``policy`` block over the documented defaults."""
     return Policy(_deep_merge(DEFAULTS, raw or {}))

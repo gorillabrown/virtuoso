@@ -39,6 +39,11 @@ A fourth, ``deadlines: <state>``, follows it on the same terms: every mode, neve
 suppressed, always a result (``none declared`` when there is nothing to say). It
 carries dates and days only — never pace, which needs the work register, and
 session start must not read a register that may be external.
+
+A fifth, ``roadmap-integrity: <state>``, reports the registered roadmap's bytes —
+``ok``, ``warn`` (empty or oversize), ``fail`` (missing, not text, null bytes),
+``external``, ``no roadmap role`` or ``not registered`` — on the same terms. The
+ceremonies that rewrite the roadmap read it before touching the file.
 """
 from __future__ import annotations
 
@@ -99,6 +104,8 @@ class Result:
     #: The one-line deadline state, on the same terms as the overlay line.
     deadlines: str = "not registered"
     deadlines_detail: dict | None = None
+    #: The one-line roadmap integrity state, on the same terms again.
+    roadmap_integrity: str = "not registered"
 
     def __post_init__(self) -> None:
         if self.status not in STATUSES:
@@ -152,6 +159,7 @@ class Result:
             else {"line": self.overlay_line()}
         data["deadlines"] = self.deadlines_detail if self.deadlines_detail is not None \
             else {"state": self.deadlines or "not registered"}
+        data["roadmapIntegrity"] = {"state": self.roadmap_integrity or "not registered"}
         if self.error is not None:
             data["error"] = self.error
         return data
@@ -172,3 +180,8 @@ class Result:
         """The deadline state line, printed after the overlay line in every mode and
         never suppressed by ``--quiet``. Always non-empty."""
         return "deadlines: %s" % (self.deadlines or "not registered")
+
+    def roadmap_integrity_line(self) -> str:
+        """The roadmap integrity line, printed after the deadline line in every mode
+        and never suppressed by ``--quiet``. Always non-empty."""
+        return "roadmap-integrity: %s" % (self.roadmap_integrity or "not registered")

@@ -391,7 +391,18 @@ def load(root: str, *, plugin_version: str = "") -> Registry:
     reg.compute_presence()
     reg.findings.extend(reg.validate(plugin_version=plugin_version))
     reg.findings.extend(reg.divergence(reg.readme_view))
+    reg.findings.extend(policy_findings(reg.policy))
     return reg
+
+
+def policy_findings(raw) -> list[Finding]:
+    """Each problem in the project's policy block, as a ``policy-invalid`` warning.
+
+    Warning, never error: the plugin reports a project's configuration and the
+    project decides; an invalid value falls back to its documented default."""
+    from . import policy as policy_mod
+    return [Finding("policy-invalid", "warning", problem, identifier=key)
+            for key, problem in policy_mod.audit(raw)]
 
 
 def require_valid(reg: Registry) -> None:

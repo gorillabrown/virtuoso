@@ -126,22 +126,43 @@ def _attach_overlays(outcome: result_mod.Result, root: str) -> result_mod.Result
     return outcome
 
 
-def _attach_deadlines(outcome: result_mod.Result, root: str) -> result_mod.Result:
-    """Give every outcome, in every mode, a deadline line. Total, as the overlay line
-    is: a registry this cannot read reports `not registered`, never an exception,
-    because a side observation must not be able to fail the operation asked for.
+def roadmap_integrity(reg) -> tuple[str, object]:
+    """``(line state, the roadmap's bytes)`` for a loaded registry.
+
+    The bytes are returned so the deadline check reads the same ones: session start
+    reads the roadmap once. An external or unregistered roadmap is not read at all
+    (``deadlines_mod.UNREAD`` tells the deadline check the same)."""
+    spec = reg.roles.get("roadmap")
+    if spec is None:
+        return "no roadmap role", deadlines_mod.UNREAD
+    if spec.is_external:
+        return "external (not read at session start)", deadlines_mod.UNREAD
+    path = os.path.join(reg.root, *spec.path.split("/"))
+    raw = textio.read_bytes(path) if os.path.isfile(path) else None
+    state, _ = integrity_state(raw, spec.path)
+    return state, raw
+
+
+def _attach_roadmap(outcome: result_mod.Result, root: str) -> result_mod.Result:
+    """Give every outcome, in every mode, a deadline line and a roadmap-integrity
+    line. Total, as the overlay line is: a registry this cannot read reports `not
+    registered`, never an exception, because a side observation must not be able to
+    fail the operation asked for.
 
     An unregistered project is `not registered`, not `none declared`: loading an
     absent registry yields an empty one, and "none declared" would describe a
     project that could declare a deadline and chose not to."""
+    outcome.deadlines, outcome.deadlines_detail = "not registered", None
+    outcome.roadmap_integrity = "not registered"
     if not _is_registered(root):
-        outcome.deadlines, outcome.deadlines_detail = "not registered", None
         return outcome
     try:
+        reg = registry_mod.load(root)
+        outcome.roadmap_integrity, raw = roadmap_integrity(reg)
         outcome.deadlines, outcome.deadlines_detail = deadlines_mod.status(
-            registry_mod.load(root))
+            reg, roadmap_raw=raw)
     except (GovernanceError, OSError, ValueError):
-        outcome.deadlines, outcome.deadlines_detail = "not registered", None
+        pass
     return outcome
 
 
@@ -297,38 +318,40 @@ def _write_marker(root: str) -> list[str]:
 # --- document integrity guard -------------------------------------------------
 
 
-def check_document(path: str, *, oversize_bytes: int = DEFAULT_OVERSIZE_BYTES) -> int:
-    """Integrity guard for a document about to be rewritten.
-    Exit codes: 0 ok, 2 warn (empty / oversize), 3 fail (missing / corrupt)."""
-    if not path or not os.path.isfile(path):
-        print("document-integrity: fail (missing: %s)" % path)
-        return 3
-    raw = textio.read_bytes(path)
-    if raw is None:
-        print("document-integrity: fail (unreadable: %s)" % path)
-        return 3
+def integrity_state(raw: bytes | None, label: str, *,
+                    oversize_bytes: int = DEFAULT_OVERSIZE_BYTES) -> tuple[str, int]:
+    """``(state, exit code)`` for a document's bytes: ``ok`` 0, ``warn`` 2 (empty,
+    oversize), ``fail`` 3 (missing, not text, null bytes).
 
+    Decoded first, honouring a byte-order mark, as every reader in the plugin does:
+    a UTF-16 file from a PowerShell redirect is text, and its bytes are full of
+    zeros. A null byte is corruption only when it survives decoding."""
+    if raw is None:
+        return "fail (missing: %s)" % label, 3
     failures, warnings = [], []
-    if b"\x00" in raw:
+    text = textio.decode(raw)
+    if text is None:
+        failures.append("not-text")
+    elif "\x00" in text:
         failures.append("null-bytes")
-    try:
-        raw.decode("utf-8")
-    except UnicodeDecodeError:
-        failures.append("not-utf-8")
-    if not raw.strip():
+    if not (text if text is not None else raw).strip():
         warnings.append("empty")
     if len(raw) > oversize_bytes:
         warnings.append("oversize:%d-bytes(>%d)" % (len(raw), oversize_bytes))
-
     if failures:
-        print("document-integrity: fail (%s) size=%d"
-              % (", ".join(failures + warnings), len(raw)))
-        return 3
+        return "fail (%s) size=%d" % (", ".join(failures + warnings), len(raw)), 3
     if warnings:
-        print("document-integrity: warn (%s) size=%d" % (", ".join(warnings), len(raw)))
-        return 2
-    print("document-integrity: ok size=%d" % len(raw))
-    return 0
+        return "warn (%s) size=%d" % (", ".join(warnings), len(raw)), 2
+    return "ok size=%d" % len(raw), 0
+
+
+def check_document(path: str, *, oversize_bytes: int = DEFAULT_OVERSIZE_BYTES) -> int:
+    """Integrity guard for a document about to be rewritten.
+    Exit codes: 0 ok, 2 warn (empty / oversize), 3 fail (missing / corrupt)."""
+    raw = textio.read_bytes(path) if path and os.path.isfile(path) else None
+    state, code = integrity_state(raw, path, oversize_bytes=oversize_bytes)
+    print("document-integrity: " + state)
+    return code
 
 
 # --- entry point --------------------------------------------------------------
@@ -355,19 +378,20 @@ def preflight(root: str, mode: str = "check", *, quiet: bool = False,
             status=result_mod.FAILED, mode=mode, root=root, message=str(exc),
             error=exc.as_dict(), plugin_version=plugin_version())
     _attach_overlays(outcome, root)
-    _attach_deadlines(outcome, root)
+    _attach_roadmap(outcome, root)
     outcome.assert_contract()
     return outcome
 
 
 def emit(outcome: result_mod.Result, *, quiet: bool, as_json: bool) -> None:
     # The status lines are EXEMPT from --quiet: they are what hooks and tools
-    # parse, and the SessionStart hook runs quiet. The overlay and deadline lines
-    # are printed unconditionally for the same reason the others are.
+    # parse, and the SessionStart hook runs quiet. The overlay, deadline and
+    # roadmap-integrity lines are printed unconditionally for the same reason.
     for line in outcome.contract_lines():
         print(line)
     print(outcome.overlay_line())
     print(outcome.deadline_line())
+    print(outcome.roadmap_integrity_line())
     if as_json:
         print(outcome.to_json())
         return

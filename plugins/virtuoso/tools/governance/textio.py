@@ -50,6 +50,14 @@ def read_text(path: str) -> str | None:
     raw = read_bytes(path)
     if raw is None:
         return None
+    return decode(raw)
+
+
+def decode(raw: bytes) -> str | None:
+    """``raw`` as text, honouring a byte-order mark; ``None`` when it is not text.
+
+    The decoding half of :func:`read_text`, for a caller that already holds the
+    bytes and must not read the file a second time."""
     for bom, encoding in _BOMS:
         if raw.startswith(bom):
             try:

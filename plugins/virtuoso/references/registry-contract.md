@@ -511,13 +511,15 @@ for twice. That is the failure this loop exists to make visible.
 ## Preflight status contract (items 10, 11)
 
 `scripts/virtuoso_preflight.py` always prints two parseable lines, plus a line
-reporting overlays and a line reporting deadlines:
+reporting overlays, a line reporting deadlines, and a line reporting the roadmap's
+integrity:
 
 ```
 virtuoso-status: <status>
 writes: <N>
 overlays: <state>
 deadlines: <state>
+roadmap-integrity: <state>
 ```
 
 | status | meaning | writes |
@@ -559,9 +561,35 @@ register, which may be external, and session start never reads one.
 
 A `; N finding(s)` suffix counts the deadline findings above.
 
+The `roadmap-integrity:` line follows the same rule. It reports the registered
+roadmap's bytes, read once at session start (the deadline check reads the same bytes).
+The ceremonies that rewrite the roadmap act on it before touching the file, and
+`--check-document <path>` prints the same state for any one document, with exit code
+0 / 2 / 3 for `ok` / `warn` / `fail`.
+
+| integrity state | meaning |
+|---|---|
+| `not registered` | the project is not registered |
+| `no roadmap role` | registered; no `roadmap` role is declared |
+| `external (not read at session start)` | the roadmap is an external role |
+| `ok size=<N>` | readable text of N bytes |
+| `warn (<why>) size=<N>` | `empty`, or `oversize:<N>-bytes(><limit>)` |
+| `fail (<why>) size=<N>` | `not-text` (undecodable, a byte-order mark honoured) or `null-bytes` (after decoding) |
+| `fail (missing: <path>)` | the registered path is not a file |
+
+### Policy validated at every load
+
+Every registry load checks the project's own `policy` block the way `policy-set`
+checks a write: a documented key whose value has the wrong type, and every problem the
+policy's own validation finds (an unknown git policy, an invalid ledger mapping, lesson
+prefix or pace block). Each is a **`policy-invalid`** warning naming the key; the value
+falls back to its documented default. Warning, never error: a project's configuration is
+the project's to fix. Undocumented keys are inert rather than invalid and are not
+reported; deadline problems are reported on the `deadlines:` line instead.
+
 `--json` adds the full structured result, including the resolved overlays and the
-safety floor they may not loosen, and `deadlines` (the declared dates, days remaining
-and findings). The JSON follows the machine lines; read it from its first line (the one
+safety floor they may not loosen, `deadlines` (the declared dates, days remaining
+and findings), and `roadmapIntegrity` (its state). The JSON follows the machine lines; read it from its first line (the one
 beginning `{`), never from a fixed line count, because the set of machine lines grows.
 Modes: `check` (read-only; `detect` is a retained alias), `adopt`, `create --authorize`,
 `repair [--apply]`.
