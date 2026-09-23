@@ -40,8 +40,8 @@ Full suite 874 passed, 3 skipped; 104 passed with child output forced to cp1252.
   reconciliation, 7 rule anchors) and `eb/charming-pasteur-9rigux` (stale vendored-tool
   warning) are not merged. Recommendation: merge both. If gracious-mendel merges, its seven
   anchors need `RULE_TEXT_HASHES` entries (`python scripts/skill_rules.py --hashes`).
-- **Launch Q2, Q3 unanswered:** a capability string beyond Interactive/Read/Write (left at
-  three); whether 1.9.0 ships alone or with this as 1.10.0 (notes carry both sections).
+- **Launch Q2 unanswered:** a capability string beyond Interactive/Read/Write (left at
+  three). **Q3 answered:** 1.9.0 and 1.10.0 ship together as 1.10.0.
 - CI runs #119–#121 were red on Windows (test encoding), fixed in `80047fa`; no product change.
 - `dispatch-buffer-filled` keeps its meaning; `dispatch-buffer-ready` is the new figure.
 - Existing workspaces get the `findings` role and ledger effort columns only by adding them.

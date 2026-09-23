@@ -1,4 +1,4 @@
-"""The learning loop (v1.9.0): lessons captured at close-out, applied in the next
+"""The learning loop (built as 1.9.0, released in 1.10.0): lessons captured at close-out, applied in the next
 specification and the next epic's direction.
 
 The tests use the prefix ``LSN``; the documented default is ``SRL``. A lesson is an

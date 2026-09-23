@@ -23,7 +23,8 @@
 - **Q3 (parameter / default: notes carry a separate v1.10.0 section).** Should 1.9.0 ship
   from `1442ccc` before this epic's commits, or should everything ship as 1.10.0?
   Either works: `release.py` bumps to the version named at release time.
-  **Answer:** _(pending)_
+  **Answer:** ship both together as 1.10.0 (owner, 2026-09-23). The notes lead with the
+  upgrade from 1.8.2 and label the learning loop as released in 1.10.0.
 
 ## Kickoff / resume prompt
 

@@ -1,10 +1,14 @@
 # Virtuoso Release Notes
 
-## v1.10.0 (2026-09-23) — loop hardening
+## v1.10.0 (2026-09-23) — the learning loop, hardened
 
-**Additive. Registry schema stays at v2; the readiness rubric stays at v1.1.** New
-workspaces get two more roles (`findings`, and effort columns in the ledger); existing
-manifests stay valid without them.
+**Upgrading from 1.8.2.** This release ships two bodies of work: the learning loop (the
+next section, built as 1.9.0 and never released on its own) and the loop hardening below.
+**Additive; registry schema stays at v2. The readiness rubric moves to v1.1** — its new
+universal check U9, *Lessons applied*, means a specification that passed under v1.0 may
+need one more section before it is dispatch-ready again (the next `/roadmap-review`
+re-checks the buffer). New workspaces also get a `findings` role and effort columns in the
+ledger; existing manifests stay valid without them.
 
 1.9.0 closed the learning loop at three checked links. The analysis that followed graded
 all twenty-one hand-offs in the loop — six mechanical, five partly, eight prose, two
@@ -84,7 +88,7 @@ chips, information panel, icons). A test holds the three equal.
 
 Tests: 874 passed, 3 skipped (Linux).
 
-## v1.9.0 (2026-09-23) — the learning loop
+## v1.10.0, continued — the learning loop (built as 1.9.0; first released in 1.10.0)
 
 **Additive. Registry schema stays at v2. The readiness rubric moves to v1.1.** The rubric
 has one new universal check, U9 *Lessons applied*, so a specification that passed under

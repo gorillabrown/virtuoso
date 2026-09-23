@@ -98,3 +98,11 @@
 - **Gate/DoD movement:** all rows met; D19 met as raised (owner decision pending); CI #126
   green on both legs. done.md written; charter status complete.
 - **Next:** none for the executor. Owner: BLOCKER(USER) #1, launch Q2/Q3, release.
+
+## S1 (post-completion) — 2026-09-23 — release shape
+
+- **Did:** the owner answered launch Q3: ship both as 1.10.0. RELEASE-NOTES now leads
+  with the upgrade from 1.8.2 (rubric v1.1 / U9) and labels the learning-loop section as
+  released in 1.10.0; no v1.9.0 release is claimed. `release.py` reads no notes, so the
+  pipeline is unaffected.
+- **Next:** the owner runs `release.py 1.10.0` on their machine.
