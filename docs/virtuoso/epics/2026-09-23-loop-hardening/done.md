@@ -36,10 +36,10 @@ Full suite 874 passed, 3 skipped; 104 passed with child output forced to cp1252.
 
 ## Caveats and loose ends
 
-- **D19 is the owner's.** `eb/gracious-mendel-juqys8` (close-out acceptance and evidence
-  reconciliation, 7 rule anchors) and `eb/charming-pasteur-9rigux` (stale vendored-tool
-  warning) are not merged. Recommendation: merge both. If gracious-mendel merges, its seven
-  anchors need `RULE_TEXT_HASHES` entries (`python scripts/skill_rules.py --hashes`).
+- **D19 answered: merge.** `eb/charming-pasteur-9rigux` (stale vendored-tool warning,
+  now documented in the contract) and `eb/gracious-mendel-juqys8` (close-out acceptance and
+  evidence reconciliation, folded into the v1.10.0 notes) are merged; the latter's seven rule
+  anchors are hashed — 34 promoted rules held.
 - **Launch Q2 unanswered:** a capability string beyond Interactive/Read/Write (left at
   three). **Q3 answered:** 1.9.0 and 1.10.0 ship together as 1.10.0.
 - CI runs #119–#121 were red on Windows (test encoding), fixed in `80047fa`; no product change.

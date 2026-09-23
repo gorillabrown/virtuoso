@@ -79,6 +79,85 @@ had silently needed a v1 `paths` map.
   guide states the memory / lessons / findings boundary once.
 - Promoted rules are hashed: an anchor now proves the rule beneath it, not just a marker.
 
+### Close-out: acceptance and evidence reconciliation
+
+Step 1 of the close-out
+crossing said to verify completion evidence. It did not say how to read a result that is not
+a pass, how much evidence a given integrity property is worth, or which tree the evidence is
+about. That left the three misreadings a close-out is most likely to make: applying a
+superseded gate, attributing an inherited baseline failure to the candidate — or excusing a
+real regression as inherited, by inference rather than evidence — and publishing a tree other
+than the one that was tested.
+
+#### One section, not a seventh step
+
+`pointer-closeout` gains **Acceptance and evidence reconciliation**, placed after Step 1. It
+governs how the six steps read evidence; the transactional ordering and every confirmation
+the crossing requires are unchanged.
+
+Before verifying anything, the ceremony identifies the currently authorized acceptance
+contract, published mid-execution amendments included — superseded criteria stay visible in
+the history and are not applied as current gates. It never amends those criteria during
+close-out: criteria that conflict with superior governance, a known-red baseline, or the
+delivered scope stop the crossing and route a concrete amendment for owner approval and
+independent review.
+
+#### Failure classification
+
+Every non-pass result is classified before completion evidence is judged to hold:
+
+| Classification | Effect |
+|---|---|
+| In-scope regression | Completion is blocked |
+| Inherited baseline failure | Preserved, routed to a separate bounded issue through the issue contract, covered only by an authorized amendment |
+| Admission or custody failure | Completion is blocked even if test assertions passed |
+| Infrastructure failure | Repaired or rerun — never recorded as a product failure |
+| Authorized exclusion | Reported explicitly; the excluded population is never described as passed |
+
+An inherited failure needs evidence, not inference: reproduce it at the accepted baseline
+where practical, compare the candidate's relevant dependency surface, and confirm the
+protected inputs did not move.
+
+#### Evidence proportional to the property being proved
+
+Commit and tree identities for tracked-content identity, exact-path diffs for implementation
+scope, `virtuoso_registry repo` for checkout drift, `virtuoso_registry protected` for the
+protected-file inventory — rather than repeatedly hashing whole repositories, standing up
+independent repositories where one identity proves the point, or rerunning an accepted final
+test to produce a fresher summary. Evidence reduction is never invented at close-out: a
+binding gate changes through the project's amendment and review process first.
+
+#### The tested tree is the published tree
+
+Completion evidence names the exact integrated commit and tree — the candidate diff matches
+the authorized manifest, the tested tree equals the tree selected for publication, the local,
+tracking and authoritative remote references agree, and nothing unreviewed landed between
+acceptance and publication. A later governance-only commit does not retroactively invalidate
+a recorded implementation acceptance; the close-out distinguishes the two rather than blurring
+them. Where protected inputs exist their integrity properties are recorded either side of the
+accepted test session, because a passing test result cannot override protected-state drift.
+
+#### Also
+
+- **Close only what was verified.** A parent epic, program, milestone or release closes on its
+  own completion conditions, never on a child's. Remaining dependencies, inherited defects,
+  authorized exclusions and unresolved owner decisions are recorded without being converted
+  into completion claims.
+- **Aggregates leave the close-out vocabulary.** "All tests passed" is not sayable while any
+  tested or excluded population carries a known failure; the two populations are named
+  separately, alongside what failed, what was excluded under authority, what remained
+  unchanged, what was published, and what remains open.
+- **Terminal operations are verified through their source** — item retirement, ledger entry,
+  worktree completion, lane/lock/merge-slot release, remote publication, recovery state — by
+  the exact recorded holder, branch, item and revision identities.
+- **Retrospective lessons prefer reconciliation to duplication.** An inefficient or invalid
+  gate is sorted into a one-time specification correction, a repeated workflow pattern, an
+  existing rule needing reconciliation, or a new candidate standing rule — the last promoted
+  only at the project's repetition threshold.
+- Seven anchors added to `scripts/skill_rules.py` hold these rules in the skill body, so
+  `validate.py` fails if a later edit drops one. **34 rules** are now held this way, and
+  `pointer-closeout` joins the skills covered, and each rule's text is hashed like the rest.
+
 ### Plugin pages
 
 Both hosts and the marketplace describe the plugin the same way — one description naming

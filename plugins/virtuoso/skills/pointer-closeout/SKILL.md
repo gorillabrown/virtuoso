@@ -234,6 +234,147 @@ Evidence that does not hold **stops the crossing**. Report exactly which
 criterion failed, with its output. A close-out is a claim about reality; do not
 make one you have not checked.
 
+### Acceptance and evidence reconciliation
+
+Not a seventh step. This governs how the six steps read evidence; their order and
+every confirmation they require are unchanged.
+
+Before verifying completion, identify the currently authorized acceptance contract,
+including every published mid-execution amendment. Superseded criteria stay visible
+in the history but are not applied as current gates.
+
+<!-- rule:closeout-never-amends-acceptance (acceptance-amendment) -->
+**Never amend acceptance criteria during close-out.** If the active criteria
+conflict with superior governance, a known-red baseline, or the delivered scope,
+stop the crossing and route a concrete amendment for owner approval and independent
+review.
+
+#### Failure classification
+
+<!-- rule:classify-before-completion (failure-classification) -->
+**Classify every non-pass result before deciding whether completion evidence holds:**
+
+1. **In-scope regression** — the candidate fails behavior within its changed
+   dependency surface. Completion is blocked.
+2. **Inherited baseline failure** — the same deterministic failure occurs at the
+   accepted baseline and at the candidate, with the relevant implementation
+   unchanged. Preserve the failure, link or create a separate bounded issue through
+   the issue contract, and apply only an authorized acceptance amendment.
+3. **Admission or custody failure** — repository identity, import isolation,
+   protected inputs, or evidence collection cannot be trusted. Completion is blocked
+   even if test assertions passed.
+4. **Infrastructure failure** — the test produced no valid behavioral result because
+   of environment, runner, storage, permission, or provider failure. Repair or rerun
+   the affected operation; do not classify it as a product failure.
+5. **Authorized exclusion** — an owner-approved, published exclusion exists. Report
+   it explicitly and never describe the excluded population as passed.
+
+An inherited failure requires evidence, not inference: reproduce it at the accepted
+baseline when practical, compare the candidate's relevant dependency surface, and
+verify that protected inputs remained unchanged.
+
+#### Proportional evidence
+
+<!-- rule:proportional-evidence (evidence-proportionality) -->
+**Use the least expensive evidence that proves each integrity property.**
+
+- Commit and tree identities prove tracked-content identity.
+- Exact-path diffs prove implementation scope.
+- Clean index and working-tree checks detect checkout drift; `virtuoso_registry repo`
+  reports both, read-only.
+- Hash protected inputs and configuration surfaces directly.
+- Use multiple independent repositories only when the proof depends on distinct
+  repository identities.
+- Use one fresh isolated runner for ordinary regression unless the governing
+  contract requires more.
+- Do not repeatedly hash complete repositories when version-control identities and a
+  targeted protected-file inventory establish the same property.
+- Do not rerun an accepted final test merely to produce another summary. Read and
+  verify its raw evidence unless the contract explicitly requires a fresh close-out
+  execution.
+
+Evidence reduction is never invented during close-out. Any change to a binding gate
+goes through the project's amendment and review process first.
+
+#### Exact integrated identity
+
+<!-- rule:tested-tree-is-the-published-tree (integrated-identity) -->
+**Completion evidence must identify the exact integrated commit and tree tested.**
+Before publication, verify:
+
+- the complete candidate diff matches the authorized manifest;
+- the tested tree equals the tree selected for publication;
+- the published local, tracking, and authoritative remote references agree;
+- no unreviewed change landed between final acceptance and publication.
+
+A later governance-only commit does not retroactively invalidate a properly recorded
+implementation acceptance, but the close-out distinguishes the tested implementation
+commit from any subsequent documentation commit.
+
+#### Protected-state custody
+
+<!-- rule:protected-state-over-test-result (protected-custody) -->
+**A passing test result cannot override protected-state drift.** Where protected
+inputs exist, record their configured integrity properties immediately before and
+after the accepted test session — hashes, sizes, modification times, database
+sidecars, generated-file provenance, or whatever else the project declares.
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . protected --json
+
+#### Completion scope
+
+<!-- rule:close-only-what-was-verified (completion-scope) -->
+**Close only the item whose deliverables and acceptance criteria were verified.** Do
+not mark a parent epic, program, milestone, or release complete unless its own
+separate completion conditions also pass.
+
+Record remaining dependencies, inherited defects, authorized exclusions, and
+unresolved owner decisions without converting them into completion claims.
+
+#### Close-out language
+
+<!-- rule:name-populations-not-aggregates (population-naming) -->
+**Name the accepted test population and the excluded population separately.** Avoid
+aggregate statements such as "all tests passed" when any tested or excluded
+population contains a known failure.
+
+The report distinguishes:
+
+- what passed;
+- what failed;
+- what was excluded under authority;
+- what remained unchanged;
+- what was published;
+- what remains open.
+
+#### Resource and provider completion
+
+After publication, verify every registered terminal operation through its source:
+
+- item retirement or terminal status;
+- terminal-ledger entry;
+- worktree completion;
+- lane, lock, or merge-slot release;
+- authoritative remote publication;
+- recovery state.
+
+Use the exact recorded holder, branch, item, and revision identities. A partial
+crossing remains incomplete and receives a recovery record describing what succeeded
+and what remains.
+
+#### Retrospective lessons
+
+When close-out reveals an inefficient or invalid gate, distinguish:
+
+- a one-time specification correction;
+- a repeated workflow pattern;
+- an existing rule that needs reconciliation;
+- a new candidate standing rule.
+
+Prefer updating an existing rule over creating a duplicate. Promote a new standing
+rule only after the project's repetition threshold is met
+([references/promotion-rules.md](references/promotion-rules.md)).
+
 ### Step 2 — Create the close-out artifact
 
 Write the close-out report into the registered `closeOuts` directory.

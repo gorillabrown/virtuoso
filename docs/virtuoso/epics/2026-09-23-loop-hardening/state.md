@@ -28,7 +28,7 @@ updated_by: session 1
 ```
 phase:        complete — done.md written
 next_action:  none; owner answers BLOCKER(USER) #1, launch Q2/Q3, then releases
-blockers:     BLOCKER(USER) #1 (owner decision, does not block completion)
+blockers:     none — BLOCKER(USER) #1 answered: both branches merged
 session:      1 of ~3 budgeted
 dod:          D1–D23 [met] (D19 met as raised)
 ```
@@ -71,7 +71,7 @@ dod:          D1–D23 [met] (D19 met as raised)
     `registry.py`, 14 in `schema.py`, a test). Additive, small, safe.
   - **Recommendation:** merge both into this branch during P5 (each is finished, tested
     where it has code, and closes a real gap the SWOT named); retire neither.
-  - **Answer:** _(pending — unanswered means: not merged; recorded as retired-for-now in done.md)_
+  - **Answer:** Merge (owner, 2026-09-23). Both merged: charming-pasteur `6734c58`, gracious-mendel in the following merge commit; its seven rule anchors hashed.
 
 ## Decision log — append; never silently re-litigate
 

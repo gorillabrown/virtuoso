@@ -106,3 +106,12 @@
   released in 1.10.0; no v1.9.0 release is claimed. `release.py` reads no notes, so the
   pipeline is unaffected.
 - **Next:** the owner runs `release.py 1.10.0` on their machine.
+
+## S1 (post-completion) — 2026-09-23 — stranded branches merged
+
+- **Did:** the owner answered BLOCKER(USER) #1: merge. charming-pasteur merged (conflict
+  in `registry.load` resolved by keeping both load findings; `retired-vendored-tool`
+  documented). gracious-mendel merged (its unreleased notes folded into v1.10.0; its seven
+  anchors failed the new rule-text check until hashed — the check doing its job).
+- **Learned:** launch Q2 answered "yes" without the exact capability string; asked for it
+  rather than guessing (charter A1).
