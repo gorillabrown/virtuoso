@@ -186,7 +186,11 @@ This is the behavioral pause mechanism — Zeus does not auto-advance between ph
 ### Phase 1 — READ
 
 **Actions:**
-- Read project `CLAUDE.md` (rules, current state, standing rules)
+- Read project `CLAUDE.md` (project rules, current state)
+- Read the standing rules from their one source: the role `policy.standingRules.source`
+  names (`virtuoso_registry --root . resolve <that role>`), each rule the section headed
+  by its id in `policy.standingRules.ids`. A rule restated in `CLAUDE.md` is a copy; where
+  the two differ, the registered source wins and the difference is an issue to route
 - Read this `zeus.md` (coordination protocol, routing tree, escalation rules)
 - Scan the agent roster (plugin `agents/` + project `.claude/agents/`) — discover all available agents + their exact `name:` fields
 - Read the sprint spec referenced by the dispatch pointer (the pointer printed by **`/next-pointer`**)

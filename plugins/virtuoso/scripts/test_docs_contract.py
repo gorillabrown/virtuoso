@@ -328,3 +328,17 @@ def test_every_sprint_guard_is_documented():
     source = (ROOT / "scripts" / "sprint_guards.py").read_text(encoding="utf-8")
     for name in re.findall(r'add_parser\(\s*"([a-z-]+)"', source):
         assert "| `%s" % name in contract, "sprint guard %s is undocumented" % name
+
+
+def test_every_standing_rules_finding_is_documented():
+    from tools.governance import standing_rules
+    contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
+    for code in standing_rules.FINDING_CODES:
+        assert "`%s`" % code in contract, "standing-rules finding %s is undocumented" % code
+
+
+def test_the_learning_metrics_are_documented():
+    from tools.governance import learning
+    contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
+    for metric in learning.metrics([], learning.Outcomes()):
+        assert "| `%s` |" % metric.name in contract, "metric %s is undocumented" % metric.name

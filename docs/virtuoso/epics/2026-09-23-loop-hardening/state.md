@@ -1,6 +1,6 @@
 ---
 epic: loop-hardening
-last_updated: 2026-09-23 19:40
+last_updated: 2026-09-23 21:10
 updated_by: session 1
 ---
 
@@ -26,20 +26,20 @@ updated_by: session 1
 ## Where we are
 
 ```
-phase:        P3 — Make the prose links mechanical
-next_action:  lessons --hygiene / --record-status / --candidates (D22, D11), then record-completion (D9)
-blockers:     BLOCKER(USER) #1 (stranded branches) — does not block P3–P6
+phase:        P4 — Give every output a reader
+next_action:  findings role and its readers (D13)
+blockers:     BLOCKER(USER) #1 (stranded branches) — does not block P4–P6
 session:      1 of ~3 budgeted
-dod:          D1–D8 [met] | D9–D18 [unmet] | D19 [raised] | D20–D22 [unmet] | D23 [met]
+dod:          D1–D12 [met] | D13, D14 [unmet] | D15 [met] | D16–D18 [unmet] | D19 [raised] | D20, D21 [unmet] | D22, D23 [met]
 ```
 
 ## Next actions — max 5, near horizon only
 
-1. [ ] D22 + D11: `lessons --hygiene`, `--record-status`, `--candidates`; governance-sweep and roadmap-review D.4 run them
-2. [ ] D12: anchored no-lesson reason; `kpis lesson-yield`
-3. [ ] D9: `record-completion`; `test_crossing.py` runs it
-4. [ ] D10: standing-rules pairing; Zeus reads `policy.standingRules.source`
-5. [ ] Push; gate P3
+1. [ ] D13: `findings` role (sweep, adversarial, agents as writers); `create` scaffolds it; roadmap-review B.3 reads the previous lessons-applied
+2. [ ] D14: ledger `effortEstimate` / `effortActual`; `kpis effort-calibration`; effort-levels prefers it
+3. [ ] P5: D16 agent residue, D17 memory boundary, D18 anchor hashes + `dispatch-buffer-ready`
+4. [ ] P6: notes v1.10.0, fresh DoD, done.md, CI
+5. [ ] Re-surface BLOCKER(USER) #1 in the hand-off
 
 ## Working set — verified facts this epic relies on
 
@@ -82,6 +82,8 @@ dod:          D1–D8 [met] | D9–D18 [unmet] | D19 [raised] | D20–D22 [unmet
 |---|------|----------|-----|-------------------|
 | 1 | 2026-09-23 | Epic lives at `docs/virtuoso/epics/2026-09-23-loop-hardening/` | this repository is not registry-governed and keeps its own governance artifacts under `docs/virtuoso/` | Assumption A6 |
 | 2 | 2026-09-23 | Gap 15 closed by stating the memory boundary (not a new `agentMemory` role) | lighter closure that still closes the gap; a role would add a default every governed project must absorb | grant: lighter of two closures |
+| 4 | 2026-09-23 | For local roles, `record-completion` performs crossing Steps 3 and 5 together at Step 3, so Step 4 persists ledger and register in one commit | the crossing's order exists to keep irreversible/external work last; both writes are local and reversible, and persisting them together is simpler to reconcile | grant: order of work; lighter closure |
+| 5 | 2026-09-23 | D15's metrics landed in P3 with D12's `lesson-yield` | one close-out scan feeds hygiene, candidates, yield and the other five figures | grant: order of work |
 | 3 | 2026-09-23 | Gap 16's buffer figure is a new metric `dispatch-buffer-ready`, `dispatch-buffer-filled` unchanged | Constraint: existing KPI names keep their meaning | Assumption A4 |
 
 ## Evidence

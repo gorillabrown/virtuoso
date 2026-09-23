@@ -51,3 +51,20 @@
 - **Decisions:** none new.
 - **Gate/DoD movement:** D2–D8 and D23 met; P2 gate passed (820 passed, validator clean).
 - **Next:** P3 — lessons hygiene and candidates first (D22, D11), then D12, D9, D10.
+
+## S1 (P3) — 2026-09-23 21:10 — P3 gate
+
+- **Did:** `lessons --hygiene` / `--candidates` / `--record-status` and the `learning`
+  metric group (7eae11a); governance-sweep check 21 tidies, merges and retires through
+  them; roadmap-review D.4.2 computes candidates; the "No new lesson" reason is anchored
+  (`lesson-reason-unanchored`); `record-completion` performs the ledger crossing with a
+  recovery record on partial failure (cb81cc4); standing rules paired at preflight from
+  the same roadmap read, and Zeus reads them from the registered source.
+- **Learned:** recovery records serialize snake_case (`completed_steps`) — the CLI's
+  JSON is camelCase elsewhere; a test caught the assumption. The close-out skill's own
+  example reason ("a routine change with no surprise") would have failed the new
+  anchored-reason gate — rewritten before it shipped, per the charter's lesson about
+  templates failing their own gates.
+- **Decisions:** #4 (record-completion covers Steps 3 and 5), #5 (D15 landed early).
+- **Gate/DoD movement:** D9–D12, D15, D22 met; P3 gate passed.
+- **Next:** P4 — the findings role (D13), effort calibration (D14).

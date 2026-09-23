@@ -46,7 +46,7 @@ from tools.governance import (  # noqa: E402
     backup as backup_mod, deadlines as deadlines_mod, discovery, install,
     overlays as overlays_mod,
     policy as policy_mod, providers, registry as registry_mod, repair as repair_mod,
-    result as result_mod, schema, textio, workspace,
+    result as result_mod, schema, standing_rules as standing_rules_mod, textio, workspace,
 )
 from tools.governance.errors import GovernanceError  # noqa: E402
 
@@ -161,6 +161,15 @@ def _attach_roadmap(outcome: result_mod.Result, root: str) -> result_mod.Result:
         outcome.roadmap_integrity, raw = roadmap_integrity(reg)
         outcome.deadlines, outcome.deadlines_detail = deadlines_mod.status(
             reg, roadmap_raw=raw)
+        _, source = standing_rules_mod.declared(reg)
+        rules = standing_rules_mod.findings(
+            reg, source_raw=raw if source == "roadmap" and raw is not deadlines_mod.UNREAD
+            else standing_rules_mod.UNREAD)
+        if rules:
+            outcome.findings = list(outcome.findings) + [f.as_dict() for f in rules]
+            if outcome.status == result_mod.READY and any(f.severity == "warning"
+                                                          for f in rules):
+                outcome.status = result_mod.WARNING
     except (GovernanceError, OSError, ValueError):
         pass
     return outcome

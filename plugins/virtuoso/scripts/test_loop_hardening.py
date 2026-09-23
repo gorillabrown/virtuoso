@@ -559,3 +559,63 @@ def test_the_stale_threshold_is_a_documented_policy_value():
     from tools.governance import policy as policy_mod
     assert policy_mod.documented_default("lessons.staleAfterDays") == 180
     assert policy_mod.lessons_problems({"staleAfterDays": -1})
+
+
+# --- D10: standing rules are paired and have one source ---------------------------------
+
+def declare_rules(root, ids, source=None):
+    data = manifest(root)
+    rules = {"ids": ids}
+    if source:
+        rules["source"] = source
+    data.setdefault("policy", {})["standingRules"] = rules
+    write_manifest(root, data)
+
+
+def test_a_declared_rule_without_a_section_is_unpaired(workspace):
+    role_path(workspace, "roadmap").write_text(
+        "# Roadmap\n\n## Standing rules\n\n### SR-1 — Reader first\nText.\n\n"
+        "```\n### SR-2 — only an example\n```\n", encoding="utf-8")
+    declare_rules(workspace, ["SR-1", "SR-2"])
+    completed, payload = preflight_json(workspace)
+    assert completed.returncode == 0 and payload["status"] == "warning"
+    unpaired = [f for f in payload["findings"] if f["code"] == "standing-rule-unpaired"]
+    assert [f["identifier"] for f in unpaired] == ["SR-2"]
+    assert unpaired[0]["severity"] == "warning"
+
+
+def test_paired_rules_raise_nothing(workspace):
+    role_path(workspace, "roadmap").write_text("# Roadmap\n\n### SR-1 — Reader first\n",
+                                               encoding="utf-8")
+    declare_rules(workspace, ["SR-1"])
+    _, payload = preflight_json(workspace)
+    assert payload["status"] == "ready"
+
+
+def test_an_unregistered_source_is_named(workspace):
+    declare_rules(workspace, ["SR-1"], source="rulebook")
+    _, payload = preflight_json(workspace)
+    [finding] = [f for f in payload["findings"]
+                 if f["code"] == "standing-rules-source-unregistered"]
+    assert "rulebook" in finding["message"]
+
+
+def test_standing_rules_share_the_one_roadmap_read(workspace, monkeypatch):
+    preflight = load_script("virtuoso_preflight")
+    roadmap = role_path(workspace, "roadmap")
+    roadmap.write_text("# Roadmap\n\n### SR-1 — Reader first\n", encoding="utf-8")
+    declare_rules(workspace, ["SR-1", "SR-9"])
+    reads = []
+    real = textio.read_bytes
+    monkeypatch.setattr(textio, "read_bytes",
+                        lambda p: (reads.append(p) if Path(p) == roadmap else None) or real(p))
+    outcome = preflight.preflight(str(workspace), "check")
+    assert [f["identifier"] for f in outcome.findings
+            if f["code"] == "standing-rule-unpaired"] == ["SR-9"]
+    assert len(reads) == 1
+
+
+def test_zeus_reads_standing_rules_from_the_registered_source():
+    zeus = (ROOT / "skills" / "virtuoso" / "references" / "zeus.md").read_text(encoding="utf-8")
+    assert "policy.standingRules.source" in zeus
+    assert "(rules, current state, standing rules)" not in zeus

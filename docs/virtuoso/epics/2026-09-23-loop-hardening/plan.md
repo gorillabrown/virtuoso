@@ -63,6 +63,7 @@ charter: charter.md
 |------|------|----------|
 | 2026-09-23 | P1 | D1 met — journal S1 |
 | 2026-09-23 | P2 | D2–D8, D23 met — journal S1 (cont.); 820 passed |
+| 2026-09-23 | P3 | D9–D12, D15, D22 met — journal S1 (P3); 848 passed |
 
 ## Current-phase worklist
 

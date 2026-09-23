@@ -572,6 +572,21 @@ promotions above zero, a high held rate, a falling repeated-trap rate. Any one f
 gamed; the set is expensive to game, because yield without holds, or holds without
 promotions, shows.
 
+## Standing rules
+
+`policy.standingRules.ids` declares the rules every item inherits;
+`policy.standingRules.source` names the registered role whose document defines them
+(`roadmap` by default). Each declared id must head a section there — a depth 2-4 heading
+starting with the id, outside fenced examples — the same pairing rule overlays and
+deadlines follow. The preflight checks it at session start from the same read of the
+roadmap, and every ceremony and agent reads the rules from that one source.
+
+| finding | severity | meaning |
+|---|---|---|
+| `standing-rule-unpaired` | warning | a declared id heads no section in the source document |
+| `standing-rules-source-unregistered` | warning | `standingRules.source` names a role the registry does not declare |
+| `standing-rules-source-unread` | warning / info | the source cannot be read (warning), or is external and not read here (info) |
+
 ## Recording a completion
 
 The close-out crossing's two record-keeping writes are one governed command for a
