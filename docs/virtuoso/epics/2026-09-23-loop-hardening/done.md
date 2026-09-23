@@ -1,6 +1,6 @@
 # Done — Loop hardening
 
-**Completed:** 2026-09-23, session 1 (of ~3 budgeted). Every charter DoD row re-run fresh in
+**Released:** v1.10.0, `7cbfb68`, 2026-09-23. **Completed:** 2026-09-23, session 1 (of ~3 budgeted). Every charter DoD row re-run fresh in
 one session; outputs in state.md → Evidence. Final code commit `d8ef633`, CI run #126
 (35907177454) green on ubuntu and windows.
 

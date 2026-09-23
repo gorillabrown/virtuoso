@@ -115,3 +115,19 @@
   anchors failed the new rule-text check until hashed — the check doing its job).
 - **Learned:** launch Q2 answered "yes" without the exact capability string; asked for it
   rather than guessing (charter A1).
+
+## S1 (post-completion) — 2026-09-23 — released
+
+- **Did:** the owner released v1.10.0 (`7cbfb68`). The regen-diff gate stopped the first
+  run on four intended changes to what `create` writes (starter ledger's Estimate/Actual
+  columns, `Findings.md`, the `findings` role and the corrected default writers in the
+  manifest and readme) — reproduced hash-for-hash from 1.8.2 and HEAD before the owner
+  re-ran with `--allow-regen-diff`. Sweep, verify and registry passed.
+- **First real run (Gloves of Glory, 1.10.0):** `roadmap-integrity: ok`; the deadline is
+  anchored (no finding — the unanchored case was re-verified to still report on 1.10.0);
+  two `retired-vendored-tool` warnings, the merged stale-tool check finding its first real
+  case (`Virtuoso/scripts/prepare_closeout_files.py`, `recalc.py`).
+- **Learned:** the post-release step recorded the new install only by running that
+  version's own preflight; the extensionless launcher path given first was the bash
+  launcher, which PowerShell hands to Windows to open. The PowerShell launcher is
+  `virtuoso.ps1`.
