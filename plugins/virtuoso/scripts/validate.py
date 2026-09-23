@@ -92,6 +92,18 @@ PROJECT_SPECIFIC_PATTERNS = [
     (r"\bCL-WF-\d+\b", "project-specific rule identifier"),
 ]
 
+#: Residue a real project left in shipped agents and skills. Checked in shipped
+#: files only: tests legitimately carry such names as fixtures (adopting a real
+#: layout, a foreign lesson prefix).
+SHIPPED_PROJECT_PATTERNS = [
+    (r"\b2 operational/", "project directory assumption"),
+    (r"\bSession 1\d\d\b", "project session history"),
+    (r"\b(?:AR-[1-9]|DC-\d|LL-\d{3})\b", "project-specific rule identifier"),
+    (r"\b(?:IMMEDIATE_BASE_PROB|V4_DAMAGE_MULTIPLIER|_v4_snapshot)\b", "project constant"),
+    (r"\bfeedback\.log\b", "agent memory outside the shared guide"),
+    (r"git diff origin/main\b", "a default branch assumed"),
+]
+
 #: Shell constructs that only work on one platform.
 NONPORTABLE_SHELL_PATTERNS = [
     (r"\$\(cat\s+~/", "Unix-only command substitution over a home path"),
@@ -402,6 +414,8 @@ def check_text_scans(skill_names: list[str]) -> None:
             continue
         scan(rel, text, ABSOLUTE_PATH_PATTERNS, "absolute path", absolute)
         scan(rel, text, PROJECT_SPECIFIC_PATTERNS, "project-specific", project)
+        if not _is_test_file(rel):
+            scan(rel, text, SHIPPED_PROJECT_PATTERNS, "project-specific", project)
         scan(rel, text, NONPORTABLE_SHELL_PATTERNS, "non-portable shell", shell)
         if rel in HOST_ADAPTER_FILES:
             continue
@@ -693,6 +707,16 @@ def check_promoted_rule_anchors() -> None:
         else "missing rule anchors: %s" % missing)
 
 
+def check_promoted_rule_text() -> None:
+    """Every promoted rule still says what it said when it was promoted. An anchor
+    proves a marker; the hash proves the rule beneath it."""
+    changed = skill_rules.changed_rules(os.path.join(ROOT, "skills"))
+    (ok if not changed else fail)(
+        "%d promoted rules unchanged" % len(skill_rules.RULE_TEXT_HASHES) if not changed
+        else "promoted rule text changed without its hash (update RULE_TEXT_HASHES — "
+             "`python scripts/skill_rules.py --hashes`): %s" % changed)
+
+
 def main() -> int:
     skill_names = check_frontmatter_and_manifests(os.path.join(ROOT, "skills"))
     check_session_hook()
@@ -700,6 +724,7 @@ def main() -> int:
     check_overlay_pairings()
     check_agent_memory_names()
     check_promoted_rule_anchors()
+    check_promoted_rule_text()
     check_text_scans(skill_names)
     check_relative_resources()
     check_status_tokens()

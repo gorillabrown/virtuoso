@@ -110,7 +110,11 @@ class MetricSet:
 
 
 def compute(snapshot: base.Snapshot, *, effort_scale: dict | None = None,
-            dispatch_buffer: int = 5) -> MetricSet:
+            dispatch_buffer: int = 5, spec_ready=None) -> MetricSet:
+    """``spec_ready``: a callable ``item -> True / False / None`` saying whether the
+    item's specification passes readiness check U9 (``None``: it cannot be located),
+    or a string naming why that cannot be judged here. Omitted, the
+    ``dispatch-buffer-ready`` figure is not computed at all."""
     scale = {str(k).lower(): v for k, v in (effort_scale or DEFAULT_EFFORT_SCALE).items()}
     items = snapshot.items
     fields = set(snapshot.fields)
@@ -175,5 +179,23 @@ def compute(snapshot: base.Snapshot, *, effort_scale: dict | None = None,
         filled = sum(1 for i in head if i.written_status == base.FULL_SPEC)
         metrics.append(Metric("dispatch-buffer-target", dispatch_buffer, unit="items"))
         metrics.append(Metric("dispatch-buffer-filled", filled, unit="items"))
+        if spec_ready is not None:
+            metrics.append(_buffer_ready(head, spec_ready))
 
     return MetricSet(metrics=metrics, provenance=snapshot.provenance())
+
+
+def _buffer_ready(head, spec_ready) -> Metric:
+    """Of the buffer's written items, how many a dispatch gate would pass: the
+    specification is found and passes U9. ``dispatch-buffer-filled`` counts what
+    the register *says* is written; this counts what is actually ready."""
+    if isinstance(spec_ready, str):
+        return Metric("dispatch-buffer-ready", computable=False, missing_inputs=[spec_ready])
+    written = [i for i in head if i.written_status == base.FULL_SPEC]
+    verdicts = {i.id: spec_ready(i) for i in written}
+    unlocated = [k for k, v in verdicts.items() if v is None]
+    if unlocated:
+        return Metric("dispatch-buffer-ready", computable=False, missing_inputs=[
+            "a locatable specification for %s" % ", ".join(unlocated)])
+    return Metric("dispatch-buffer-ready", sum(1 for v in verdicts.values() if v),
+                  unit="items whose specification passes U9")

@@ -224,7 +224,8 @@ Verification:
 
 #### Phase 1: Context
 1. Read CLAUDE.md, the live lessons (`virtuoso_registry --root . lessons --open`), and the relevant spec for the phase
-2. `git log --oneline -20` or `git diff origin/main HEAD` to identify changes
+2. `git log --oneline -20` or `git diff <base>...HEAD`, where `<base>` is the branch the
+   specification's *Branch* field says the work started from, to identify changes
 
 #### Phase 2: Tests
 Run the test suite. Expected: all pass. Failures = CRITICAL finding.
@@ -234,29 +235,16 @@ Run calibration and compare vs targets.
 
 #### Phase 4: Code Analysis
 
-**Architecture Compliance:**
-- Gate A (DC-4): FRO sole authority for damage/energy
-- DC-1: State routing via select_variant_state()
-- Feature flags: New features gated behind FF
-- Constants: All tunables in class C, no hardcoded magic numbers
-- `_v4_snapshot` completeness: New ExchangeResult fields populated there
-- Dual-path consistency: v4 and legacy paths handle same edge cases
+**Architecture compliance:** the project's declared rules, never a list kept here —
+- the standing rules, from the role `policy.standingRules.source` names, each the section
+  headed by its id in `policy.standingRules.ids`;
+- any architecture checks the project's overlay of this agent adds (`agents/Plato.md` in
+  the registered `overlays` role);
+- feature flags, constants and single-source-of-truth rules as the specification states them.
 
-**Persistent Rules (the project's standing rules and live lessons):**
-- AR-1: Every C.* has >=1 consumer
-- AR-2: No module-level frozen dataclass capturing tunables
-- AR-3: Display derives from same constants as engine
-- AR-5: _v4_snapshot is SOLE bridge
-- AR-6: Finish gates replicated across all code paths
-- AR-7: self._rng for all randomness
-
-**Known Traps:**
-- Constants in C but not wired (silent desync)
-- SequenceConfig frozen at import time
-- Display diverging from engine values
-- String "None" vs Python None in SQLite
-- Legacy paths modifying state when v4 flag on
-- Sub progress not resetting on PAIR_ID change
+**Known traps:** the live lessons (`virtuoso_registry --root . lessons --open`). Match the
+change against each lesson's *Applies to*; flag a change that walks into one, naming its
+identifier.
 
 #### Phase 4b: verification-governance checklist (enforcer role, when the project declares one)
 If engine/constants/data/calibration scripts changed, verify:
@@ -290,46 +278,19 @@ If engine/constants/data/calibration scripts changed, verify:
 **Scope:** Shared memory system for all agents
 **Purpose:** Enable continuity across agent dispatches, preserve discoveries, and avoid re-investigation of solved problems.
 
-### Memory Types
+### Memory
 
-#### Type 1: User Memory
-Facts about the user's project, preferences, and constraints. Save to `.claude/agents/memory.yaml`.
-
-#### Type 2: Feedback Memory
-Lessons from past dispatches. What worked, what didn't. Save to `.claude/agents/feedback.log` (append-only).
-
-#### Type 3: Project Memory
-State of the codebase at key milestones. Save to `.claude/agents/project_milestones.yaml`.
-
-#### Type 4: Reference Memory
-Pointers to solved problems, architectural decisions, and code locations. Save to `.claude/agents/reference.yaml`.
-
-### Memory Rules
-
-1. **Don't duplicate code/git** — save file:line references, not full code.
-2. **Don't save ephemeral state** — save only stable facts.
-3. **Convert relative dates** — always use absolute dates (ISO 8601).
-4. **Update outdated memories** — don't create duplicate entries.
-5. **Index everything** — include keywords, related LL entries, code locations.
+Agent memory follows the shared guide (`agents/AGENT_MEMORY_GUIDE.md`): one directory per
+agent, outside the registry, for how the agent works in this project. A lesson goes to the
+registered `lessons` role and a finding to the registered `findings` role — never to a
+memory file.
 
 ### Findings Queue
 
-All agents write discoveries to a shared findings queue. Findings are triaged by the lead.
-
-**Finding Structure:**
-```yaml
----
-type: finding
-timestamp: [ISO 8601]
-session: [N]
-source_agent: [name]
-status: NEW  # NEW | TRIAGED | IMPLEMENTATION | DEFERRED | WONTFIX
-priority: HIGH | MEDIUM | LOW
----
-[Finding content]
-```
-
-**Status flow:** NEW → TRIAGED → IMPLEMENTATION → complete (or DEFERRED / WONTFIX)
+All agents write discoveries to the registered `findings` role, one entry each —
+`### F-NNN — title (agent, YYYY-MM-DD)` with **Source**, **Severity**, **Where**,
+**Finding** and **Disposition:** `open`. The lead triages by appending a disposition under
+the same id: `fixed by <item>`, `accepted — <reason>`, `lesson <prefix>-NNN`.
 
 **Priority matrix:**
 

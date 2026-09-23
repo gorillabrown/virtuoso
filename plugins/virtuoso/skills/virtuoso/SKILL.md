@@ -685,7 +685,8 @@ any task that updates a document listed in CLAUDE.md §Main Governance Documents
    becomes "Write fold-in entries to the staging file for CLAUDE.md updates (constants,
    cal results, phase status)."
 2. The parent includes the staging file path in the task note or worker prompt:
-   `"Write fold-ins to 2 operational/Memo.<sprint-id>.GovernanceStaging.<date>.md"`
+   `"Write fold-ins to <closeOuts>/Memo.<sprint-id>.GovernanceStaging.<date>.md"` —
+   `<closeOuts>` resolved through the registry
 3. The parent records the constraint:
    `"Do NOT edit CLAUDE.md directly — this sprint runs in a worktree. All governance
    updates go to the staging file as fold-in entries."`

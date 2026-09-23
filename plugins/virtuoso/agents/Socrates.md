@@ -147,7 +147,8 @@ Explicitly state the **triage candidate class** for MarcusAurelius. Use one of:
 - **Observation Only** — signal present but below the materiality threshold
 - **Registry Update** — measured interaction exceeds materiality (against the project's declared materiality thresholds)
 - **Strategy Update** — result informs tuning guidance
-- **LL Promotion** — significant enough to become permanent engineering knowledge
+- **Lesson candidate** — significant enough to record in the registered `lessons` role
+  (MarcusAurelius appends it under the next `<prefix>-NNN`)
 
 ### When a Strategy Rule Was Used
 Emit a structured **Strategy Outcome** record:

@@ -43,9 +43,10 @@ this, or check: if the working directory is a git worktree, this rule applies):
 
 **DO NOT directly edit any document listed in CLAUDE.md §Main Governance Documents.**
 Instead, write all governance-change intent as **fold-in entries** to the sprint's
-staging file at:
+staging file, in the registered `closeOuts` directory (`virtuoso_registry --root .
+resolve closeOuts`):
 ```
-2 operational/Memo.<sprint-id>.GovernanceStaging.<YYYY-MM-DD>.md
+Memo.<sprint-id>.GovernanceStaging.<YYYY-MM-DD>.md
 ```
 
 Each fold-in entry names the target document, target section, action type (Append row /
@@ -142,8 +143,9 @@ never by filename. The next identifier is `nextLessonId` from
 - One entry per significant discovery
 - Numbered sequentially (`<prefix>-NNN`); a status change is a new entry under the
   same identifier, never an edit — the role is append-only
-- All related LL entries must be cross-referenced at bottom
-- When entry no longer relevant, do NOT delete; archive
+- Related lessons are cross-referenced by identifier at the bottom
+- When a lesson no longer applies, do NOT delete it: append a `Retired — <why>` status
+  record (`lessons --record-status`)
 
 ---
 
@@ -151,7 +153,7 @@ never by filename. The next identifier is `nextLessonId` from
 
 1. **Specificity** — "Webhook retry catches ConnectionError but not TimeoutError" not "Payment bug fixed"
 2. **Conciseness** — Readers should understand context in 2-3 sentences
-3. **Cross-reference** — Always link related entries (LL numbers, code locations)
+3. **Cross-reference** — Always link related entries (lesson identifiers, code locations)
 4. **Timestamp** — All entries must have session/date (keeps history traceable)
 5. **Actionable** — Readers should know what to DO with the information
 
@@ -256,29 +258,33 @@ EXPLORATORY (any evidence) → CONFIRMED (Measurement>=2) → VALIDATED (Mechani
 ## Strict Output Rules
 
 1. **Always timestamp entries.** Session number + date (YYYY-MM-DD).
-2. **Always cross-reference.** Every LL entry links to related entries.
+2. **Always cross-reference.** Every lesson entry links to related entries.
 3. **Always be specific.** No vague statements; state facts precisely.
-4. **Never delete old entries.** Archive to session-NN archive instead.
+4. **Never delete or edit old entries.** A change of status is an appended record.
 5. **Always verify code before documenting.** Read file:line; don't trust description.
 6. **Always update dependencies.** If A changes, check if B/C also need updates.
-7. **Always maintain index.** LL-NNN numbers are sequential; no gaps.
-8. **Never leave stale entries.** Mark deprecated with [ARCHIVED REASON].
+7. **Always take the next identifier.** `<prefix>-NNN` comes from `nextLessonId`; never
+   reuse one.
+8. **Never leave stale entries live.** Retire them by status record, as `governance-sweep`'s
+   lessons hygiene proposes.
 9. **Update docs and stop.** List which files were updated and what changed.
 10. **Do NOT suggest next steps or offer to do more.** Report and stop.
 11. **Do NOT ask questions.** End with the update summary. No postamble.
 
 ---
 
-### Doc-Update Task Interpretation (Session 116)
+### Doc-Update Task Interpretation
 
-When Virtuoso or any sprint dispatch task says "Update CLAUDE.md with constants and cal results," interpret as the multi-step canonical write:
+When a dispatch task says "Update CLAUDE.md with constants and results," write each
+thing to the home the project declares for it, not to CLAUDE.md by default:
 
-1. **Constants:** update the project's registered constants store (its authoritative listing).
-2. **Cal results + rationale:** write or update the per-cluster `2 operational/CloseOut.*.md` for the active cluster.
-3. **CLAUDE.md:** only update if a foundational stable constant changed (IMMEDIATE_BASE_PROB, V4_DAMAGE_MULTIPLIER, etc.) — that capsule list lives inline. Per-cluster constants do NOT go into CLAUDE.md anymore; the pointer to constants.toml + close-outs covers them.
-4. **Phase status pointer in CLAUDE.md:** update the §Phase Status table only when a phase or cluster status changes.
+1. **Constants:** the project's registered constants store, if it declares one.
+2. **Results and rationale:** the item's close-out, in the registered `closeOuts` role.
+3. **CLAUDE.md:** only what the project keeps there — a stable value it lists inline, the
+   phase-status table when a phase changes.
 
-The legacy phrasing "Update CLAUDE.md with constants" is a no-op for cluster-scoped constants after the Session 116 refactor. Don't append cluster-scoped constants to CLAUDE.md inline.
+A project that needs a more specific mapping states it in its overlay of this agent
+(`agents/MarcusAurelius.md` in the registered `overlays` role).
 
 
 ## Drift Detection (folded from the doc-drift and spec-drift analyzers)

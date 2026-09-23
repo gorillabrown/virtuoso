@@ -126,11 +126,11 @@ When tests fail, categorize each failure:
 Test was passing before; now failing after code change.
 
 ```
-Test: test_v4_exchange_outcome_distribution
+Test: test_checkout_totals_distribution
 Before: PASS
 After: FAIL
 Category: REGRESSION
-Output: Expected Immediate-outcome rate 12-18%, got 11.2%
+Output: Expected discount rate 12-18%, got 11.2%
 Action: Aristotle needed (unexpected behavior change)
 ```
 
@@ -138,11 +138,11 @@ Action: Aristotle needed (unexpected behavior change)
 Test is new and validates new functionality.
 
 ```
-Test: test_decouple_a_wave_b_pin
+Test: test_split_ledger_writer_pin
 Before: N/A (did not exist)
 After: PASS
 Category: NEW_FEATURE
-Output: Per-channel accumulator dual-path writes verified
+Output: Both writer paths verified
 Action: Expected (feature working)
 ```
 
@@ -150,11 +150,11 @@ Action: Expected (feature working)
 Test fails because a tunable constant or configuration value drifted.
 
 ```
-Test: test_constants_v4_damage_multiplier
+Test: test_constants_retry_backoff
 Before: PASS
 After: FAIL
 Category: CONSTANT_MISMATCH
-Output: Test expects V4_DAMAGE_MULTIPLIER=63.0; constants.toml has 65.0
+Output: Test expects RETRY_BACKOFF=2.0; the constants file has 2.5
 Action: Aristotle to verify constant change is intentional
 ```
 
@@ -174,7 +174,7 @@ Action: Check environment; re-run once environment fixed
 Test passes/fails intermittently (timing, randomness).
 
 ```
-Test: test_seed7_tail_distribution
+Test: test_seeded_tail_distribution
 Before: PASS (most runs)
 After: FAIL (sometimes)
 Category: FLAKY

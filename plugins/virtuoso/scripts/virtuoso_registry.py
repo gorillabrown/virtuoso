@@ -253,10 +253,45 @@ def cmd_kpis(args) -> int:
         snap,
         effort_scale=project_policy.get("roadmap.effortScale"),
         dispatch_buffer=project_policy.dispatch_buffer,
+        spec_ready=_spec_ready(reg, project_policy),
     )
     metrics.pace, metrics.invalid_deadlines = providers.pace_for(reg, snap)
     metrics.learning, metrics.learning_provenance = _learning_metrics(reg, project_policy)
     return _emit(metrics.as_dict(), args.as_json, metrics.render)
+
+
+def _spec_ready(reg, project_policy):
+    """A judge of whether an item's specification passes U9, for the buffer figure —
+    or the reason no judge is possible here."""
+    prefix = project_policy.lesson_prefix
+    try:
+        lessons_path = reg.resolve("lessons")
+    except RoleNotRegistered:
+        return "a registered lessons role (U9 checks specifications against it)"
+    recorded = lessons_mod.parse(textio.read_text(lessons_path) or "", prefix)
+    storage = str(project_policy.get("roadmap.specStorage", "inline"))
+    if storage == "external":
+        return "specifications in a readable store (policy.roadmap.specStorage is external)"
+    if storage == "inline":
+        try:
+            roadmap = textio.read_text(reg.resolve("roadmap")) or ""
+        except RoleNotRegistered:
+            return "a registered roadmap holding the specifications"
+
+        def judge(item):
+            result = lessons_mod.check(roadmap, recorded, prefix, item=item.id)
+            if any(f["code"] == lessons_mod.ITEM_MISSING for f in result.findings):
+                return None
+            return result.passed
+        return judge
+
+    def judge_file(item):
+        link = (item.spec_link or "").strip()
+        if not link or "://" in link:
+            return None
+        text = textio.read_text(link if os.path.isabs(link) else os.path.join(reg.root, link))
+        return None if text is None else lessons_mod.check(text, recorded, prefix).passed
+    return judge_file
 
 
 def _learning_metrics(reg, project_policy):

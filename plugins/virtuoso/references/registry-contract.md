@@ -558,6 +558,16 @@ Merging is two records: the survivor stays, each duplicate is superseded by it. 
 promotion is a status record plus the rule written where `policy.standingRules.source`
 says rules live.
 
+### The buffer, as a gate would see it
+
+`kpis` carries `dispatch-buffer-ready` beside `dispatch-buffer-filled`. *Filled* counts the
+buffer's items whose register row says the specification is written; *ready* counts those
+whose specification a dispatch gate would pass — found (inline in the roadmap under a
+heading naming the item, or at the item's `spec_link` when `policy.roadmap.specStorage` is
+`files`) and passing U9. It is *not computable* when there is no lessons role, when
+specifications are external, or when a written item's specification cannot be located —
+naming the items.
+
 ### Loop-health metrics
 
 `kpis` carries a `learning` group beside pace: six figures on whether the loop is

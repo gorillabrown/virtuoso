@@ -733,3 +733,79 @@ def test_kpis_reports_effort_calibration(catalog):
 def test_effort_levels_prefers_the_measured_figure():
     text = (ROOT / "skills" / "effort-levels" / "SKILL.md").read_text(encoding="utf-8")
     assert "effort-calibration" in text
+
+
+# --- D16, D17: no project residue in shipped agents; one memory boundary -------------------
+
+def test_the_validator_catches_a_projects_residue_in_a_shipped_file():
+    validate = load_script("validate")
+    hits = []
+    for line in ("see 2 operational/Memo.x.md", "per the Session 116 refactor",
+                 "- AR-3: display follows engine", "save to .claude/agents/feedback.log",
+                 "git diff origin/main HEAD", "IMMEDIATE_BASE_PROB changed"):
+        validate.scan("agents/Example.md", line, validate.SHIPPED_PROJECT_PATTERNS, "p", hits)
+    assert len(hits) == 6, hits
+
+
+def test_no_shipped_agent_carries_another_projects_residue():
+    pattern = re.compile(r"2 operational|Session 116|\bAR-[1-7]\b|\bDC-4\b|origin/main"
+                         r"|feedback\.log|\bLL-NNN\b|LL Promotion")
+    for path in (ROOT / "agents").glob("*.md"):
+        assert not pattern.search(path.read_text(encoding="utf-8")), path.name
+
+
+def test_the_memory_boundary_is_stated_once_and_agents_defer_to_it():
+    guide = (ROOT / "agents" / "AGENT_MEMORY_GUIDE.md").read_text(encoding="utf-8")
+    assert "## The boundary — memory, lessons, findings" in guide
+    plato = (ROOT / "agents" / "Plato.md").read_text(encoding="utf-8")
+    assert "AGENT_MEMORY_GUIDE.md" in plato and "memory.yaml" not in plato
+
+
+# --- D18: anchors prove rule text; the buffer counts readiness -----------------------------
+
+def test_a_changed_rule_fails_until_its_hash_is_updated(tmp_path):
+    rules = load_script("skill_rules")
+    skill = tmp_path / "skills" / "virtuoso"
+    skill.mkdir(parents=True)
+    marker = rules.anchor_comment("lane-declaration", "lane-concurrency")
+    (skill / "SKILL.md").write_text("%s\n**Declare the lane** before any write.\n\nnext\n" % marker,
+                                    encoding="utf-8")
+    recorded = dict(rules.current_hashes(str(tmp_path / "skills")))
+    assert rules.changed_rules(str(tmp_path / "skills"), recorded) == []
+    (skill / "SKILL.md").write_text("%s\n**Declare the lane** when convenient.\n" % marker,
+                                    encoding="utf-8")
+    assert rules.changed_rules(str(tmp_path / "skills"), recorded) == ["lane-declaration"]
+
+
+def test_every_registered_anchor_has_a_recorded_hash():
+    rules = load_script("skill_rules")
+    anchors = {a for pairs in rules.REQUIRED_RULE_ANCHORS.values() for a, _ in pairs}
+    assert anchors == set(rules.RULE_TEXT_HASHES)
+
+
+def test_dispatch_buffer_ready_counts_what_a_gate_would_pass(workspace):
+    data = manifest(workspace)
+    data.setdefault("policy", {})["lessons"] = {"idPrefix": "LSN"}
+    write_manifest(workspace, data)
+    role_path(workspace, "lessons").write_text(
+        "### LSN-001 — Reader first (A-0, 2026-09-01)\n**Applies to:** row shapes\n"
+        "**Status:** Observation\n", encoding="utf-8")
+    role_path(workspace, "roadmap").write_text(
+        "# Roadmap\n\n#### R-1 — Ready\n\n##### Lessons applied\n- LSN-001 applied\n\n"
+        "#### R-2 — Written but not ready\n\n- **What:** something\n", encoding="utf-8")
+    with open(role_path(workspace, "workRegister"), "a", encoding="utf-8", newline="") as handle:
+        handle.write("R-1,Ready,1,Queued,Full Spec,,S,,,,,,,,,\n"
+                     "R-2,Not ready,2,Queued,Full Spec,,S,,,,,,,,,\n")
+    metrics = {m["name"]: m for m in json.loads(
+        run(REGISTRY_CLI, "--root", str(workspace), "kpis", "--json").stdout)["metrics"]}
+    assert metrics["dispatch-buffer-filled"]["value"] == 2
+    assert metrics["dispatch-buffer-ready"]["value"] == 1
+
+
+def test_dispatch_buffer_ready_names_what_it_cannot_judge(workspace):
+    with open(role_path(workspace, "workRegister"), "a", encoding="utf-8", newline="") as handle:
+        handle.write("R-9,Nowhere,1,Queued,Full Spec,,S,,,,,,,,,\n")
+    metrics = {m["name"]: m for m in json.loads(
+        run(REGISTRY_CLI, "--root", str(workspace), "kpis", "--json").stdout)["metrics"]}
+    ready = metrics["dispatch-buffer-ready"]
+    assert ready["computable"] is False and "R-9" in ready["missingInputs"][0]
