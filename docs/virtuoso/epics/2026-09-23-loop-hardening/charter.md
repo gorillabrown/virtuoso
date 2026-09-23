@@ -1,7 +1,7 @@
 ---
 epic: loop-hardening
 created: 2026-09-23
-status: active   # active | complete | aborted — set complete only per launch.md Completion protocol
+status: complete   # active | complete | aborted — set complete only per launch.md Completion protocol
 ---
 
 # Epic Charter — Loop hardening: every prose link a check, every output a reader

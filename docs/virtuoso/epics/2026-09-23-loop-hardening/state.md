@@ -1,6 +1,6 @@
 ---
 epic: loop-hardening
-last_updated: 2026-09-23 22:20
+last_updated: 2026-09-23 23:10
 updated_by: session 1
 ---
 
@@ -26,20 +26,16 @@ updated_by: session 1
 ## Where we are
 
 ```
-phase:        P5 — Hygiene and owner decisions
-next_action:  D16 project residue out of MarcusAurelius / Plato; extend the validator scan
-blockers:     BLOCKER(USER) #1 (stranded branches) — does not block P5–P6
+phase:        complete — done.md written
+next_action:  none; owner answers BLOCKER(USER) #1, launch Q2/Q3, then releases
+blockers:     BLOCKER(USER) #1 (owner decision, does not block completion)
 session:      1 of ~3 budgeted
-dod:          D1–D15 [met] | D16–D18 [unmet] | D19 [raised] | D20, D21 [unmet] | D22, D23 [met]
+dod:          D1–D23 [met] (D19 met as raised)
 ```
 
 ## Next actions — max 5, near horizon only
 
-1. [ ] D16: residue out of MarcusAurelius and Plato; validator scan extended
-2. [ ] D17: memory boundary in the guide; Plato's feedback.log gone; agents cite `<prefix>`
-3. [ ] D18: rule-text hashes for anchors; `dispatch-buffer-ready`
-4. [ ] P6: v1.10.0 notes; fresh DoD; done.md; CI green both legs
-5. [ ] Hand-off: BLOCKER(USER) #1 and launch Q2/Q3
+1. [ ] (owner) answer BLOCKER(USER) #1 and launch Q2/Q3
 
 ## Working set — verified facts this epic relies on
 
@@ -89,4 +85,31 @@ dod:          D1–D15 [met] | D16–D18 [unmet] | D19 [raised] | D20, D21 [unme
 
 ## Evidence
 
-- (none yet — interim gate evidence goes here as one line + pointer)
+Fresh DoD run, 2026-09-23, one session (D2 re-run after the docstring fix: `grep -c` = 1):
+
+```
+D1: 13 passed, 244 deselected in 0.81s | All declared files in sync at 1.8.2
+D2: 11 passed, 865 deselected in 2.01s | preflight roadmap-integrity occurrences: 0 | contract lists it: 1
+D3: 3 passed, 873 deselected in 0.73s
+D4: 18 passed, 858 deselected in 1.24s
+D5: 5 Decision mentions; 1 passed, 875 deselected in 0.21s
+D6: 1 ref-check OK; ghost grep: 0 files; 2 passed, 874 deselected in 0.21s
+D7: conventional paths in epic skill: 0; 2 passed, 874 deselected in 0.35s
+D8: 20 passed in 1.80s | registry:scripts: 0
+D9: 4 passed, 872 deselected in 0.64s
+D10: 7 passed, 869 deselected in 0.30s | zeus reads source: 1
+D11: 3 passed, 873 deselected in 0.59s | D.4 runs it: 1
+D12: 12 passed, 864 deselected in 0.54s
+D13: 19 passed, 857 deselected in 0.88s
+D14: 14 passed, 862 deselected in 0.97s
+D15: 3 passed, 873 deselected in 0.45s
+D16: All checks passed. | residue grep: 0
+D17: 1 passed, 875 deselected in 0.16s | feedback.log in Plato: 0
+D18: 11 passed, 865 deselected in 0.72s
+D19: BLOCKER(USER) #1 raised in state.md: 3
+D20: 31 passed in 0.27s | notes: 3:## v1.10.0 (2026-09-23) — loop hardening
+D22: 3 passed, 873 deselected in 0.56s | sweep runs it: 2
+D23: 3 passed, 873 deselected in 0.90s | closeout runs it: 2
+FULL: 873 passed, 3 skipped in 49.26s | cp1252: 104 passed in 7.36s
+D21: CI run #126 (35907177454) on d8ef633 — success, ubuntu + windows
+```

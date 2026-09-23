@@ -65,6 +65,8 @@ charter: charter.md
 | 2026-09-23 | P2 | D2–D8, D23 met — journal S1 (cont.); 820 passed |
 | 2026-09-23 | P3 | D9–D12, D15, D22 met — journal S1 (P3); 848 passed |
 | 2026-09-23 | P4 | D13, D14 met — journal S1 (P4); 866 passed |
+| 2026-09-23 | P5 | D16–D18 met, D19 raised — 873 passed |
+| 2026-09-23 | P6 | fresh DoD all met; CI #126 green — done.md |
 
 ## Current-phase worklist
 

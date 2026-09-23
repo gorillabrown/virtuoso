@@ -87,3 +87,14 @@
 - **Decisions:** none new.
 - **Gate/DoD movement:** D13, D14 met; P4 gate passed (866 passed).
 - **Next:** P5 — D16, D17, D18; D19 stays with the owner.
+
+## S1 (P5–P6) — 2026-09-23 23:10 — complete
+
+- **Did:** agent residue removed and the validator scan extended; memory boundary stated
+  once; promoted rules hashed; `dispatch-buffer-ready` (2970be9). v1.10.0 notes (d8ef633).
+  Fresh DoD run of every row in one session.
+- **Learned:** the fresh run found D2's literal check failing — the preflight's docstring
+  still listed four machine lines. Fixed and pinned by a test rather than argued away.
+- **Gate/DoD movement:** all rows met; D19 met as raised (owner decision pending); CI #126
+  green on both legs. done.md written; charter status complete.
+- **Next:** none for the executor. Owner: BLOCKER(USER) #1, launch Q2/Q3, release.
