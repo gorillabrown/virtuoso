@@ -641,7 +641,8 @@ on both legs at the code commit (`c6b5646`); 702 passed, 3 skipped locally.
 | 3 the pace engine and completion source | `193fc7b` |
 | 4–7 `kpis`, the body check, the session line, the cockpit | `c6b5646` |
 | 8 ceremonies and the contract | `18615ed` |
-| 9 record | this commit |
+| 9 record | `48242a4` |
+| cockpit tiles, after rendering them | `dc76ade` |
 
 Where the build departed from the plan, and why:
 
@@ -662,3 +663,8 @@ Where the build departed from the plan, and why:
   exactly three lines. It now reads from the first `{`, and the contract says every consumer
   must: the set of machine lines has grown twice and will again. Nothing else in the plugin
   parses by position, `release.py` included.
+- **The cockpit tiles were rendered, not only string-checked, and failed the look.** The
+  first version put "Overall game build 2027-01-01 (100 days)" in the 26px number style; it
+  wrapped over five lines and stretched every tile in the row. A tile is now a headline value
+  with its detail in small type beneath, checked in headless Chromium at desktop and phone
+  widths. The tests could not have caught it: they assert what the page says, not how it reads.
