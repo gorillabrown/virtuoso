@@ -12,6 +12,9 @@ configuration.
 from __future__ import annotations
 
 import copy
+import datetime as _dt
+import json
+import re
 from dataclasses import dataclass
 
 #: Git workflow policies (item 64). Ordered from least to most permissive.
@@ -75,6 +78,14 @@ DEFAULTS: dict = {
         # size -> points for effort-weighted metrics. {} means the generic t-shirt
         # scale in providers/kpi.py; a project's own scale replaces it, never merges.
         "effortScale": {},
+        # Dated finish lines, keyed by a project-named id; each entry has the shape
+        # of DEADLINE_TEMPLATE. None by default: a date is an owner's ruling.
+        "deadlines": {},
+        # How pace against a deadline is measured (providers/pace.py).
+        "pace": {
+            "trailingWeeks": 4,     # the window the trailing rate is measured over
+            "tolerance": 0.1,       # within ±10% of the required rate reads "on track"
+        },
     },
     # --- readiness rubric (items 52, 53) -------------------------------------
     "rubric": {
@@ -126,6 +137,28 @@ DEFAULTS: dict = {
         "openpyxl": ">=3.1",
     },
 }
+
+#: What one deadline holds. The children of ``roadmap.deadlines`` are named by the
+#: project (``game-build``), so the defaults cannot list them; this template
+#: documents their fields and the type each takes, for :func:`documented_default`
+#: and :func:`type_problem`, exactly as ``DEFAULTS`` does for every other key.
+DEADLINE_TEMPLATE: dict = {
+    "date": "",                              # required: YYYY-MM-DD; due by the end of that day
+    "owner": "",                             # required: who ruled
+    "label": "",
+    "finishLine": "",                        # the roadmap heading that defines done
+    "scope": {"field": "", "values": []},    # absent or {} => every item in the register
+    "recorded": "",                          # YYYY-MM-DD it was set or last moved
+}
+
+#: Documented mappings whose keys a project names. A child of one is documented
+#: by its template: ``roadmap.deadlines.game-build.date`` is a string, and
+#: ``roadmap.deadlines.game-build.dat`` is nothing at all.
+OPEN_MAPPINGS: dict = {"roadmap.deadlines": DEADLINE_TEMPLATE}
+
+#: A deadline id is one segment of a dotted policy key, so it cannot hold a dot.
+DEADLINE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _deep_merge(base: dict, overlay: dict) -> dict:
@@ -212,12 +245,21 @@ def documented_default(path: str):
     ``workRegister.creators`` is exactly that: documented, meaningful, and
     ``None`` to mean "unset". Testing the value made the one key that governs who
     may create work items impossible to set.
+
+    A child of an :data:`OPEN_MAPPINGS` key is documented by that mapping's
+    template, because the defaults cannot list the ids a project chooses.
     """
     cursor = DEFAULTS
+    walked: list[str] = []
     for part in path.split("."):
-        if not isinstance(cursor, dict) or part not in cursor:
+        template = OPEN_MAPPINGS.get(".".join(walked))
+        if template is not None and part:
+            cursor = template
+        elif not isinstance(cursor, dict) or part not in cursor:
             return _MISSING
-        cursor = cursor[part]
+        else:
+            cursor = cursor[part]
+        walked.append(part)
     return cursor
 
 
@@ -229,6 +271,139 @@ def is_documented(path: str) -> bool:
     Project-owned configuration has the ``x-`` extension prefix and its own rules.
     """
     return documented_default(path) is not _MISSING
+
+
+def open_child(path: str) -> bool:
+    """Whether ``path`` names one project-named entry of an :data:`OPEN_MAPPINGS`
+    key: ``roadmap.deadlines.game-build``, not the mapping itself or a field of it."""
+    parent, _, leaf = path.rpartition(".")
+    return bool(leaf) and parent in OPEN_MAPPINGS
+
+
+def withdraw(raw: dict | None, path: str) -> dict:
+    """``raw`` without the entry at ``path``. Pure; siblings at every level survive.
+
+    Withdrawing one deadline must not require restating the others — that is the
+    operation where a list-valued key loses one.
+    """
+    parts = [p for p in path.split(".") if p]
+    out = copy.deepcopy(raw or {})
+    cursor = out
+    for part in parts[:-1]:
+        cursor = cursor.get(part) if isinstance(cursor, dict) else None
+        if not isinstance(cursor, dict):
+            return out
+    if parts and isinstance(cursor, dict):
+        cursor.pop(parts[-1], None)
+    return out
+
+
+def iso_date(value) -> _dt.date | None:
+    """A strict ``YYYY-MM-DD`` calendar date, or ``None``.
+
+    ``date.fromisoformat`` alone is not strict enough: from Python 3.11 it also
+    accepts ``20270101`` and week dates such as ``2027-W01-1``, so a deadline
+    spelled either way would parse on one interpreter and not on another.
+    """
+    if not isinstance(value, str) or not _ISO_DATE_RE.match(value):
+        return None
+    try:
+        return _dt.date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _shown(value) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def deadline_problems(deadlines) -> list[str]:
+    """Every reason the value of ``roadmap.deadlines`` is not usable, one per fault.
+
+    Each message names the entry and the field, so a hand edit can be fixed from
+    the message alone. The type gate is not enough here: a deadline is a small
+    record, and a record whose date will not parse or whose field is misspelled
+    is stored happily and then ignored — configured-looking and inert.
+    """
+    if deadlines is None or deadlines == {}:
+        return []
+    if not isinstance(deadlines, dict):
+        return ["policy.roadmap.deadlines is %s; it is a mapping of deadline id to deadline"
+                % value_kind(deadlines)[1]]
+    problems: list[str] = []
+    for key, entry in deadlines.items():
+        where = "policy.roadmap.deadlines.%s" % key
+        if not isinstance(key, str) or not DEADLINE_ID_RE.match(key):
+            problems.append("%s: a deadline id is letters, digits, '-' and '_', starting with "
+                            "a letter or digit; it is one segment of a dotted key" % where)
+        if not isinstance(entry, dict):
+            problems.append("%s is %s, not a deadline" % (where, value_kind(entry)[1]))
+            continue
+        unknown = sorted(k for k in entry if k not in DEADLINE_TEMPLATE)
+        if unknown:
+            problems.append("%s has unknown field(s) %s: a misspelled field is stored and "
+                            "ignored" % (where, ", ".join(unknown)))
+        if iso_date(entry.get("date")) is None:
+            problems.append("%s.date %s is not a YYYY-MM-DD calendar date"
+                            % (where, _shown(entry.get("date"))))
+        owner = entry.get("owner")
+        if not isinstance(owner, str) or not owner.strip():
+            problems.append("%s.owner is required: a date nobody owns is not a ruling" % where)
+        for name in ("label", "finishLine"):
+            if name in entry and not isinstance(entry[name], str):
+                problems.append("%s.%s is %s; it is a string"
+                                % (where, name, value_kind(entry[name])[1]))
+        if "recorded" in entry and iso_date(entry["recorded"]) is None:
+            problems.append("%s.recorded %s is not a YYYY-MM-DD calendar date"
+                            % (where, _shown(entry["recorded"])))
+        if "scope" in entry:
+            problems.extend(_scope_problems(where + ".scope", entry["scope"]))
+    return problems
+
+
+def _scope_problems(where: str, scope) -> list[str]:
+    if scope == {}:
+        return []
+    if not isinstance(scope, dict):
+        return ['%s is %s; it is {"field": ..., "values": [...]}'
+                % (where, value_kind(scope)[1])]
+    problems = []
+    extra = sorted(k for k in scope if k not in ("field", "values"))
+    if extra:
+        problems.append("%s has unknown field(s) %s" % (where, ", ".join(extra)))
+    field_name = scope.get("field")
+    if not isinstance(field_name, str) or not field_name.strip():
+        problems.append("%s.field is required: the register field that selects the items"
+                        % where)
+    values = scope.get("values")
+    if (not isinstance(values, list) or not values
+            or not all(isinstance(v, str) and v.strip() for v in values)):
+        problems.append("%s.values is required: a non-empty list of the values that count"
+                        % where)
+    return problems
+
+
+def pace_problems(pace) -> list[str]:
+    """Every reason the value of ``roadmap.pace`` is not usable."""
+    if pace is None:
+        return []
+    if not isinstance(pace, dict):
+        return ["policy.roadmap.pace is %s; it is a mapping" % value_kind(pace)[1]]
+    problems = []
+    unknown = sorted(k for k in pace if k not in DEFAULTS["roadmap"]["pace"])
+    if unknown:
+        problems.append("policy.roadmap.pace has unknown field(s) %s" % ", ".join(unknown))
+    weeks = pace.get("trailingWeeks", 4)
+    # bool first: isinstance(True, int) is true, and a flag is not a count.
+    if isinstance(weeks, bool) or not isinstance(weeks, int) or not 1 <= weeks <= 52:
+        problems.append("policy.roadmap.pace.trailingWeeks=%s is not a whole number of weeks "
+                        "from 1 to 52" % _shown(weeks))
+    tolerance = pace.get("tolerance", 0.1)
+    if (isinstance(tolerance, bool) or not isinstance(tolerance, (int, float))
+            or not 0 <= tolerance < 1):
+        problems.append("policy.roadmap.pace.tolerance=%s is not a number from 0 up to, "
+                        "not including, 1" % _shown(tolerance))
+    return problems
 
 
 @dataclass
@@ -296,6 +471,8 @@ class Policy:
         if storage not in ("inline", "files", "external"):
             problems.append("policy.roadmap.specStorage=%r is not one of inline, files, external"
                             % (storage,))
+        problems.extend(deadline_problems(self.get("roadmap.deadlines", {})))
+        problems.extend(pace_problems(self.get("roadmap.pace", {})))
         return problems
 
 

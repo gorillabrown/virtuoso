@@ -499,6 +499,19 @@ def _json_value(raw: str, label: str):
         raise GovernanceError("%s must be valid JSON: %s" % (label, exc)) from exc
 
 
+#: A key the raw policy block does not carry at all, as distinct from one set to null.
+_ABSENT = object()
+
+
+def _raw_policy_value(raw: dict | None, path: str):
+    cursor = raw or {}
+    for part in path.split("."):
+        if not isinstance(cursor, dict) or part not in cursor:
+            return _ABSENT
+        cursor = cursor[part]
+    return cursor
+
+
 def cmd_policy_set(args) -> int:
     """Set one policy value in the manifest. Previews by default; ``--apply`` writes.
 
@@ -524,18 +537,27 @@ def cmd_policy_set(args) -> int:
             "configuration belongs under an `x-` extension key." % args.key)
 
     value = _json_value(args.value_json, "--value-json")
-    mismatch = policy_mod.type_problem(args.key, value)
-    if mismatch:
-        raise GovernanceError("%s Nothing was written." % mismatch)
     before = policy_mod.load(reg.policy).get(args.key)
-    candidate = policy_mod.assign(reg.policy, args.key, value)
+    # `null` on a project-named entry (a deadline) withdraws it. Anywhere else it
+    # is a value like any other, and the type gate judges it.
+    withdrawing = value is None and policy_mod.open_child(args.key)
+    if withdrawing:
+        if before is None:
+            raise GovernanceError("policy.%s is not declared, so there is nothing to withdraw. "
+                                  "Nothing was written." % args.key)
+        candidate = policy_mod.withdraw(reg.policy, args.key)
+    else:
+        mismatch = policy_mod.type_problem(args.key, value)
+        if mismatch:
+            raise GovernanceError("%s Nothing was written." % mismatch)
+        candidate = policy_mod.assign(reg.policy, args.key, value)
     problems = policy_mod.load(candidate).validate()
     if problems:
         raise GovernanceError("the resulting policy is not valid; nothing was written:\n  %s"
                               % "\n  ".join(problems))
 
     reg.policy = candidate
-    plan = repair_mod.policy_plan(reg, args.key, before, value)
+    plan = repair_mod.policy_plan(reg, args.key, before, value, withdraw=withdrawing)
 
     if not args.apply:
         payload = {"key": args.key, "current": before, "proposed": value,
@@ -548,17 +570,34 @@ def cmd_policy_set(args) -> int:
 
     written, backup_set = repair_mod.apply_plan(reg, plan, label="policy-set",
                                                 actor=args.actor)
+    # Read the value back from disk. apply_plan re-validates what it wrote, but
+    # "valid" is not "what was asked for", and a ceremony that is about to cite
+    # this value — a deadline most of all — should know it landed. The raw block
+    # is compared, not the merged policy: merging would fold defaults into a
+    # partial mapping and report a correct write as a wrong one.
+    landed = _raw_policy_value(registry_mod.load(args.root).policy, args.key)
+    expected = _ABSENT if withdrawing else value
+    if landed != expected:
+        raise GovernanceError(
+            "policy.%s was written, but the manifest on disk now reads %s instead of %s. "
+            "The previous manifest is backed up in %s."
+            % (args.key, "(absent)" if landed is _ABSENT else json.dumps(landed, ensure_ascii=False),
+               "(absent)" if expected is _ABSENT else json.dumps(expected, ensure_ascii=False),
+               backup_set.relative_directory))
     backup_mod.prune(args.root, keep=int(
         policy_mod.load(reg.policy).get("sweep.backupRetention", 10)))
     payload = {"key": args.key, "current": before, "proposed": value, "applied": True,
+               "withdrawn": withdrawing, "verified": True,
                "filesWritten": written, "backup": backup_set.as_dict()}
     if args.as_json:
         return _emit(payload, True)
-    print("policy.%s set" % args.key)
+    print("policy.%s %s" % (args.key, "withdrawn" if withdrawing else "set"))
     print("  was:    %s" % json.dumps(before, ensure_ascii=False))
-    print("  now:    %s" % json.dumps(value, ensure_ascii=False))
+    print("  now:    %s" % ("(withdrawn)" if withdrawing
+                            else json.dumps(value, ensure_ascii=False)))
     print("  wrote:  %s" % (", ".join(written) or "(already that value)"))
     print("  backup: %s" % backup_set.relative_directory)
+    print("  verified: read back from disk")
     return EXIT_OK
 
 

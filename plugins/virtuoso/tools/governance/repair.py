@@ -219,7 +219,8 @@ def _ordered_roles(reg: registry_mod.Registry) -> list[schema.RoleSpec]:
     return [reg.roles[n] for n in known + rest]
 
 
-def policy_plan(reg: registry_mod.Registry, key: str, before, after) -> RepairPlan:
+def policy_plan(reg: registry_mod.Registry, key: str, before, after, *,
+                withdraw: bool = False) -> RepairPlan:
     """A one-action plan that writes ``reg``'s current policy to the manifest.
 
     Built as a RepairPlan so a policy write inherits :func:`apply_plan`'s
@@ -229,15 +230,18 @@ def policy_plan(reg: registry_mod.Registry, key: str, before, after) -> RepairPl
 
     The readme view carries roles, not policy, so the manifest is the only file
     affected and the human view needs no resynchronization.
+
+    ``withdraw`` removes a project-named entry (a deadline) instead of setting it,
+    and the preview says so rather than proposing a ``null`` that reads as a value.
     """
     return RepairPlan(
         root=reg.root,
         actions=[RepairAction(
-            kind="set-policy",
+            kind="withdraw-policy" if withdraw else "set-policy",
             role="",
-            detail="set policy.%s" % key,
+            detail=("withdraw policy.%s" if withdraw else "set policy.%s") % key,
             current="(unset)" if before is None else json.dumps(before, ensure_ascii=False),
-            proposed=json.dumps(after, ensure_ascii=False),
+            proposed="(withdrawn)" if withdraw else json.dumps(after, ensure_ascii=False),
         )],
         files_affected=[schema.MANIFEST_RELPATH],
         manifest_text=reg.manifest_json(),
