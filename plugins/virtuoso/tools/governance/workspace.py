@@ -260,8 +260,11 @@ TERMINAL_LEDGER_SEED = """# Completed Work — Terminal Ledger
 Append-only. Every record is final: corrections are appended as new records that
 reference the record they correct. Nothing here is reordered, rewritten, or deleted.
 
-| Record | Item | Completed | Result | Evidence | Corrects |
-|--------|------|-----------|--------|----------|----------|
+Estimate and Actual are the effort the item was estimated at and what it took, as
+durations (90m, 1.5h); effort calibration in `kpis` learns from them.
+
+| Record | Item | Completed | Result | Evidence | Corrects | Estimate | Actual |
+|--------|------|-----------|--------|----------|----------|----------|--------|
 """
 
 LESSONS_SEED = """# Retrospective — Lessons Learned

@@ -271,10 +271,22 @@ def _learning_metrics(reg, project_policy):
                  for name in LEARNING_METRICS], {})
     recorded = lessons_mod.parse(textio.read_text(path) or "", prefix)
     outcomes, closeouts = _lesson_outcomes(reg, prefix)
-    return learning_mod.metrics(recorded, outcomes), {
-        "lessons": os.path.relpath(path, reg.root).replace(os.sep, "/"),
-        "closeOuts": closeouts, "closeOutsRead": outcomes.closeouts,
-        "asOf": _today().isoformat()}
+    figures = learning_mod.metrics(recorded, outcomes)
+    provenance = {"lessons": os.path.relpath(path, reg.root).replace(os.sep, "/"),
+                  "closeOuts": closeouts, "closeOutsRead": outcomes.closeouts,
+                  "asOf": _today().isoformat()}
+    figures.append(_effort_calibration(reg, provenance))
+    return figures, provenance
+
+
+def _effort_calibration(reg, provenance):
+    try:
+        book = providers.terminal_ledger(reg)
+    except GovernanceError:
+        return kpi.Metric("effort-calibration", computable=False,
+                          missing_inputs=["a local terminal ledger"])
+    provenance["ledger"] = os.path.relpath(book.path, reg.root).replace(os.sep, "/")
+    return learning_mod.effort_calibration(book.records())
 
 
 LEARNING_METRICS = ("live-count", "lesson-yield", "held-rate", "promotion-rate",
@@ -641,7 +653,8 @@ def cmd_record_completion(args) -> int:
     prior = [r for r in book.records() if r.item_id == args.item and not r.corrects]
     record = ledger_mod.LedgerRecord(record_id=book.next_record_id(), item_id=args.item,
                                      completed=args.date, result=args.result,
-                                     evidence=args.evidence)
+                                     evidence=args.evidence, effort_estimate=args.estimate,
+                                     effort_actual=args.actual)
     completed_already = item.status == provider_base.COMPLETED
     plan = {"item": args.item, "actor": actor, "register": provider.source,
             "ledger": os.path.relpath(book.path, reg.root).replace(os.sep, "/"),
@@ -979,6 +992,10 @@ def build_parser() -> argparse.ArgumentParser:
     completion.add_argument("--date", required=True, help="YYYY-MM-DD the item completed")
     completion.add_argument("--result", required=True, help="the ledger's result word")
     completion.add_argument("--evidence", default="", help="the close-out artifact")
+    completion.add_argument("--estimate", default="",
+                            help="the effort the specification estimated, as a duration (90m, 1.5h)")
+    completion.add_argument("--actual", default="",
+                            help="the effort it took, as a duration (the close-out's runtime)")
     completion.add_argument("--revision", default="",
                             help="the revision read in Wave 1 (default: the current one)")
     completion.add_argument("--apply", action="store_true",

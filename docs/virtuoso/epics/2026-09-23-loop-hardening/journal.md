@@ -68,3 +68,22 @@
 - **Decisions:** #4 (record-completion covers Steps 3 and 5), #5 (D15 landed early).
 - **Gate/DoD movement:** D9–D12, D15, D22 met; P3 gate passed.
 - **Next:** P4 — the findings role (D13), effort calibration (D14).
+
+## S1 (P4) — 2026-09-23 22:20 — P4 gate
+
+- **Did:** CI runs 119 and 120 were red on Windows — the new CLI tests decoded child
+  output as UTF-8 while a piped child writes cp1252 (em dash = 0x97). Reproduced by
+  forcing cp1252, fixed in the helpers (80047fa). `findings` role with writers, a
+  `create` seed, and the roadmap review reading open findings and its previous
+  lessons-applied (f7bd2fd). Effort calibration: optional `effortEstimate` /
+  `effortActual` in the ledger (by header; markdown only when its own header has the
+  columns), `record-completion --estimate --actual`, `kpis effort-calibration`,
+  `effort-levels` sizes by the project's figure; new workspaces' ledgers carry the
+  columns.
+- **Learned:** the Windows leg is the one that finds encoding assumptions — any new
+  test helper that pins an encoding must pin the child's too. An existing test pinned a
+  new CSV ledger's six-column header; the effort columns are added only when a record
+  carries them, so that meaning is kept.
+- **Decisions:** none new.
+- **Gate/DoD movement:** D13, D14 met; P4 gate passed (866 passed).
+- **Next:** P5 — D16, D17, D18; D19 stays with the owner.

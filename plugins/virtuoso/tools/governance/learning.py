@@ -240,6 +240,46 @@ def status_record(lesson_id: str, status: str, item: str, date: str) -> str:
     return "### %s — status (%s, %s)\n**Status:** %s\n" % (lesson_id, item, date, status.strip())
 
 
+# --- effort calibration ----------------------------------------------------------------------
+
+_DURATION_RE = re.compile(r"^\s*(?:(\d+(?:\.\d+)?)\s*h)?\s*(?:(\d+(?:\.\d+)?)\s*m(?:in)?)?\s*$",
+                          re.IGNORECASE)
+#: Fewer paired records than this is an anecdote, not a calibration.
+CALIBRATION_MINIMUM = 3
+
+
+def hours(text) -> float | None:
+    """A duration as hours: ``"90m"``, ``"1.5h"``, ``"2h30m"``, or a bare number of
+    hours. ``None`` when it is not one — a T-shirt size is a size, not a duration."""
+    text = str(text or "").strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        pass
+    match = _DURATION_RE.match(text)
+    if not match or not (match.group(1) or match.group(2)):
+        return None
+    return float(match.group(1) or 0) + float(match.group(2) or 0) / 60
+
+
+def effort_calibration(records) -> Metric:
+    """Median of actual ÷ estimate over ledger records that carry both as durations.
+    Above 1 the project under-estimates; below 1 it over-estimates."""
+    ratios = []
+    for record in records:
+        estimate, actual = hours(record.effort_estimate), hours(record.effort_actual)
+        if estimate and actual is not None:
+            ratios.append(actual / estimate)
+    if len(ratios) < CALIBRATION_MINIMUM:
+        return Metric("effort-calibration", computable=False, missing_inputs=[
+            "%d terminal records with effortEstimate and effortActual as durations (%d have both)"
+            % (CALIBRATION_MINIMUM, len(ratios))])
+    return Metric("effort-calibration", round(statistics.median(ratios), 2),
+                  unit="actual ÷ estimate, median of %d records" % len(ratios))
+
+
 # --- loop-health metrics ---------------------------------------------------------------------
 
 def metrics(lessons: list[lessons_mod.Lesson], outcomes: Outcomes) -> list[Metric]:

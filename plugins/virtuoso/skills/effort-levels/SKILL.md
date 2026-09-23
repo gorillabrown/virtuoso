@@ -219,6 +219,12 @@ recur, both in the same direction:
 - **Analytical sprints staffed with two top-effort `{high}` agents underestimate by
   22–36%.** This is a measured figure, not a feeling — when a plan has two such agents,
   size up a bracket rather than discovering the gap at the fix round.
+- **Prefer the project's own measurement.** When the project records estimates and
+  actuals in its terminal ledger (`record-completion --estimate --actual`), `kpis`
+  reports `effort-calibration`: the median of actual ÷ estimate. When it is computable,
+  it replaces the figure above for this project — size by it (1.3 means scale an
+  estimate up by 30%) and say that you did. When it is *not computable*, say so and
+  use the figure above.
 - **Workload volume overrides nominal task type.** Authoring pin-tests across many source
   patterns, or annotating hundreds of items, sizes by *volume* even when the per-item work
   is mechanical. Above roughly ten items with multi-pattern reading, default up a tier;

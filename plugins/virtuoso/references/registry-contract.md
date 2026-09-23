@@ -115,6 +115,13 @@ for example:
                                      "evidence": "Close-Out File"}}
 ```
 
+Two optional fields record effort: `effortEstimate` and `effortActual`, as durations
+(`90m`, `1.5h`, `2h30m`; a bare number is hours) — headers `Estimate` / `Actual` (or the
+camelCase names) in a CSV or JSONL ledger, and in a markdown ledger only when its own table
+header carries *Estimate* and *Actual* columns after the six documented ones. A ledger
+without them reads and appends exactly as before; `kpis` computes `effort-calibration` from
+them.
+
 Every other column is kept, untouched. A mapped field is found by its mapped header and nowhere
 else. An append lays its row out under the file's own header and is refused, naming the missing
 columns, when the file has no column for `itemId`, `completed` or `result` — a record is never
@@ -566,6 +573,7 @@ never zero.
 | `promotion-rate` | the share of lessons whose status is `Promoted` | a recorded lesson |
 | `time-to-apply` | median days from a lesson's date to the first dated close-out that applied it | a dated lesson applied in a dated close-out |
 | `repeated-trap-rate` | the share of lessons that record a pattern already recorded (the merge groups) | two recorded lessons |
+| `effort-calibration` | the median of actual ÷ estimate over terminal records carrying both as durations; above 1 the project under-estimates. `effort-levels` sizes by it when computable | three records with both |
 
 Read together over successive reviews: a flat or falling live count with a positive yield,
 promotions above zero, a high held rate, a falling repeated-trap rate. Any one figure can be

@@ -661,3 +661,75 @@ def test_the_findings_have_writers_and_a_reader_in_the_skills():
         assert "`findings` role" in text and "F-NNN" in text, skill
     for agent in (ROOT / "agents").glob("*.md"):
         assert "findings document" not in agent.read_text(encoding="utf-8"), agent.name
+
+
+# --- D14: effort calibration measured per project ----------------------------------------
+
+@pytest.mark.parametrize("text, value", [
+    ("90m", 1.5), ("1.5h", 1.5), ("2h30m", 2.5), ("3", 3.0), ("M", None), ("", None)])
+def test_durations(text, value):
+    assert learning_mod.hours(text) == value
+
+
+def ledger_rows(pairs):
+    from tools.governance.providers import ledger as ledger_mod
+    return [ledger_mod.LedgerRecord("TR-%d" % i, "I-%d" % i, "2026-09-01", "shipped",
+                                    effort_estimate=e, effort_actual=a)
+            for i, (e, a) in enumerate(pairs)]
+
+
+def test_calibration_is_not_computable_below_three_pairs():
+    metric = learning_mod.effort_calibration(ledger_rows([("1h", "2h"), ("M", "3h"), ("", "")]))
+    assert not metric.computable and "(1 have both)" in metric.missing_inputs[0]
+
+
+def test_calibration_is_the_median_ratio():
+    metric = learning_mod.effort_calibration(
+        ledger_rows([("1h", "1.2h"), ("2h", "3h"), ("60m", "130m"), ("4h", "4h")]))
+    assert metric.value == round((1.2 + 1.5) / 2, 2)
+
+
+def test_a_markdown_ledger_with_effort_columns_round_trips(tmp_path):
+    from tools.governance.providers import ledger as ledger_mod
+    path = tmp_path / "ledger.md"
+    path.write_text("# Ledger\n\n| Record | Item | Completed | Result | Evidence | Corrects "
+                    "| Estimate | Actual |\n|---|---|---|---|---|---|---|---|\n", encoding="utf-8")
+    book = ledger_mod.TerminalLedger(str(path), writers=["pointer-closeout"])
+    book.append(ledger_mod.LedgerRecord("TR-001", "I-1", "2026-09-23", "shipped",
+                                        effort_estimate="2h", effort_actual="150m"),
+                actor="pointer-closeout")
+    [record] = book.records()
+    assert (record.effort_estimate, record.effort_actual) == ("2h", "150m")
+    assert "| TR-001 | I-1 | 2026-09-23 | shipped |  |  | 2h | 150m |" in path.read_text(encoding="utf-8")
+
+
+def test_a_six_column_markdown_ledger_is_unchanged(tmp_path):
+    from tools.governance.providers import ledger as ledger_mod
+    path = tmp_path / "ledger.md"
+    book = ledger_mod.TerminalLedger(str(path), writers=["pointer-closeout"])
+    book.append(ledger_mod.LedgerRecord("TR-001", "I-1", "2026-09-23", "shipped",
+                                        effort_estimate="2h", effort_actual="3h"),
+                actor="pointer-closeout")
+    assert "| TR-001 | I-1 | 2026-09-23 | shipped |  |  |" in path.read_text(encoding="utf-8")
+    assert book.records()[0].effort_estimate == ""
+
+
+def test_kpis_reports_effort_calibration(catalog):
+    for item, estimate, actual in (("A", "1h", "1.5h"), ("B", "2h", "3h"), ("C", "1h", "1h")):
+        path = role_path(catalog, "workRegister")
+        with open(path, "a", encoding="utf-8", newline="") as handle:
+            handle.write("%s,%s,1,Queued,Full Spec,,S,,,,,,,,,\n" % (item, item))
+        completed = run(REGISTRY_CLI, "--root", str(catalog), "--actor", "pointer-closeout",
+                        "record-completion", "--item", item, "--date", "2026-09-23",
+                        "--result", "shipped", "--estimate", estimate, "--actual", actual,
+                        "--apply")
+        assert completed.returncode == 0, completed.stdout + completed.stderr
+    learning = json.loads(run(REGISTRY_CLI, "--root", str(catalog), "kpis",
+                              "--json").stdout)["learning"]
+    figure = {m["name"]: m for m in learning["metrics"]}["effort-calibration"]
+    assert figure["value"] == 1.5 and "ledger" in learning["provenance"]
+
+
+def test_effort_levels_prefers_the_measured_figure():
+    text = (ROOT / "skills" / "effort-levels" / "SKILL.md").read_text(encoding="utf-8")
+    assert "effort-calibration" in text

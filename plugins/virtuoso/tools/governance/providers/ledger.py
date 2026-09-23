@@ -35,7 +35,14 @@ _DEFAULT_HEADERS = {
     "result": ("result",),
     "evidence": ("evidence",),
     "corrects": ("corrects",),
+    # Optional: what the item was estimated to take and what it took, as durations
+    # ("90m", "1.5h", "2h30m"; a bare number is hours). Read by effort calibration.
+    "effortEstimate": ("effortestimate", "estimate", "effort estimate"),
+    "effortActual": ("effortactual", "actual", "effort actual"),
 }
+
+#: The optional effort fields, and the markdown header each is found by.
+EFFORT_FIELDS = {"effortEstimate": "estimate", "effortActual": "actual"}
 
 #: Fields a record cannot be appended without, because a record lacking them is
 #: not one any reader could use.
@@ -86,6 +93,8 @@ class LedgerRecord:
     result: str
     evidence: str = ""
     corrects: str = ""
+    effort_estimate: str = ""
+    effort_actual: str = ""
     extra: dict = field(default_factory=dict)
 
     @property
@@ -101,6 +110,10 @@ class LedgerRecord:
             "evidence": self.evidence,
             "corrects": self.corrects,
         }
+        if self.effort_estimate:
+            data["effortEstimate"] = self.effort_estimate
+        if self.effort_actual:
+            data["effortActual"] = self.effort_actual
         data.update(self.extra)
         return data
 
@@ -163,23 +176,35 @@ class TerminalLedger:
         return self._markdown_records(text)
 
     def _markdown_records(self, text: str) -> list[LedgerRecord]:
+        """The first six columns are positional, as they always were. The optional
+        effort columns are found by their header (*Estimate*, *Actual*) in the
+        table's own header row, so a ledger without them reads exactly as before."""
         out: list[LedgerRecord] = []
         rows_started = False
+        header: list[str] = []
+        previous = ""
         for line in text.splitlines():
             stripped = line.strip()
             if not stripped.startswith("|"):
                 rows_started = False
+                previous = ""
                 continue
             if _SEPARATOR_RE.match(line):
                 rows_started = True
+                header = [c.strip().lower() for c in previous.strip().strip("|").split("|")]
                 continue
             if not rows_started:
+                previous = stripped
                 continue
             cells = [c.strip() for c in stripped.strip("|").split("|")]
-            while len(cells) < 6:
+            while len(cells) < max(6, len(header)):
                 cells.append("")
+            effort = {name: cells[header.index(label)] if label in header else ""
+                      for name, label in EFFORT_FIELDS.items()}
             out.append(LedgerRecord(record_id=cells[0], item_id=cells[1], completed=cells[2],
-                                    result=cells[3], evidence=cells[4], corrects=cells[5]))
+                                    result=cells[3], evidence=cells[4], corrects=cells[5],
+                                    effort_estimate=effort["effortEstimate"],
+                                    effort_actual=effort["effortActual"]))
         return out
 
     def contains(self, record: LedgerRecord) -> bool:
@@ -227,11 +252,17 @@ class TerminalLedger:
         placed in is refused by name, never written under the wrong header."""
         values = {"recordId": record.record_id, "itemId": record.item_id,
                   "completed": record.completed, "result": record.result,
-                  "evidence": record.evidence, "corrects": record.corrects}
+                  "evidence": record.evidence, "corrects": record.corrects,
+                  "effortEstimate": record.effort_estimate,
+                  "effortActual": record.effort_actual}
         buffer = io.StringIO(newline="")
         if not existing or not existing.strip():
-            writer = csv.DictWriter(buffer, fieldnames=list(TERMINAL_LEDGER_FIELDS),
-                                    lineterminator="\n")
+            # The documented six columns; the optional effort columns only when this
+            # first record carries them, so a new ledger's header is what it always was.
+            fields = [f for f in TERMINAL_LEDGER_FIELDS
+                      if f not in EFFORT_FIELDS or values[f]]
+            writer = csv.DictWriter(buffer, fieldnames=fields,
+                                    lineterminator="\n", extrasaction="ignore")
             writer.writeheader()
             writer.writerow(values)
             return buffer.getvalue()
@@ -251,9 +282,13 @@ class TerminalLedger:
         return base_text + buffer.getvalue()
 
     def _markdown_append(self, existing: str | None, record: LedgerRecord) -> str:
-        row = "| %s | %s | %s | %s | %s | %s |" % (
-            record.record_id, record.item_id, record.completed, record.result,
-            record.evidence, record.corrects)
+        cells = [record.record_id, record.item_id, record.completed, record.result,
+                 record.evidence, record.corrects]
+        header = _last_markdown_header(existing or "")
+        if len(header) > 6:
+            extra = {"estimate": record.effort_estimate, "actual": record.effort_actual}
+            cells += [extra.get(label, "") for label in header[6:]]
+        row = "| %s |" % " | ".join(cells)
         if not existing:
             return "# Completed Work — Terminal Ledger\n\nAppend-only.\n\n" \
                    + _MARKDOWN_HEADER + "\n" + row + "\n"
@@ -268,6 +303,16 @@ class TerminalLedger:
         return "\n".join(lines) + "\n"
 
 
+def _last_markdown_header(text: str) -> list[str]:
+    """The lower-cased header cells of the last table in ``text``."""
+    lines = text.splitlines()
+    header: list[str] = []
+    for position, line in enumerate(lines):
+        if _SEPARATOR_RE.match(line) and position > 0:
+            header = [c.strip().lower() for c in lines[position - 1].strip().strip("|").split("|")]
+    return header
+
+
 def _from_payload(payload: dict, columns: dict | None = None) -> LedgerRecord:
     columns = columns if columns is not None else column_map(payload.keys())
     used = set(columns.values())
@@ -279,6 +324,7 @@ def _from_payload(payload: dict, columns: dict | None = None) -> LedgerRecord:
     return LedgerRecord(
         record_id=value("recordId"), item_id=value("itemId"), completed=value("completed"),
         result=value("result"), evidence=value("evidence"), corrects=value("corrects"),
+        effort_estimate=value("effortEstimate"), effort_actual=value("effortActual"),
         extra={k: v for k, v in payload.items() if k not in used},
     )
 

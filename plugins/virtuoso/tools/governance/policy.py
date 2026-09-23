@@ -149,7 +149,8 @@ DEFAULTS: dict = {
 }
 
 #: The terminal ledger's fields, in the order the documented format lays them out.
-TERMINAL_LEDGER_FIELDS = ("recordId", "itemId", "completed", "result", "evidence", "corrects")
+TERMINAL_LEDGER_FIELDS = ("recordId", "itemId", "completed", "result", "evidence", "corrects",
+                          "effortEstimate", "effortActual")
 
 
 def ledger_mapping_problems(mappings) -> list[str]:

@@ -1,6 +1,6 @@
 ---
 epic: loop-hardening
-last_updated: 2026-09-23 21:10
+last_updated: 2026-09-23 22:20
 updated_by: session 1
 ---
 
@@ -26,20 +26,20 @@ updated_by: session 1
 ## Where we are
 
 ```
-phase:        P4 — Give every output a reader
-next_action:  findings role and its readers (D13)
-blockers:     BLOCKER(USER) #1 (stranded branches) — does not block P4–P6
+phase:        P5 — Hygiene and owner decisions
+next_action:  D16 project residue out of MarcusAurelius / Plato; extend the validator scan
+blockers:     BLOCKER(USER) #1 (stranded branches) — does not block P5–P6
 session:      1 of ~3 budgeted
-dod:          D1–D12 [met] | D13, D14 [unmet] | D15 [met] | D16–D18 [unmet] | D19 [raised] | D20, D21 [unmet] | D22, D23 [met]
+dod:          D1–D15 [met] | D16–D18 [unmet] | D19 [raised] | D20, D21 [unmet] | D22, D23 [met]
 ```
 
 ## Next actions — max 5, near horizon only
 
-1. [ ] D13: `findings` role (sweep, adversarial, agents as writers); `create` scaffolds it; roadmap-review B.3 reads the previous lessons-applied
-2. [ ] D14: ledger `effortEstimate` / `effortActual`; `kpis effort-calibration`; effort-levels prefers it
-3. [ ] P5: D16 agent residue, D17 memory boundary, D18 anchor hashes + `dispatch-buffer-ready`
-4. [ ] P6: notes v1.10.0, fresh DoD, done.md, CI
-5. [ ] Re-surface BLOCKER(USER) #1 in the hand-off
+1. [ ] D16: residue out of MarcusAurelius and Plato; validator scan extended
+2. [ ] D17: memory boundary in the guide; Plato's feedback.log gone; agents cite `<prefix>`
+3. [ ] D18: rule-text hashes for anchors; `dispatch-buffer-ready`
+4. [ ] P6: v1.10.0 notes; fresh DoD; done.md; CI green both legs
+5. [ ] Hand-off: BLOCKER(USER) #1 and launch Q2/Q3
 
 ## Working set — verified facts this epic relies on
 
@@ -57,6 +57,7 @@ dod:          D1–D12 [met] | D13, D14 [unmet] | D15 [met] | D16–D18 [unmet] 
 | Ledger append | `TerminalLedger.append` (ledger.py) reached only from `test_crossing.py` | grep, 2026-09-23 |
 | `policy.standingRules` | declared in `policy.py` defaults; read by no code | grep, 2026-09-23 |
 | Marketplace/manifest keys | `displayName`, `category`, `tags`, `author`, `homepage`, `repository`, `license`, `keywords` documented; unknown `plugin.json` keys ignored | Claude Code docs via the guide agent, 2026-09-23 |
+| Windows CI | a piped Python child writes the console code page (cp1252): a test that decodes UTF-8 must set PYTHONIOENCODING=utf-8 for the child; reproduce locally with PYTHONIOENCODING=cp1252 | runs 119/120 failed, fixed in 80047fa |
 | Stranded branches | see Blockers #1 | `git diff main...`, 2026-09-23 |
 
 ## Blockers

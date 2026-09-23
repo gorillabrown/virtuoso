@@ -273,7 +273,10 @@ Append **one** record to the registered `terminalLedger`:
 appends the record, closes the item at the revision you read in Wave 1, and verifies
 both; Step 4 then persists the ledger and the register with everything else:
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout record-completion --item "<ITEM-ID>" --date "<YYYY-MM-DD>" --result "<result>" --evidence "<close-out file>" --revision "<revision>" --apply
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout record-completion --item "<ITEM-ID>" --date "<YYYY-MM-DD>" --result "<result>" --evidence "<close-out file>" --estimate "<the spec's effort, as a duration>" --actual "<the report's runtime>" --revision "<revision>" --apply
+
+`--estimate` and `--actual` are what effort calibration learns from: pass them whenever
+the specification stated its effort as a duration and the report records its runtime.
 
 Run it once without `--apply` to preview. If the register refuses after the ledger
 append, the command leaves a recovery record naming what remains — follow *On partial
