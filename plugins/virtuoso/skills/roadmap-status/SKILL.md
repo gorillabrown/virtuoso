@@ -247,6 +247,7 @@ compute. Report them as returned:
 | Items remaining | blocked + queued + in-flight |
 | Dispatch-ready items | against `policy.roadmap.dispatchBuffer`; if the buffer is 0, report "eager specification disabled" |
 | Group progress | only if the project uses grouping |
+| Pace against each declared deadline | from the `pace` block: verdict, required vs trailing rate, projected finish, blocked share, scope. With no deadline declared, say so |
 
 The status *words* in the register are the project's own; the canonical statuses
 above come from `policy.workRegister.statusMappings`. Never assume a project
@@ -261,8 +262,10 @@ registered generator if the user wants, and never read it as truth.
 - Items added during the window → possible sideways scope
 - Items at the head of the sequence that predate the window and are still active
   → potentially stuck
-- Pace: completions in the window versus the recent average. If completion dates
-  are absent from the register, pace is **not computable** — say so.
+- Pace: read it from the `pace` block of `kpis --json`, never derive it. It is
+  computed against each date declared in `policy.roadmap.deadlines`; a figure the
+  data cannot support comes back **not computable** with its missing inputs
+  named — say so, naming them.
 
 ### 1.5 Straggler scan (read-only)
 Walk the roadmap's active section and look for completion signals:
@@ -293,7 +296,7 @@ Each becomes a Phase 2 candidate, never a Phase 1 edit.
 - [Whether work is moving.]
 - [Anything stuck.]
 - [Anything sideways.]
-- [Pace — or: pace is not computable because [missing inputs].]
+- [Pace: <verdict> against <deadline label> (<date>, N days) — required X vs trailing Y per week (<unit>). Or: no deadline is declared. Or: not computable — [missing inputs].]
 - [Dispatch buffer: N of [policy target] — or: eager specification is disabled.]
 - [If stragglers: N items look complete and need migration.]
 - [If drift: the roadmap and the register disagree about N items.]
@@ -310,6 +313,9 @@ Each becomes a Phase 2 candidate, never a Phase 1 edit.
 - **Current group ([name]):** X% of the group's work remains. *(omit for a flat project)*
 - **Finish line:** Y% remains by effort; N items remain.
   *(or: not computable — [missing inputs])*
+- **Deadline ([label], [date]):** N items / P points remain in its scope; at the
+  trailing rate they finish [projected date]. *(one line per declared deadline;
+  omit when none is declared)*
 
 ### Health read
 - **[On track / Watch closely / Concerns]** — one plain-language sentence saying why.

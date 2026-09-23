@@ -62,7 +62,7 @@ def test_every_documented_registry_subcommand_exists():
     pattern = re.compile(r"virtuoso_registry[^\n]*?(?:--json\s+|--actor \S+\s+|--root \S+\s+)*"
                          r"\b(roles|resolve|provider|items|next|kpis|closeout|snapshot|"
                          r"recovery|repo|deps|protected|overlays|create-item|"
-                         r"mutation-plan|mutation-confirm)\b")
+                         r"mutation-plan|mutation-confirm|policy-set)\b")
     for path in DOCS:
         documented.update(pattern.findall(path.read_text(encoding="utf-8")))
     assert documented, "no registry subcommands are documented at all"
@@ -234,6 +234,41 @@ def test_documented_contract_lines_match_the_implementation():
     for line in outcome.contract_lines():
         token = line.split(":")[0]
         assert token in all_doc_text(), "%s is undocumented" % token
+
+
+def test_the_machine_lines_and_their_json_keys_are_documented():
+    """Every line preflight prints beside the two-line contract, and the JSON key
+    that carries its detail, is in the registry contract."""
+    contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
+    outcome = result_mod.Result(status=result_mod.READY, mode="check", root="/tmp")
+    payload = outcome.as_dict()
+    for line, key in ((outcome.overlay_line(), "overlays"),
+                      (outcome.deadline_line(), "deadlines")):
+        token = line.split(":")[0] + ":"
+        assert token in contract, "%s is undocumented" % token
+        assert key in payload and "`%s`" % key in contract, "JSON key %s" % key
+
+
+def test_the_registry_contract_documents_every_pace_verdict():
+    from tools.governance.providers import pace
+    contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
+    for verdict in pace.VERDICTS:
+        assert "| `%s` |" % verdict in contract, "pace verdict %r is undocumented" % verdict
+
+
+def test_the_registry_contract_documents_every_deadline_finding():
+    from tools.governance import deadlines
+    contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
+    for code in deadlines.FINDING_CODES:
+        assert "| `%s` |" % code in contract, "deadline finding %r is undocumented" % code
+
+
+def test_the_ceremonies_read_pace_rather_than_derive_it():
+    for name in ("roadmap-review", "roadmap-status", "next-pointer"):
+        text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+        assert "`pace` block" in text, "%s does not read the pace block" % name
+    review = (ROOT / "skills" / "roadmap-review" / "SKILL.md").read_text(encoding="utf-8")
+    assert "policy-set roadmap.deadlines.<id>" in review
 
 
 def test_the_json_result_keys_are_documented():

@@ -363,7 +363,9 @@ Buffer health compares the count of dispatch-ready active items against
 disabled" rather than a ratio.
 
 "Last review" is the newest artifact in the registered reviews directory. Pace
-comes from the most recent assessment; if none exists, pace is not computable.
+comes from the `pace` block of the same `kpis --json` call — computed live against
+each date in `policy.roadmap.deadlines`, never read from an assessment. With no
+deadline declared, the Pace row says so.
 
 **Never read a generated report or spreadsheet cache to obtain any of this.** A
 generated artifact is a presentation output; the provider is the source.
@@ -565,7 +567,8 @@ matters.]** *(item [ITEM-ID])*
 | Items to finish line | Y — ~Z% remaining by effort *(or: not computable — [missing inputs])* |
 | Prerequisites for this item | all met / pending: [descriptive names] |
 | Last review | N days ago |
-| Pace | On track / Behind / Ahead — [reason] *(or: not computable)* |
+| Deadline | [label] YYYY-MM-DD — N days *(or: none declared)* |
+| Pace | Ahead / On track / Behind / Overdue — required X vs trailing Y per week ([unit]) *(or: not computable — [missing inputs]; or: no deadline declared)* |
 
 *Source: [register] via [provider], snapshot [timestamp][ — STALE: reason].*
 

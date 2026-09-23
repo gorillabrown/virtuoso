@@ -334,15 +334,108 @@ a mechanical check, make it one.** An overlay is prose applied at the agent's di
 policy value is enforced. A dispatch buffer is a value. "Migrations need a data-loss analysis"
 is prose. Do not ship the first as the second because prose is easier to write.
 
+## Deadlines and pace
+
+A deadline is a declaration with a body, like any other project rule. The **declaration** is
+`policy.roadmap.deadlines.<id>`: a date and who set it, written through `policy-set`. The
+**body** is the roadmap heading that defines the finish line the date is for.
+
+```json
+"roadmap": {
+  "deadlines": {
+    "game-build": {"date": "2027-01-01", "owner": "Evan", "label": "Overall game build",
+                   "finishLine": "Finish Line C",
+                   "scope": {"field": "group", "values": ["B1", "B2", "B3", "C"]},
+                   "recorded": "2026-09-22"}
+  },
+  "pace": {"trailingWeeks": 4, "tolerance": 0.1}
+}
+```
+
+| Field | Required | Meaning |
+|---|---|---|
+| the id | yes | letters, digits, `-`, `_`; one segment of a dotted key, so never a dot |
+| `date` | yes | `YYYY-MM-DD`, a real calendar date; due by the end of that day |
+| `owner` | yes | who ruled. A date nobody owns is not a ruling |
+| `label` | no | the name shown; the id when absent |
+| `finishLine` | no | the roadmap heading that defines done — the body |
+| `scope` | no | `{"field": ..., "values": [...]}`: which items count. Absent means every item |
+| `recorded` | no | the date it was set or last moved |
+
+Any other field is refused: a misspelled field is stored and ignored, which reads as configured
+and is not. `policy-set roadmap.deadlines.<id>` adds or replaces one deadline,
+`policy-set roadmap.deadlines.<id>.date` moves one date, and `--value-json null` on an id
+withdraws it — none of them restates the others. Every `--apply` reads the value back from the
+manifest on disk and says so.
+
+**One authority.** The date lives in the manifest and nowhere else. The roadmap's finish-line
+section defines what done means and points at the policy for the date; reviews, briefings and
+assessments cite the computed pace *as of* their own date, which is history rather than a second
+authority. Memory, charters and boards point at the policy instead of repeating the date, so
+there is one place to move it and nothing to drift. `finish_line:` in a roadmap is a marker that
+discovery uses to recognize a roadmap; it is not a date and nothing reads a value from it.
+
+**The plugin never reverts a successful `policy-set`.** The write restores its backup only when
+the write itself or the re-validation after it fails, and it says so. A project that runs its
+own guard over the manifest should let `policy-set` writes through; each leaves a backup set
+labelled `policy-set` that names the ceremony which asked.
+
+### What pace computes
+
+`kpis` reports pace against every declared deadline, in date order, from the same snapshot as
+its other figures. It is computed as of the **snapshot's** date, never the reader's clock.
+
+- **Scope** — every item in the register, or the items whose `scope.field` (canonical `id`,
+  `title`, `lane`, `group`, `effort`, `branch`, or a register column) holds one of
+  `scope.values`, in any case. A scope that matches nothing is **not computable** — never met.
+- **Remaining** — non-terminal items in scope, and their points through
+  `policy.roadmap.effortScale`. **Blocked** — the canonical `blocked` share of what remains.
+- **Required** — remaining ÷ weeks to the date, in items and in points.
+- **Trailing** — distinct items completed in the last `policy.roadmap.pace.trailingWeeks`
+  weeks, divided by that many weeks. It is the project's delivery capacity, not a per-scope
+  rate. Completions come from the terminal ledger when one is registered, with corrections
+  applied and results read through `policy.workRegister.statusMappings`; only a project with no
+  ledger uses the register's completion dates, and the two are never mixed. The output breaks
+  the count down by the result words recorded, and lists what it excluded.
+- **Verdict** — per unit: `ahead` above the required rate by more than
+  `policy.roadmap.pace.tolerance`, `on track` within it, `behind` below it. The headline is the
+  worse of the two units and names the unit. `met` when nothing in scope remains; `overdue`
+  when the date has arrived with work remaining. The order, worst first:
+
+| verdict | meaning |
+|---|---|
+| `overdue` | the date has arrived and work in scope remains |
+| `behind` | the trailing rate is below the required rate by more than the tolerance |
+| `on track` | the trailing rate is within the tolerance of the required rate |
+| `ahead` | the trailing rate exceeds the required rate by more than the tolerance |
+| `met` | nothing in scope remains |
+
+- **Projection** — the date the remaining work finishes at the trailing rate, per unit.
+
+A figure whose inputs are missing is **not computable**, with the inputs named — an undatable
+completion (append a correction that dates it), an unsized item, a completed item that left the
+register (trailing points only), a scope that matches nothing. Nothing is estimated, and nothing
+silently becomes zero.
+
+| finding | severity | meaning |
+|---|---|---|
+| `deadline-unanchored` | info | the deadline names no `finishLine`; pace is computed, but nothing defines done |
+| `deadline-finish-line-missing` | warning | `finishLine` names a heading the registered roadmap does not have |
+| `deadline-invalid` | warning | a hand-edited entry fails validation; `policy-set` refuses such an entry outright |
+
+Deadline findings are never `error` severity and never change the registry status: the project
+fixes them, and `repair` has nothing to propose.
+
 ## Preflight status contract (items 10, 11)
 
-`scripts/virtuoso_preflight.py` always prints two parseable lines, plus a third
-line reporting overlays:
+`scripts/virtuoso_preflight.py` always prints two parseable lines, plus a line
+reporting overlays and a line reporting deadlines:
 
 ```
 virtuoso-status: <status>
 writes: <N>
 overlays: <state>
+deadlines: <state>
 ```
 
 | status | meaning | writes |
@@ -370,9 +463,26 @@ ends up believing its overlays are in force while nothing reads them.
 | `registered, none present (<path>)` | the directory exists and holds nothing that applies |
 | `<N> applied (<path>)` | N overlays mirror a shipped file; findings are appended |
 
+The `deadlines:` line follows the same rule — every mode, never suppressed, always a
+result — and carries dates and days only. It never carries pace: pace needs the work
+register, which may be external, and session start never reads one.
+
+| deadline state | meaning |
+|---|---|
+| `not registered` | the project is not registered |
+| `none declared` | registered; `policy.roadmap.deadlines` is empty |
+| `<id> <date> (<N> days)` | one deadline; `(due today)` or `(passed N days ago)` once it arrives |
+| `<N> declared; next <id> <date> (<N> days)` | several; the earliest not yet passed (`latest` once all have) |
+| `invalid (<problem>)` | every declared entry fails validation; the first problem is shown |
+
+A `; N finding(s)` suffix counts the deadline findings above.
+
 `--json` adds the full structured result, including the resolved overlays and the
-safety floor they may not loosen. Modes: `check` (read-only; `detect` is a
-retained alias), `adopt`, `create --authorize`, `repair [--apply]`.
+safety floor they may not loosen, and `deadlines` (the declared dates, days remaining
+and findings). The JSON follows the machine lines; read it from its first line (the one
+beginning `{`), never from a fixed line count, because the set of machine lines grows.
+Modes: `check` (read-only; `detect` is a retained alias), `adopt`, `create --authorize`,
+`repair [--apply]`.
 
 ## Locating the plugin
 

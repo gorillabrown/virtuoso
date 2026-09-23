@@ -109,6 +109,7 @@ declaration does not belong here — it produces prose nothing can act on.
 | How much may a ceremony touch the repository? | `policy.git.policy` |
 | What do you call the people and agents in this workflow? | `policy.actors` |
 | Where should a stop, hold, or block be recorded? | `policy.issues.targets` |
+| Is there a date the work must be done by? Who set it, which finish line does it date, and which items count toward it? | `policy.roadmap.deadlines` **and its finish-line heading** |
 | What must every agent know here that the plugin cannot? Which shipped file does each rule belong on top of? | no declaration — these are **bodies**, recorded in Phase 3 and emitted in Phase 5 |
 
 The last row is the exception that proves the rule, and it is marked as one: it collects
@@ -134,6 +135,8 @@ Present both halves as one plan, and change nothing yet.
 POLICY (written on approval)
   policy.roadmap.hierarchy       [] -> ["phase", "stage"]
   policy.rubric.extensions       [] -> ["db-migration"]
+  policy.roadmap.deadlines.v1    (unset) -> {"date": "2027-01-01", "owner": "<who ruled>",
+                                             "finishLine": "Finish Line — Target"}
 
 OVERLAYS (emitted for you to save; never written by this ceremony)
   <overlays>/references/readiness-rubric.md   defines: db-migration
@@ -163,6 +166,15 @@ One key per invocation, so each approved line in the Phase 3 preview is one writ
 point at. The value is JSON, so a list stays a list. The write validates the resulting
 policy before touching anything, backs the manifest up, and rolls back if the registry
 would not reload cleanly.
+
+A deadline is one entry, keyed by an id you choose, so declaring it never restates another:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor project-profile \
+        policy-set roadmap.deadlines.v1 \
+        --value-json '{"date": "2027-01-01", "owner": "<who ruled>", "finishLine": "Finish Line — Target"}'
+
+Its body is the roadmap heading `finishLine` names — the section that says what done means.
+If the roadmap has no such heading, the deadline is reported at session start until it does.
 
 The helper refuses a key the plugin does not document, because a key no ceremony reads is
 configuration that looks live and is inert. If an answer has nowhere documented to go, it

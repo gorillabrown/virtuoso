@@ -133,6 +133,9 @@ fixed number or a required structure:
 | `roadmap.specStorage` | `inline` (in the roadmap), `files` (one per item), or `external` | inline |
 | `roadmap.lengthCeilingLines` | when to snapshot and trim | 2000 |
 | `roadmap.effortScale` | size → points for effort-weighted metrics | generic t-shirt scale |
+| `roadmap.deadlines` | dated finish lines, by id: `date`, `owner`, and optionally `label`, `finishLine`, `scope` | none |
+| `roadmap.pace.trailingWeeks` | the window the trailing delivery rate is measured over | 4 |
+| `roadmap.pace.tolerance` | how far from the required rate still reads "on track" | 0.1 |
 | `standingRules.ids` | the project's inheritable rule identifiers | none — never hardcode one |
 | `issues.targets` | where a blocker is written: `local`, `external`, or both | `["local"]` |
 
@@ -354,8 +357,37 @@ Never substitute an estimate, and never present a percentage the data cannot
 support.
 
 ### B.2 Pace
-Trailing completion rate versus the rate the finish line requires. If completion
-dates are missing from the register, pace is not computable — say so.
+Pace comes from the `pace` block of the same `kpis --json` call — one report per
+declared deadline. Each gives the rate the date requires (remaining work ÷ weeks
+left) against the trailing rate (completions over
+`policy.roadmap.pace.trailingWeeks`), in items and in points, and a verdict:
+`ahead`, `on track`, `behind`, `overdue`, or `met`, naming the unit that drove it.
+Report, for each deadline:
+
+- the verdict and its reason, and the projected finish at the trailing rate
+- the scope it covers — say it, because a wrong assumption about scope is only
+  visible if it is stated
+- the blocked share of remaining work: blocked work cannot be delivered however
+  fast the rest moves
+- every figure returned as not computable, with its missing inputs named
+
+With no deadline declared, say "no deadline is declared": pace against a date is
+not computable, and now the cause is stated rather than implied. Never derive
+pace by hand, and never copy a date from anywhere but the policy.
+
+**Recording a deadline the owner sets or moves.** The date has one home,
+`policy.roadmap.deadlines.<id>`. Before writing, ask which finish line the date is
+for and which items count toward it — the answers are `finishLine` and `scope`;
+without them the review reports the deadline unanchored, which is the truth.
+Preview, get approval, then apply:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor roadmap-review policy-set roadmap.deadlines.<id> --value-json '{"date": "YYYY-MM-DD", "owner": "<who ruled>", "finishLine": "<roadmap heading>"}'
+
+then the same command with `--apply`. A moved date is
+`policy-set roadmap.deadlines.<id>.date`; a withdrawn one is `--value-json null`.
+Record the ruling in the roadmap's finish-line section as prose that points at the
+policy. Do not copy the date into memory, charters, or the board — every surface
+reads it from the policy, and a copy is a second authority that drifts.
 
 ### B.3 Scope discipline
 Forward / sideways / backward deltas since the previous review. Score =
@@ -386,10 +418,21 @@ Prerequisites → risk → hardest-first. Write the sequence back through the
 provider only if it supports `write-status` on the sequence field; otherwise
 produce the sequence as a recommendation and say why it was not written.
 
-### C.5 Render the plan
+### C.5 Answer the pace verdict
+A `behind` or `overdue` verdict from B.2 gets a stated response in the plan — at
+least one of:
+
+- reduce scope, with the owner, so the dated finish line holds less
+- resequence toward the dated finish line
+- release blocked work, naming the rulings or dependencies that hold it
+- take a moved date to the owner (recorded through `policy-set`, never by hand)
+
+A plan that leaves a behind verdict unaddressed says so explicitly.
+
+### C.6 Render the plan
 Write `YYYY-MM-DD-plan.md`; update the roadmap's active section.
 
-### C.6 Checkpoint
+### C.7 Checkpoint
 
 ---
 
