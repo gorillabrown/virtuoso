@@ -19,6 +19,9 @@ Subcommands:
   kpis                      derived metrics, each with its provenance, and pace
                             against every declared deadline
   closeout --item ID --date D   resolve close-out artifact paths (read-only)
+  lessons [--open]          the registered lessons and their status (read-only)
+          --check PATH      check a spec's Lessons applied (rubric U9), or with
+                            --closeout a close-out's Lessons section
   repo [--expect PATHS]     read-only repository state and readiness finding
   deps                      check the project's declared runtime dependencies
   protected                 hash every protected file (immutable-hash verification)
@@ -44,7 +47,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.governance import (  # noqa: E402
-    backup as backup_mod, overlays as overlays_mod, policy as policy_mod, providers,
+    backup as backup_mod, lessons as lessons_mod, overlays as overlays_mod,
+    policy as policy_mod, providers,
     registry as registry_mod, repair as repair_mod, schema, textio,
 )
 from tools.governance.errors import CapabilityError, GovernanceError, RoleNotRegistered  # noqa: E402
@@ -287,7 +291,8 @@ def cmd_closeout(args) -> int:
         "closeOutReport": report,
         "lessons": lessons,
         "terminalLedger": ledger_path,
-        "nextLessonId": _next_lesson_id(lessons, args.lesson_prefix),
+        "nextLessonId": _next_lesson_id(lessons, args.lesson_prefix
+                                        or project_policy.lesson_prefix),
         "issueFilenameTemplate": template,
         "prepared": False,
     }
@@ -307,6 +312,77 @@ def _next_lesson_id(lessons: str, prefix: str) -> str:
     text = textio.read_text(lessons) if lessons else None
     numbers = [int(n) for n in re.findall(r"%s-(\d+)" % re.escape(prefix), text or "")]
     return "%s-%03d" % (prefix, (max(numbers) + 1) if numbers else 1)
+
+
+EXIT_CHECK_FAILED = 1
+
+
+def cmd_lessons(args) -> int:
+    """The learning loop's read side. Lists the registered lessons with their current
+    status, or checks a specification (rubric U9) or a close-out against them.
+
+    Read-only. Exit 0 when the listing or the check passes, 1 when a check fails,
+    3 when there is no lessons role to read.
+    """
+    reg = _load(args.root)
+    project_policy = policy_mod.load(reg.policy)
+    prefix = project_policy.lesson_prefix
+    try:
+        path = reg.resolve("lessons")
+    except RoleNotRegistered:
+        raise GovernanceError(
+            "no `lessons` role is registered, so there is nowhere a lesson is recorded and "
+            "nothing a specification can apply. Register one in %s (virtuoso-init "
+            "creates it)." % schema.MANIFEST_RELPATH)
+    text = textio.read_text(path)
+    source = os.path.relpath(path, args.root).replace(os.sep, "/")
+    notes = [] if text is not None else [
+        "the registered lessons document %s does not exist yet" % source]
+    recorded = lessons_mod.parse(text or "", prefix)
+
+    if args.check:
+        target = args.check if os.path.isabs(args.check) else os.path.join(args.root, args.check)
+        document = textio.read_text(target)
+        if document is None:
+            raise GovernanceError("%s cannot be read" % args.check)
+        result = lessons_mod.check(document, recorded, prefix, item=args.item,
+                                   closeout=args.closeout)
+        payload = dict(result.as_dict(), document=args.check, lessons=source, prefix=prefix,
+                       notes=notes)
+        if args.as_json:
+            _emit(payload, True)
+        else:
+            what = ("close-out lessons" if args.closeout
+                    else "U9 lessons applied%s" % (" (%s)" % args.item if args.item else ""))
+            print("%s: %s" % (what, "PASS" if result.passed else "FAIL"))
+            if result.cited:
+                print("  cited: %s" % ", ".join(result.cited))
+            for finding in result.findings:
+                print("  [%s] %s: %s" % (finding["severity"], finding["code"],
+                                         finding["message"]))
+            for note in notes:
+                print("  note: %s" % note)
+            print("  lessons: %s (prefix %s)" % (source, prefix))
+        return EXIT_OK if result.passed else EXIT_CHECK_FAILED
+
+    shown = [lesson for lesson in recorded if lesson.live or not args.open]
+    live = sum(1 for lesson in recorded if lesson.live)
+    payload = {"lessons": [lesson.as_dict() for lesson in shown], "source": source,
+               "prefix": prefix, "live": live, "closed": len(recorded) - live, "notes": notes}
+    if args.as_json:
+        return _emit(payload, True)
+    print("%d lesson(s) in %s: %d live, %d closed%s"
+          % (len(recorded), source, live, len(recorded) - live,
+             " (showing live only)" if args.open else ""))
+    for lesson in shown:
+        print("  %-9s %-6s %s" % (lesson.id, "live" if lesson.live else "closed", lesson.title))
+        if lesson.applies_to:
+            print("            applies to: %s" % lesson.applies_to)
+        if not lesson.live or lesson.status != lessons_mod.DEFAULT_STATUS:
+            print("            status: %s" % lesson.status)
+    for note in notes:
+        print("note: %s" % note)
+    return EXIT_OK
 
 
 def cmd_snapshot(args) -> int:
@@ -659,10 +735,24 @@ def build_parser() -> argparse.ArgumentParser:
     closeout = sub.add_parser("closeout", parents=[common])
     closeout.add_argument("--item", required=True)
     closeout.add_argument("--date", required=True)
-    closeout.add_argument("--lesson-prefix", default="SRL")
+    closeout.add_argument("--lesson-prefix", default="",
+                          help="override policy.lessons.idPrefix (default SRL)")
     closeout.add_argument("--prepare", action="store_true",
                           help="create the close-out directory (a write; off by default)")
     closeout.set_defaults(func=cmd_closeout)
+
+    lessons = sub.add_parser("lessons", parents=[common])
+    lessons.add_argument("--open", action="store_true", help="live lessons only")
+    lessons.add_argument("--check", default="", metavar="PATH",
+                         help="check a specification (rubric U9) or, with --closeout, a "
+                              "close-out report")
+    lessons.add_argument("--item", default="",
+                         help="the item: locates an inline specification, or names the "
+                              "item a close-out closes")
+    lessons.add_argument("--closeout", action="store_true",
+                         help="check a close-out's Lessons section instead of a "
+                              "specification's Lessons applied")
+    lessons.set_defaults(func=cmd_lessons)
 
     snapshot = sub.add_parser("snapshot", parents=[common])
     snapshot.add_argument("--out", default="Virtuoso/work-register.snapshot.json")

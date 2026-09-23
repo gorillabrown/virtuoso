@@ -111,6 +111,10 @@ DEFAULTS: dict = {
         # whose columns are not the documented ones (see TERMINAL_LEDGER_FIELDS).
         "fieldMappings": {},
     },
+    # --- lessons: the learning loop (tools/governance/lessons.py) -------------
+    "lessons": {
+        "idPrefix": "SRL",              # lesson identifiers are <prefix>-NNN
+    },
     # --- governance sweep (items 51b, 52b, 53b, 56) --------------------------
     "sweep": {
         "include": ["**/*"],
@@ -162,6 +166,27 @@ def ledger_mapping_problems(mappings) -> list[str]:
         if key in TERMINAL_LEDGER_FIELDS and (not isinstance(column, str) or not column.strip()):
             problems.append("policy.terminalLedger.fieldMappings.%s must name a column header"
                             % key)
+    return problems
+
+
+_LESSON_PREFIX_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+
+
+def lessons_problems(section) -> list[str]:
+    """Every reason the value of ``lessons`` is not usable."""
+    if section is None:
+        return []
+    if not isinstance(section, dict):
+        return ["policy.lessons is %s; it is a mapping" % value_kind(section)[1]]
+    problems = []
+    unknown = sorted(k for k in section if k not in DEFAULTS["lessons"])
+    if unknown:
+        problems.append("policy.lessons has unknown field(s) %s" % ", ".join(unknown))
+    prefix = section.get("idPrefix", "SRL")
+    if not isinstance(prefix, str) or not _LESSON_PREFIX_RE.match(prefix):
+        problems.append("policy.lessons.idPrefix=%s is not a prefix: letters, digits and "
+                        "'_', starting with a letter (identifiers are <prefix>-NNN)"
+                        % _shown(prefix))
     return problems
 
 
@@ -476,6 +501,12 @@ class Policy:
             return 5
 
     @property
+    def lesson_prefix(self) -> str:
+        """The project's lesson identifier prefix, or the default when it is unusable."""
+        prefix = self.get("lessons.idPrefix", "SRL")
+        return prefix if not lessons_problems({"idPrefix": prefix}) else "SRL"
+
+    @property
     def hierarchy(self) -> list[str]:
         value = self.get("roadmap.hierarchy", [])
         return [str(v) for v in value] if isinstance(value, list) else []
@@ -499,6 +530,7 @@ class Policy:
             problems.append("policy.roadmap.specStorage=%r is not one of inline, files, external"
                             % (storage,))
         problems.extend(ledger_mapping_problems(self.get("terminalLedger.fieldMappings", {})))
+        problems.extend(lessons_problems(self.get("lessons", {})))
         problems.extend(deadline_problems(self.get("roadmap.deadlines", {})))
         problems.extend(pace_problems(self.get("roadmap.pace", {})))
         return problems
