@@ -572,6 +572,25 @@ promotions above zero, a high held rate, a falling repeated-trap rate. Any one f
 gamed; the set is expensive to game, because yield without holds, or holds without
 promotions, shows.
 
+## Recording a completion
+
+The close-out crossing's two record-keeping writes are one governed command for a
+local register and ledger:
+
+    virtuoso_registry --root . --actor pointer-closeout record-completion --item <ID> \
+        --date <YYYY-MM-DD> --result <word> --evidence <close-out> [--revision R] [--apply]
+
+It appends the terminal record (`TR-NNN`, under `policy.terminalLedger.writers`), then
+records the completion in the live register at the revision read in Wave 1, then reads
+both back from their sources. Without `--apply` it previews both writes. It is
+idempotent: a record already in the ledger for the item, or an item already completed,
+is reported and not repeated. When the register refuses the completion after the ledger
+append — a stale revision, a permission — it opens a **recovery record** naming the steps
+that remain (`close-in-register`, `verify-results`) and exits non-zero; `recovery` lists
+it until it is resolved. An external register is refused and pointed at the
+`mutation-plan --operation record-completion` handshake; an external ledger is refused by
+name.
+
 ## Sprint guards
 
 `scripts/sprint_guards.py` holds the executable halves of the execution rules, run

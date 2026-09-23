@@ -255,3 +255,58 @@ def test_registering_a_new_item_is_idempotent_and_leaves_no_recovery(workspace):
     assert len(rows) == 1 and rows[0].prerequisites == ["ITEM-2"]
     assert recovery.outstanding(str(workspace)) == []
     assert provider.next_eligible().id == "ITEM-1"      # the belt order is unchanged
+
+
+# --- the crossing as one governed command (record-completion) ----------------------
+
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+
+REGISTRY_CLI = str(Path(__file__).resolve().parent / "virtuoso_registry.py")
+
+
+def record_completion(root, *extra, actor="pointer-closeout"):
+    return subprocess.run([sys.executable, REGISTRY_CLI, "--root", str(root), "--actor", actor,
+                           "record-completion", "--item", "ITEM-1", "--date", "2026-01-01",
+                           "--result", "shipped", "--evidence", "CloseOut.ITEM-1.2026-01-01.md",
+                           *extra], capture_output=True, text=True, encoding="utf-8")
+
+
+def test_record_completion_previews_without_writing(workspace):
+    before = (workspace / "docs" / "ledger.md").read_bytes(), \
+        (workspace / "docs" / "register.csv").read_bytes()
+    completed = record_completion(workspace)
+    assert completed.returncode == 0, completed.stderr
+    assert "preview" in completed.stdout and "append TR-001" in completed.stdout
+    assert ((workspace / "docs" / "ledger.md").read_bytes(),
+            (workspace / "docs" / "register.csv").read_bytes()) == before
+
+
+def test_record_completion_appends_closes_and_verifies_in_order(workspace):
+    completed = record_completion(workspace, "--apply", "--json")
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["steps"] == ["append-terminal-record", "close-in-register", "verify-results"]
+    reg = registry_mod.load(str(workspace))
+    assert [r.item_id for r in providers.terminal_ledger(reg).records()] == ["ITEM-1"]
+    assert providers.work_register(reg).provider.get("ITEM-1").status == base.COMPLETED
+    assert recovery.outstanding(str(workspace)) == []
+    again = record_completion(workspace, "--apply", "--json")
+    assert again.returncode == 0
+    assert json.loads(again.stdout)["appendRecord"] is False
+    assert len(providers.terminal_ledger(registry_mod.load(str(workspace))).records()) == 1
+
+
+def test_record_completion_leaves_a_recovery_record_when_the_register_refuses(workspace):
+    completed = record_completion(workspace, "--apply", "--revision", "stale-revision")
+    assert completed.returncode != 0
+    assert "Recovery record" in completed.stdout + completed.stderr
+    [open_record] = recovery.outstanding(str(workspace))
+    assert open_record["completed_steps"] == ["append-terminal-record"]
+    assert open_record["remaining_steps"] == ["close-in-register", "verify-results"]
+
+
+def test_record_completion_refuses_a_writer_the_ledger_does_not_allow(workspace):
+    completed = record_completion(workspace, "--apply", actor="roadmap-status")
+    assert completed.returncode != 0
+    assert (workspace / "docs" / "ledger.md").read_text(encoding="utf-8").count("ITEM-1") == 0

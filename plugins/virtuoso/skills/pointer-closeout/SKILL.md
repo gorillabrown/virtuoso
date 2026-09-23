@@ -269,6 +269,16 @@ Append **one** record to the registered `terminalLedger`:
 - **Idempotent.** A record whose content already appears in the ledger is a
   no-op. Re-running a close-out never duplicates history.
 
+**For a local register and ledger, Steps 3 and 5 are one command**, run here — it
+appends the record, closes the item at the revision you read in Wave 1, and verifies
+both; Step 4 then persists the ledger and the register with everything else:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout record-completion --item "<ITEM-ID>" --date "<YYYY-MM-DD>" --result "<result>" --evidence "<close-out file>" --revision "<revision>" --apply
+
+Run it once without `--apply` to preview. If the register refuses after the ledger
+append, the command leaves a recovery record naming what remains — follow *On partial
+failure*. An external register goes through the handshake in Step 5 instead.
+
 ### Step 4 — Persist local governance changes
 
 Apply the confirmed roadmap changes and append the lessons — new entries and

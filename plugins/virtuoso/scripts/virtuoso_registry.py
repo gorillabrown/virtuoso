@@ -22,11 +22,16 @@ Subcommands:
   lessons [--open]          the registered lessons and their status (read-only)
           --check PATH      check a spec's Lessons applied (rubric U9), or with
                             --closeout a close-out's Lessons section
+          --hygiene         what to merge, retire, tidy or repair (governance-sweep)
+          --candidates      lessons that have earned promotion or revision
+          --record-status ID --status S   append a status record (--apply writes)
   repo [--expect PATHS]     read-only repository state and readiness finding
   deps                      check the project's declared runtime dependencies
   protected                 hash every protected file (immutable-hash verification)
   snapshot --out PATH       capture a timestamped snapshot of the work register
   recovery                  list unresolved partial-failure recovery records
+  record-completion         append the terminal record and close the item in a LOCAL
+                            register, in order, then verify (preview; --apply writes)
   create-item               bring a new item into a LOCAL register (a write)
   mutation-plan             emit a revision-aware host connector instruction
                             (operations: set-status, store-spec-link,
@@ -55,7 +60,7 @@ from tools.governance import (  # noqa: E402
 from tools.governance.errors import CapabilityError, GovernanceError, RoleNotRegistered  # noqa: E402
 from tools.governance import dependencies, integrity, repostate  # noqa: E402
 from tools.governance.providers import (  # noqa: E402
-    base as provider_base, kpi, recovery, snapshot_provider,
+    base as provider_base, kpi, ledger as ledger_mod, recovery, snapshot_provider,
 )
 
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -604,6 +609,94 @@ def _json_object(raw: str, label: str) -> dict:
     return value
 
 
+CROSSING_STEPS = ("append-terminal-record", "close-in-register", "verify-results")
+
+
+def cmd_record_completion(args) -> int:
+    """The close-out crossing's two record-keeping writes, in order, for a local
+    register and ledger: append the terminal record, then close the item in the
+    live register — then verify both from their sources.
+
+    Previews without ``--apply``. Idempotent: a record already in the ledger for this
+    item, or an item already completed, is reported and not repeated. A register
+    write that fails after the ledger append leaves a recovery record naming the
+    steps that remain. An external register or ledger is refused: those go through
+    the mutation handshake the host's connector executes.
+    """
+    actor = getattr(args, "actor", "") or ""
+    if not actor:
+        raise CapabilityError("record-completion needs --actor: the ceremony closing the item")
+    reg = _load(args.root)
+    selection = providers.work_register(reg, actor=actor)
+    provider = selection.provider
+    if hasattr(provider, "plan_mutation"):
+        raise CapabilityError(
+            "the live register %r is external: close the item with `mutation-plan "
+            "--operation record-completion`, the host's connector, and `mutation-confirm`"
+            % provider.name)
+    book = providers.terminal_ledger(reg)          # refuses an external ledger by name
+    item = provider.get(args.item)
+    if item is None:
+        raise GovernanceError("%s is not in the live register (%s)" % (args.item, provider.source))
+    prior = [r for r in book.records() if r.item_id == args.item and not r.corrects]
+    record = ledger_mod.LedgerRecord(record_id=book.next_record_id(), item_id=args.item,
+                                     completed=args.date, result=args.result,
+                                     evidence=args.evidence)
+    completed_already = item.status == provider_base.COMPLETED
+    plan = {"item": args.item, "actor": actor, "register": provider.source,
+            "ledger": os.path.relpath(book.path, reg.root).replace(os.sep, "/"),
+            "ledgerRecord": prior[0].as_dict() if prior else record.as_dict(),
+            "appendRecord": not prior, "closeInRegister": not completed_already,
+            "revision": args.revision or item.revision}
+    if not args.apply:
+        return _emit(dict(plan, applied=False), args.as_json, lambda: "\n".join([
+            "preview — record-completion %s (run again with --apply):" % args.item,
+            "  1. terminal ledger %s: %s" % (plan["ledger"], (
+                "append %s (%s, %s, %s)" % (record.record_id, args.date, args.result,
+                                             args.evidence))
+                if not prior else "already holds %s — nothing to append" % prior[0].record_id),
+            "  2. live register %s: %s" % (plan["register"], (
+                "record completion at revision %s" % plan["revision"])
+                if not completed_already else "item already completed — nothing to change"),
+            "  3. verify both from their sources"]))
+
+    done: list[str] = []
+    if not prior:
+        book.append(record, actor=actor)
+    done.append("append-terminal-record")
+    if not completed_already:
+        try:
+            provider.record_completion(args.item, completed=args.date, evidence=args.evidence,
+                                       revision=args.revision or item.revision)
+        except GovernanceError as exc:
+            opened = recovery.open_record(
+                args.root, operation="record-completion", item_id=args.item,
+                completed_steps=list(done),
+                remaining_steps=list(CROSSING_STEPS[len(done):]),
+                detail={"register": provider.source, "ledger": plan["ledger"],
+                        "error": str(exc)})
+            raise GovernanceError(
+                "the terminal record is appended but the register refused the completion "
+                "(%s). Recovery record %s names what remains; resolve it before re-running."
+                % (exc, opened.id))
+    done.append("close-in-register")
+    after = provider.get(args.item)
+    in_ledger = [r for r in book.records() if r.item_id == args.item and not r.corrects]
+    if not in_ledger or after is None or after.status != provider_base.COMPLETED:
+        opened = recovery.open_record(
+            args.root, operation="record-completion", item_id=args.item,
+            completed_steps=list(done), remaining_steps=["verify-results"],
+            detail={"register": provider.source, "ledger": plan["ledger"]})
+        raise GovernanceError("the writes did not read back (ledger: %s, register status: %s); "
+                              "recovery record %s" % (bool(in_ledger),
+                                                      after.status if after else "missing",
+                                                      opened.id))
+    done.append("verify-results")
+    result = dict(plan, applied=True, steps=done, ledgerRecord=in_ledger[0].as_dict())
+    return _emit(result, args.as_json, lambda: "recorded %s: ledger %s, register %s (%s)"
+                 % (args.item, in_ledger[0].record_id, after.status, ", ".join(done)))
+
+
 def _external_mutation_provider(args):
     if not args.actor:
         raise CapabilityError("an explicit ceremony actor is required for external mutations")
@@ -880,6 +973,17 @@ def build_parser() -> argparse.ArgumentParser:
     lessons.add_argument("--apply", action="store_true",
                          help="append the record (without it, --record-status previews)")
     lessons.set_defaults(func=cmd_lessons)
+
+    completion = sub.add_parser("record-completion", parents=[common])
+    completion.add_argument("--item", required=True)
+    completion.add_argument("--date", required=True, help="YYYY-MM-DD the item completed")
+    completion.add_argument("--result", required=True, help="the ledger's result word")
+    completion.add_argument("--evidence", default="", help="the close-out artifact")
+    completion.add_argument("--revision", default="",
+                            help="the revision read in Wave 1 (default: the current one)")
+    completion.add_argument("--apply", action="store_true",
+                            help="perform the writes (without it, previews)")
+    completion.set_defaults(func=cmd_record_completion)
 
     snapshot = sub.add_parser("snapshot", parents=[common])
     snapshot.add_argument("--out", default="Virtuoso/work-register.snapshot.json")
