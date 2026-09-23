@@ -1,10 +1,22 @@
 {
   "name": "virtuoso",
+  "displayName": "Virtuoso",
   "version": "1.8.2",
-  "description": "Provider-based governance & dispatch suite: roadmap planning, execution discipline, close-outs, mid-dispatch decisions, audits, and doc hygiene — driven by a per-project registry that declares its live work register, terminal ledger, ownership rules, and permitted mutations.",
-  "author": { "name": "Evan Brown", "email": "evan@heyevanbrown.com" },
+  "description": "Provider-based governance & dispatch suite: roadmap planning, execution discipline, close-outs, mid-dispatch decisions, audits, and doc hygiene, joined into a learning loop in which every close-out records its lessons and every new specification is checked against them — driven by a per-project registry that declares its live work register, terminal ledger, ownership rules, and permitted mutations.",
+  "author": {
+    "name": "Evan Brown",
+    "email": "evan@heyevanbrown.com",
+    "url": "https://github.com/gorillabrown"
+  },
   "homepage": "https://github.com/gorillabrown/virtuoso",
   "repository": "https://github.com/gorillabrown/virtuoso",
   "license": "MIT",
-  "keywords": ["governance", "roadmap", "sprint", "dispatch", "cowork", "workflow"]
+  "keywords": [
+    "governance",
+    "roadmap",
+    "sprint",
+    "dispatch",
+    "workflow",
+    "lessons-learned"
+  ]
 }

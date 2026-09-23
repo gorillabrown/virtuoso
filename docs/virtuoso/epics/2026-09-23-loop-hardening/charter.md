@@ -44,6 +44,7 @@ way is green.
 | D18 | Anchors prove rule text; the buffer counts readiness | `python -m pytest plugins/virtuoso -q -k "anchor or buffer_ready"` | `skill_rules.py` entries carry a rule-text hash the validator checks (a changed rule fails); `kpis` carries `dispatch-buffer-ready` |
 | D19 | The stranded branches have an owner decision | `state.md` → Blockers | a BLOCKER(USER) with the inspection and a recommendation per branch; nothing merged without an `Answer:` |
 | D20 | Contract and notes carry everything new | `python -m pytest plugins/virtuoso/scripts/test_docs_contract.py -q`; `grep -n "^## v1.10.0" RELEASE-NOTES.md` | every new command, finding, role and metric in `references/registry-contract.md` with a docs test; a v1.10.0 section |
+| D22 | `governance-sweep` tidies, merges and retires lessons — by appended status records, never edits *(amended 2026-09-23 at the owner's request)* | `python -m pytest plugins/virtuoso -q -k hygiene`; `grep -n "lessons --hygiene" plugins/virtuoso/skills/governance-sweep/SKILL.md` | `lessons --hygiene` reports duplicates (merge candidates), stale live lessons (retire candidates), incomplete entries (tidy) and malformed records; `lessons --record-status` appends a Superseded/Retired record for an allowed writer; `governance-sweep` is a default `lessons` writer and its skill runs both |
 | D21 | Green on both legs | the CI run of the final commit | ubuntu and windows both `success` |
 
 Rules: the session claiming completion re-runs **every** row fresh and pastes the outputs
@@ -108,7 +109,7 @@ entry and stop cleanly.
 | Assumption | Risk if wrong | Guard |
 |------------|---------------|-------|
 | A1 The alternate host accepts only `Interactive`, `Read`, `Write` as capabilities | a fourth string breaks the plugin page | keep the three; escalation trigger for any addition |
-| A2 The marketplace entry accepts `category`, `tags`, `author`, `homepage`, `license`, `keywords` | `/plugin` install fails on an unknown key | keep the manifest itself to documented keys; the marketplace gains only keys its documentation lists; owner confirms after the next install |
+| A2 The marketplace entry accepts `category`, `tags`, `author`, `homepage`, `license`, `keywords` — **verified 2026-09-23** against the Claude Code plugin-marketplaces and plugins-reference docs (both also accept `displayName`; `plugin.json` ignores unknown keys) | `/plugin` install fails on an unknown key | keep the manifest itself to documented keys; the marketplace gains only keys its documentation lists; owner confirms after the next install |
 | A3 The preflight's existing roadmap read (deadlines, since 1.8.1) is the right place for the integrity line | a second read of the roadmap at session start | reuse that read; a test asserts one read |
 | A4 No project relies on `dispatch-buffer-filled` counting written status | a changed figure surprises a cockpit | leave it; add `dispatch-buffer-ready` |
 | A5 The registry-governed repositories using this plugin can absorb a new default role (`findings`) without a migration | `create`/`repair` add it; existing manifests without it stay valid | the role is optional in `validate`, scaffolded by `create`, offered by `repair` |

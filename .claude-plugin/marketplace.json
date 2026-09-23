@@ -1,13 +1,40 @@
 {
   "name": "virtuoso-marketplace",
-  "owner": { "name": "gorillabrown", "url": "https://github.com/gorillabrown" },
+  "owner": {
+    "name": "gorillabrown",
+    "url": "https://github.com/gorillabrown"
+  },
   "description": "Marketplace hosting the Virtuoso governance & dispatch plugin.",
   "plugins": [
     {
       "name": "virtuoso",
+      "displayName": "Virtuoso",
       "version": "1.8.2",
       "source": "./plugins/virtuoso",
-      "description": "Provider-based governance & dispatch suite — 16 skills for roadmap planning, execution discipline, goal-scale epics, close-outs, audits, doc hygiene, and per-project configuration, driven by a declared per-project governance registry."
+      "description": "Provider-based governance & dispatch suite: roadmap planning, execution discipline, close-outs, mid-dispatch decisions, audits, and doc hygiene, joined into a learning loop in which every close-out records its lessons and every new specification is checked against them — driven by a per-project registry that declares its live work register, terminal ledger, ownership rules, and permitted mutations.",
+      "author": {
+        "name": "Evan Brown",
+        "email": "evan@heyevanbrown.com",
+        "url": "https://github.com/gorillabrown"
+      },
+      "homepage": "https://github.com/gorillabrown/virtuoso",
+      "repository": "https://github.com/gorillabrown/virtuoso",
+      "license": "MIT",
+      "category": "Developer Tools",
+      "keywords": [
+        "governance",
+        "roadmap",
+        "sprint",
+        "dispatch",
+        "workflow",
+        "lessons-learned"
+      ],
+      "tags": [
+        "governance",
+        "planning",
+        "lessons-learned",
+        "agents"
+      ]
     }
   ]
 }

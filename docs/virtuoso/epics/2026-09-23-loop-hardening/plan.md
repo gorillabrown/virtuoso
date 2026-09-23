@@ -29,9 +29,9 @@ charter: charter.md
 - **Rough size:** one to two work bursts.
 
 ### P3 — Make the prose links mechanical
-- **Intent:** gaps 5, 4, 3, 10 — `record-completion`, the standing-rules pairing with one
+- **Intent:** gaps 5, 4, 3, 10 and D22 (owner amendment) — lessons hygiene for `governance-sweep`, `record-completion`, the standing-rules pairing with one
   source, `lessons --candidates`, the anchored no-lesson reason and `lesson-yield`.
-- **Exit gate:** D9–D12 pass; `test_crossing.py` runs the new command; pushed.
+- **Exit gate:** D9–D12 and D22 pass; `test_crossing.py` runs the new command; pushed.
 - **Rough size:** two work bursts.
 
 ### P4 — Give every output a reader
@@ -61,6 +61,7 @@ charter: charter.md
 
 | Date | Gate | Evidence |
 |------|------|----------|
+| 2026-09-23 | P1 | D1 met — journal S1 |
 
 ## Current-phase worklist
 

@@ -1,24 +1,40 @@
 {
   "name": "virtuoso",
   "version": "1.8.2",
-  "description": "Provider-based governance & dispatch suite: roadmap planning, execution discipline, close-outs, mid-dispatch decisions, audits, and doc hygiene — driven by a per-project registry that declares its live work register, terminal ledger, ownership rules, and permitted mutations.",
-  "author": { "name": "Evan Brown", "email": "evan@heyevanbrown.com" },
+  "description": "Provider-based governance & dispatch suite: roadmap planning, execution discipline, close-outs, mid-dispatch decisions, audits, and doc hygiene, joined into a learning loop in which every close-out records its lessons and every new specification is checked against them — driven by a per-project registry that declares its live work register, terminal ledger, ownership rules, and permitted mutations.",
+  "author": {
+    "name": "Evan Brown",
+    "email": "evan@heyevanbrown.com",
+    "url": "https://github.com/gorillabrown"
+  },
   "homepage": "https://github.com/gorillabrown/virtuoso",
   "repository": "https://github.com/gorillabrown/virtuoso",
   "license": "MIT",
-  "keywords": ["governance", "roadmap", "sprint", "dispatch", "workflow"],
+  "keywords": [
+    "governance",
+    "roadmap",
+    "sprint",
+    "dispatch",
+    "workflow",
+    "lessons-learned"
+  ],
   "skills": "./skills",
   "hooks": "./hooks/hooks-codex.json",
   "interface": {
     "displayName": "Virtuoso",
     "shortDescription": "Governance and dispatch discipline for agent-run projects",
-    "longDescription": "Use Virtuoso to plan a roadmap, dispatch work at a declared effort level, decide mid-dispatch without losing the thread, close out against a terminal ledger, audit third-party code, and keep project documentation honest — all driven by a per-project registry that declares where the work lives and what may change it.",
+    "longDescription": "Use Virtuoso to plan a roadmap, dispatch work at a declared effort level, decide mid-dispatch without losing the thread, close out against a terminal ledger, prepare outside audits, and keep project documentation honest. The ceremonies form one learning loop: every close-out records what the work taught, and every new specification and epic is checked against those lessons before it runs — all driven by a per-project registry that declares where the work lives and what may change it.",
     "developerName": "Evan Brown",
     "category": "Developer Tools",
-    "capabilities": ["Interactive", "Read", "Write"],
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
     "defaultPrompt": [
       "Set this project up for governed dispatch.",
-      "What should we dispatch next, and at what effort?"
+      "What should we dispatch next, and at what effort?",
+      "Close out this dispatch and record what it taught."
     ],
     "websiteURL": "https://github.com/gorillabrown/virtuoso",
     "privacyPolicyURL": "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement",

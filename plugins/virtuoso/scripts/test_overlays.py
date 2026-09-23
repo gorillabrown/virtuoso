@@ -1899,6 +1899,26 @@ def test_the_alternate_host_manifest_describes_itself_for_the_plugin_page():
         assert asset.is_file(), f"{key} points at a file that is not shipped: {interface[key]}"
 
 
+def test_both_hosts_and_the_marketplace_describe_the_plugin_the_same_way():
+    """One plugin, three descriptions of it: the Claude manifest, the alternate-host
+    manifest, and the marketplace entry that installs it. They drift silently — the
+    marketplace kept a "16 skills" description after the manifests moved on — so the
+    fields a person reads on either host's plugin page are held equal here."""
+    claude = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    codex = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    market = json.loads((ROOT.parent.parent / ".claude-plugin" / "marketplace.json")
+                        .read_text(encoding="utf-8"))
+    [entry] = [p for p in market["plugins"] if p["name"] == claude["name"]]
+    for field in ("name", "version", "description", "author", "homepage", "repository",
+                  "license", "keywords"):
+        assert claude[field] == codex[field] == entry[field], field
+    assert claude["displayName"] == entry["displayName"] == codex["interface"]["displayName"]
+    assert entry["category"] == codex["interface"]["category"]
+    assert codex["interface"]["developerName"] == claude["author"]["name"]
+    assert codex["interface"]["websiteURL"] == claude["homepage"]
+    assert entry["tags"], "the marketplace entry carries no tags"
+
+
 @pytest.mark.skipif(not HAVE_GIT, reason="git is not installed")
 def test_the_alternate_host_manifest_is_shipped_not_ignored():
     """Checked with --no-index, i.e. against the ignore PATTERNS themselves.

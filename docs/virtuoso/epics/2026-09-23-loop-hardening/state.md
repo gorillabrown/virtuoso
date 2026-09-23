@@ -26,20 +26,20 @@ updated_by: session 1
 ## Where we are
 
 ```
-phase:        P1 — Discovery and metadata
-next_action:  Claude manifest + marketplace parity with a pinning test
+phase:        P2 — Remove the dangling and the unsafe
+next_action:  roadmap-integrity line from one roadmap read (D2)
 blockers:     BLOCKER(USER) #1 (stranded branches) — does not block P1–P6 work
 session:      1 of ~3 budgeted
-dod:          D1 [unmet] | D2–D18 [unmet] | D19 [raised] | D20 [unmet] | D21 [unmet]
+dod:          D1 [met] | D2–D18 [unmet] | D19 [raised] | D20–D22 [unmet]
 ```
 
 ## Next actions — max 5, near horizon only
 
-1. [ ] Bring `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` to parity with the Codex `interface` block; add the parity test (D1)
-2. [ ] Open P2: the `roadmap-integrity:` line from the preflight's existing roadmap read (D2)
-3. [ ] Policy validation at preflight as warnings (D3)
-4. [ ] Writer defaults (D4), Decision step (D5), ghost names (D6)
-5. [ ] Epic role (D7), v2 sprint guards (D8); push; gate P2
+1. [ ] Open P2: the `roadmap-integrity:` line from the preflight's existing roadmap read (D2)
+2. [ ] Policy validation at preflight as warnings (D3)
+3. [ ] Writer defaults (D4), Decision step (D5), ghost names (D6)
+4. [ ] Epic role (D7), v2 sprint guards (D8); push; gate P2
+5. [ ] P3 includes D22 (lessons hygiene for governance-sweep)
 
 ## Working set — verified facts this epic relies on
 
@@ -56,6 +56,7 @@ dod:          D1 [unmet] | D2–D18 [unmet] | D19 [raised] | D20 [unmet] | D21 [
 | U9 matcher | `lessons.py _find_section` matches markdown headings only | read, 2026-09-23 |
 | Ledger append | `TerminalLedger.append` (ledger.py) reached only from `test_crossing.py` | grep, 2026-09-23 |
 | `policy.standingRules` | declared in `policy.py` defaults; read by no code | grep, 2026-09-23 |
+| Marketplace/manifest keys | `displayName`, `category`, `tags`, `author`, `homepage`, `repository`, `license`, `keywords` documented; unknown `plugin.json` keys ignored | Claude Code docs via the guide agent, 2026-09-23 |
 | Stranded branches | see Blockers #1 | `git diff main...`, 2026-09-23 |
 
 ## Blockers
