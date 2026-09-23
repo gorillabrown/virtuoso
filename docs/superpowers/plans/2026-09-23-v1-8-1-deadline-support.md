@@ -626,3 +626,39 @@ If GoG's frozen ledger does not follow the documented six-column format, `kpis` 
 - **Per-scope trailing rates and velocity multipliers.** GoG's 1.5×–4× over spec-floor is one example. A multiplier would be a policy value, and a separate decision.
 - **`policy-set --value-file`.** Windows PowerShell 5.1 strips embedded double quotes from native-command arguments. Ceremonies run under bash, so only hand use from PowerShell is affected.
 - **Checking roadmap prose dates against the policy date.** Fuzzy prose parsing buys little over "the roadmap points at the policy".
+
+---
+
+## Implementation record (2026-09-23)
+
+Built on `eb/zealous-einstein-zxvy3w` as planned, with D1–D8 at their stated defaults. CI green
+on both legs at the code commit (`c6b5646`); 702 passed, 3 skipped locally.
+
+| Task | Commit |
+|---|---|
+| 1 `roadmap.effortScale`; policy tables checked | `54aa99f` |
+| 2 the declaration; `policy-set` withdraw and read-back | `15bc8b1` |
+| 3 the pace engine and completion source | `193fc7b` |
+| 4–7 `kpis`, the body check, the session line, the cockpit | `c6b5646` |
+| 8 ceremonies and the contract | `18615ed` |
+| 9 record | this commit |
+
+Where the build departed from the plan, and why:
+
+- **`Deadline` and `declared()` moved into `tools/governance/deadlines.py` at Task 3**, because
+  `pace.py` needs them. Anchoring and the session summary joined that module at Tasks 5–6, as
+  planned. Tasks 4–7 touched the same files in the same pass and landed as one commit.
+- **The providers entry point is `pace_for(reg, snapshot)`**, returning the reports and a
+  `deadline-invalid` finding per problem. `kpis --json` carries those as `invalidDeadlines`
+  beside `pace`, because an invalid entry has no parsed deadline to hang a report on.
+- **The read-back compares the raw manifest value, not the merged policy.** Merging folds the
+  defaults into a partial mapping, so `roadmap.pace = {"trailingWeeks": 6}` read back with
+  `tolerance` added and would have reported a correct write as a wrong one. Caught by writing
+  the test for it.
+- **An unregistered project's line reads `not registered`.** Loading an absent registry yields
+  an empty one rather than an error, so the first version said `none declared`, which
+  describes a project that could declare a deadline. Caught by a test.
+- **The fourth machine line broke one existing test**, which parsed `--json` output by skipping
+  exactly three lines. It now reads from the first `{`, and the contract says every consumer
+  must: the set of machine lines has grown twice and will again. Nothing else in the plugin
+  parses by position, `release.py` included.

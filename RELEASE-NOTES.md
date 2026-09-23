@@ -1,5 +1,107 @@
 # Virtuoso Release Notes
 
+## v1.8.1 (2026-09-23) — deadline support
+
+**Additive. Registry schema stays at v2, and nothing a project already has changes meaning.**
+One behaviour to know: preflight now prints a fourth machine line, so anything that read
+`--json` output by skipping a fixed number of lines must read from the first line beginning
+`{` instead.
+
+On 2026-09-22 a project owner set a date — 1 January 2027 for "the overall game build" — and
+the plugin had nowhere to put it. There was no deadline key. `finish_line:` looked like one
+and is only a marker discovery uses to recognize a roadmap. The review's pace line read "not
+computable: no dated deadline exists", so the operator derived pace by hand: 60 items and
+235.5 points remaining, 4.16 items and 16.32 points a week required, 2.50 to 3.00
+completions a week delivered, 85.4% of the remaining points blocked. The date was then
+headed for the roadmap, the assessment, the phase brief, memory, the epic charters, and the
+board — six copies to keep in step, and nothing to say which one was right.
+
+### A deadline is a declaration with a body
+
+The date lives in one place, `policy.roadmap.deadlines.<id>`, written through `policy-set`:
+a `date` and the `owner` who set it, and optionally a `label`, the `finishLine` it dates, the
+`scope` of work that counts, and when it was `recorded`. Deadlines are keyed by an id you
+choose, so `policy-set roadmap.deadlines.<id>` adds one without restating the others,
+`…<id>.date` moves one date, and `--value-json null` withdraws one. A malformed date, a
+missing owner, or a misspelled field is refused before anything is written.
+
+The **body** is the roadmap heading `finishLine` names — the section that says what done
+means. It is matched the way every pairing body is, and reported when it is missing:
+`deadline-unanchored` (info) when a deadline names no finish line, and
+`deadline-finish-line-missing` (warning) when it names one the roadmap does not define. That
+turns the question the operator had to guess at — *which* finish line is "the overall game
+build"? — into a field the owner answers once.
+
+Everything else points at the policy rather than copying it. The roadmap defines; reviews and
+briefings cite the computed pace as of their own date; memory, charters and boards do not
+carry the date at all.
+
+### Pace, computed rather than derived
+
+`kpis` now reports pace against every declared deadline, from the same snapshot as its other
+figures and as of that snapshot's date. For each one:
+
+- **remaining** work in scope, in items and points, and the **blocked** share of it
+- the **required** rate — remaining ÷ weeks to the date
+- the **trailing** rate — distinct items completed over `policy.roadmap.pace.trailingWeeks`
+  (default 4), read from the terminal ledger with corrections applied, broken down by the
+  result words the ledger records
+- a **verdict** per unit — `ahead`, `on track` or `behind` by `policy.roadmap.pace.tolerance`
+  (default ±10%), `met` when nothing remains, `overdue` when the date has arrived — with the
+  worse unit as the headline
+- the **projected finish** at the trailing rate
+
+A figure the data cannot support is *not computable*, with its missing inputs named: an
+undatable completion, an unsized item, a completed item that has left the register (for points
+only), a scope that matches nothing. None of these ever becomes a zero, and an empty scope is
+never "met".
+
+The 2026-09-22 figures are the acceptance test, reproduced exactly: 101 days, 4.16 items and
+16.32 points a week required, 3.00 a week delivered, **behind**, projected finish 9 February
+2027, 85.4% of points blocked. The 3.00 includes two "completed (qualified)" records, because
+the status vocabulary counts any result beginning "completed" as completed; the breakdown
+(`completed ×10, completed (qualified) ×2`) keeps the strict 2.50 readable.
+
+### Every session knows its deadlines
+
+Preflight prints `deadlines:` beside `overlays:`, in every mode and through `--quiet`:
+`deadlines: game-build 2027-01-01 (100 days); 1 finding`, or `none declared`, or
+`not registered`. It carries dates and days only. Pace needs the work register, which may
+be external, and session start never reads one.
+
+### Where it shows
+
+- **`roadmap-review`** reads pace in B.2 instead of deriving it, records a date the owner sets
+  or moves through `policy-set`, and must answer a behind or overdue verdict in its plan:
+  reduce scope, resequence, release blocked work, or take a moved date to the owner.
+- **`roadmap-status`** and **`next-pointer`** read pace live, not from the last assessment.
+- **`project-profile`** asks for the date, its owner, its finish line and its scope.
+- **The cockpit** shows Deadline and Pace tiles, and a behind or overdue verdict becomes the
+  recommendation when nothing more urgent is.
+
+### `policy-set` reads its write back
+
+Every `--apply` now re-reads the manifest from disk and confirms the value landed, printing
+`verified: read back from disk`. The plugin never reverts a successful `policy-set` — it
+restores its backup only when the write itself or the re-validation after it fails — and the
+session-start line would show a deadline that something else later removed.
+
+### Fixed
+
+- **`roadmap.effortScale` could not be set.** `roadmap-review` documents it and `kpis` reads
+  it, but it was never a declared key, so `policy-set` refused it as unknown. Points-based pace
+  depends on it. The docs-contract test missed it because it only matched keys spelled
+  `policy.x.y`; it now also checks every policy table.
+
+### Not in this release
+
+Pace in the XLSX register report; deadlines in the generated governance README; validating
+every policy value at session start (today only `policy-set` validates, so a hand-edited
+invalid `git.policy` goes unreported — a pre-existing gap); per-scope trailing rates; velocity
+multipliers.
+
+Tests: 702 passed, 3 skipped (Linux); CI green on `ubuntu-latest` and `windows-latest`.
+
 ## v1.8.0 (2026-09-17) — project specificity
 
 **Additive. No breaking changes; registry schema stays at v2.** v1.7.0 gave projects a place

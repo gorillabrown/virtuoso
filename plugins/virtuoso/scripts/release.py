@@ -17,8 +17,8 @@ Steps (real run):
                  green; bump_version.py --check in sync; target well-formed and != current
   2  regen-diff  installed writer vs repo writer on a fresh fixture: file sets + bytes must
                  match, else --allow-regen-diff is required and the diff is printed
-  3  bump        bump_version.py X.Y.Z (writes plugin.json + marketplace.json)
-  4  git         explicit-stage exactly those two files; chore(release) commit; push main
+  3  bump        bump_version.py X.Y.Z (writes every manifest .version-bump.json declares)
+  4  git         explicit-stage exactly those files; chore(release) commit; push main
   5  deploy      marketplace clone pull --ff-only (version must match target);
                  cache/<ver> installed fresh from the clone
   6  sweep       SR-5 from THIS process (the harness's own filesystem view): normalized

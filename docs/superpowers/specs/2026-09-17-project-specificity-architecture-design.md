@@ -368,8 +368,8 @@ so a policy write inherits the same transaction repair has.
 A version bump is not a release. 1.8.0 was bumped inside feature commits on a branch while
 `origin/main` sat at v1.6.0 and the installed plugin on the maintainer's machine was
 v1.6.0. `release.py` exists because two releases once shipped on red CI; it was bypassed.
-That release step remains outstanding and is the last thing between this work and a
-plugin anyone actually runs.
+That release step was outstanding when this was written; it completed on 2026-09-22
+(see *Released*, below).
 
 ### Found by reviewing the remediation (2026-09-18)
 
@@ -420,3 +420,14 @@ without `--no-index`, which skips tracked files entirely, so it passed even unde
 that ignored the manifest. It now checks the patterns, and a second test pins the root
 directory as ignored. Neither half can regress silently again.
 
+### Released (2026-09-22)
+
+With the anchored pattern in place, `release.py 1.8.0 --redeploy` ran to the end on the
+maintainer's Windows machine: `RELEASE v1.8.0 COMPLETE`. Preflight passed with the full
+suite at 556 passed and 5 skipped; the regen-diff between the installed and repository
+writers was byte-identical; the sweep found equal writer hashes across repository, clone and
+cache; the installed copy passed its fixture battery; and the registry now points at 1.8.0.
+
+One thing remains unverified from here: which version the desktop app's own copy runs after a
+restart. `release.py` names per-session snapshots as unverifiable from its process, and the
+restart is the mitigation, so that check belongs to the maintainer's next session.
