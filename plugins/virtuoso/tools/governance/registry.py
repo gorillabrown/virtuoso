@@ -392,6 +392,7 @@ def load(root: str, *, plugin_version: str = "") -> Registry:
     reg.findings.extend(reg.validate(plugin_version=plugin_version))
     reg.findings.extend(reg.divergence(reg.readme_view))
     reg.findings.extend(policy_findings(reg.policy))
+    reg.findings.extend(retired_vendored_tools(root))
     return reg
 
 
@@ -403,6 +404,31 @@ def policy_findings(raw) -> list[Finding]:
     from . import policy as policy_mod
     return [Finding("policy-invalid", "warning", problem, identifier=key)
             for key, problem in policy_mod.audit(raw)]
+
+
+def retired_vendored_tools(root: str) -> list[Finding]:
+    """Report retired tools still vendored into the project.
+
+    Pre-1.4 installs copied plugin scripts into ``Virtuoso/scripts/``; 1.4 stopped
+    vendoring but never removed the copies. A stale copy keeps running against a
+    v2 registry and silently answers from conventional fallbacks (for example a
+    close-out directory nobody tracks and a lesson counter restarting at 001).
+    Read-only: the copy is reported, never deleted.
+    """
+    found: list[Finding] = []
+    directory = os.path.join(root, *schema.VENDORED_SCRIPTS_RELPATH.split("/"))
+    for name, replacement in schema.RETIRED_VENDORED_TOOLS.items():
+        if not os.path.isfile(os.path.join(directory, name)):
+            continue
+        rel = "%s/%s" % (schema.VENDORED_SCRIPTS_RELPATH, name)
+        instead = ("use the plugin's `%s`" % replacement) if replacement \
+            else "nothing replaces it"
+        found.append(Finding(
+            "retired-vendored-tool", "warning",
+            "%s is a stale pre-1.4 copy of a retired tool; it does not read the v2 "
+            "registry and returns fallback answers instead of failing. Delete it — "
+            "%s." % (rel, instead)))
+    return found
 
 
 def require_valid(reg: Registry) -> None:

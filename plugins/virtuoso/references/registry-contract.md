@@ -737,6 +737,14 @@ The ceremonies that rewrite the roadmap act on it before touching the file, and
 | `fail (<why>) size=<N>` | `not-text` (undecodable, a byte-order mark honoured) or `null-bytes` (after decoding) |
 | `fail (missing: <path>)` | the registered path is not a file |
 
+### Stale vendored tools
+
+Installs before 1.4 copied plugin scripts into `Virtuoso/scripts/`; 1.4 stopped vendoring
+and never removed the copies. Each retired tool still present there is a
+**`retired-vendored-tool`** warning at every load, naming what replaces it. A stale copy
+reads the v1 `paths` map and answers from conventional fallbacks instead of failing, so
+it is reported — never deleted by the plugin.
+
 ### Policy validated at every load
 
 Every registry load checks the project's own `policy` block the way `policy-set`

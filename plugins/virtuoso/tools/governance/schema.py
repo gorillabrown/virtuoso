@@ -31,6 +31,20 @@ PLUGIN_COMPATIBILITY = ">=1.4.0 <2.0.0"
 MANIFEST_RELPATH = "Virtuoso/workspace-layout.json"
 README_RELPATH = "Virtuoso.Governance.Readme.md"
 MARKER_RELPATH = "Virtuoso/.virtuoso"
+#: Where pre-1.4 preflight vendored copies of plugin scripts into a project.
+VENDORED_SCRIPTS_RELPATH = "Virtuoso/scripts"
+
+#: Tools retired in 1.4, mapped to what replaces them. A vendored copy left in a
+#: project still runs, reads the v1 ``paths`` map a v2 registry no longer carries,
+#: and answers with a conventional fallback instead of failing — so its mere
+#: presence is reported (see ``registry.retired_vendored_tools``).
+RETIRED_VENDORED_TOOLS = {
+    "prepare_closeout_files.py":  # validate-ok: names the retired tool to detect it
+        "virtuoso_registry.py closeout --item <ID> --date <YYYY-MM-DD>",
+    "recalc.py": None,  # validate-ok: names the retired tool to detect it
+    "build_sprint_queue.py":  # validate-ok: names the retired tool to detect it
+        "build_register_report.py",
+}
 
 # --- controlled vocabularies -------------------------------------------------
 
