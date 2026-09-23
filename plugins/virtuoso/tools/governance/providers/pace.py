@@ -192,12 +192,14 @@ class PaceReport:
             if self.trailing.get("points") is not None:
                 lines.append("              %s points/week" % _n(self.trailing["points"], 2))
         for figure, inputs in self.missing.items():
-            lines.append("    %s not computable (missing: %s)"
+            lines.append("    not computable: %s (missing: %s)"
                          % (_FIGURE_LABELS.get(figure, figure), "; ".join(inputs)))
         verdict = self.verdict.upper()
         if self.basis:
             verdict += " on %s" % " and ".join(self.basis)
-        lines.append("    verdict:  %s%s" % (verdict, (": " + self.reason) if self.reason else ""))
+        # A not-computable verdict's reason is the missing inputs, listed just above.
+        reason = "" if self.verdict == NOT_COMPUTABLE else self.reason
+        lines.append("    verdict:  %s%s" % (verdict, (": " + reason) if reason else ""))
         for unit in UNITS:
             finish = self.projected.get(unit)
             if finish:
@@ -216,10 +218,10 @@ class PaceReport:
 
 #: How each figure that can be missing is named to a reader.
 _FIGURE_LABELS = {
-    "asOf": "the as-of date",
-    "scope": "the scope",
+    "asOf": "as-of date",
+    "scope": "scope",
     "remaining.points": "remaining points",
-    "trailing": "the trailing rate",
+    "trailing": "trailing rate",
     "trailing.points": "trailing points/week",
 }
 

@@ -437,3 +437,134 @@ def test_the_project_status_vocabulary_reads_the_ledger(paced):
     append_ledger(paced, [("TR-003", "W-8", days_ago(1), "Shipped", "", "")])
     src, _ = _source(paced)
     assert [c.canonical for c in src.completions][-1] == base.COMPLETED
+
+
+# =============================================================================
+# kpis carries pace
+# =============================================================================
+
+
+def kpis(root, *extra):
+    return run(REGISTRY_CLI, "--root", str(root), "kpis", *extra)
+
+
+def test_kpis_json_carries_a_pace_block(paced):
+    completed = kpis(paced, "--json")
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    payload = json.loads(completed.stdout)
+    assert {"metrics", "provenance", "pace", "invalidDeadlines"} <= set(payload)
+    assert payload["invalidDeadlines"] == []
+    [report] = payload["pace"]
+    assert report["deadline"]["id"] == "ship"
+    assert report["deadline"]["scope"] == "every item in the register"
+    assert report["remaining"] == {"items": 6, "points": 36.0}      # 3+1+8+20+3+1
+    assert report["blocked"]["items"] == 2
+    trailing = report["trailing"]
+    assert trailing["completions"] == 2 and trailing["items"] == 0.5
+    assert trailing["source"].startswith("terminalLedger: ")
+    assert "W-0" in report["missingInputs"]["trailing.points"][0]   # left the register
+    assert report["verdict"] == "ahead" and report["basis"] == ["items"]
+    assert report["findings"] == []                  # "Finish line" anchors to the seed
+
+
+def test_kpis_json_pace_is_empty_without_deadlines(paced):
+    edit_manifest(paced, lambda d: d["policy"]["roadmap"].pop("deadlines"))
+    payload = json.loads(kpis(paced, "--json").stdout)
+    assert payload["pace"] == [] and payload["invalidDeadlines"] == []
+
+
+def test_kpis_text_renders_pace(paced):
+    text = kpis(paced).stdout
+    assert "\npace\n" in text
+    assert "ship  ship: due 2099-01-01, owner Owner" in text
+    assert "verdict:  AHEAD on items" in text
+    assert "not computable: trailing points/week" in text
+
+
+def test_kpis_text_says_when_no_deadline_is_declared(paced):
+    edit_manifest(paced, lambda d: d["policy"]["roadmap"].pop("deadlines"))
+    assert "no deadline is declared (policy.roadmap.deadlines)" in kpis(paced).stdout
+
+
+def test_kpis_reports_a_hand_edited_invalid_deadline(paced):
+    edit_manifest(paced, lambda d: d["policy"]["roadmap"]["deadlines"].update(
+        {"broken": {"date": "soon", "owner": "Owner"}}))
+    completed = kpis(paced, "--json")
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    assert [r["deadline"]["id"] for r in payload["pace"]] == ["ship"]
+    [finding] = payload["invalidDeadlines"]
+    assert finding["code"] == "deadline-invalid" and "broken.date" in finding["message"]
+    assert "invalid deadline: policy.roadmap.deadlines.broken.date" in kpis(paced).stdout
+
+
+def test_kpis_uses_the_project_pace_policy(paced):
+    edit_manifest(paced, lambda d: d["policy"]["roadmap"].update(
+        {"pace": {"trailingWeeks": 1, "tolerance": 0}}))
+    [report] = json.loads(kpis(paced, "--json").stdout)["pace"]
+    assert report["trailing"]["window"]["weeks"] == 1
+    assert report["trailing"]["completions"] == 1                 # only the 3-days-ago record
+
+
+def test_an_invalid_pace_policy_falls_back_to_the_defaults_and_says_so(paced):
+    edit_manifest(paced, lambda d: d["policy"]["roadmap"].update({"pace": {"tolerance": 5}}))
+    [report] = json.loads(kpis(paced, "--json").stdout)["pace"]
+    assert report["trailing"]["window"]["weeks"] == 4
+    assert any("policy.roadmap.pace is invalid" in n for n in report["notes"])
+
+
+# =============================================================================
+# The cockpit
+# =============================================================================
+
+import re  # noqa: E402
+
+from tools.roadmap_visualizer import generate as cockpit  # noqa: E402
+from tools.roadmap_visualizer import health as health_mod  # noqa: E402
+
+
+def cockpit_html(root):
+    return Path(cockpit.generate(str(root))).read_text(encoding="utf-8")
+
+
+def embedded_model(html):
+    match = re.search(r"const MODEL = (\{.*?\});\n", html, re.DOTALL)
+    assert match, "the cockpit did not embed its model"
+    return json.loads(match.group(1).replace("<\\/", "</"))
+
+
+def test_the_cockpit_model_carries_pace(paced):
+    model = embedded_model(cockpit_html(paced))
+    [report] = model["metrics"]["pace"]
+    assert report["deadline"]["id"] == "ship" and report["verdict"] == "ahead"
+    assert model["metrics"]["invalidDeadlines"] == []
+
+
+def test_the_cockpit_renders_deadline_and_pace_tiles(paced):
+    html = cockpit_html(paced)
+    assert '["Deadline", deadlineText(nextPace())]' in html
+    assert '["Pace", paceText(nextPace())]' in html
+    assert "none declared" in html and "no deadline" in html
+
+
+def _concern(verdict):
+    return {"verdict": verdict, "reason": "trailing 3.00 items/week is 72% of the 4.16 required",
+            "deadline": {"label": "Overall game build", "date": "2027-01-01"}}
+
+
+def test_behind_or_overdue_replaces_proceed_only():
+    concern = health_mod._pace_concern([_concern("ahead"), _concern("behind")])
+    assert concern["verdict"] == "behind"
+    said = health_mod._recommendation(0, 5, 5, {}, False, concern)
+    assert said.startswith("Run the roadmap-review ceremony: pace is behind against "
+                           "Overall game build (due 2027-01-01)")
+    assert health_mod._recommendation(0, 5, 5, {}, False, None).startswith("Proceed")
+    # stale, drift, and a short buffer keep their priority
+    assert "stale" in health_mod._recommendation(0, 5, 5, {}, True, concern)
+    assert "disagree" in health_mod._recommendation(2, 5, 5, {}, False, concern)
+    assert "dispatch buffer" in health_mod._recommendation(0, 3, 5, {}, False, concern)
+
+
+def test_on_track_ahead_and_met_raise_no_concern():
+    assert health_mod._pace_concern([_concern("on track"), _concern("ahead"),
+                                     _concern("met"), _concern("not computable")]) is None

@@ -16,9 +16,13 @@ Every invocation prints the machine-readable status lines, quiet or not:
     virtuoso-status: <status>
     writes: <N>
     overlays: <state>
+    deadlines: <state>
 
 The overlay line always states a result — `not registered` when the project never
-declared the role — so silence can never be read as "overlays are in force".
+declared the role — so silence can never be read as "overlays are in force". The
+deadline line does the same (`none declared`), and carries each declared deadline's
+date and days remaining, never pace: pace needs the work register, which may be
+external, and session start never reads it.
 
 `--json` additionally emits the full structured result (item 11): status, mode,
 writes, files written, findings, and the resolved role table. The complete list
@@ -39,7 +43,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.governance import (  # noqa: E402
-    backup as backup_mod, discovery, install, overlays as overlays_mod,
+    backup as backup_mod, deadlines as deadlines_mod, discovery, install,
+    overlays as overlays_mod,
     policy as policy_mod, providers, registry as registry_mod, repair as repair_mod,
     result as result_mod, schema, textio, workspace,
 )
@@ -118,6 +123,25 @@ def _attach_overlays(outcome: result_mod.Result, root: str) -> result_mod.Result
     status = _overlay_status(root)
     outcome.overlays = status.state
     outcome.overlays_detail = status.as_dict()
+    return outcome
+
+
+def _attach_deadlines(outcome: result_mod.Result, root: str) -> result_mod.Result:
+    """Give every outcome, in every mode, a deadline line. Total, as the overlay line
+    is: a registry this cannot read reports `not registered`, never an exception,
+    because a side observation must not be able to fail the operation asked for.
+
+    An unregistered project is `not registered`, not `none declared`: loading an
+    absent registry yields an empty one, and "none declared" would describe a
+    project that could declare a deadline and chose not to."""
+    if not _is_registered(root):
+        outcome.deadlines, outcome.deadlines_detail = "not registered", None
+        return outcome
+    try:
+        outcome.deadlines, outcome.deadlines_detail = deadlines_mod.status(
+            registry_mod.load(root))
+    except (GovernanceError, OSError, ValueError):
+        outcome.deadlines, outcome.deadlines_detail = "not registered", None
     return outcome
 
 
@@ -331,17 +355,19 @@ def preflight(root: str, mode: str = "check", *, quiet: bool = False,
             status=result_mod.FAILED, mode=mode, root=root, message=str(exc),
             error=exc.as_dict(), plugin_version=plugin_version())
     _attach_overlays(outcome, root)
+    _attach_deadlines(outcome, root)
     outcome.assert_contract()
     return outcome
 
 
 def emit(outcome: result_mod.Result, *, quiet: bool, as_json: bool) -> None:
     # The status lines are EXEMPT from --quiet: they are what hooks and tools
-    # parse, and the SessionStart hook runs quiet. The overlay line is printed
-    # unconditionally for the same reason the others are.
+    # parse, and the SessionStart hook runs quiet. The overlay and deadline lines
+    # are printed unconditionally for the same reason the others are.
     for line in outcome.contract_lines():
         print(line)
     print(outcome.overlay_line())
+    print(outcome.deadline_line())
     if as_json:
         print(outcome.to_json())
         return

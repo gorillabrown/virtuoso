@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tools.governance import policy as policy_mod, registry as registry_mod  # noqa: E402
+from tools.governance import policy as policy_mod, providers, registry as registry_mod  # noqa: E402
 from tools.governance.providers import kpi  # noqa: E402
 
 from .health import summarize_health  # noqa: E402
@@ -31,7 +31,9 @@ def build_model(root: Path | str) -> PlanningModel:
         effort_scale=project_policy.get("roadmap.effortScale"),
         dispatch_buffer=project_policy.dispatch_buffer,
     )
-    health = summarize_health(roadmap, snapshot, buffer_target=project_policy.dispatch_buffer)
+    metrics.pace, metrics.invalid_deadlines = providers.pace_for(reg, snapshot)
+    health = summarize_health(roadmap, snapshot, buffer_target=project_policy.dispatch_buffer,
+                              pace=[report.as_dict() for report in metrics.pace])
     return PlanningModel(
         workspace=context,
         roadmap=roadmap,

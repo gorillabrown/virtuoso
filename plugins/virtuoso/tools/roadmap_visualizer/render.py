@@ -157,6 +157,35 @@ def render_html(model: PlanningModel) -> str:
       document.getElementById("provenance").textContent = parts.join(" · ");
     }}
 
+    // Pace is computed by the plugin (providers/pace.py), never here: the cockpit
+    // only shows the earliest declared deadline's figures as the provider stated them.
+    function nextPace() {{
+      const pace = (MODEL.metrics && MODEL.metrics.pace) || [];
+      return pace.length ? pace[0] : null;
+    }}
+
+    function daysText(days) {{
+      if (days === null || days === undefined) return "-";
+      if (days > 0) return `${{days}} day${{days === 1 ? "" : "s"}}`;
+      if (days === 0) return "due today";
+      return `passed ${{-days}} day${{days === -1 ? "" : "s"}} ago`;
+    }}
+
+    function deadlineText(report) {{
+      if (!report) return "none declared";
+      const d = report.deadline || {{}};
+      return `${{text(d.label)}} ${{text(d.date)}} (${{daysText(report.daysRemaining)}})`;
+    }}
+
+    function paceText(report) {{
+      if (!report) return "no deadline";
+      const unit = (report.basis || [])[0];
+      if (!unit) return text(report.verdict);
+      const trailing = (report.trailing || {{}})[unit];
+      const required = (report.required || {{}})[unit];
+      return `${{report.verdict}}: ${{Number(trailing).toFixed(2)}} vs ${{Number(required).toFixed(2)}} ${{unit}}/week`;
+    }}
+
     function renderMetrics() {{
       const health = MODEL.health || {{}};
       const counts = health.counts || {{}};
@@ -167,6 +196,8 @@ def render_html(model: PlanningModel) -> str:
         ["In Flight", counts["in-flight"]],
         ["Blocked", counts["blocked"]],
         ["Drift Findings", health.drift_count],
+        ["Deadline", deadlineText(nextPace())],
+        ["Pace", paceText(nextPace())],
       ];
       const container = document.getElementById("metrics");
       metrics.forEach(([label, value]) => {{

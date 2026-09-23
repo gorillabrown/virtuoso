@@ -58,8 +58,16 @@ def _drift_findings(roadmap: RoadmapSnapshot, items) -> list[str]:
     return findings
 
 
+def _pace_concern(pace) -> dict | None:
+    """The earliest declared deadline whose pace is behind or overdue, if any."""
+    for report in pace or []:
+        if report.get("verdict") in ("overdue", "behind"):
+            return report
+    return None
+
+
 def _recommendation(drift: int, buffer_filled: int, buffer_target: int,
-                    counts: dict, stale: bool) -> str:
+                    counts: dict, stale: bool, pace_concern: dict | None = None) -> str:
     if stale:
         return ("The work register was read from a stale snapshot. Refresh it before acting "
                 "on these numbers.")
@@ -70,11 +78,16 @@ def _recommendation(drift: int, buffer_filled: int, buffer_target: int,
     if buffer_target and buffer_filled < buffer_target:
         return ("Run the roadmap-review ceremony: the dispatch buffer holds %d of %d "
                 "specified items." % (buffer_filled, buffer_target))
+    if pace_concern is not None:
+        deadline = pace_concern.get("deadline") or {}
+        return ("Run the roadmap-review ceremony: pace is %s against %s (due %s); %s."
+                % (pace_concern["verdict"], deadline.get("label"), deadline.get("date"),
+                   pace_concern.get("reason") or "see the pace figures"))
     return "Proceed: the roadmap and the work register agree."
 
 
 def summarize_health(roadmap: RoadmapSnapshot, snapshot: base.Snapshot,
-                     *, buffer_target: int = 5) -> HealthSummary:
+                     *, buffer_target: int = 5, pace: list | None = None) -> HealthSummary:
     ordered = _ordered(snapshot.items)
     counts = {status: 0 for status in base.CANONICAL_STATUSES}
     for item in ordered:
@@ -95,5 +108,5 @@ def summarize_health(roadmap: RoadmapSnapshot, snapshot: base.Snapshot,
         drift_count=len(findings),
         drift_findings=findings,
         recommendation=_recommendation(len(findings), buffer_filled, buffer_target,
-                                       counts, snapshot.stale),
+                                       counts, snapshot.stale, _pace_concern(pace)),
     )

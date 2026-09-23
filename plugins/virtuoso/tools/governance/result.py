@@ -34,6 +34,11 @@ always printed, and it always states a result. An unregistered project reports
 ``not registered`` rather than staying silent, because absent output is
 indistinguishable from an all-clear, which is exactly how a project ends up
 believing overlays are in force when nothing is reading them.
+
+A fourth, ``deadlines: <state>``, follows it on the same terms: every mode, never
+suppressed, always a result (``none declared`` when there is nothing to say). It
+carries dates and days only — never pace, which needs the work register, and
+session start must not read a register that may be external.
 """
 from __future__ import annotations
 
@@ -91,6 +96,9 @@ class Result:
     #: reports something true rather than something reassuring.
     overlays: str = "not registered"
     overlays_detail: dict | None = None
+    #: The one-line deadline state, on the same terms as the overlay line.
+    deadlines: str = "not registered"
+    deadlines_detail: dict | None = None
 
     def __post_init__(self) -> None:
         if self.status not in STATUSES:
@@ -142,6 +150,8 @@ class Result:
             data["pluginVersion"] = self.plugin_version
         data["overlays"] = self.overlays_detail if self.overlays_detail is not None \
             else {"line": self.overlay_line()}
+        data["deadlines"] = self.deadlines_detail if self.deadlines_detail is not None \
+            else {"state": self.deadlines or "not registered"}
         if self.error is not None:
             data["error"] = self.error
         return data
@@ -157,3 +167,8 @@ class Result:
         """The overlay state line, printed beside the contract lines in every mode
         and never suppressed by ``--quiet``. Always non-empty."""
         return "overlays: %s" % (self.overlays or "not registered")
+
+    def deadline_line(self) -> str:
+        """The deadline state line, printed after the overlay line in every mode and
+        never suppressed by ``--quiet``. Always non-empty."""
+        return "deadlines: %s" % (self.deadlines or "not registered")

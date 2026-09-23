@@ -976,7 +976,11 @@ def test_the_two_line_contract_is_unchanged():
 
 def test_the_json_result_carries_the_overlay_detail(with_overlays):
     completed = run(PREFLIGHT, "--root", str(with_overlays), "--mode", "check", "--json")
-    payload = json.loads(completed.stdout.split("\n", 3)[3])
+    # The JSON follows the machine lines. Read from its first line, never from a
+    # fixed line count: the set of machine lines grows (deadlines: joined in 1.8.1).
+    lines = completed.stdout.splitlines()
+    payload = json.loads("\n".join(lines[next(i for i, line in enumerate(lines)
+                                              if line.startswith("{")):]))
     assert payload["overlays"]["registered"] is True
     assert len(payload["overlays"]["overlays"]) == EXPECTED_OVERLAYS
     assert payload["overlays"]["line"].startswith("overlays: 2 applied")

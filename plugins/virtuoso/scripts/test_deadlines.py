@@ -9,6 +9,7 @@ about a deadline except the pace computed against it, which lives in
 from __future__ import annotations
 
 import json
+import re
 import os
 import subprocess
 import sys
@@ -297,3 +298,201 @@ def test_the_read_back_compares_what_was_written_not_the_merged_defaults(workspa
     explicit_null = policy_set(workspace, "workRegister.creators", "null", "--apply")
     assert explicit_null.returncode == 0, explicit_null.stdout + explicit_null.stderr
     assert "verified: read back from disk" in explicit_null.stdout
+
+
+# =============================================================================
+# The body: finishLine resolves to a roadmap heading
+# =============================================================================
+
+import datetime as _dt  # noqa: E402
+
+from tools.governance import deadlines as deadlines_mod  # noqa: E402
+from tools.governance import registry as registry_mod  # noqa: E402
+
+GOG_ROADMAP = """# Gloves of Glory — Project Roadmap
+
+## Finish Line B — Target (Graduated B1 / B2 / B3)
+
+### Finish Line B1 — Kinetic foundation + locked Strategy/Focus handoff
+
+### Finish Line B3 — Engine + full strategic layer + UX + career/medical layer
+
+### Finish Line C — The Living Game online
+
+```markdown
+## Finish Line Z — an example inside a fence, not a definition
+```
+"""
+
+
+def roadmap_file(root):
+    data = manifest(root)
+    return root.joinpath(*data["roles"]["roadmap"]["path"].split("/"))
+
+
+def declare(root, **entries):
+    for key, entry in entries.items():
+        completed = policy_set(root, "roadmap.deadlines.%s" % key, json.dumps(entry), "--apply")
+        assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def anchor(root, finish_line, newline="\n"):
+    roadmap_file(root).write_bytes(GOG_ROADMAP.replace("\n", newline).encode("utf-8"))
+    declare(root, g=dict(GAME_BUILD, finishLine=finish_line))
+    reg = registry_mod.load(str(root))
+    usable, _ = deadlines_mod.declared(policy_mod.load(reg.policy))
+    return deadlines_mod.anchor_findings(reg, usable)
+
+
+@pytest.mark.parametrize("finish_line", ["Finish Line B3", "finish line c", "Finish Line B"])
+def test_a_finish_line_matches_its_heading(workspace, finish_line):
+    assert anchor(workspace, finish_line) == []
+
+
+def test_a_shorter_finish_line_does_not_match_a_longer_heading(workspace):
+    roadmap = GOG_ROADMAP.replace("## Finish Line B — Target (Graduated B1 / B2 / B3)\n", "")
+    roadmap_file(workspace).write_text(roadmap, encoding="utf-8", newline="\n")
+    declare(workspace, g=dict(GAME_BUILD, finishLine="Finish Line B"))
+    reg = registry_mod.load(str(workspace))
+    usable, _ = deadlines_mod.declared(policy_mod.load(reg.policy))
+    findings = deadlines_mod.anchor_findings(reg, usable)
+    assert [f.code for f in findings] == ["deadline-finish-line-missing"]
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n"])
+def test_a_heading_inside_a_fence_does_not_count(workspace, newline):
+    findings = anchor(workspace, "Finish Line Z", newline=newline)
+    assert [(f.code, f.severity) for f in findings] == [
+        ("deadline-finish-line-missing", "warning")]
+
+
+def test_an_unanchored_deadline_is_info(workspace):
+    declare(workspace, g=GAME_BUILD)
+    reg = registry_mod.load(str(workspace))
+    usable, _ = deadlines_mod.declared(policy_mod.load(reg.policy))
+    findings = deadlines_mod.anchor_findings(reg, usable)
+    assert [(f.code, f.severity) for f in findings] == [("deadline-unanchored", "info")]
+    assert "every item in the register" in findings[0].message
+
+
+def test_no_registered_roadmap_is_a_missing_finish_line(workspace):
+    declare(workspace, g=dict(GAME_BUILD, finishLine="Finish Line C"))
+    path = workspace / "Virtuoso" / "workspace-layout.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["roles"].pop("roadmap")
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    reg = registry_mod.load(str(workspace))
+    usable, _ = deadlines_mod.declared(policy_mod.load(reg.policy))
+    findings = deadlines_mod.anchor_findings(reg, usable)
+    assert findings[0].code == "deadline-finish-line-missing"
+    assert "no roadmap role is registered" in findings[0].message
+
+
+def test_deadline_findings_never_change_the_registry_status(workspace):
+    declare(workspace, g=dict(GAME_BUILD, finishLine="Finish Line Nowhere"))
+    completed = run(PREFLIGHT, "--root", str(workspace), "--mode", "check", "--quiet")
+    assert "virtuoso-status: ready" in completed.stdout
+    assert "; 1 finding" in completed.stdout
+
+
+def test_declared_skips_an_invalid_entry_whole_and_reports_it():
+    declared, problems = deadlines_mod.declared(policy_mod.load({"roadmap": {"deadlines": {
+        "good": GAME_BUILD, "bad": dict(GAME_BUILD, date="soon")}}}))
+    assert [d.id for d in declared] == ["good"]
+    assert len(problems) == 1 and "bad.date" in problems[0]
+
+
+def test_declared_sorts_by_date():
+    declared, _ = deadlines_mod.declared(policy_mod.load({"roadmap": {"deadlines": {
+        "late": dict(GAME_BUILD, date="2027-06-01"), "early": GAME_BUILD}}}))
+    assert [d.id for d in declared] == ["early", "late"]
+
+
+# =============================================================================
+# The session-start line
+# =============================================================================
+
+ON = _dt.date(2026, 9, 23)
+
+
+def _deadline(key, date):
+    return deadlines_mod.Deadline(id=key, date=_dt.date.fromisoformat(date), owner="Evan")
+
+
+@pytest.mark.parametrize("usable, problems, findings, state", [
+    ([], [], [], "none declared"),
+    ([], ["policy.roadmap.deadlines.g.date \"soon\" is not a YYYY-MM-DD calendar date"], [],
+     "invalid (policy.roadmap.deadlines.g.date \"soon\" is not a YYYY-MM-DD calendar date)"),
+    ([_deadline("game-build", "2027-01-01")], [], [], "game-build 2027-01-01 (100 days)"),
+    ([_deadline("g", "2026-09-24")], [], [], "g 2026-09-24 (1 day)"),
+    ([_deadline("g", "2026-09-23")], [], [], "g 2026-09-23 (due today)"),
+    ([_deadline("g", "2026-09-20")], [], [], "g 2026-09-20 (passed 3 days ago)"),
+    ([_deadline("g", "2026-09-22")], [], [], "g 2026-09-22 (passed 1 day ago)"),
+    ([_deadline("a", "2026-09-01"), _deadline("b", "2027-01-01"), _deadline("c", "2027-06-01")],
+     [], [], "3 declared; next b 2027-01-01 (100 days)"),
+    ([_deadline("a", "2026-09-01"), _deadline("b", "2026-09-10")], [], [],
+     "2 declared; latest b 2026-09-10 (passed 13 days ago)"),
+    ([_deadline("game-build", "2027-01-01")], [], ["f"], "game-build 2027-01-01 (100 days); 1 finding"),
+    ([_deadline("game-build", "2027-01-01")], ["p"], ["f"],
+     "game-build 2027-01-01 (100 days); 2 findings"),
+])
+def test_summary_forms(usable, problems, findings, state):
+    assert deadlines_mod.summary(usable, problems, findings, ON) == state
+
+
+FAR = dict(GAME_BUILD, date="2099-01-01", finishLine="Finish Line C")
+LINE_RE = r"(?m)^deadlines: g 2099-01-01 \(\d+ days\)$"
+
+
+@pytest.mark.parametrize("mode", ["check", "detect", "repair"])
+@pytest.mark.parametrize("quiet", [True, False])
+def test_the_deadline_line_is_printed_in_every_mode_and_survives_quiet(workspace, mode, quiet):
+    roadmap_file(workspace).write_text(GOG_ROADMAP, encoding="utf-8", newline="\n")
+    declare(workspace, g=FAR)
+    args = ["--root", str(workspace), "--mode", mode] + (["--quiet"] if quiet else [])
+    completed = run(PREFLIGHT, *args)
+    assert re.search(LINE_RE, completed.stdout), completed.stdout
+    lines = completed.stdout.splitlines()
+    assert lines.index("overlays: not registered") + 1 == \
+        [i for i, line in enumerate(lines) if line.startswith("deadlines: ")][0]
+
+
+def test_the_deadline_line_is_printed_by_create_and_for_an_empty_directory(project):
+    created = run(PREFLIGHT, "--root", str(project), "--mode", "create", "--authorize",
+                  "--quiet")
+    assert "deadlines: none declared" in created.stdout.splitlines()
+    empty = project.parent / "empty"
+    empty.mkdir()
+    nothing = run(PREFLIGHT, "--root", str(empty), "--mode", "check", "--quiet")
+    assert "virtuoso-status: none" in nothing.stdout
+    assert "deadlines: not registered" in nothing.stdout.splitlines()
+
+
+def test_the_two_line_contract_is_unchanged(workspace):
+    declare(workspace, g=FAR)
+    completed = run(PREFLIGHT, "--root", str(workspace), "--mode", "check", "--quiet")
+    lines = completed.stdout.splitlines()
+    assert lines[0] == "virtuoso-status: ready" and lines[1] == "writes: 0"
+
+
+def test_preflight_json_carries_deadlines(workspace):
+    roadmap_file(workspace).write_text(GOG_ROADMAP, encoding="utf-8", newline="\n")
+    declare(workspace, g=FAR)
+    completed = run(PREFLIGHT, "--root", str(workspace), "--mode", "check", "--json")
+    payload = json.loads(completed.stdout[completed.stdout.index("{"):])
+    detail = payload["deadlines"]
+    assert re.match(r"^g 2099-01-01 \(\d+ days\)$", detail["state"])
+    assert detail["declared"][0]["id"] == "g"
+    assert detail["declared"][0]["finishLine"] == "Finish Line C"
+    assert detail["findings"] == []
+
+
+def test_a_hand_edited_invalid_deadline_is_reported_and_never_fails_preflight(workspace):
+    path = workspace / "Virtuoso" / "workspace-layout.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data.setdefault("policy", {})["roadmap"] = {"deadlines": {"g": {"date": "soon"}}}
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    completed = run(PREFLIGHT, "--root", str(workspace), "--mode", "check", "--quiet")
+    assert completed.returncode == 0
+    assert "virtuoso-status: ready" in completed.stdout
+    assert "deadlines: invalid (policy.roadmap.deadlines.g.date" in completed.stdout

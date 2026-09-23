@@ -16,7 +16,8 @@ Subcommands:
   provider [--role R]       describe the provider serving a role, and its capabilities
   items [--all]             list work items from the work register
   next                      the next eligible work item
-  kpis                      derived metrics, each with its provenance
+  kpis                      derived metrics, each with its provenance, and pace
+                            against every declared deadline
   closeout --item ID --date D   resolve close-out artifact paths (read-only)
   repo [--expect PATHS]     read-only repository state and readiness finding
   deps                      check the project's declared runtime dependencies
@@ -243,6 +244,7 @@ def cmd_kpis(args) -> int:
         effort_scale=project_policy.get("roadmap.effortScale"),
         dispatch_buffer=project_policy.dispatch_buffer,
     )
+    metrics.pace, metrics.invalid_deadlines = providers.pace_for(reg, snap)
     return _emit(metrics.as_dict(), args.as_json, metrics.render)
 
 

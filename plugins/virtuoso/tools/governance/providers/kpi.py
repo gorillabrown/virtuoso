@@ -41,11 +41,18 @@ class Metric:
 class MetricSet:
     metrics: list[Metric]
     provenance: dict
+    #: Pace against each declared deadline (``pace.PaceReport``), attached by a
+    #: caller that holds the registry. Empty when no deadline is declared.
+    pace: list = field(default_factory=list)
+    #: ``deadline-invalid`` findings for declared deadlines that cannot be used.
+    invalid_deadlines: list = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return {
             "metrics": [m.as_dict() for m in self.metrics],
             "provenance": self.provenance,
+            "pace": [report.as_dict() for report in self.pace],
+            "invalidDeadlines": list(self.invalid_deadlines),
         }
 
     def get(self, name: str) -> Metric | None:
@@ -63,6 +70,15 @@ class MetricSet:
             else:
                 lines.append("  %-28s not computable (missing: %s)"
                              % (metric.name, ", ".join(metric.missing_inputs)))
+        lines.append("")
+        lines.append("pace")
+        if not self.pace and not self.invalid_deadlines:
+            lines.append("  no deadline is declared (policy.roadmap.deadlines); pace against a "
+                         "date is not computable")
+        for report in self.pace:
+            lines.append(report.render())
+        for finding in self.invalid_deadlines:
+            lines.append("  invalid deadline: %s" % finding["message"])
         provenance = self.provenance
         lines.append("")
         lines.append("  source: %s via %s, snapshot %s%s"

@@ -258,3 +258,31 @@ def completion_source(reg, snapshot) -> pace.CompletionSource:
         [], "", missing=["completion dates: no terminal ledger is registered and the register "
                          "carries no completion date"])
 
+
+
+def pace_for(reg, snapshot) -> tuple[list, list[dict]]:
+    """Pace against every usable declared deadline, each carrying its anchoring
+    findings, plus a ``deadline-invalid`` finding for every problem with the ones
+    that are not usable. Nothing is declared -> ``([], [])``."""
+    from .. import deadlines as deadlines_mod
+
+    project_policy = policy_mod.load(reg.policy)
+    usable, problems = deadlines_mod.declared(project_policy)
+    invalid = [f.as_dict() for f in deadlines_mod.invalid_findings(problems)]
+    if not usable:
+        return [], invalid
+    settings = project_policy.get("roadmap.pace", {})
+    settings_problems = policy_mod.pace_problems(settings)
+    if settings_problems:
+        settings = policy_mod.DEFAULTS["roadmap"]["pace"]
+    reports = pace.compute_all(usable, snapshot, completion_source(reg, snapshot),
+                               effort_scale=project_policy.get("roadmap.effortScale"),
+                               trailing_weeks=settings.get("trailingWeeks", 4),
+                               tolerance=settings.get("tolerance", 0.1))
+    for report in reports:
+        report.findings.extend(f.as_dict() for f in
+                               deadlines_mod.anchor_findings(reg, [report.deadline]))
+        if settings_problems:
+            report.notes.append("policy.roadmap.pace is invalid (%s); the documented defaults "
+                                "were used" % "; ".join(settings_problems))
+    return reports, invalid
