@@ -1880,6 +1880,25 @@ def test_the_alternate_host_manifest_serves_every_shipped_skill():
     assert found, "the alternate-host manifest serves no skills at all"
 
 
+def test_the_alternate_host_manifest_describes_itself_for_the_plugin_page():
+    """The host's plugin page is rendered from `interface`, not from `description`.
+
+    Without these keys the page falls back to the bare name and description: no
+    tagline, no example prompts, and no information panel. Each key below is one
+    row or element of that page, so a missing one is a blank on a published page.
+    """
+    interface = json.loads(
+        (ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))["interface"]
+    for key in ("displayName", "shortDescription", "longDescription", "developerName",
+                "category", "capabilities", "defaultPrompt", "websiteURL",
+                "privacyPolicyURL", "termsOfServiceURL", "brandColor"):
+        assert interface.get(key), f"the plugin page has no {key}"
+    assert len(interface["shortDescription"]) <= 80, "the tagline is too long to render"
+    for key in ("composerIcon", "logo"):
+        asset = ROOT / interface[key].lstrip("./")
+        assert asset.is_file(), f"{key} points at a file that is not shipped: {interface[key]}"
+
+
 @pytest.mark.skipif(not HAVE_GIT, reason="git is not installed")
 def test_the_alternate_host_manifest_is_shipped_not_ignored():
     """Checked with --no-index, i.e. against the ignore PATTERNS themselves.
