@@ -517,9 +517,60 @@ or `Superseded` is appended. `virtuoso_registry lessons [--open]` lists them.
 | `lesson-closed-cited` | a specification cites a promoted or retired lesson; cite what it became (warning) |
 | `lessons-not-cited` | live lessons the specification does not cite, listed for the author to confirm (info) |
 | `lessons-item-section-missing` | `--item` names an item the document has no section for |
+| `lesson-reason-unanchored` | a close-out's "No new lesson" reason names nothing it examined — no lesson, standing rule or item identifier — while the catalog or `policy.standingRules.ids` holds something to examine |
 
 A lesson the close-out recorded and no specification applied was learned once and paid
 for twice. That is the failure this loop exists to make visible.
+
+### Keeping the catalog short: hygiene, candidates, status records
+
+U9 holds every specification to every live lesson, so the catalog's value is its
+shortness. Two read-only reports keep it short, and one command changes it — by appending.
+
+- **`lessons --hygiene`** (`governance-sweep`) reads the catalog and every close-out
+  report in the `closeOuts` role (`CloseOut.*.md`) and proposes: **merge** — live lessons
+  that record one pattern (the same *Applies to*, or near-identical titles), kept under the
+  first recorded and the rest superseded by it; **retire** — a live observation older than
+  `policy.lessons.staleAfterDays` (default 180; 0 turns it off) that no close-out ever
+  applied; **tidy** — a live lesson missing *Verdict*, *Evidence*, *Recommendation* or
+  *Applies to*; **repair** — an identifier reused for a second lesson.
+- **`lessons --candidates`** (`roadmap-review` D.4) lists the lessons that have earned a
+  decision: **promote** a pattern that recurred (the second occurrence) or a lesson applied
+  and held in two close-outs; **revise or retire** one that did not hold in two. A
+  close-out's *Lessons* section records each applied lesson on a line with `held` or
+  `did not hold`; that line is what these counts read.
+- **`lessons --record-status <ID> --status "<status>" --actor <ceremony> [--item <ID>]
+  [--date <date>] [--apply]`** appends one status record under the lesson's identifier —
+  `Promoted -> <destination>`, `Retired — <reason>`, `Superseded -> <ID>` (a recorded
+  lesson other than itself), or `Observation`. It previews without `--apply`; refuses an
+  actor the role's `allowedWriters` does not name, an unknown or already-closed lesson,
+  and a status that says nothing; and reads the record back as the lesson's current status.
+  It never edits an earlier entry.
+
+Merging is two records: the survivor stays, each duplicate is superseded by it. A
+promotion is a status record plus the rule written where `policy.standingRules.source`
+says rules live.
+
+### Loop-health metrics
+
+`kpis` carries a `learning` group beside pace: six figures on whether the loop is
+improving, from the catalog and the close-out reports, with their sources and as-of date.
+Each is *not computable*, naming the missing input, when the sources cannot support it —
+never zero.
+
+| metric | definition | not computable without |
+|---|---|---|
+| `live-count` | live lessons | a recorded lesson or a close-out |
+| `lesson-yield` | lessons recorded per close-out report, and how many reports said "No new lesson" | a close-out report |
+| `held-rate` | of the applied-lesson outcomes close-outs recorded, the share that held | a close-out recording an outcome |
+| `promotion-rate` | the share of lessons whose status is `Promoted` | a recorded lesson |
+| `time-to-apply` | median days from a lesson's date to the first dated close-out that applied it | a dated lesson applied in a dated close-out |
+| `repeated-trap-rate` | the share of lessons that record a pattern already recorded (the merge groups) | two recorded lessons |
+
+Read together over successive reviews: a flat or falling live count with a positive yield,
+promotions above zero, a high held rate, a falling repeated-trap rate. Any one figure can be
+gamed; the set is expensive to game, because yield without holds, or holds without
+promotions, shows.
 
 ## Sprint guards
 

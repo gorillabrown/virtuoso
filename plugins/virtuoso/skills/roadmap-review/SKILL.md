@@ -530,15 +530,24 @@ say so and record the links in the roadmap instead.
 close-outs since the last review, audits, and decision records. Resolve each
 through the registry; do not scan the filesystem for lookalike names.
 
-**D.4.2 Build the checklist.** Deduped, grouped by theme. A lesson whose pattern a
-second close-out has now reported is a promotion candidate.
+**D.4.2 Build the checklist.** Deduped, grouped by theme. The promotion candidates are
+computed, not remembered:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --candidates
+
+It lists every pattern that recurred (a second close-out reported it) and every lesson
+applied and held in two close-outs — **promote** — and every lesson that did not hold
+twice — **revise or retire**. Decide each; a candidate left undecided is carried into
+D.4.6 by name.
 
 **D.4.3 Update the standing rules.** Rules live where
 `policy.standingRules.source` says, and their identifiers come from
 `policy.standingRules.ids`. Present rules get their wording verified; missing ones
 are added with a source; superseded ones are updated or removed. A lesson promoted
 here gets a status record appended under its identifier in the `lessons` role —
-`Promoted -> <rule id>` — never an edit to its original entry.
+`Promoted -> <rule id>` — never an edit to its original entry:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --record-status <ID> --status "Promoted -> <rule id>" --actor roadmap-review --item <review date> --apply
 
 **D.4.4 Confirm the new specifications** applied the lessons: U9 passed for each in
 D.3. Note any live lesson every one of them declined, and whether that is right.
@@ -553,8 +562,9 @@ buffer gap in D.6. A lesson recorded after a specification was written is exactl
 what this step exists to catch.
 
 **D.4.6 Render** `YYYY-MM-DD-lessons-applied.md`: the live lessons; which
-specification applied which; the promotions and retirements recorded; and the
-close-outs since the last review that recorded no lesson and gave no reason.
+specification applied which; the promotions and retirements recorded; the candidates
+left undecided; the `learning` figures from `kpis` beside the previous review's; and
+the close-outs since the last review that recorded no lesson and gave no reason.
 
 ### D.5 Integrate
 

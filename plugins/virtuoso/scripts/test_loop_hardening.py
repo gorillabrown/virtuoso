@@ -333,3 +333,229 @@ def test_the_virtuoso_skill_runs_the_guards_through_the_launcher():
     text = (ROOT / "skills" / "virtuoso" / "SKILL.md").read_text(encoding="utf-8")
     assert "registry:scripts" not in text
     assert text.count('"$HOME/.virtuoso/bin/virtuoso" sprint_guards') == 4
+
+
+# --- D22, D11, D12, D15: hygiene, candidates, the anchored reason, loop health ---------
+
+from tools.governance import learning as learning_mod, lessons as lessons_mod   # noqa: E402
+
+CATALOG = """# Lessons
+
+### LSN-001 — Read-side fallback before a row-shape migration (ADD-042, 2026-01-10)
+**Verdict:** the reader crashed on rows written before the migration
+**Evidence:** one crash, two hours
+**Recommendation:** merge the reader fallback before the migration runs
+**Applies to:** any item that changes a stored row shape
+**Status:** Observation
+
+### LSN-002 — Consumer fallback before an export-format change (ADD-051, 2026-02-01)
+**Verdict:** consumers broke on the new export shape
+**Evidence:** three consumers down for a day
+**Recommendation:** ship the consumer fallback first
+**Applies to:** any item that changes a stored row shape
+**Status:** Observation
+
+### LSN-003 — Name the fixture (ARCH-4, 2025-01-20)
+**Verdict:** an unnamed fixture was shared across suites
+**Evidence:** two flaky suites
+**Recommendation:** name every shared fixture
+**Applies to:** fixtures shared across suites
+**Status:** Observation
+
+### LSN-004 — Half-written lesson (ARCH-9, 2026-03-01)
+**Verdict:** something happened
+**Status:** Observation
+
+### LSN-005 — Record the base's failing set first (ARCH-2, 2026-01-05)
+**Verdict:** a red base hid a regression
+**Evidence:** one day lost
+**Recommendation:** record the failing set before the first change
+**Applies to:** continuations on a red base
+**Status:** Observation
+
+### LSN-005 — a second lesson under the same id (ARCH-11, 2026-04-01)
+**Verdict:** reused
+**Recommendation:** something else
+"""
+
+
+def reports(*entries):
+    return [("CloseOut.%s.%s.md" % (item, date),
+             "---\ndate: %s\n---\n# Close-out\n\n## Lessons\n\n%s\n" % (date, body))
+            for item, date, body in entries]
+
+
+TODAY = __import__("datetime").date(2026, 9, 23)
+
+
+def test_hygiene_proposes_merge_retire_tidy_and_repair():
+    recorded = lessons_mod.parse(CATALOG, "LSN")
+    outcomes = learning_mod.read_outcomes([], "LSN")
+    report = learning_mod.hygiene(recorded, outcomes, today=TODAY, stale_after_days=180)
+    assert report["duplicates"] == [{"keep": "LSN-001", "supersede": ["LSN-002"],
+                                     "why": "the same Applies to (any item that changes a "
+                                            "stored row shape)"}]
+    assert [s["id"] for s in report["stale"]] == ["LSN-001", "LSN-002", "LSN-003", "LSN-004",
+                                                 "LSN-005"]
+    assert report["incomplete"] == [{"id": "LSN-004",
+                                     "missing": ["evidence", "recommendation", "applies to"]}]
+    assert [m["id"] for m in report["malformed"]] == ["LSN-005"]
+
+
+def test_a_lesson_applied_in_a_close_out_is_not_stale():
+    recorded = lessons_mod.parse(CATALOG, "LSN")
+    outcomes = learning_mod.read_outcomes(reports(
+        ("ARCH-7", "2026-05-01", "- **Applied:** LSN-003 — held: both suites green")), "LSN")
+    report = learning_mod.hygiene(recorded, outcomes, today=TODAY, stale_after_days=180)
+    assert "LSN-003" not in [s["id"] for s in report["stale"]]
+    assert learning_mod.hygiene(recorded, outcomes, today=TODAY,
+                                stale_after_days=0)["stale"] == []
+
+
+def test_candidates_promote_what_recurred_or_held_twice_and_revise_what_failed_twice():
+    recorded = lessons_mod.parse(CATALOG, "LSN")
+    outcomes = learning_mod.read_outcomes(reports(
+        ("A-1", "2026-05-01", "- **Applied:** LSN-003 — held: suites green"),
+        ("A-2", "2026-06-01", "- **Applied:** LSN-003 — held: green again"),
+        ("A-3", "2026-06-02", "- **Applied:** LSN-005 — did not hold: base still hid it"),
+        ("A-4", "2026-07-02", "- **Applied:** LSN-005 — did not hold: again"),
+        ("A-5", "2026-07-03", "- **New:** No new lesson — covered by LSN-001")), "LSN")
+    found = {c["id"]: c for c in learning_mod.candidates(recorded, outcomes)}
+    assert found["LSN-001"]["action"] == "promote" and "LSN-002" in found["LSN-001"]["why"]
+    assert found["LSN-003"] == {"id": "LSN-003", "action": "promote",
+                                "why": "applied and held in 2 close-outs"}
+    assert found["LSN-005"]["action"] == "revise or retire"
+    assert outcomes.closeouts == 5 and outcomes.no_lesson == 1
+
+
+def test_the_learning_metrics_are_computed_or_not_computable():
+    empty = learning_mod.metrics([], learning_mod.Outcomes())
+    assert [m.name for m in empty] == ["live-count", "lesson-yield", "held-rate",
+                                       "promotion-rate", "time-to-apply", "repeated-trap-rate"]
+    assert all(not m.computable and m.missing_inputs for m in empty)
+    recorded = lessons_mod.parse(CATALOG, "LSN")
+    outcomes = learning_mod.read_outcomes(reports(
+        ("A-1", "2026-01-20", "- **Applied:** LSN-001 — held: no crash"),
+        ("A-2", "2026-02-10", "- **Applied:** LSN-005 — did not hold: hidden again"),
+        ("A-3", "2026-02-11", "No new lesson — covered by LSN-001")), "LSN")
+    figures = {m.name: m for m in learning_mod.metrics(recorded, outcomes)}
+    assert figures["live-count"].value == 5
+    assert figures["lesson-yield"].value == round(5 / 3, 2)
+    assert figures["held-rate"].value == 0.5
+    assert figures["promotion-rate"].value == 0.0
+    assert figures["time-to-apply"].value == 23             # LSN-001 10 days, LSN-005 36: median 23
+    assert figures["repeated-trap-rate"].value == 0.4       # LSN-001 and LSN-002 of five
+
+
+def closeout_text(line):
+    return "# Close-out\n\n## Lessons\n\n- **New:** %s\n" % line
+
+
+@pytest.mark.parametrize("line, standing, passes", [
+    ("No new lesson — nothing new happened", (), False),
+    ("No new lesson — both risks were covered by LSN-001 and LSN-003", (), True),
+    ("No new lesson — the same change as ADD-042", (), True),
+    ("No new lesson — standing rule WIDE-RULE covered it", ("WIDE-RULE",), True),
+])
+def test_a_no_lesson_reason_names_what_was_examined(line, standing, passes):
+    recorded = lessons_mod.parse(CATALOG, "LSN")
+    result = lessons_mod.check(closeout_text(line), recorded, "LSN", closeout=True,
+                               item="ADD-099", standing_rules=standing)
+    assert result.passed is passes, result.findings
+    if not passes:
+        assert result.findings[0]["code"] == "lesson-reason-unanchored"
+
+
+def test_with_nothing_to_examine_any_real_reason_passes():
+    result = lessons_mod.check(closeout_text("No new lesson — first dispatch of the project"),
+                               [], "LSN", closeout=True, item="ADD-001")
+    assert result.passed is True
+
+
+@pytest.fixture
+def catalog(workspace):
+    data = manifest(workspace)
+    data.setdefault("policy", {})["lessons"] = {"idPrefix": "LSN"}
+    write_manifest(workspace, data)
+    role_path(workspace, "lessons").write_text(CATALOG, encoding="utf-8", newline="\n")
+    closeouts = role_path(workspace, "closeOuts")
+    for name, text in reports(("A-1", "2026-05-01", "- **Applied:** LSN-003 — held: green"),
+                              ("A-2", "2026-06-01", "- **Applied:** LSN-003 — held: green")):
+        (closeouts / name).write_text(text, encoding="utf-8")
+    return workspace
+
+
+def lessons_cli(root, *args, actor=None):
+    extra = ["--actor", actor] if actor else []
+    return run(REGISTRY_CLI, "--root", str(root), *extra, "lessons", *args)
+
+
+def test_the_hygiene_and_candidates_commands(catalog):
+    completed = lessons_cli(catalog, "--hygiene", "--json")
+    assert completed.returncode == 0, completed.stderr
+    report = json.loads(completed.stdout)
+    assert report["duplicates"][0]["keep"] == "LSN-001" and report["closeOutsRead"] == 2
+    text = lessons_cli(catalog, "--hygiene").stdout
+    assert "merge    keep LSN-001; supersede LSN-002" in text and "tidy     LSN-004" in text
+    found = json.loads(lessons_cli(catalog, "--candidates", "--json").stdout)["candidates"]
+    assert {c["id"]: c["action"] for c in found} == {"LSN-001": "promote", "LSN-003": "promote"}
+
+
+def test_record_status_previews_then_appends_and_reads_back(catalog):
+    path = role_path(catalog, "lessons")
+    before = path.read_bytes()
+    preview = lessons_cli(catalog, "--record-status", "LSN-002", "--status",
+                          "Superseded -> LSN-001", actor="governance-sweep")
+    assert preview.returncode == 0 and "preview" in preview.stdout
+    assert path.read_bytes() == before
+    applied = lessons_cli(catalog, "--record-status", "LSN-002", "--status",
+                          "Superseded -> LSN-001", "--item", "sweep", "--date", "2026-09-23",
+                          "--apply", actor="governance-sweep")
+    assert applied.returncode == 0, applied.stdout + applied.stderr
+    after = path.read_bytes()
+    assert after.startswith(before), "an earlier entry was edited"
+    assert after.endswith(b"### LSN-002 \xe2\x80\x94 status (sweep, 2026-09-23)\n"
+                          b"**Status:** Superseded -> LSN-001\n")
+    listing = json.loads(lessons_cli(catalog, "--json").stdout)
+    assert {l["id"]: l["live"] for l in listing["lessons"]}["LSN-002"] is False
+
+
+@pytest.mark.parametrize("lesson, status, actor, why", [
+    ("LSN-002", "Superseded -> LSN-001", "next-pointer", "may not write"),
+    ("LSN-042", "Retired — obsolete", "governance-sweep", "not a recorded lesson"),
+    ("LSN-002", "Superseded -> LSN-002", "governance-sweep", "names the recorded lesson"),
+    ("LSN-002", "Retired", "governance-sweep", "say where it went or why"),
+    ("LSN-002", "Deleted", "governance-sweep", "a status begins with"),
+])
+def test_record_status_refuses(catalog, lesson, status, actor, why):
+    before = role_path(catalog, "lessons").read_bytes()
+    completed = lessons_cli(catalog, "--record-status", lesson, "--status", status, "--apply",
+                            actor=actor)
+    assert completed.returncode != 0
+    assert why in completed.stdout + completed.stderr
+    assert role_path(catalog, "lessons").read_bytes() == before
+
+
+def test_kpis_carries_the_learning_group(catalog):
+    completed = run(REGISTRY_CLI, "--root", str(catalog), "kpis", "--json")
+    assert completed.returncode == 0, completed.stderr
+    learning = json.loads(completed.stdout)["learning"]
+    figures = {m["name"]: m for m in learning["metrics"]}
+    assert figures["live-count"]["value"] == 5
+    assert figures["held-rate"]["value"] == 1.0
+    assert learning["provenance"]["closeOutsRead"] == 2
+    text = run(REGISTRY_CLI, "--root", str(catalog), "kpis").stdout
+    assert "learning" in text and "repeated-trap-rate" in text
+
+
+def test_the_ceremonies_run_hygiene_and_candidates():
+    sweep = (ROOT / "skills" / "governance-sweep" / "SKILL.md").read_text(encoding="utf-8")
+    assert "lessons --hygiene" in sweep and "--actor governance-sweep" in sweep
+    review = (ROOT / "skills" / "roadmap-review" / "SKILL.md").read_text(encoding="utf-8")
+    assert "lessons --candidates" in review and "--record-status" in review
+
+
+def test_the_stale_threshold_is_a_documented_policy_value():
+    from tools.governance import policy as policy_mod
+    assert policy_mod.documented_default("lessons.staleAfterDays") == 180
+    assert policy_mod.lessons_problems({"staleAfterDays": -1})

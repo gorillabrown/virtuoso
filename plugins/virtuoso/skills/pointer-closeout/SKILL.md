@@ -192,8 +192,11 @@ apply. Every close-out produces one of two things:
   `Applies to` is the field the next author matches against new work — say *when*
   the lesson bears, not only what happened.
 - Or the line **`No new lesson — <reason>`** in the report's Lessons section. The
-  reason is evidence: "followed <prefix>-NNN exactly", "a routine change with no
-  surprise". A close-out that names neither is not finished.
+  reason is evidence, and it names what was examined by identifier: "followed
+  <prefix>-NNN exactly", "both risks were covered by <prefix>-NNN and standing rule
+  <rule id>", "the same change as <ITEM-ID>, which taught <prefix>-NNN". Whenever the
+  catalog or the standing rules hold anything, a reason that names none of it fails
+  the gate (`lesson-reason-unanchored`). A close-out that names neither is not finished.
 
 And in either case, **the outcome of every lesson the specification applied** (its
 *Lessons applied* section): each held, or did not. A lesson that failed to prevent

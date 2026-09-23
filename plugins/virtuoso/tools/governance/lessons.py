@@ -26,6 +26,7 @@ Three ceremonies close the loop, and this module is what they check against:
 """
 from __future__ import annotations
 
+import datetime as _dt
 import re
 from dataclasses import dataclass, field
 
@@ -38,6 +39,12 @@ DEFAULT_STATUS = "Observation"
 _FIELD_RE = re.compile(r"^\*\*(?P<name>[^*]+?):\*\*[ \t]*(?P<value>.*)$")
 _HEADING_RE = re.compile(r"^(?P<hashes>#{1,6})[ \t]+(?P<text>.+?)[ \t]*$")
 _SOURCE_RE = re.compile(r"^(?P<title>.*?)[ \t]*\((?P<source>[^()]*)\)[ \t]*$")
+_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+#: The fields a complete lesson carries besides its status.
+LESSON_FIELDS = ("verdict", "evidence", "recommendation", "applies to")
+#: Something a reason can name to show what was examined: an item, lesson or rule
+#: identifier (``ADD-042``, ``<prefix>-014``, ``SR-7``).
+_IDENTIFIER_RE = re.compile(r"(?<![\w-])[A-Z][A-Z0-9_]*(?:-[A-Z0-9]+)*-\d+(?![\w-])")
 
 #: Finding codes for ``--check``. Failures make a specification or close-out not ready.
 SECTION_MISSING = "lessons-section-missing"
@@ -47,8 +54,9 @@ NOT_APPENDED = "lesson-not-appended"
 CLOSED_CITED = "lesson-closed-cited"
 NOT_CITED = "lessons-not-cited"
 ITEM_MISSING = "lessons-item-section-missing"
+REASON_UNANCHORED = "lesson-reason-unanchored"
 FINDING_CODES = (SECTION_MISSING, SECTION_EMPTY, UNKNOWN, NOT_APPENDED, CLOSED_CITED,
-                 NOT_CITED, ITEM_MISSING)
+                 NOT_CITED, ITEM_MISSING, REASON_UNANCHORED)
 
 
 @dataclass
@@ -58,6 +66,9 @@ class Lesson:
     source: str = ""
     fields: dict = field(default_factory=dict)
     history: list = field(default_factory=list)      # every status recorded, in order
+    #: A later entry under this id carried lesson fields, not only a status: the id
+    #: was reused for a second lesson, which the catalog can no longer tell apart.
+    reused: bool = False
 
     @property
     def status(self) -> str:
@@ -70,6 +81,17 @@ class Lesson:
     @property
     def applies_to(self) -> str:
         return self.fields.get("applies to", "")
+
+    @property
+    def date(self) -> _dt.date | None:
+        """The date the lesson was recorded, from its heading's ``(ITEM, date)``."""
+        match = _DATE_RE.search(self.source or "")
+        if not match:
+            return None
+        try:
+            return _dt.date.fromisoformat(match.group(0))
+        except ValueError:
+            return None
 
     def as_dict(self) -> dict:
         return {"id": self.id, "title": self.title, "source": self.source,
@@ -127,6 +149,8 @@ def parse(text: str, prefix: str) -> list[Lesson]:
             current.history.append(value or DEFAULT_STATUS)
         elif first_entry and name not in current.fields:
             current.fields[name] = value
+        elif not first_entry and name in LESSON_FIELDS:
+            current.reused = True
     return [lessons[i] for i in order]
 
 
@@ -191,7 +215,7 @@ def _find_section(lines: list[str], wanted, refuse=()) -> list[str] | None:
 
 
 def check(text: str, lessons: list[Lesson], prefix: str, *, item: str = "",
-          closeout: bool = False) -> CheckResult:
+          closeout: bool = False, standing_rules=()) -> CheckResult:
     """Readiness check U9 for a specification, or the lessons gate for a close-out.
 
     A **specification** carries a *Lessons applied* section that cites the live
@@ -208,6 +232,11 @@ def check(text: str, lessons: list[Lesson], prefix: str, *, item: str = "",
     "No new lesson — <reason>". Naming only older lessons (the ones the
     specification applied) is not enough: a close-out answers what *this* dispatch
     taught. ``item`` is the item being closed.
+
+    A "No new lesson" reason names what was examined — a lesson, a standing rule, or
+    an item, by identifier — whenever the catalog or ``standing_rules`` holds
+    anything to examine. "Nothing new" passes every gate and proves nothing; "both
+    risks were covered by <prefix>-014 and SR-3" shows the catalog was read.
     """
     result = CheckResult(kind="close-out" if closeout else "specification")
     lines = overlays_mod.without_fenced_blocks(text or "").splitlines()
@@ -260,6 +289,15 @@ def check(text: str, lessons: list[Lesson], prefix: str, *, item: str = "",
             result.fail(SECTION_EMPTY, "the Lessons section names no lesson recorded from %s "
                         "and does not say \"No new lesson — <reason>\""
                         % (item or "this dispatch"))
+        elif not added and (lessons or standing_rules):
+            reason = text_body[says_none.start():].split("\n", 1)[0]
+            rules = [r for r in standing_rules if r and re.search(
+                r"(?<![\w-])%s(?![\w-])" % re.escape(r), reason)]
+            if not _IDENTIFIER_RE.search(reason) and not rules:
+                result.fail(REASON_UNANCHORED,
+                            "the \"No new lesson\" reason names nothing it examined — cite "
+                            "the lessons, standing rules or items that already cover what "
+                            "this dispatch met")
         return result
 
     if not cited and "no live lesson" not in text_body.lower():

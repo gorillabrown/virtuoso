@@ -114,6 +114,9 @@ DEFAULTS: dict = {
     # --- lessons: the learning loop (tools/governance/lessons.py) -------------
     "lessons": {
         "idPrefix": "SRL",              # lesson identifiers are <prefix>-NNN
+        # a live observation older than this, never applied in a close-out, is a
+        # retire candidate in `lessons --hygiene`; 0 turns the check off
+        "staleAfterDays": 180,
     },
     # --- governance sweep (items 51b, 52b, 53b, 56) --------------------------
     "sweep": {
@@ -182,6 +185,10 @@ def lessons_problems(section) -> list[str]:
     unknown = sorted(k for k in section if k not in DEFAULTS["lessons"])
     if unknown:
         problems.append("policy.lessons has unknown field(s) %s" % ", ".join(unknown))
+    stale = section.get("staleAfterDays", 180)
+    if isinstance(stale, bool) or not isinstance(stale, int) or stale < 0:
+        problems.append("policy.lessons.staleAfterDays=%s is not a whole number of days "
+                        "(0 turns the stale check off)" % _shown(stale))
     prefix = section.get("idPrefix", "SRL")
     if not isinstance(prefix, str) or not _LESSON_PREFIX_RE.match(prefix):
         problems.append("policy.lessons.idPrefix=%s is not a prefix: letters, digits and "

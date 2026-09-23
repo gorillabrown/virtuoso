@@ -38,8 +38,8 @@ status: [all-pass | has-regressions | has-discoveries]
      Then the outcome of each lesson the specification applied: held, or did not.
      Verified in Wave 2 Step 6 with `virtuoso_registry lessons --check <this file> --closeout --item <ID>`. -->
 
-- **New:** [<prefix>-NNN — title] *(or: No new lesson — [reason])*
-- **Applied:** [<prefix>-NNN — held / did not hold: evidence] *(or: the specification applied none)*
+- **New:** [<prefix>-NNN — title] *(or: No new lesson — [what was examined, by identifier: the lessons, standing rules or items that already cover what this dispatch met])*
+- **Applied:** [<prefix>-NNN — held / did not hold: evidence] *(one line per lesson; `lessons --candidates` counts these words)*
 
 ## Files Created
 

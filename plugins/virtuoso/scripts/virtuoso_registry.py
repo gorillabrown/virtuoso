@@ -47,7 +47,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.governance import (  # noqa: E402
-    backup as backup_mod, lessons as lessons_mod, overlays as overlays_mod,
+    backup as backup_mod, learning as learning_mod, lessons as lessons_mod,
+    overlays as overlays_mod,
     policy as policy_mod, providers,
     registry as registry_mod, repair as repair_mod, schema, textio,
 )
@@ -249,7 +250,30 @@ def cmd_kpis(args) -> int:
         dispatch_buffer=project_policy.dispatch_buffer,
     )
     metrics.pace, metrics.invalid_deadlines = providers.pace_for(reg, snap)
+    metrics.learning, metrics.learning_provenance = _learning_metrics(reg, project_policy)
     return _emit(metrics.as_dict(), args.as_json, metrics.render)
+
+
+def _learning_metrics(reg, project_policy):
+    """The loop-health figures and where they came from. No lessons role: each
+    figure is not computable, naming the role."""
+    prefix = project_policy.lesson_prefix
+    try:
+        path = reg.resolve("lessons")
+    except RoleNotRegistered:
+        from tools.governance.providers.kpi import Metric
+        return ([Metric(name, computable=False, missing_inputs=["a registered lessons role"])
+                 for name in LEARNING_METRICS], {})
+    recorded = lessons_mod.parse(textio.read_text(path) or "", prefix)
+    outcomes, closeouts = _lesson_outcomes(reg, prefix)
+    return learning_mod.metrics(recorded, outcomes), {
+        "lessons": os.path.relpath(path, reg.root).replace(os.sep, "/"),
+        "closeOuts": closeouts, "closeOutsRead": outcomes.closeouts,
+        "asOf": _today().isoformat()}
+
+
+LEARNING_METRICS = ("live-count", "lesson-yield", "held-rate", "promotion-rate",
+                    "time-to-apply", "repeated-trap-rate")
 
 
 def cmd_closeout(args) -> int:
@@ -317,6 +341,59 @@ def _next_lesson_id(lessons: str, prefix: str) -> str:
 EXIT_CHECK_FAILED = 1
 
 
+def _today():
+    import datetime as _dt
+    return _dt.date.today()
+
+
+def _lesson_outcomes(reg, prefix):
+    """``(Outcomes, closeOuts path or "")`` — every close-out report the registry
+    holds, read for what it says about lessons. No closeOuts role: no outcomes."""
+    try:
+        directory = reg.resolve("closeOuts")
+    except RoleNotRegistered:
+        return learning_mod.Outcomes(), ""
+    return (learning_mod.load_outcomes(directory, prefix),
+            os.path.relpath(directory, reg.root).replace(os.sep, "/"))
+
+
+def _record_lesson_status(args, reg, path, source, recorded, text) -> int:
+    """Append one status record — the only way a lesson is promoted, retired or
+    superseded. Previews unless ``--apply``; refuses an actor the role does not
+    allow, an unknown or closed lesson, and a status that says nothing."""
+    actor = getattr(args, "actor", "") or ""
+    if not actor:
+        raise GovernanceError("--record-status needs --actor: the ceremony recording it")
+    if not reg.writable("lessons", actor):
+        raise GovernanceError("%s may not write the lessons role (allowedWriters in %s)"
+                              % (actor, schema.MANIFEST_RELPATH))
+    problem = learning_mod.status_problem(recorded, args.record_status, args.status)
+    if problem:
+        raise GovernanceError(problem)
+    record = learning_mod.status_record(args.record_status, args.status,
+                                        args.item or actor, args.date or _today().isoformat())
+    if not args.apply:
+        print("preview — append to %s (run again with --apply):\n\n%s" % (source, record))
+        return EXIT_OK
+    raw = textio.read_bytes(path) or b""
+    try:
+        raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise GovernanceError("%s is not UTF-8 text; convert it before appending" % source)
+    eol = "\r\n" if b"\r\n" in raw else "\n"
+    lead = "" if not raw or raw.endswith(b"\n") else eol
+    with open(path, "ab") as handle:
+        handle.write((lead + eol + record.replace("\n", eol)).encode("utf-8"))
+    after = {l.id: l for l in lessons_mod.parse(textio.read_text(path) or "",
+                                                policy_mod.load(reg.policy).lesson_prefix)}
+    recorded_now = after.get(args.record_status)
+    if recorded_now is None or recorded_now.status != args.status.strip():
+        raise GovernanceError("the record was appended but does not read back as the "
+                              "current status of %s; inspect %s" % (args.record_status, source))
+    print("recorded %s: %s (%s)" % (args.record_status, recorded_now.status, source))
+    return EXIT_OK
+
+
 def cmd_lessons(args) -> int:
     """The learning loop's read side. Lists the registered lessons with their current
     status, or checks a specification (rubric U9) or a close-out against them.
@@ -346,7 +423,8 @@ def cmd_lessons(args) -> int:
         if document is None:
             raise GovernanceError("%s cannot be read" % args.check)
         result = lessons_mod.check(document, recorded, prefix, item=args.item,
-                                   closeout=args.closeout)
+                                   closeout=args.closeout,
+                                   standing_rules=project_policy.get("standingRules.ids") or ())
         payload = dict(result.as_dict(), document=args.check, lessons=source, prefix=prefix,
                        notes=notes)
         if args.as_json:
@@ -364,6 +442,43 @@ def cmd_lessons(args) -> int:
                 print("  note: %s" % note)
             print("  lessons: %s (prefix %s)" % (source, prefix))
         return EXIT_OK if result.passed else EXIT_CHECK_FAILED
+
+    if args.record_status:
+        return _record_lesson_status(args, reg, path, source, recorded, text)
+    if args.hygiene or args.candidates:
+        outcomes, closeouts = _lesson_outcomes(reg, prefix)
+        if args.hygiene:
+            report = learning_mod.hygiene(
+                recorded, outcomes, today=_today(),
+                stale_after_days=int(project_policy.get("lessons.staleAfterDays", 180) or 0))
+            payload = dict(report, source=source, closeOuts=closeouts,
+                           closeOutsRead=outcomes.closeouts, notes=notes)
+            if args.as_json:
+                return _emit(payload, True)
+            print("lessons hygiene: %s (%d lessons, %d close-outs read)"
+                  % (source, len(recorded), outcomes.closeouts))
+            for group in report["duplicates"]:
+                print("  merge    keep %s; supersede %s — %s" % (
+                    group["keep"], ", ".join(group["supersede"]), group["why"]))
+            for entry in report["stale"]:
+                print("  retire   %s — recorded %s (%d days), never applied in a close-out"
+                      % (entry["id"], entry["recorded"], entry["ageDays"]))
+            for entry in report["incomplete"]:
+                print("  tidy     %s — missing %s" % (entry["id"], ", ".join(entry["missing"])))
+            for entry in report["malformed"]:
+                print("  repair   %s — %s" % (entry["id"], entry["why"]))
+            if not any(report[k] for k in ("duplicates", "stale", "incomplete", "malformed")):
+                print("  clean — nothing to merge, retire, tidy or repair")
+            return EXIT_OK
+        found = learning_mod.candidates(recorded, outcomes)
+        payload = {"candidates": found, "source": source, "closeOuts": closeouts,
+                   "closeOutsRead": outcomes.closeouts, "notes": notes}
+        if args.as_json:
+            return _emit(payload, True)
+        print("promotion candidates: %d (%d close-outs read)" % (len(found), outcomes.closeouts))
+        for entry in found:
+            print("  %-9s %-16s %s" % (entry["id"], entry["action"], entry["why"]))
+        return EXIT_OK
 
     shown = [lesson for lesson in recorded if lesson.live or not args.open]
     live = sum(1 for lesson in recorded if lesson.live)
@@ -752,6 +867,18 @@ def build_parser() -> argparse.ArgumentParser:
     lessons.add_argument("--closeout", action="store_true",
                          help="check a close-out's Lessons section instead of a "
                               "specification's Lessons applied")
+    lessons.add_argument("--hygiene", action="store_true",
+                         help="what to merge, retire, tidy or repair (governance-sweep)")
+    lessons.add_argument("--candidates", action="store_true",
+                         help="lessons that have earned promotion or revision (roadmap-review)")
+    lessons.add_argument("--record-status", default="", metavar="ID",
+                         help="append a status record for ID (with --status, --actor)")
+    lessons.add_argument("--status", default="",
+                         help="the status to record: Promoted -> <rule> / Retired — <why> / "
+                              "Superseded -> <ID> / Observation")
+    lessons.add_argument("--date", default="", help="the record's date (default: today)")
+    lessons.add_argument("--apply", action="store_true",
+                         help="append the record (without it, --record-status previews)")
     lessons.set_defaults(func=cmd_lessons)
 
     snapshot = sub.add_parser("snapshot", parents=[common])

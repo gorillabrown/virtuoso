@@ -147,7 +147,7 @@ and — explicitly — **what the boundaries excluded**, with counts. A sweep th
 silently skips a tree reads as "clean" when it was not looked at.
 
 **Detect which optional audit modules apply.** Agent definitions → roster checks.
-Retrospective or lessons catalogs → entry-staleness checks. The same document
+A registered `lessons` role → lessons hygiene (check 21). The same document
 deployed in multiple places → parity checks. Registered generated artifacts →
 source-to-mirror checks. If none exist, only the universal checks run. State which
 modules are active at the start.
@@ -234,9 +234,26 @@ definition** and the mirror is out of date (item 57).
 **Parity** (only if parity targets were detected):
 20. Checksum mismatches between a canonical file and its deployed copies.
 
-**Retrospective catalogs** (only if detected):
-21. Entries referencing changed names, paths, or items — propose reference updates;
-    route content staleness to the user.
+**Lessons** (only if a `lessons` role is registered):
+21. **Lessons hygiene — tidy, merge, retire.** Run
+
+        "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --hygiene
+
+    and carry every proposal into the work list:
+    - **merge** — live lessons recording one pattern: keep the first recorded,
+      supersede each other by it (`Superseded -> <kept ID>`). If the kept entry lacks
+      detail the duplicates carry, append a complete restatement under the next free
+      identifier first, keep that one, and supersede all of the originals by it.
+    - **retire** — live observations older than `policy.lessons.staleAfterDays` that no
+      close-out ever applied: `Retired — <why it no longer bears>`. Route any whose
+      relevance you cannot judge to the user instead of retiring it.
+    - **tidy** — a live lesson missing a field: append a complete restatement under the
+      next free identifier and supersede the incomplete entry by it.
+    - **repair** — an identifier reused for a second lesson: give the second its own
+      identifier by restatement, and record the reuse.
+    Also flag entries referencing changed names, paths or items (propose the reference
+    update as a restatement, never an edit). The catalog is append-only: every one of
+    these is a new entry or a status record.
 
 Print findings grouped by check, with exact locations. Print only categories with findings.
 
@@ -420,6 +437,13 @@ Run the approved groups A → G, one action at a time.
   quarantine directory.
 - **Permanent deletion** — only under an explicit policy or an explicit instruction,
   and only after every other group has verified.
+- **Lesson records** — for each approved merge, retirement or tidy, append the status
+  record (and any restatement first), one at a time, and read it back:
+
+      "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --record-status <ID> --status "<status>" --actor governance-sweep --item sweep --apply
+
+  Never edit or delete an existing entry. Re-run `lessons --hygiene` afterwards; the
+  approved proposals must be gone from it.
 
 ### Step 2 — Verify after each group
 

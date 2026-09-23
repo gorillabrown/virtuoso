@@ -70,6 +70,10 @@ status; the latest status recorded is the current one, and the history shows why
     ### <prefix>-NNN — status (ITEM-ID, YYYY-MM-DD)
     **Status:** Promoted -> standing rule <rule id> (second occurrence in ITEM-ID)
 
+The command appends it for you, previews first, and refuses a status that says nothing:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --record-status <prefix>-NNN --status "Promoted -> <rule id>" --actor pointer-closeout --item <ITEM-ID> --apply
+
 A lesson is **live** until a status beginning `Promoted`, `Retired`, or `Superseded`
 is appended. The live lessons are what readiness check U9 holds every specification
 to.

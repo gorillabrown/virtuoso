@@ -46,6 +46,9 @@ class MetricSet:
     pace: list = field(default_factory=list)
     #: ``deadline-invalid`` findings for declared deadlines that cannot be used.
     invalid_deadlines: list = field(default_factory=list)
+    #: The loop-health figures (``learning.metrics``) and their sources.
+    learning: list = field(default_factory=list)
+    learning_provenance: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
         return {
@@ -53,6 +56,8 @@ class MetricSet:
             "provenance": self.provenance,
             "pace": [report.as_dict() for report in self.pace],
             "invalidDeadlines": list(self.invalid_deadlines),
+            "learning": {"metrics": [m.as_dict() for m in self.learning],
+                         "provenance": dict(self.learning_provenance)},
         }
 
     def get(self, name: str) -> Metric | None:
@@ -79,6 +84,21 @@ class MetricSet:
             lines.append(report.render())
         for finding in self.invalid_deadlines:
             lines.append("  invalid deadline: %s" % finding["message"])
+        if self.learning:
+            lines.append("")
+            lines.append("learning")
+            for metric in self.learning:
+                if metric.computable:
+                    lines.append("  %-28s %s%s" % (metric.name, metric.value,
+                                                   (" " + metric.unit) if metric.unit else ""))
+                else:
+                    lines.append("  %-28s not computable (missing: %s)"
+                                 % (metric.name, ", ".join(metric.missing_inputs)))
+            source = self.learning_provenance
+            if source:
+                lines.append("  source: %s; %d close-out(s) in %s; as of %s" % (
+                    source.get("lessons"), source.get("closeOutsRead", 0),
+                    source.get("closeOuts") or "no closeOuts role", source.get("asOf")))
         provenance = self.provenance
         lines.append("")
         lines.append("  source: %s via %s, snapshot %s%s"
