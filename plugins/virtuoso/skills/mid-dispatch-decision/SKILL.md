@@ -195,7 +195,8 @@ partial pointer-closeout, then authors a new dispatch.
 with these inputs: (a) completed tasks treated as the sprint's deliverables,
 (b) cancelled tasks listed with reason "mid-dispatch pivot," (c) the close-out's
 findings table includes the pause-point finding that triggered the stop,
-(d) the next pointer enters Case C (brainstorm). Pointer-closeout does not need
+(d) the stopped line of work goes back to `/roadmap-review` to be re-planned
+(`/next-pointer` escalates there when no head is dispatch-ready). Pointer-closeout does not need
 a full pause summary — the mid-dispatch decision's Step 2 assessment serves as
 the summary input.
 
@@ -772,6 +773,28 @@ Print confirmation: "Added <prefix>-NNN to the lessons: [one-line summary]."
 
 **If skipping:** Print: "No new lesson — [reason]."
 
+#### 6d. Record the Decision in the Issue File (always)
+
+The issue file is the durable record of what was decided; the chat is not. Append
+this block to the end of the issue file you were handed — append-only: a later
+decision on the same issue appends another block beneath it, never an edit.
+
+```markdown
+## Decision — YYYY-MM-DD
+
+- **Type:** [1a / 1b / 2 / 3 / 3a / 4 / 5] — [name]
+- **Decided:** [the recommendation adopted, or the user's override, in one sentence]
+- **Instruction:** [the first line of the 6a block]
+- **Amendment:** [staging file path, or "inline in the spec", or "none"]
+- **Lessons:** [<prefix>-NNN appended in 6c, or "No new lesson — reason"]
+```
+
+An issue with no `## Decision` block is an open decision. `pointer-closeout` reads
+each of the item's issue files at close-out and will not treat one without a block
+as settled.
+
+Print confirmation: "Recorded the decision in [issue file]."
+
 ---
 
 ## Integration with Other Skills
@@ -780,7 +803,8 @@ Print confirmation: "Added <prefix>-NNN to the lessons: [one-line summary]."
 
 **Type 4 triggers partial pointer-closeout immediately.** Inputs: (a) completed
 tasks as deliverables, (b) cancelled tasks with reason "mid-dispatch pivot,"
-(c) pause-point finding in the findings table, (d) next pointer enters Case C.
+(c) pause-point finding in the findings table, (d) the stopped line of work goes
+back to `/roadmap-review` to be re-planned.
 Step 2's situation assessment serves as the pause summary input.
 
 **Types 1-5 inform eventual close-out.** The amendment block (6b) ensures the

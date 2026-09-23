@@ -183,3 +183,74 @@ def test_deadline_problems_stay_on_the_deadline_line(workspace):
 
 def test_undocumented_keys_are_inert_not_invalid():
     assert registry_mod.policy_findings({"somethingNew": 1}) == []
+
+
+# --- D4: default writers match the skill bodies ---------------------------------------
+
+@pytest.mark.parametrize("role, writer", [
+    ("issues", "virtuoso"), ("closeOuts", "virtuoso"), ("closeOuts", "mid-dispatch-decision"),
+    ("lessons", "3rd-party-audit"), ("lessons", "governance-sweep"),
+    ("roadmap", "3rd-party-audit"),
+])
+def test_default_writers_name_the_ceremonies_that_write(role, writer):
+    from tools.governance import schema
+    assert writer in schema.DEFAULT_ROLES[role]["allowedWriters"]
+
+
+def test_a_new_workspace_carries_the_aligned_writers(workspace):
+    roles = manifest(workspace)["roles"]
+    assert "virtuoso" in roles["issues"]["allowedWriters"]
+    assert "governance-sweep" in roles["lessons"]["allowedWriters"]
+
+
+# --- D5: the Decision block has a step and a reader --------------------------------------
+
+def test_the_decision_block_has_a_step_and_the_close_out_reads_it():
+    decide = (ROOT / "skills" / "mid-dispatch-decision" / "SKILL.md").read_text(encoding="utf-8")
+    assert "#### 6d. Record the Decision in the Issue File" in decide
+    assert "## Decision — YYYY-MM-DD" in decide
+    close = (ROOT / "skills" / "pointer-closeout" / "SKILL.md").read_text(encoding="utf-8")
+    assert "`## Decision`" in close and "open decision" in close
+
+
+# --- D6: nothing names a skill, agent or case that does not exist ------------------------
+
+def test_the_reference_check_catches_a_ghost():
+    validate = load_script("validate")
+    skills, agents = ["roadmap-review", "next-pointer"], ["Aristotle", "Hermes"]
+    assert validate.unresolved_references(
+        "escalate to athena; (→ Hermes); run `/write-spec`; Invoke `write-spec`; "
+        "`/virtuoso:next-pointer`", skills, agents) == ["/write-spec", "write-spec", "athena"]
+    assert validate.unresolved_references(
+        "escalate to the planner; (→ cross-cutting); □ 3. Aristotle: go", skills, agents) == []
+
+
+def test_the_shipped_plugin_names_no_ghost():
+    for ghost in ("athena", "solon", "herodotus", "write-spec", "Case C"):
+        for path in list((ROOT / "skills").rglob("*.md")) + list((ROOT / "agents").glob("*.md")):
+            assert ghost not in path.read_text(encoding="utf-8"), (ghost, path)
+
+
+# --- D7: epics are a registered role, never a conventional path ------------------------
+
+def test_the_epics_role_is_opt_in_and_written_by_the_epic_skill():
+    from tools.governance import schema
+    assert schema.DEFAULT_ROLES["epics"]["allowedWriters"] == ["epic"]
+    assert "epics" not in schema.CREATE_ROLE_ORDER
+
+
+def test_a_registered_epics_role_resolves(workspace):
+    data = manifest(workspace)
+    data["roles"]["epics"] = {"path": "Virtuoso/epics", "provider": "directory",
+                              "authority": "reference", "mutability": "read-write",
+                              "owner": "epic", "allowedWriters": ["epic"]}
+    write_manifest(workspace, data)
+    completed = run(REGISTRY_CLI, "--root", str(workspace), "resolve", "epics")
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.strip().replace("\\", "/").endswith("Virtuoso/epics")
+
+
+def test_the_epic_skill_names_no_conventional_path():
+    text = (ROOT / "skills" / "epic" / "SKILL.md").read_text(encoding="utf-8")
+    assert "resolve epics" in text
+    assert "2 operational" not in text and "`epics/` at the project root" not in text

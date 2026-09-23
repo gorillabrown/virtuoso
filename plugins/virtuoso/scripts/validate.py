@@ -492,6 +492,53 @@ def shipped_agent_files() -> list[str]:
                   if f.endswith(".md") and f != AGENT_GUIDE)
 
 
+#: Words that follow an agent-reference construct and are not agent names
+#: ("escalate to the planner", "escalate to Type 5", "(→ cross-cutting)").
+_NOT_AGENT_WORDS = {"the", "a", "an", "type", "deep", "cross", "user", "planner",
+                    "unassigned", "zeus"}   # zeus: the orchestrator persona (skills/virtuoso/zeus.md)
+
+_COMMAND_REF_RE = re.compile(r"`/(?:virtuoso:)?([a-z][a-z0-9-]*)`")
+_SKILL_CALL_RE = re.compile(r"(?:\bInvoke|\(use) `([a-z][a-z0-9-]*)`")
+_AGENT_REF_RE = re.compile(r"\(→ ([A-Za-z]+)|\bescalate to ([A-Za-z]+)|\brun on ([A-Za-z]+)"
+                           r"|^□ \d+\. ([A-Za-z]+):", re.MULTILINE)
+
+
+def unresolved_references(text: str, skills, agents) -> list[str]:
+    """Skill and agent names ``text`` points at that the plugin does not ship.
+
+    A reference to a skill or agent that does not exist sends the reader nowhere —
+    `write-spec` and the agents `athena`, `solon` and `herodotus` were named for
+    releases after they stopped existing, because nothing checked."""
+    skills = set(skills)
+    agents = {a.lower() for a in agents}
+    found = []
+    for match in _COMMAND_REF_RE.finditer(text):
+        if match.group(1) not in skills:
+            found.append("/" + match.group(1))
+    for match in _SKILL_CALL_RE.finditer(text):
+        if match.group(1) not in skills:
+            found.append(match.group(1))
+    for match in _AGENT_REF_RE.finditer(text):
+        name = next(g for g in match.groups() if g)
+        if name.lower() not in agents and name.lower() not in _NOT_AGENT_WORDS \
+                and name not in skills:
+            found.append(name)
+    return found
+
+
+def check_references_resolve() -> None:
+    skills = shipped_skill_names()
+    agents = [os.path.splitext(f)[0] for f in shipped_agent_files()]
+    hits = []
+    for rel, text in walk_text_files():
+        if rel.endswith(".md") and rel.split("/")[0] in ("skills", "agents", "references"):
+            hits.extend("%s: %s" % (rel, name)
+                        for name in unresolved_references(text, skills, agents))
+    (ok if not hits else fail)(
+        "every skill and agent a shipped file names is shipped" if not hits
+        else "references to skills or agents the plugin does not ship: %s" % hits[:8])
+
+
 def check_overlay_clause() -> None:
     """Every shipped skill and agent carries the project-overlay clause, verbatim.
 
@@ -662,6 +709,7 @@ def main() -> int:
     check_authority_claims()
     check_launchers_match_source()
     check_commands()
+    check_references_resolve()
 
     print("VALIDATION RESULTS")
     for message in oks:

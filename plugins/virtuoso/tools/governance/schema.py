@@ -246,7 +246,7 @@ DEFAULT_ROLES: dict[str, dict] = {
         "mutability": "read-write",
         "owner": "roadmap-review",
         "allowedWriters": ["roadmap-review", "next-pointer", "mid-dispatch-decision",
-                           "pointer-closeout"],
+                           "pointer-closeout", "3rd-party-audit"],
         "validation": "markdown",
         "classification": "active",
         "origin": "authored",
@@ -279,7 +279,8 @@ DEFAULT_ROLES: dict[str, dict] = {
         "authority": "reference",
         "mutability": "append-only",
         "owner": "pointer-closeout",
-        "allowedWriters": ["pointer-closeout", "roadmap-review", "mid-dispatch-decision"],
+        "allowedWriters": ["pointer-closeout", "roadmap-review", "mid-dispatch-decision",
+                           "3rd-party-audit", "governance-sweep"],
         "validation": "markdown",
         "classification": "active",
         "origin": "authored",
@@ -290,7 +291,9 @@ DEFAULT_ROLES: dict[str, dict] = {
         "authority": "evidence",
         "mutability": "append-only",
         "owner": "pointer-closeout",
-        "allowedWriters": ["pointer-closeout"],
+        # virtuoso writes the burst's close-out block and staging memos here, and
+        # mid-dispatch-decision folds amendments into those staging memos.
+        "allowedWriters": ["pointer-closeout", "virtuoso", "mid-dispatch-decision"],
         "validation": "exists",
         "classification": "active",
         "origin": "authored",
@@ -302,7 +305,7 @@ DEFAULT_ROLES: dict[str, dict] = {
         "mutability": "read-write",
         "owner": "mid-dispatch-decision",
         "allowedWriters": ["mid-dispatch-decision", "next-pointer", "pointer-closeout",
-                           "roadmap-review"],
+                           "roadmap-review", "virtuoso"],
         "validation": "exists",
         "classification": "active",
         "origin": "authored",
@@ -357,6 +360,21 @@ DEFAULT_ROLES: dict[str, dict] = {
         "classification": "active",
         "origin": "authored",
         "label": "Project overlays (read-only; mirrors shipped skill/agent paths)",
+    },
+    "epics": {
+        # One directory holding every epic packet (`<yyyy-mm-dd>-<slug>/`). Opt-in,
+        # like overlays: a project registers it when it runs its first epic, so
+        # `create` lays down no directory nobody asked for — and the epic skill
+        # resolves it here, never at a conventional path.
+        "provider": "directory",
+        "authority": "reference",
+        "mutability": "read-write",
+        "owner": "epic",
+        "allowedWriters": ["epic"],
+        "validation": "exists",
+        "classification": "active",
+        "origin": "authored",
+        "label": "Epic packets (directory)",
     },
     "governance": {
         "provider": "directory",
@@ -426,7 +444,7 @@ DEFAULT_ROLES: dict[str, dict] = {
 
 #: Roles created by ``create`` on a brand-new workspace, in readme order.
 #:
-#: ``overlays`` is deliberately not here. It is opt-in: a project registers it
+#: ``overlays`` and ``epics`` are deliberately not here. Each is opt-in: a project registers it
 #: when it has something to overlay, and until then `create` lays down no empty
 #: directory for it. Leaving a role out of this tuple is how the plugin says
 #: "supported, not assumed".

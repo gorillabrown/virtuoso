@@ -236,6 +236,13 @@ targets, process amendment migrations before inline collapses, and delete the
 staging file only after every fold-in lands. A fold-in that conflicts with current
 state becomes a reconciliation question, not a silent overwrite.
 
+Read the item's issue files in the registered `issues` role (`Issue.<ITEM-ID>.*`,
+per `policy.issues.filenameTemplate`). Each carries the `## Decision` block
+`mid-dispatch-decision` appended in its step 6d; summarize every block into the
+report's *Mid-Dispatch Decisions* section. An issue file with no `## Decision`
+block is an open decision, not a settled one: stop and route it to
+`/mid-dispatch-decision` before the crossing continues.
+
 ### Step 3 — Append the terminal record
 
 Append **one** record to the registered `terminalLedger`:

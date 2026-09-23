@@ -60,7 +60,7 @@ this run's depth, not a ranking of hosts.
 **If dispatching to an implementation agent:** any task tagged ULTRATHINK should be assigned at
 the cross-cutting tier with a `{max}` effort override. Example:
 ```
-□ 3. athena: Analyze architecture tradeoffs for cache redesign [cross-cutting] {max}  ← ULTRATHINK
+□ 3. Aristotle: Analyze architecture tradeoffs for cache redesign [cross-cutting] {max}  ← ULTRATHINK
 
 Execution:
   /effort-levels max             ← set before ULTRATHINK task

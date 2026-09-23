@@ -64,13 +64,22 @@ for an afternoon task.
 
 ## The packet
 
-All five files live in one directory. Resolution order for that directory:
-(1) an `epics` path registered in `Virtuoso/workspace-layout.json`, if present;
-(2) `<Project Documentation>/2 operational/Epics/` where that governance tree exists;
-(3) `epics/` at the project root. Directory name: `<yyyy-mm-dd>-<slug>/`.
-Never seed a rival governance document; if the project keeps a
-`Virtuoso.Governance.Readme.md` registry, suggest (once) registering the epics directory —
-the user decides.
+All five files live in one directory, `<yyyy-mm-dd>-<slug>/`, inside the project's
+registered `epics` role:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . resolve epics
+
+Never fall back to a conventional path. If the project is registered but declares no
+`epics` role, stop and show the entry to add to `Virtuoso/workspace-layout.json` —
+the user decides where epics live:
+
+```json
+"epics": { "path": "<directory>", "provider": "directory", "authority": "reference",
+           "mutability": "read-write", "owner": "epic", "allowedWriters": ["epic"] }
+```
+
+If the project keeps no registry at all, ask the user for the directory and use exactly
+that. Never seed a rival governance document.
 
 | File | Role | Mutability during the run |
 |------|------|---------------------------|

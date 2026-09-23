@@ -153,7 +153,8 @@ Run this skill when:
 
 Do NOT use this skill for:
 - Routine single-item planning
-- Single-specification authoring (use `write-spec`)
+- Single-item planning that needs no re-sequencing (write the specification to the
+  D.5.2 format and dispatch it with `/next-pointer`)
 - Weekly status updates (use `/roadmap-status`)
 
 ## Invocation
@@ -480,8 +481,8 @@ written, not retrofitted after the specification has passed.
 
 For each item in scope:
 
-**D.3.1 Draft.** Invoke `write-spec` with structural and implementation-detail
-inputs, sourced from close-outs, decision records, standing rules, and archives —
+**D.3.1 Draft.** Write each specification in the D.5.2 format, with structural and
+implementation-detail inputs sourced from close-outs, decision records, standing rules, and archives —
 and a **Lessons applied** section: each live lesson that bears on the item, by
 identifier, with the concrete change it made to this specification; or the
 statement that no live lesson applies.

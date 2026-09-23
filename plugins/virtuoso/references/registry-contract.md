@@ -75,6 +75,19 @@ Each entry under `roles` carries the full metadata set (item 15):
    completion record rather than live operational state. Terminal authority is
    still forbidden beneath backups, snapshots, and quarantine.
 
+### Opt-in roles
+
+Two roles are supported but never assumed: `create` lays down neither, and a project
+registers each by adding its entry to the manifest when it first needs it.
+
+| Role | Holds | Writers | Registered |
+|---|---|---|---|
+| `overlays` | project additions to shipped skills and agents (see *Project overlays*) | none (read-only) | when the project has something to overlay |
+| `epics` | one directory per epic packet, `<yyyy-mm-dd>-<slug>/` | `epic` | when the project runs its first epic |
+
+A ceremony that needs an opt-in role the project has not registered stops and shows the
+entry to add; it never falls back to a conventional path.
+
 ## Three distinct work roles (item 24)
 
 | Role | What it is |

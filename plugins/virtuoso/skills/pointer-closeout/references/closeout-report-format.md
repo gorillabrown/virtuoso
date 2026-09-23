@@ -5,7 +5,7 @@ Use this reference when drafting the project-facing close-out report.
 ## Report Flow
 
 1. **Lead with the 5-line Sprint Brief** (*Goal*, *Result*, *Learned*, *Recommend*,
-   *Bottom line* — one sentence each). See SKILL.md → "Sprint Brief — Lead of Wave 1".
+   *Bottom line* — one sentence each). See SKILL.md → "The five-line brief".
 2. Findings table.
 3. Interpret each non-pass result.
 4. Propose dispositions for user confirmation.
