@@ -38,7 +38,10 @@ carries *Lessons applied*, and `lessons --check` must pass before it is saved. T
 review then re-checks every existing dispatch-ready specification against lessons recorded
 since it was written. `next-pointer` reads the live lessons, runs the check, folds them in
 as a closable gap, and prints them with the pointer. Live lessons a specification leaves
-uncited are listed, so declining one is a judgement rather than an omission.
+uncited are listed, so declining one is a judgement rather than an omission. The
+specification format the review ships (D.5.2) ends with the `##### Lessons applied`
+heading the check reads, so a specification shaped like the template passes the gate
+instead of failing it.
 
 ### Epics apply too
 
@@ -57,7 +60,7 @@ role instead of staying in a journal.
 - The promotion rules said to *edit* an earlier entry's status, which the role's
   append-only mutability forbids.
 
-Tests: 773 passed, 3 skipped (Linux).
+Tests: 775 passed, 3 skipped (Linux).
 
 ## v1.8.2 (2026-09-23) — no silent zero in the trailing rate
 

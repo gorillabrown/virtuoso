@@ -560,7 +560,8 @@ close-outs since the last review that recorded no lesson and gave no reason.
 **D.5.1** Place specifications per `policy.roadmap.specStorage`.
 
 **D.5.2** Specification format (structural fields first, then implementation
-detail). Grouping headings appear only if `policy.roadmap.hierarchy` declares them:
+detail, then the lessons applied under the heading U9 reads). Grouping headings
+appear only if `policy.roadmap.hierarchy` declares them:
 
 ```
 #### ITEM-ID — Item title
@@ -582,6 +583,10 @@ detail). Grouping headings appear only if `policy.roadmap.hierarchy` declares th
 - **Staging plan:** explicit paths, per policy.git
 - **Failure handling:** if X, do Y; rollback: …
 - **Project extensions:** … (only those policy.rubric.extensions declares)
+
+##### Lessons applied
+- <prefix>-NNN — what it changed here: a *Done when* row, a constraint, a test
+- (or) No live lesson applies — N read
 ```
 
 Mid-dispatch amendments append as `##### Mid-Dispatch Amendment — YYYY-MM-DD`.

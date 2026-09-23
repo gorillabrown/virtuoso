@@ -441,3 +441,15 @@ def test_no_shipped_file_names_a_lessons_document_by_filename():
         if "LESSONS_LEARNED" in text or "Lessons_Learned.md" in text:
             offenders.append(str(path.relative_to(ROOT)))
     assert offenders == []
+
+
+def test_the_specification_format_the_review_ships_carries_the_section_u9_reads():
+    """D.5.2's format is what authors copy. A specification shaped exactly like it
+    must have the section U9 looks for, or every new specification fails at the gate."""
+    text = (ROOT / "skills" / "roadmap-review" / "SKILL.md").read_text(encoding="utf-8")
+    start = text.index("**D.5.2**")
+    block = text[text.index("```\n", start) + 4:]
+    block = block[:block.index("```")]
+    result = lessons_mod.check(block, LESSONS, "LSN")
+    assert result.passed is True
+    assert not any(f["code"].startswith("lessons-section") for f in result.findings)
