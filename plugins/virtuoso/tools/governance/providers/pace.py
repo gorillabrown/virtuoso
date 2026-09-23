@@ -191,6 +191,7 @@ class PaceReport:
                             _tally("; excluded: ", self.trailing.get("excluded", {}))))
             if self.trailing.get("points") is not None:
                 lines.append("              %s points/week" % _n(self.trailing["points"], 2))
+            lines.append("              source: %s" % (self.trailing.get("source") or "—"))
         for figure, inputs in self.missing.items():
             lines.append("    not computable: %s (missing: %s)"
                          % (_FIGURE_LABELS.get(figure, figure), "; ".join(inputs)))
@@ -433,6 +434,22 @@ def _trailing(report: PaceReport, source: CompletionSource, snapshot, scale, wee
             "correction that dates it" % (len(undatable),
                                           _some("%s (%r)" % (c.record, c.raw_date)
                                                 for c in undatable))]
+        return
+    # A source with no completion ever recorded cannot evidence a rate of zero: it
+    # is a ledger in another format, a board that keeps no finished items, or a
+    # project with no history. Each reads as "0/week, behind" and none of them is.
+    if not any(c.canonical == base.COMPLETED for c in completions):
+        where = source.label or "the completion source"
+        if not completions:
+            held = "%s holds no terminal records" % where
+        else:
+            held = ("%s holds %d record(s), none whose result reads as completed "
+                    "(results seen: %s)" % (where, len(completions),
+                                            _some(sorted({c.result or "(blank)"
+                                                          for c in completions}))))
+        report.missing["trailing"] = [
+            "a recorded completion: %s. If the ledger has another column layout, its "
+            "records are not being read" % held]
         return
     in_window = [c for c in completions if c.date is not None and start < c.date <= as_of]
     counted: dict = {}

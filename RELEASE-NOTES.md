@@ -1,5 +1,18 @@
 # Virtuoso Release Notes
 
+## v1.8.2 (2026-09-23) — no silent zero in the trailing rate
+
+The first real run of 1.8.1 read Gloves of Glory's live board and reported "0 completions,
+BEHIND" against a review that had counted twelve in the same four weeks. The required side
+matched the review to the hundredth; the trailing side read a source that held no completion
+at all — a board that keeps only live items, or a ledger in another column layout — and turned
+that into a rate of zero.
+
+A source with no recorded completion now makes the trailing rate **not computable**, naming the
+source and, when it holds records, the result words it found instead. A project whose ledger
+has completions, just none in the window, still reads zero and behind, because that is true.
+The text form of `kpis` now also prints the trailing rate's source.
+
 ## v1.8.1 (2026-09-23) — deadline support
 
 **Additive. Registry schema stays at v2, and nothing a project already has changes meaning.**

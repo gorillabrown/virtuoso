@@ -569,3 +569,43 @@ def test_behind_or_overdue_replaces_proceed_only():
 def test_on_track_ahead_and_met_raise_no_concern():
     assert health_mod._pace_concern([_concern("on track"), _concern("ahead"),
                                      _concern("met"), _concern("not computable")]) is None
+
+
+# =============================================================================
+# 1.8.2: a source with no recorded completion is not a rate of zero
+# =============================================================================
+
+
+def test_an_empty_ledger_is_not_computable_not_zero():
+    report = compute(records=[])
+    assert report.trailing["items"] is None
+    assert report.verdict == pace.NOT_COMPUTABLE
+    assert "holds no terminal records" in report.missing["trailing"][0]
+
+
+def test_a_ledger_read_in_the_wrong_layout_is_named_not_zero():
+    """Columns shifted: the result cell holds evidence text, the date cell a title."""
+    shifted = [LedgerRecord(record_id="289", item_id="2026-09-21", completed="Lineage close-out",
+                            result="reviewed decision packet")]
+    report = compute(records=shifted)
+    assert report.verdict == pace.NOT_COMPUTABLE
+    message = report.missing["trailing"][0]
+    assert "none whose result reads as completed" in message
+    assert "reviewed decision packet" in message
+
+
+def test_a_register_that_keeps_no_finished_items_is_not_computable():
+    snap = snapshot(gog_items())
+    src = pace.CompletionSource(pace.from_register(snap.items), "workRegister completion dates")
+    report = pace.compute(GAME_BUILD, snap, src)
+    assert report.verdict == pace.NOT_COMPUTABLE
+    assert "workRegister completion dates holds no terminal records" in report.missing["trailing"][0]
+
+
+def test_completions_outside_the_window_still_read_as_zero_and_behind():
+    report = compute(records=[record(1, "2026-06-01")])
+    assert report.trailing["items"] == 0 and report.verdict == "behind"
+
+
+def test_the_trailing_source_is_rendered():
+    assert "source: terminalLedger: CompletedWork.Ledger.md" in compute().render()
