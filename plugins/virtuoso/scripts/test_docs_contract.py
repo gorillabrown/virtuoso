@@ -142,6 +142,42 @@ def test_every_documented_policy_key_exists():
     assert not unknown, "documented policy keys that do not exist: %s" % unknown
 
 
+def _policy_table_keys(text: str) -> set[str]:
+    """The key in the first cell of every row of a table headed ``| Policy |``.
+
+    Those tables spell keys without the ``policy.`` prefix (``roadmap.effortScale``),
+    which the prefix-matching check above cannot see — and that is how a key was
+    documented, read by ``kpis``, and still refused by ``policy-set`` as unknown.
+    """
+    keys: set[str] = set()
+    in_table = False
+    for line in text.splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if not line.lstrip().startswith("|"):
+            in_table = False
+            continue
+        if cells and cells[0].lower() == "policy":
+            in_table = True
+            continue
+        if not in_table or re.match(r"^:?-+:?$", cells[0]):
+            continue
+        match = re.fullmatch(r"`(?:policy\.)?([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)+)`",
+                             cells[0])
+        if match:
+            keys.add(match.group(1))
+    return keys
+
+
+def test_every_policy_table_key_exists():
+    known = set(_policy_keys(policy_mod.DEFAULTS))
+    documented = set()
+    for path in DOCS:
+        documented |= _policy_table_keys(path.read_text(encoding="utf-8"))
+    assert documented, "no policy table was found at all"
+    unknown = sorted(k for k in documented if k not in known)
+    assert not unknown, "policy-table keys that do not exist: %s" % unknown
+
+
 def test_every_git_policy_value_is_documented():
     text = (ROOT / "references" / "git-policy.md").read_text(encoding="utf-8")
     for value in policy_mod.GIT_POLICIES:

@@ -72,6 +72,9 @@ DEFAULTS: dict = {
         "specStorage": "inline",        # "inline" | "files" | "external"
         "specDirectory": "",
         "lengthCeilingLines": 2000,
+        # size -> points for effort-weighted metrics. {} means the generic t-shirt
+        # scale in providers/kpi.py; a project's own scale replaces it, never merges.
+        "effortScale": {},
     },
     # --- readiness rubric (items 52, 53) -------------------------------------
     "rubric": {
