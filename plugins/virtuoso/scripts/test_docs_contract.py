@@ -342,3 +342,17 @@ def test_the_learning_metrics_are_documented():
     contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
     for metric in learning.metrics([], learning.Outcomes()):
         assert "| `%s` |" % metric.name in contract, "metric %s is undocumented" % metric.name
+
+
+def test_the_preflight_docstring_lists_every_machine_line():
+    """The script's own help is the first place an operator reads what it prints."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("preflight_doc",
+                                                  str(ROOT / "scripts" / "virtuoso_preflight.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    outcome = result_mod.Result(status=result_mod.READY, mode="check", root="/tmp")
+    for line in outcome.contract_lines() + [outcome.overlay_line(), outcome.deadline_line(),
+                                            outcome.roadmap_integrity_line()]:
+        token = line.split(":")[0] + ":"
+        assert token in module.__doc__, "%s is not in the preflight's docstring" % token

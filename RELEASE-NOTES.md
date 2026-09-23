@@ -1,5 +1,89 @@
 # Virtuoso Release Notes
 
+## v1.10.0 (2026-09-23) — loop hardening
+
+**Additive. Registry schema stays at v2; the readiness rubric stays at v1.1.** New
+workspaces get two more roles (`findings`, and effort columns in the ledger); existing
+manifests stay valid without them.
+
+1.9.0 closed the learning loop at three checked links. The analysis that followed graded
+all twenty-one hand-offs in the loop — six mechanical, five partly, eight prose, two
+missing — and ranked eighteen gaps. This release closes them. Wherever a person had to
+remember, a command now answers; wherever an output had no reader, it has one.
+
+### The catalog tidies itself
+
+- **`lessons --hygiene`** — `governance-sweep`'s new check 21 — proposes what to
+  **merge** (live lessons recording one pattern), **retire** (observations older than
+  `policy.lessons.staleAfterDays`, default 180, that no close-out ever applied),
+  **tidy** (entries missing fields) and **repair** (a reused id).
+- **`lessons --candidates`** computes promotion for `roadmap-review` D.4: a pattern that
+  recurred, or a lesson applied and held in two close-outs; revision for one that failed
+  twice.
+- **`lessons --record-status`** is the one write: a Promoted / Retired / Superseded
+  record appended for an allowed writer, previewed first, read back after. Nothing is
+  ever edited.
+- A close-out's **"No new lesson — reason" names what was examined** — a lesson, rule or
+  item — whenever there is anything to examine (`lesson-reason-unanchored`).
+- **`kpis` has a `learning` group**: live-count, lesson-yield, held-rate, promotion-rate,
+  time-to-apply, repeated-trap-rate, effort-calibration — each with its sources, or
+  *not computable* naming the missing input.
+
+### Prose links made mechanical
+
+- **`record-completion`** performs the close-out crossing's ledger append and register
+  close for a local project, in order, verified, with a recovery record on partial
+  failure. Before, those writes were done by hand.
+- **Standing rules are paired** with their definitions in `policy.standingRules.source`
+  (`standing-rule-unpaired`), checked at session start, and Zeus reads them from that one
+  source instead of `CLAUDE.md`.
+- **`roadmap-integrity:`** is printed — the fifth machine line, from one read of the
+  roadmap — so the four ceremonies that act on it are no longer reading a line that did not
+  exist. It decodes before judging, so a UTF-16 roadmap from PowerShell is `ok`.
+- **Policy is checked at every load**: a hand-edited value of the wrong type is a
+  `policy-invalid` warning, not a silently ignored setting.
+
+### Every output has a reader
+
+- **`findings`** is a default role: the sweep, the adversarial review and the agents record
+  there, and `roadmap-review` B.3 reads every open finding — and its own previous
+  lessons-applied — into the next plan.
+- **Effort calibration** is measured: optional `effortEstimate` / `effortActual` ledger
+  fields (`record-completion --estimate --actual`), `kpis effort-calibration`, and
+  `effort-levels` sizing by the project's figure instead of a fixed one.
+- **`dispatch-buffer-ready`** counts the buffer items a gate would actually pass, beside
+  `dispatch-buffer-filled`, which counts what the register says.
+
+### Close-out reviews every file it made
+
+**`sprint_guards created-files --base <ref>`** classifies every file a dispatch created or
+left changed — committed, temporary, untracked, uncommitted. `pointer-closeout` drafts
+the report's new *Files Created* dispositions from it in Wave 1, removes the confirmed
+temporaries, and re-runs it at Step 6. The sprint guards also read v2 registries now; they
+had silently needed a v1 `paths` map.
+
+### Said what they do
+
+- Default writers match the skill bodies (`virtuoso` → issues and close-outs,
+  `3rd-party-audit` → roadmap and lessons, `governance-sweep` → lessons).
+- `mid-dispatch-decision` step 6d writes the `## Decision` block it always promised, and
+  the close-out reads it.
+- Nothing names a skill, agent or case the plugin does not ship (`write-spec`, "Case C",
+  `athena`, `solon`, `herodotus`); the validator checks every reference.
+- `epic` resolves an opt-in `epics` role and never a conventional path.
+- No other project's residue in the shipped agents; the validator scans for it. The memory
+  guide states the memory / lessons / findings boundary once.
+- Promoted rules are hashed: an anchor now proves the rule beneath it, not just a marker.
+
+### Plugin pages
+
+Both hosts and the marketplace describe the plugin the same way — one description naming
+the learning loop, `displayName`, author, keywords; the marketplace entry gains `category`
+and `tags`; the alternate host's page gains its `interface` block (tagline, three prompt
+chips, information panel, icons). A test holds the three equal.
+
+Tests: 874 passed, 3 skipped (Linux).
+
 ## v1.9.0 (2026-09-23) — the learning loop
 
 **Additive. Registry schema stays at v2. The readiness rubric moves to v1.1.** The rubric

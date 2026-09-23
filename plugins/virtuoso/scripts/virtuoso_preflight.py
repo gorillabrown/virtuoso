@@ -17,6 +17,7 @@ Every invocation prints the machine-readable status lines, quiet or not:
     writes: <N>
     overlays: <state>
     deadlines: <state>
+    roadmap-integrity: <state>
 
 The overlay line always states a result — `not registered` when the project never
 declared the role — so silence can never be read as "overlays are in force". The
