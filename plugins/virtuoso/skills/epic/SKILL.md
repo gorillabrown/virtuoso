@@ -1,16 +1,17 @@
 ---
 name: epic
 description: >
-  Produce the launch materials for a long-horizon autonomous run — a multi-phase epic spanning
-  hours or days of Claude working alone, across context loss and multiple sessions, until a
-  completion condition is verifiably met. Use when the user states an outcome and wants to
-  walk away: "here's the goal, keep working until it's done", "run this overnight", "multi-day
-  epic", "set this up so Claude finishes it without me", "prepare an epic", "work until the
-  tests pass / coverage hits the target". Also use when a goal is too big for one sitting and
-  the user does not want to spec the steps. Trigger on: "epic", "long-running goal",
-  "autonomous run", "walk away", "keep going until done", "don't lose the thread", "completion
-  condition", "give it the goal not the steps". NOT for fully-specified sprint dispatches
-  (sprint machinery), single-session tasks (virtuoso skill), or interval jobs (loop/schedule).
+  Produce the launch materials for a long-horizon autonomous run of an epic-scale item on the
+  master roadmap: a multi-phase epic spanning hours or days of Claude working alone, across
+  context loss and multiple sessions, until a completion condition is verifiably met. Epics
+  start only from the roadmap, after a roadmap review has placed the item with Path: epic;
+  next-pointer routes such an item here, or name it with "/epic ITEM-ID". An outcome stated
+  ad hoc ("here's the goal, keep working until it's done", "run this overnight", "walk away")
+  goes to /storyboard first, which aligns it and holds it for that review. Every session of
+  the run executes under the virtuoso skill, and the run closes through /pointer-closeout.
+  Trigger on: "epic", "/epic", "run the epic", "long-running goal", "autonomous run", "keep
+  going until done", "completion condition". NOT for dispatch-sized items (next-pointer),
+  single-session tasks (virtuoso skill), or interval jobs (loop/schedule).
 ---
 
 <!-- virtuoso-shared-contract v2 -->
@@ -40,10 +41,17 @@ same thing — proceed on the shipped file alone.
 
 # Epic
 
-Turn a stated outcome into an **epic packet**: five files that let any future Claude
-session — with zero memory of this conversation — execute the goal autonomously for hours
-or days, survive every context loss, and stop only when completion is *proven* or a
-human decision is genuinely required.
+Turn an epic-scale item on the master roadmap into an **epic packet**: five files that let
+any future Claude session — with zero memory of this conversation — execute the goal
+autonomously for hours or days, survive every context loss, and stop only when completion
+is *proven* or a human decision is genuinely required.
+
+**One of three paths, one destination.** This is the roadmap-epic path. Like
+`/next-pointer`, it opens only on an item a roadmap review has placed on the master
+roadmap. The ad hoc path, `/storyboard` then `/write-plan`, is the only one that may
+start from an idea. All three deliver the same thing to execution, under the contract in
+`references/execution-paths.md`: aligned, verifiable, aware of the project, executed
+under the virtuoso skill, and closed out by `/pointer-closeout`.
 
 **Core principle:** the goal is fixed and verifiable; the path belongs to the executor;
 the files are the memory. You are producing the materials, not executing the goal.
@@ -54,14 +62,15 @@ the files are the memory. You are producing the materials, not executing the goa
 
 | Signal | Route |
 |--------|-------|
+| An outcome that is not on the master roadmap yet | `/virtuoso:storyboard`: it aligns the idea and holds it, and the next roadmap review places it as `Path: epic` |
+| A dispatch-sized item on the roadmap | `/virtuoso:next-pointer` |
 | Fits in one sitting | Just do it (virtuoso skill if 3+ tool calls) |
-| A dispatch-ready spec already exists for a low-judgment implementer | Sprint machinery — `/virtuoso:next-pointer` |
-| One new piece of work to plan and slot in now, fits a dispatch | `/virtuoso:plan-now` |
 | Recurring job on an interval ("check every 5 minutes") | loop / schedule tooling |
-| Outcome-stated, multi-phase, multi-session or walk-away | **This skill** |
+| An epic-scale item on the master roadmap (`Path: epic`) | **This skill** |
 
-When sized below epic scale, say so in one sentence and route — do not scaffold a packet
-for an afternoon task.
+When the item turns out not to be epic-scale, say so in one sentence and route it to
+`/roadmap-review`, which owns its path. This skill does not edit the roadmap. Do not
+scaffold a packet for an afternoon task.
 
 ## The packet
 
@@ -104,15 +113,33 @@ other epic, so the user, the resume prompt, and downstream tooling always know w
 
 ## Workflow
 
-### Step 1 — Size it
+### Step 1 — Pull the item from the master roadmap
 
-Epic scale = outcome-stated **and** multi-phase **and** multi-session-or-walk-away.
-Anything less: route per the table above. State the sizing verdict in one line
-(e.g. "Epic-scale: ~2 days, 4 phases, unattended overnight").
+An epic starts from an item a roadmap review has placed, never from a stated outcome:
+`/epic <ITEM-ID>`, or the head item `/next-pointer` routed here.
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor epic items --json
+
+- The item is in the live register and not terminal. Every prerequisite is terminal,
+  resolved through the provider. Its roadmap entry declares `Path: epic`.
+- Read its roadmap entry. When its origin names a held plan, read that entry's
+  storyboard too: `holding --check <entry>`, then the file itself. Its alignment record,
+  frames, and decisions are the charter's first draft, and a question they already
+  answer is not asked again.
+- No such item: route the user to `/storyboard`. `Path` is dispatch, or absent: route to
+  `/next-pointer`. A prerequisite is pending: name it and stop.
+- A charter whose `item:` already names this item means the run exists. Point to its
+  launch file, and do not scaffold a second packet.
+
+Epic scale = outcome-stated **and** multi-phase **and** multi-session-or-walk-away. State
+the sizing verdict in one line (e.g. "Epic-scale: ~2 days, 4 phases, unattended
+overnight").
 
 ### Step 2 — Sharpen the charter (Definition of Done first)
 
-Convert the stated outcome into DoD rows: **condition | verify by | expected evidence**.
+Convert the item's outcome, from its roadmap entry and, where it has one, from the
+storyboard's confirmed frames, into DoD rows: **condition | verify by | expected
+evidence**.
 Every row must be checkable by a command or a concrete procedure — a row that cannot be
 verified is a wish, not a condition; tighten it or move it to non-goals.
 
@@ -147,6 +174,9 @@ otherwise dead-end on unattended:
   needs, so no approval prompt stalls the run at hour two
 
 Record results in state.md's Working set (verified facts) and launch.md's preflight table.
+The table reports the same five readiness findings every path reports: specification (every
+DoD row verifiable), prerequisites, repository, external register, and execution
+environment.
 Anything unverifiable right now becomes a **launch-blocking question** if the user is still
 present, or an explicit charter Assumption + escalation trigger if not — deliberately,
 never by omission. **Never defer a five-second question into the unattended run.**
@@ -166,8 +196,8 @@ than you can now, and stale prescriptions poison later sessions.
 2. Print the walk-away readiness verdict: preflight table status + open assumptions.
 3. Print the kickoff/resume prompt from launch.md in a fenced code block — it is the
    same prompt for the first session and every later one.
-4. If the user is present, offer to begin executing now; otherwise end with the packet
-   path and the code-boxed prompt.
+4. If the user is present, offer to begin executing now, under the virtuoso skill.
+   Otherwise, end with the packet path and the code-boxed prompt.
 
 ## Scaffolding budget
 
@@ -214,14 +244,26 @@ read anyway — the packet works even for an executor that has never seen this p
   long-lived session — record distilled conclusions and evidence pointers; where the
   runtime offers subagents, push noisy exploration into them and keep only their results.
 
-## Integration (optional, never required)
+## Execution — the destination every path shares
 
-- `virtuoso` — per-burst execution discipline when the executor runs inside this plugin.
+Every session of the run executes under the **virtuoso** skill, with the packet as its
+dispatch spec. The charter is the contract, plan.md is the route, state.md is the working
+set, and the sprint identifier is `[ITEM-ID]-S<n>`. That is what brings an epic to the
+same place as a roadmap dispatch and an ad hoc plan (`references/execution-paths.md`).
+The packet still embeds its own run rules, so a session on a host without this plugin
+keeps them anyway.
+
+The run ends through `/pointer-closeout [ITEM-ID]` once `done.md` exists, as launch.md's
+completion protocol says. That crossing retires the item on the master roadmap and
+records what the epic taught.
+
 - `mid-dispatch-decision` — process a BLOCKER(USER) when the user returns to one.
 - `adversarial-review` — red-team the charter before committing days to it.
 
 ## Anti-patterns (observed in baseline runs)
 
+- Chartering an outcome that is not on the master roadmap: storyboard it, and let the
+  review place it
 - Pre-baked task backlogs or starter code for a project nobody has inspected yet
 - A 9-or-22-file bespoke kit instead of the five-file contract
 - Deferring "where is the repo?" / "is gh authenticated?" into the unattended run

@@ -48,6 +48,10 @@ noisy exploration into subagents when your runtime offers them.
 Before ending any work burst: update state.md, append a journal.md entry, leave the
 working tree at a committed or clearly-journaled checkpoint. Disk handoff-ready,
 always.
+
+Run this session under the virtuoso skill when it is available: this packet is your
+dispatch spec, and your sprint identifier is [ITEM-ID]-S<n>, where n is the next session
+number in journal.md.
 ```
 
 ## Completion protocol — the only way this epic ends as "complete"
@@ -61,8 +65,8 @@ always.
 4. Final journal entry, then stop. **`done.md` existing is the stop signal** for any
    loop or scheduler driving sessions: check it before launching another session. Never
    create it under any other circumstances.
-5. Close the epic through `/pointer-closeout`, with journal.md and done.md as its
-   evidence. That ceremony records what the epic taught in the registered `lessons`
+5. Close the epic through `/pointer-closeout [ITEM-ID]`, with journal.md and done.md as
+   its evidence. That ceremony records what the epic taught in the registered `lessons`
    role — where the next charter reads it — or says why it taught nothing. An epic
    that ends without it leaves its lessons in a journal no future run consults.
 

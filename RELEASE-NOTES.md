@@ -1,27 +1,44 @@
 # Virtuoso Release Notes
 
-## Unreleased — ad hoc planning with `/plan-now`
+## Unreleased — three paths to execution, one destination
 
-**Upgrading.** New workspaces name `plan-now` as a writer on `roadmap`, `workRegister` and
-`issues`. An existing project adds `"plan-now"` to those roles' `allowedWriters` in
-`Virtuoso/workspace-layout.json` to let it ingest. Without that, the skill still plans in
-full and hands the approved specification to `/roadmap-review`.
+**Upgrading.** The ad hoc path needs the opt-in `holdingBay` role: `/storyboard` prints the
+entry to add, and you choose the directory. Two behaviours change. `/epic` now starts only
+from a roadmap item marked `Path: epic`, and `/next-pointer` routes such items to it. An
+outcome stated ad hoc goes to `/storyboard` first, and the next roadmap review places it.
 
-- **`/virtuoso:plan-now`** is the side door for work that arrives between reviews. It
-  sizes the work out loud and routes epic-scale work to `/epic`. It investigates first,
-  then brainstorms one bounded question at a time through six lenses: outcome, placement,
-  touchpoints, externalities, upstream and downstream. It writes back what the user said
-  apart from what it assumed, with an impact map. Then it drafts a skeleton for approval
-  and authors D.5.2 specifications against the shared rubric and the lessons check. It
-  creates the items through `create-item`, stamped with their `plan-now` origin, and
-  seats each one without renumbering anyone else. Finally it gates the item with
-  `/next-pointer <ITEM-ID>` and asks whether to execute now with the virtuoso skill, hand
-  off to a fresh session, leave it queued, or hand it to `/epic`.
-- **`/next-pointer <ITEM-ID>`** runs the dispatch gate against one named item instead of
-  the head of the belt.
-- **`/roadmap-review`** names every `plan-now` item in its scope-discipline assessment,
-  seats the ones left unsequenced, and works the downstream flags they left in the
-  follow-up queue.
+- **`/virtuoso:storyboard`** is the ad hoc way in, and its one job is alignment. It sizes
+  the work out loud and investigates before it asks. It asks one bounded question at a
+  time, through six lenses: outcome, placement, touchpoints, externalities, upstream,
+  and downstream. It writes back what you said apart from what it assumed, with an impact
+  map, and walks concrete *frames* of the finished work, including one where something
+  goes wrong. It proposes approaches and a skeleton, and records an *Aligned* verdict
+  only when every assumption is resolved and you approve. The result is held, never put
+  on the roadmap.
+- **`/virtuoso:write-plan`** continues from the storyboard, and always starts there. With
+  no storyboard it runs `/storyboard`. With one, it re-anchors and checks for drift, and
+  any question about intent goes back to the storyboard. It writes D.5.2 specifications
+  against the shared rubric and the lessons check, then runs next-pointer's readiness
+  audit, pre-flight, and repository reconciliation. After that it asks: execute now
+  under the virtuoso skill, execute from another session, hold for review, or withdraw.
+  It never writes the roadmap or the register.
+- **The holding bay** (`holdingBay`, opt-in) keeps one file per piece of ad hoc work.
+  Each file has a trail of states that only the owning ceremony may move, through
+  `virtuoso_registry holding --record`: `storyboarded`, `planned`, `in-flight`,
+  `executed`, `absorbed`, and `withdrawn`. `holding --open` lists what the next review
+  must reconcile, and `holding --check` validates an entry. Provisional item identifiers
+  are `HB-<n>`, never reused.
+- **`/roadmap-review`** empties the holding bay at every review. Work that already ran
+  becomes a completed item, through pointer-closeout's recording crossing. Planned and
+  storyboarded work comes onto the roadmap as specifications, stubs, or `Path: epic`
+  items, or is withdrawn with a reason. Only work in flight carries over.
+- **`/pointer-closeout`** closes a held plan in held-plan mode: the evidence and lessons
+  are written now, and the register and terminal ledger wait for the absorbing review.
+- **`/epic`** pulls from the master roadmap, and every session runs under the virtuoso
+  skill. **`/next-pointer`** routes `Path: epic` items to it, and every pointer carries an
+  origin line.
+- **`references/execution-paths.md`** is the one home for the contract that all three
+  paths must meet before execution starts.
 
 ## v1.10.2 (2026-09-24) — a privacy policy
 

@@ -238,7 +238,7 @@ def test_the_rubric_reports_five_separate_findings():
 
 
 def test_the_ceremonies_defer_to_the_shared_rubric():
-    for name in ("roadmap-review", "next-pointer", "plan-now"):
+    for name in ("roadmap-review", "next-pointer", "write-plan"):
         text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
         assert "references/readiness-rubric.md" in text, (
             "%s does not point at the shared rubric" % name)
@@ -315,7 +315,7 @@ def test_every_skill_carries_the_shared_contract_block():
 
 def test_ceremony_skills_run_the_read_only_preflight():
     ceremonies = ["roadmap-review", "roadmap-status", "next-pointer", "pointer-closeout",
-                  "mid-dispatch-decision", "3rd-party-audit", "plan-now"]
+                  "mid-dispatch-decision", "3rd-party-audit", "storyboard", "write-plan"]
     for name in ceremonies:
         text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
         assert "--mode check" in text, "%s does not run the read-only preflight" % name
@@ -358,30 +358,53 @@ def test_the_preflight_docstring_lists_every_machine_line():
         assert token in module.__doc__, "%s is not in the preflight's docstring" % token
 
 
-# --- ad hoc intake -------------------------------------------------------------
+# --- three paths to execution, one destination ---------------------------------
 
 
-def test_plan_now_writes_where_its_defaults_let_it():
-    """plan-now creates its own items, stores their specifications, and escalates
-    blockers; a fresh workspace must name it on exactly the roles it writes."""
-    for role in ("roadmap", "workRegister", "issues"):
-        assert "plan-now" in schema.DEFAULT_ROLES[role]["allowedWriters"], role
-    for role in ("terminalLedger", "lessons", "roadmapReviews"):
-        assert "plan-now" not in schema.DEFAULT_ROLES[role]["allowedWriters"], role
+def skill_text(name: str) -> str:
+    return (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
 
 
-def test_plan_now_gates_through_the_shared_ceremonies():
-    """The side door keeps the same bar: the shared rubric, the lessons check,
-    governed creation, the targeted dispatch gate, and virtuoso for execution."""
-    text = (ROOT / "skills" / "plan-now" / "SKILL.md").read_text(encoding="utf-8")
-    for needle in ("--actor plan-now create-item", "lessons --check",
-                   "/next-pointer <ITEM-ID>", "**virtuoso** skill", "/pointer-closeout",
-                   "plan-now YYYY-MM-DD"):
-        assert needle in text, needle
+def test_every_path_points_at_the_one_destination_contract():
+    """Storyboard -> write-plan, next-pointer and epic must arrive at the same place;
+    the contract has one home, and every ceremony on a path reads it."""
+    assert (ROOT / "references" / "execution-paths.md").is_file()
+    for name in ("storyboard", "write-plan", "next-pointer", "epic", "virtuoso",
+                 "pointer-closeout", "roadmap-review"):
+        assert "references/execution-paths.md" in skill_text(name), name
 
 
-def test_the_targeted_dispatch_gate_is_documented_where_plan_now_uses_it():
-    pointer = (ROOT / "skills" / "next-pointer" / "SKILL.md").read_text(encoding="utf-8")
-    assert "`/next-pointer <ITEM-ID>`" in pointer
-    review = (ROOT / "skills" / "roadmap-review" / "SKILL.md").read_text(encoding="utf-8")
-    assert "`/plan-now`" in review and "plan-now YYYY-MM-DD" in review
+def test_the_ad_hoc_path_does_no_roadmapping():
+    """storyboard and write-plan write the holding bay and nothing else: every command
+    they run under their own name is a read or a holding-bay move."""
+    reads_and_holding = {"holding", "provider", "items", "next", "kpis", "lessons", "repo",
+                         "deps", "roles", "resolve"}
+    for name in ("storyboard", "write-plan"):
+        text = skill_text(name)
+        used = set(re.findall(r"--actor %s (\S+)" % re.escape(name), text))
+        assert used, name
+        assert used <= reads_and_holding, (name, sorted(used - reads_and_holding))
+
+
+def test_write_plan_always_starts_from_the_storyboard():
+    text = skill_text("write-plan")
+    assert "## Step 0 — Pull back into the storyboard (always first)" in text
+    assert "run `/storyboard`" in text
+
+
+def test_the_roadmap_paths_open_only_on_the_master_roadmap():
+    epic = skill_text("epic")
+    assert "### Step 1 — Pull the item from the master roadmap" in epic
+    assert "`/storyboard`" in epic
+    pointer = skill_text("next-pointer")
+    assert "`Path: epic`" in pointer and "## Edge case: Epic at head" in pointer
+    assert "Origin: roadmap — [ITEM-ID]" in pointer
+
+
+def test_the_holding_bay_is_reconciled_at_review_and_closed_out_in_held_plan_mode():
+    review = skill_text("roadmap-review")
+    assert "holding --open" in review
+    assert "--actor roadmap-review holding --record <entry> --state absorbed" in review
+    closeout = skill_text("pointer-closeout")
+    assert "--actor pointer-closeout holding --record <entry> --state executed" in closeout
+    assert "**The recording crossing.**" in closeout

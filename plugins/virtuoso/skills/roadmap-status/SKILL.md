@@ -244,6 +244,7 @@ compute. Report them as returned:
 | Dispatch-ready items | against `policy.roadmap.dispatchBuffer`; if the buffer is 0, report "eager specification disabled" |
 | Group progress | only if the project uses grouping |
 | Pace against each declared deadline | from the `pace` block: verdict, required vs trailing rate, projected finish, blocked share, scope. With no deadline declared, say so |
+| Held ad hoc plans | `virtuoso_registry holding --open`: the count by state, and the oldest entry's age. No `holdingBay` role: the project holds no ad hoc work |
 
 The status *words* in the register are the project's own; the canonical statuses
 above come from `policy.workRegister.statusMappings`. Never assume a project
@@ -296,6 +297,7 @@ Each becomes a Phase 2 candidate, never a Phase 1 edit.
 - [Dispatch buffer: N of [policy target] — or: eager specification is disabled.]
 - [If stragglers: N items look complete and need migration.]
 - [If drift: the roadmap and the register disagree about N items.]
+- [If anything is held: N ad hoc plans are waiting for the next roadmap review (N planned, N storyboarded, N executed, N in flight).]
 
 ### Recently completed (since YYYY-MM-DD)
 - **[Item title]** — summary. *(ITEM-ID)*

@@ -1,5 +1,7 @@
 ---
 epic: [SLUG]
+item: [ITEM-ID]   # the master-roadmap item this epic executes (Path: epic)
+origin: roadmap — [ITEM-ID]
 created: [YYYY-MM-DD]
 status: active   # active | complete | aborted — set complete only per launch.md Completion protocol
 ---
@@ -11,7 +13,9 @@ status: active   # active | complete | aborted — set complete only per launch.
 
 ## Outcome
 
-[1–3 sentences describing the end state — what will be true, not what will be done.]
+[1–3 sentences describing the end state — what will be true, not what will be done.
+Drawn from the item's roadmap entry and, where it was absorbed from a held plan, from its
+storyboard's alignment record.]
 
 ## Definition of Done — all rows must pass
 

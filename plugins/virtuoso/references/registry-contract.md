@@ -77,13 +77,14 @@ Each entry under `roles` carries the full metadata set (item 15):
 
 ### Opt-in roles
 
-Two roles are supported but never assumed: `create` lays down neither, and a project
-registers each by adding its entry to the manifest when it first needs it.
+Three roles are supported but never assumed: `create` lays down none of them, and a
+project registers each by adding its entry to the manifest when it first needs it.
 
 | Role | Holds | Writers | Registered |
 |---|---|---|---|
 | `overlays` | project additions to shipped skills and agents (see *Project overlays*) | none (read-only) | when the project has something to overlay |
 | `epics` | one directory per epic packet, `<yyyy-mm-dd>-<slug>/` | `epic` | when the project runs its first epic |
+| `holdingBay` | one held plan per piece of ad hoc work, `<yyyy-mm-dd>-<slug>.md` (see *The holding bay*) | `storyboard`, `write-plan`, `pointer-closeout`, `roadmap-review` | when the project storyboards its first piece of ad hoc work |
 
 A ceremony that needs an opt-in role the project has not registered stops and shows the
 entry to add; it never falls back to a conventional path.
@@ -613,6 +614,65 @@ Writers by default: `governance-sweep`, `adversarial-review`, `virtuoso` (for th
 dispatches), `pointer-closeout`, `roadmap-review`, `3rd-party-audit`. **Reader:**
 `roadmap-review` B.3 reads every finding whose latest disposition is `open`, with the
 previous review's lessons-applied, and carries each into the plan.
+
+## The holding bay
+
+Work that arrives between roadmap reviews enters through `storyboard` (alignment) and
+`write-plan` (a dispatch-ready plan). Neither writes the roadmap or the live register —
+bringing work onto the roadmap is `roadmap-review`'s — so what they produce waits in the
+`holdingBay` role: one Markdown file per piece of work, named `<yyyy-mm-dd>-<slug>.md`,
+copied from the storyboard skill's `held-plan.template.md` and marked
+`<!-- virtuoso-held-plan v1 -->`. Items inside it carry provisional identifiers,
+`HB-<n>`, never reused; the register assigns their real ones when a review absorbs them.
+
+The file's **trail** is its state machine: a table under `## Trail`, one row per move
+(`| date | state | by | note |`), appended through `virtuoso_registry holding --record`
+and never edited. The last row is the current state.
+
+| State | Recorded by | The entry must carry | Next |
+|---|---|---|---|
+| `storyboarded` | `storyboard`, `write-plan` | an alignment record whose verdict reads *Aligned* | `storyboarded`, `planned`, `absorbed`, `withdrawn` |
+| `planned` | `write-plan` | a `## Plan` with at least one `HB-<n>` specification; never epic-scale | `storyboarded`, `planned`, `in-flight`, `absorbed`, `withdrawn` |
+| `in-flight` | `write-plan` | as `planned` | `planned`, `executed` |
+| `executed` | `pointer-closeout` | as `planned`; the note names the close-out and its result | `absorbed` |
+| `absorbed` | `roadmap-review` | a note naming the register item(s) it became | — |
+| `withdrawn` | `storyboard`, `write-plan`, `roadmap-review` | a note giving the reason | — |
+
+`write-plan` may record `storyboarded` over a plan: anything that changes what was agreed
+goes back to the storyboard, and the plan is rewritten after it. An entry that is neither
+`absorbed` nor `withdrawn` is **open**, and the next roadmap review reconciles every open
+entry that is not `in-flight`: it absorbs it into the roadmap or withdraws it. Nothing is
+carried past a review.
+
+```sh
+python <plugin>/scripts/virtuoso_registry.py --root . holding --open        # what a review reconciles
+python <plugin>/scripts/virtuoso_registry.py --root . holding --check <entry>
+python <plugin>/scripts/virtuoso_registry.py --root . holding --next-id     # the next HB-<n>
+python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> holding \
+  --record <entry> --state <state> --note "<one line>" --apply
+```
+
+The read side writes nothing; `--record` previews without `--apply`, and refuses an actor
+the role does not name, a state that ceremony does not own, an illegal move, and a state
+whose content the entry does not yet carry. No `holdingBay` role is exit 3 with the entry
+to add, which also means nothing is held.
+
+| finding | meaning |
+|---|---|
+| `held-marker-missing` | no `<!-- virtuoso-held-plan v1 -->` marker: not a held plan |
+| `held-name-invalid` | the file is not named `<yyyy-mm-dd>-<slug>.md` |
+| `held-entry-mismatch` | the *Entry* field disagrees with the file name |
+| `held-size-invalid` | *Size* is not `single item`, `item set`, or `epic-scale` |
+| `held-trail-missing` | no `## Trail` section |
+| `held-unrecorded` | the trail has no row: the entry was never recorded |
+| `held-state-unknown` | a row records a state that does not exist |
+| `held-transition-illegal` | a row records a move the state machine does not allow |
+| `held-recorder-wrong` | a row was recorded by a ceremony that does not own that state |
+| `held-date-invalid` | a row's date is not `YYYY-MM-DD` |
+| `held-note-missing` | an `executed`, `absorbed`, or `withdrawn` row says nothing |
+| `held-not-aligned` | the entry stands past `unrecorded` without an *Aligned* verdict |
+| `held-plan-missing` | the entry stands at `planned` or later without a plan |
+| `held-epic-planned` | an epic-scale entry was planned here; it waits for review, then `/epic` |
 
 ## Standing rules
 
