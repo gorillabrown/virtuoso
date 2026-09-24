@@ -1,11 +1,12 @@
 # Virtuoso Release Notes
 
-## Unreleased — three paths to execution, one destination
+## v1.11.0 (2026-09-24) — three paths to execution, one destination
 
-**Upgrading.** The ad hoc path needs the opt-in `holdingBay` role: `/storyboard` prints the
-entry to add, and you choose the directory. Two behaviours change. `/epic` now starts only
-from a roadmap item marked `Path: epic`, and `/next-pointer` routes such items to it. An
-outcome stated ad hoc goes to `/storyboard` first, and the next roadmap review places it.
+**Upgrading from 1.10.2.** The ad hoc path needs the opt-in `holdingBay` role:
+`/storyboard` prints the entry to add, and you choose the directory. Two behaviours change.
+`/epic` now starts only from a roadmap item marked `Path: epic`, and `/next-pointer` routes
+such items to it. An outcome stated ad hoc goes to `/storyboard` first, and the next roadmap
+review places it.
 
 - **`/virtuoso:storyboard`** is the ad hoc way in, and its one job is alignment. It sizes
   the work out loud and investigates before it asks. It asks one bounded question at a
