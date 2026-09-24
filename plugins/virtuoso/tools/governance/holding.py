@@ -308,7 +308,7 @@ def validate(entry: Entry) -> list[dict]:
             previous = row.state
             continue
         if previous in TRANSITIONS and row.state not in TRANSITIONS[previous]:
-            problems.append(_problem(TRANSITION_ILLEGAL, "%s → %s is not a legal move"
+            problems.append(_problem(TRANSITION_ILLEGAL, "%s -> %s is not a legal move"
                                                          % (previous, row.state)))
         if row.by not in RECORDED_BY[row.state]:
             problems.append(_problem(RECORDER_WRONG, "%s was recorded by %r; only %s may record it"
@@ -383,7 +383,7 @@ def record_problems(entry: Entry, state: str, actor: str, note: str, date: str) 
                 if p["code"] not in (UNRECORDED_ENTRY, NOT_ALIGNED, PLAN_MISSING, EPIC_PLANNED)]
     problems.extend(blocking)
     if state not in TRANSITIONS.get(entry.state, ()):
-        problems.append(_problem(TRANSITION_ILLEGAL, "%s → %s is not a legal move (from %s: %s)"
+        problems.append(_problem(TRANSITION_ILLEGAL, "%s -> %s is not a legal move (from %s: %s)"
                                                      % (entry.state, state, entry.state,
                                                         ", ".join(TRANSITIONS.get(entry.state, ()))
                                                         or "nothing — the entry is closed")))

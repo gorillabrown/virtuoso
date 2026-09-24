@@ -337,3 +337,42 @@ def test_the_registry_contract_documents_every_finding_and_state():
         assert "| `%s` |" % code in contract, code
     for state in holding_mod.STATES:
         assert "| `%s` |" % state in contract, state
+
+
+# =============================================================================
+# Windows: every line the CLI prints must survive a legacy code page
+# =============================================================================
+
+
+def run_cp1252(*args):
+    """The CLI as a Windows pipe runs it: stdout encoded in cp1252, strictly."""
+    return subprocess.run([sys.executable, REGISTRY_CLI, *args], capture_output=True,
+                          env=dict(os.environ, PYTHONIOENCODING="cp1252"))
+
+
+def test_every_holding_output_survives_a_legacy_code_page(workspace):
+    """Windows CI caught `holding --record` crashing on a character cp1252 lacks, after
+    its write had landed. The listing and --check print the same messages, so each
+    path runs here with stdout forced to cp1252, which makes the crash reproducible
+    on every platform."""
+    bay = register(workspace)
+    (bay / ("%s.md" % ENTRY)).write_text(ALIGNED + PLAN, encoding="utf-8")
+    forged = "2026-09-25-forged"
+    (bay / ("%s.md" % forged)).write_text(with_trail(
+        ALIGNED.replace(ENTRY, forged) + PLAN,
+        ("2026-09-24", "storyboarded", "storyboard", ""),
+        ("2026-09-24", "executed", "pointer-closeout", "x")), encoding="utf-8")  # illegal
+    root = str(workspace)
+    recorded = run_cp1252("--root", root, "--actor", "storyboard", "holding", "--record",
+                          ENTRY, "--state", "storyboarded", "--apply")
+    assert recorded.returncode == 0, recorded.stderr
+    refused = run_cp1252("--root", root, "--actor", "storyboard", "holding", "--record",
+                         ENTRY, "--state", "absorbed", "--apply")
+    assert refused.returncode == 3, refused.stderr
+    checked = run_cp1252("--root", root, "holding", "--check", forged)
+    assert checked.returncode == 1, checked.stderr
+    assert b"held-transition-illegal" in checked.stdout
+    listed = run_cp1252("--root", root, "holding")
+    assert listed.returncode == 0, listed.stderr
+    for completed in (recorded, refused, checked, listed):
+        assert b"UnicodeEncodeError" not in completed.stderr

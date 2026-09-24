@@ -629,7 +629,7 @@ def _record_holding(args, reg, directory) -> int:
         raise GovernanceError("the row was appended but %s does not read back as %s; "
                               "inspect %s" % (entry.id, args.state, entry.path))
     return _emit({"entry": after.as_dict(), "recorded": row}, args.as_json,
-                 lambda: "recorded %s: %s → %s (%s)" % (after.id, entry.state, after.state,
+                 lambda: "recorded %s: %s -> %s (%s)" % (after.id, entry.state, after.state,
                                                        after.path))
 
 
