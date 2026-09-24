@@ -72,9 +72,11 @@ they can:
 - **Smart slicers.** Slicers are built from the data, not hard-coded:
   - **Always shown:** Complete / Incomplete. This is a two-way toggle over the canonical
     status set, so a project's own vocabulary (`statusMappings`) still collapses correctly.
-  - **Shown when the field has two or more distinct values:** Status (each canonical
-    status), Lane, Group/phase, Effort, Deadline (has deadline / overdue / none),
-    Dispatch-ready (passes the readiness rubric), Has comments.
+  - **Shown when the field has two or more distinct values:** Impl Status (each canonical
+    status), Lane, Written (Stub / Full Spec), LOE, Phase, Stage, Deadline (has deadline /
+    overdue / none), Dispatch-ready (passes the readiness rubric), Has comments. Any
+    other register column with few distinct values also gets a slicer. On the reference
+    board these are Lane, Impl Status, Written, LOE, Phase and Stage.
   - Values are ordered by policy where policy defines an order (lanes, status vocabulary,
     effort scale), and by first appearance otherwise.
   - Each slicer shows live counts that update as other slicers change (cross-filtering).
@@ -85,24 +87,96 @@ they can:
 
 ### 3. Tab 2 — Roadmap (monday.com-style board)
 
-- **Groups** are collapsible sections, one per group/phase in roadmap order, falling back to
-  lane when a project has no groups. Each group has a coloured left rail, a header showing
-  the item count, and a footer "battery" bar showing the status mix across the group.
-- **Rows** are one per work item. The columns are:
-  - Item: the id in monospace, then the title.
-  - Status: a full-cell coloured pill, using a fixed colour per canonical status.
-  - Lane.
-  - Effort.
-  - Prerequisites: shown as chips; a chip jumps to its row.
-  - Deadline: turns red when overdue.
-  - Spec: a link.
-  - Comment.
-  - Copy.
-- **Board behaviour.** The header row is sticky. The item column is frozen while the other
-  columns scroll sideways. Columns are sortable within a group, and there is a search box.
-  Completed items sit in a collapsed "Done" group at the bottom, as monday does.
-- **At phone width**, each row becomes a card: status pill first, then title, with the other
-  fields in a list.
+This tab is modelled on the reference board: the *Gloves of Glory* main table in monday.com,
+shared 2026-09-24. The page reproduces that board's layout from the Virtuoso register.
+Nothing is synced with monday.
+
+**Groups: one per pipeline state, not one per phase.** The reference board groups rows into
+**Conveyor** and **Blocked / Gated**. The board groups by canonical status, in this order:
+
+| Group | Canonical statuses | Rail | Default |
+|---|---|---|---|
+| In Flight | `in-flight` | amber | open |
+| Conveyor | `queued` | blue | open |
+| Blocked / Gated | `blocked` | red | open |
+| Completed | `completed` | green | collapsed |
+| Dissolved / Superseded | `dissolved`, `superseded` | grey | collapsed |
+
+- **What each group shows.** A collapse chevron and the title in the group's colour. The
+  column header row repeats under every group. Every row carries the group's coloured left
+  rail. Empty groups are not shown. Items with status `unknown` go to Conveyor and get a
+  warning mark.
+- **Row order.** Rows are ordered by Seq and then by id. In the reference, the `1,000` and
+  `2,000` values act as backlog tiers after the sequenced head (20, 25, 30).
+- **Other groupings.** A **Group by** control regroups the rows by Phase, Lane or Stage, as
+  monday's Group by does. Pipeline state stays the default.
+
+**Columns.** Columns follow the reference board's order. A column appears only when the
+register carries that field, and its header uses the register's own name ("Impl Status", not
+"status").
+
+| Column | Register field | Rendering |
+|---|---|---|
+| Item | `id` + `title` | `ID — Title`, cut short with an ellipsis; the full text shows on hover. Frozen on the left. |
+| *(row actions)* | — | Comment bubble and copy button, in the slot where monday puts its updates icon (§4, §5) |
+| Seq | `sequence` | Right-aligned, with thousands separator |
+| Lane | `lane` | Full-cell colour label (ENGINE, GOV, …) |
+| Impl Status | `status` | Full-cell colour label. The register's own spelling is shown; the colour comes from the canonical status. |
+| Written | `written_status` | Full-cell label: Full Spec or Stub |
+| Description | `description` | Plain text, cut short |
+| Depends On | `prerequisites` | Plain text. Any token that matches an id on the board becomes a link that jumps to that row. |
+| Sprint Code | `id` | Shown only when the register keeps the id apart from Item |
+| Branch | `branch` | Monospace text |
+| Repo Spec | `spec_link` | A link that opens the spec relative to the project root |
+| Notes | `notes` | Plain text, cut short. The register's own provenance note, not the board's comments. |
+| LOE | `effort` | Full-cell colour label, ordered by `roadmap.effortScale` (XS → XL) |
+| Points | `extra["Points"]` | Number |
+| Phase | `group` | Outlined chip, not a filled cell, as in the reference |
+| Stage | `extra["Stage"]` | Plain text |
+
+- **Unmapped columns.** Every other register column (anything the provider puts in
+  `extra`) comes after the mapped ones, under the register's own header. The board never
+  drops a column the register carries.
+- **Colours.** Label columns (Lane, Impl Status, Written, LOE) fill the whole cell with
+  white text, like monday's status columns.
+  - Status colours follow the canonical status: queued blue, in-flight amber, blocked
+    purple, completed green, dissolved and superseded grey. These match the reference, where
+    Queued is blue and Blocked is purple.
+  - Written: Full Spec blue, Stub purple.
+  - Lane and LOE values take slots from a fixed palette. Each value's slot is derived from
+    the value itself, so the same value keeps its colour across regenerations.
+- **Group footer.** The reference board shows "battery" bars under Impl Status, Written and
+  LOE. The board does the same: under each label column, a bar shows that group's mix of
+  values, with count and percentage on hover. Under Points, the footer shows the group's
+  total.
+- **Toolbar.** The toolbar mirrors the reference: Search, Filter (the same filter model as
+  the Dashboard slicers), Sort, Hide and Group by.
+  - Hide sets which columns are visible, remembered per browser.
+  - There is no New item or Person control, because the board never writes to the
+    register.
+- **Row checkboxes.** These are kept from the reference, but here they drive
+  **Copy selected**: the names of the selected rows, one per line, for dispatching a batch.
+- **Scrolling.** The group header row is sticky and the Item column is frozen. The table
+  scrolls sideways inside its own frame, because the reference runs to about sixteen
+  columns; the page itself never scrolls sideways.
+- **At phone width**, each row becomes a card: `ID — Title`, then the status and Lane
+  labels, then the other fields in a list.
+
+**Reading the reference board's register.** The reference board's column names show four
+mapping cases that the board, and its tests, must handle:
+
+- **Item holds both id and title.** The reference's Item column holds `ID — Title` and has
+  no separate title column. The default aliases take `id` from Sprint Code, leave Item in
+  `extra`, and leave `title` empty. When `title` is empty and an `extra` value begins with
+  the id and a dash, the board uses that value as the display name and as the copy text.
+- **Lane and Stage are separate columns.** An exact header match wins over an alias, so
+  Lane maps to `lane` and Stage falls to `extra`. That is the right result, and the tests
+  pin it, because `stage` is also an alias of `lane`.
+- **LOE and Points both look like effort.** Both are aliases of `effort`. LOE wins because it
+  comes first in the alias list; Points falls to `extra` and renders as its own column.
+- **Two headers have no default alias.** "Impl Status" and "Written" match nothing by
+  default. Add `impl status` and `written` to `DEFAULT_ALIASES` so a board like this one reads
+  without any `fieldMappings`.
 
 ### 4. Row comments
 
@@ -150,13 +224,17 @@ they can:
   - no protected overwrite;
   - regeneration preserves the sidecar;
   - slicer derivation (a field with a single value gets no slicer);
-  - copy-text format;
+  - copy-text format, including the Item-only register case;
+  - a fixture register with the reference board's headers (Item, Seq, Lane, Impl Status,
+    Written, Description, Depends On, Sprint Code, Branch, Repo Spec, Notes, LOE, Points,
+    Phase, Stage) that renders every column in order, with nothing dropped;
   - an HTML escape test with a hostile title and comment.
 
 ## Delivery slices
 
-1. **Board role and generator.** Registry role, default path, create-on-first-review in D.7,
-   Roadmap tab with groups, status pills and the copy button.
+1. **Board role and generator.** Registry role, default path, and create-on-first-review in
+   D.7. The Roadmap tab as specified in §3: pipeline-state groups, the reference column set,
+   label colours, footer bars and the copy button. The two new default aliases.
 2. **Dashboard.** KPI tiles, charts, derived and cross-filtering slicers, URL-hash state.
 3. **Comments.** Browser storage, sidecar save/export, merge on regeneration, and the
    `roadmap-review` B.3 intake.
@@ -169,9 +247,6 @@ they can:
   proposed default is **Health**: the cockpit's drift findings, dependency graph and
   provenance, so nothing the cockpit shows today is lost. Alternatives are a **Comments**
   inbox (every open comment in one list) or a **Timeline** (deadlines and pace).
-- **The reference board.** The monday.com example that was meant to be attached did not come
-  through. Section 3 follows monday's standard main-table layout; adjust it against the
-  example when it is re-shared.
 - **Committing the board.** Should `roadmap-board.html` be committed or gitignored? Proposed:
   commit the sidecar, which is the durable record, and let the project decide for the
   HTML. The scaffolded `.gitignore` entry stays commented out.
