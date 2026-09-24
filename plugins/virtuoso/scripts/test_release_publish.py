@@ -22,8 +22,8 @@ _IDENTITY = {"GIT_AUTHOR_NAME": "Release Test", "GIT_AUTHOR_EMAIL": "release@exa
 #: Written out, not derived from rp.PUBLIC_TREE: a fixture built from the code under test
 #: would agree with any change to it. One file per public entry, per VIR-008.
 PUBLIC_FILES = (".claude-plugin/f.txt", ".gitattributes", ".github/f.txt", ".gitignore",
-                "LICENSE", "README.md", "RELEASE-NOTES.md", "docs/MIGRATION-1.4.md",
-                "plugins/f.txt")
+                "LICENSE", "PRIVACY.md", "README.md", "RELEASE-NOTES.md",
+                "docs/MIGRATION-1.4.md", "plugins/f.txt")
 PRIVATE = ("docs/plans/x.md", "Virtuoso/workspace-layout.json", "Project Documentation/a.md")
 
 
@@ -67,7 +67,7 @@ def repos(tmp_path, monkeypatch):
 
 def test_public_tree_is_the_specified_set():
     assert set(rp.PUBLIC_TREE) == {".claude-plugin", ".gitattributes", ".github", ".gitignore",
-                                   "LICENSE", "README.md", "RELEASE-NOTES.md",
+                                   "LICENSE", "PRIVACY.md", "README.md", "RELEASE-NOTES.md",
                                    "docs/MIGRATION-1.4.md", "plugins"}
 
 

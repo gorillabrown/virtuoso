@@ -1,5 +1,19 @@
 # Virtuoso Release Notes
 
+## v1.10.2 (2026-09-24) — a privacy policy
+
+**Upgrading from 1.10.1.** Nothing to change.
+
+- **`PRIVACY.md`** states what Virtuoso stores and where. It collects nothing and sends
+  nothing to its author or anyone else. The files it creates stay in your project, and
+  outside the project it keeps only `~/.virtuoso/installs.json` and two launcher scripts.
+  In use it makes no network requests of its own. The policy names the only two paths to
+  the network, both under your control: pushing to your own remote, if your git policy
+  allows it, and an external work register, through your host's connector.
+- The release carries `PRIVACY.md` to the public repository. The alternate host's plugin
+  page links it, in place of the repository host's general privacy statement, and the
+  README points to it.
+
 ## v1.10.1 (2026-09-24) — what hosts load, and where releases come from
 
 **Upgrading from 1.10.0.** Nothing to change: no schema, policy or rubric change. If your

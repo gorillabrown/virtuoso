@@ -1959,6 +1959,16 @@ def test_the_release_bumper_tracks_every_install_manifest():
     assert "../../.claude-plugin/marketplace.json" in tracked
 
 
+def test_the_privacy_policy_link_names_the_policy_this_repository_publishes():
+    """The plugin page and the directory listing link a privacy policy. It must be this
+    repository's own, and the file must exist to be published; a link to a host's general
+    policy, or to a file the release never carries, answers nothing about Virtuoso."""
+    codex = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    claude = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    assert codex["interface"]["privacyPolicyURL"] == claude["repository"] + "/blob/main/PRIVACY.md"
+    assert (ROOT.parent.parent / "PRIVACY.md").is_file()
+
+
 def test_the_version_check_reports_all_manifests_in_sync():
     completed = run(str(ROOT / "scripts" / "bump_version.py"), "--check")
     assert completed.returncode == 0

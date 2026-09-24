@@ -1,6 +1,6 @@
 {
   "name": "virtuoso",
-  "version": "1.10.1",
+  "version": "1.10.2",
   "description": "A living roadmap that makes every task your agents finish improve the next one. Each task is scoped against what earlier work proved, run on the model and effort it needs, and closed out with evidence and a record of what it taught; lessons that keep holding become standing rules. The roadmap, ledger, lessons and rules live in plain files in your project.",
   "author": {
     "name": "Evan Brown",
@@ -38,7 +38,7 @@
       "Close out this dispatch and record what it taught."
     ],
     "websiteURL": "https://github.com/gorillabrown/virtuoso",
-    "privacyPolicyURL": "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement",
+    "privacyPolicyURL": "https://github.com/gorillabrown/virtuoso/blob/main/PRIVACY.md",
     "termsOfServiceURL": "https://docs.github.com/en/site-policy/github-terms/github-terms-of-service",
     "brandColor": "#14B8A6",
     "composerIcon": "./assets/virtuoso-small.svg",

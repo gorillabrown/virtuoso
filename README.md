@@ -312,6 +312,11 @@ moves 1 → 2 and several bundled scripts are removed. See
 previewed; unknown legacy roles stay unclassified, and the legacy local catalog migrates as
 a read-only compatibility mirror rather than being reinterpreted as authoritative.
 
+## Privacy
+
+Virtuoso collects nothing and sends nothing to its author or anyone else: everything it
+creates stays in your project and its repository. See [`PRIVACY.md`](PRIVACY.md).
+
 ## License
 
 MIT
