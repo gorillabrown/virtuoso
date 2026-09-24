@@ -12,6 +12,7 @@ This index maps the old section numbers to their new homes.
 
 - **virtuoso** — multi-step execution discipline (sprints, narration, progress tracking)
 - **roadmap-review / roadmap-status / next-pointer** — plan, pulse-check, and dispatch
+- **plan-now** — ad hoc intake: brainstorm → skeleton → spec → ingest → execute now or later
 - **pointer-closeout** — close-out report + spec retrospective
 - **mid-dispatch-decision** — decision protocol when a dispatch pauses
 - **governance-sweep** — read-only doc-hygiene audit → the implementation agent spec

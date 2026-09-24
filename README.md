@@ -234,6 +234,7 @@ Invoked through the plugin namespace, e.g. `/virtuoso:roadmap-review`.
 | `roadmap-review` | `/virtuoso:roadmap-review` | Heavyweight roadmap recalibration |
 | `roadmap-status` | `/virtuoso:roadmap-status` | Read-only status briefing |
 | `next-pointer` | `/virtuoso:next-pointer` | Finalize and dispatch the next item |
+| `plan-now` | `/virtuoso:plan-now` | Plan ad hoc work now: brainstorm, spec, ingest, then execute or queue |
 | `pointer-closeout` | `/virtuoso:pointer-closeout` | The transactional close-out crossing |
 | `mid-dispatch-decision` | `/virtuoso:mid-dispatch-decision` | Decide when a dispatch pauses mid-run |
 | `governance-sweep` | `/virtuoso:governance-sweep` | 3-phase doc hygiene: discover → approve → fix |

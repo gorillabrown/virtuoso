@@ -56,6 +56,7 @@ the files are the memory. You are producing the materials, not executing the goa
 |--------|-------|
 | Fits in one sitting | Just do it (virtuoso skill if 3+ tool calls) |
 | A dispatch-ready spec already exists for a low-judgment implementer | Sprint machinery — `/virtuoso:next-pointer` |
+| One new piece of work to plan and slot in now, fits a dispatch | `/virtuoso:plan-now` |
 | Recurring job on an interval ("check every 5 minutes") | loop / schedule tooling |
 | Outcome-stated, multi-phase, multi-session or walk-away | **This skill** |
 

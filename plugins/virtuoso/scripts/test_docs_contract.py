@@ -238,7 +238,7 @@ def test_the_rubric_reports_five_separate_findings():
 
 
 def test_the_ceremonies_defer_to_the_shared_rubric():
-    for name in ("roadmap-review", "next-pointer"):
+    for name in ("roadmap-review", "next-pointer", "plan-now"):
         text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
         assert "references/readiness-rubric.md" in text, (
             "%s does not point at the shared rubric" % name)
@@ -315,7 +315,7 @@ def test_every_skill_carries_the_shared_contract_block():
 
 def test_ceremony_skills_run_the_read_only_preflight():
     ceremonies = ["roadmap-review", "roadmap-status", "next-pointer", "pointer-closeout",
-                  "mid-dispatch-decision", "3rd-party-audit"]
+                  "mid-dispatch-decision", "3rd-party-audit", "plan-now"]
     for name in ceremonies:
         text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
         assert "--mode check" in text, "%s does not run the read-only preflight" % name
@@ -356,3 +356,32 @@ def test_the_preflight_docstring_lists_every_machine_line():
                                             outcome.roadmap_integrity_line()]:
         token = line.split(":")[0] + ":"
         assert token in module.__doc__, "%s is not in the preflight's docstring" % token
+
+
+# --- ad hoc intake -------------------------------------------------------------
+
+
+def test_plan_now_writes_where_its_defaults_let_it():
+    """plan-now creates its own items, stores their specifications, and escalates
+    blockers; a fresh workspace must name it on exactly the roles it writes."""
+    for role in ("roadmap", "workRegister", "issues"):
+        assert "plan-now" in schema.DEFAULT_ROLES[role]["allowedWriters"], role
+    for role in ("terminalLedger", "lessons", "roadmapReviews"):
+        assert "plan-now" not in schema.DEFAULT_ROLES[role]["allowedWriters"], role
+
+
+def test_plan_now_gates_through_the_shared_ceremonies():
+    """The side door keeps the same bar: the shared rubric, the lessons check,
+    governed creation, the targeted dispatch gate, and virtuoso for execution."""
+    text = (ROOT / "skills" / "plan-now" / "SKILL.md").read_text(encoding="utf-8")
+    for needle in ("--actor plan-now create-item", "lessons --check",
+                   "/next-pointer <ITEM-ID>", "**virtuoso** skill", "/pointer-closeout",
+                   "plan-now YYYY-MM-DD"):
+        assert needle in text, needle
+
+
+def test_the_targeted_dispatch_gate_is_documented_where_plan_now_uses_it():
+    pointer = (ROOT / "skills" / "next-pointer" / "SKILL.md").read_text(encoding="utf-8")
+    assert "`/next-pointer <ITEM-ID>`" in pointer
+    review = (ROOT / "skills" / "roadmap-review" / "SKILL.md").read_text(encoding="utf-8")
+    assert "`/plan-now`" in review and "plan-now YYYY-MM-DD" in review

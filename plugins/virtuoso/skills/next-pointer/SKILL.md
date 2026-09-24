@@ -7,8 +7,10 @@ description: |
   drives every pre-flight check to a resolved state, and prints a
   dispatch pointer with a repository-reconciliation recipe matched to
   the project's declared git policy. Triggered by "/next-pointer",
-  "next pointer", "show next", or "what's next". Does NOT replan,
-  re-sequence, or author new items — that is /roadmap-review.
+  "next pointer", "show next", or "what's next"; "/next-pointer ITEM-ID"
+  targets one named item instead of the head. Does NOT replan,
+  re-sequence, or author new items — that is /roadmap-review, or
+  /plan-now for a single piece of ad hoc work.
 ---
 
 <!-- virtuoso-shared-contract v2 -->
@@ -132,11 +134,20 @@ figures may not reflect current state.
 
 - A full status briefing — use `/roadmap-status`
 - Replanning, re-sequencing, or authoring new items — use `/roadmap-review`
+- Planning one new piece of work now, outside a review — use `/plan-now`
 - Dispatching when the head item is still a stub — this skill refuses
 
 ## Invocation
 
 Manual only: `/next-pointer`, "next pointer", "show next", "what's next".
+
+**Targeted:** `/next-pointer <ITEM-ID>` runs every phase below against that one item
+instead of the head of the conveyor belt. `/plan-now` uses it to gate the item it just
+authored, and a hand-off prompt uses it to re-confirm readiness in a fresh session. The
+item must exist in the live register. Everything else is unchanged: the same rubric, the
+same five findings, the same pre-flight, and the same pointer. The only difference is
+that the summary says the item was targeted and names the current head, so nobody
+mistakes a targeted dispatch for the belt's own order.
 
 ## Glossary
 
@@ -329,6 +340,11 @@ failed prerequisite — never improvised around.
 ### 1.1 Determine the head item
 
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor next-pointer next --json
+
+**Targeted invocation:** read the named item from `items --json` instead. If it is
+absent from the register, stop and say so. A specification with no register row is not
+dispatchable, so route it to `/plan-now` or `/roadmap-review` to be ingested. If the item
+is terminal, stop and name its terminal record.
 
 The provider returns the next item whose prerequisites are all terminal, in
 sequence order, together with its provenance. If the provider lacks

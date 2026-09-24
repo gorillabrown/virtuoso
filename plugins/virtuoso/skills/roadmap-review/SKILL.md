@@ -153,8 +153,8 @@ Run this skill when:
 
 Do NOT use this skill for:
 - Routine single-item planning
-- Single-item planning that needs no re-sequencing (write the specification to the
-  D.5.2 format and dispatch it with `/next-pointer`)
+- Single-item planning that needs no re-sequencing — use `/plan-now`, which writes
+  the specification to the D.5.2 format, ingests it, and gates it with `/next-pointer`
 - Weekly status updates (use `/roadmap-status`)
 
 ## Invocation
@@ -402,6 +402,12 @@ reads it from the policy, and a copy is a second authority that drifts.
 ### B.3 Scope discipline
 Forward / sideways / backward deltas since the previous review. Score =
 forward / (forward + sideways + backward).
+
+Name every item that entered through `/plan-now` since the last review (its origin
+note reads `plan-now YYYY-MM-DD`), and classify each one as forward, sideways, or
+backward like any other delta. Seat any that `/plan-now` left unsequenced in C.4, and
+work the downstream flags it added to the non-blocking follow-up queue in D.4.5. Ad hoc
+entry is legitimate. Ad hoc entry that nobody reviews is how scope drifts unseen.
 
 Then read what the previous cycle left for this one: the previous review's
 `YYYY-MM-DD-lessons-applied.md` in the registered reviews directory (the lessons it

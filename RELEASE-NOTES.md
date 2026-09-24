@@ -1,5 +1,28 @@
 # Virtuoso Release Notes
 
+## Unreleased — ad hoc planning with `/plan-now`
+
+**Upgrading.** New workspaces name `plan-now` as a writer on `roadmap`, `workRegister` and
+`issues`. An existing project adds `"plan-now"` to those roles' `allowedWriters` in
+`Virtuoso/workspace-layout.json` to let it ingest. Without that, the skill still plans in
+full and hands the approved specification to `/roadmap-review`.
+
+- **`/virtuoso:plan-now`** is the side door for work that arrives between reviews. It
+  sizes the work out loud and routes epic-scale work to `/epic`. It investigates first,
+  then brainstorms one bounded question at a time through six lenses: outcome, placement,
+  touchpoints, externalities, upstream and downstream. It writes back what the user said
+  apart from what it assumed, with an impact map. Then it drafts a skeleton for approval
+  and authors D.5.2 specifications against the shared rubric and the lessons check. It
+  creates the items through `create-item`, stamped with their `plan-now` origin, and
+  seats each one without renumbering anyone else. Finally it gates the item with
+  `/next-pointer <ITEM-ID>` and asks whether to execute now with the virtuoso skill, hand
+  off to a fresh session, leave it queued, or hand it to `/epic`.
+- **`/next-pointer <ITEM-ID>`** runs the dispatch gate against one named item instead of
+  the head of the belt.
+- **`/roadmap-review`** names every `plan-now` item in its scope-discipline assessment,
+  seats the ones left unsequenced, and works the downstream flags they left in the
+  follow-up queue.
+
 ## v1.10.2 (2026-09-24) — a privacy policy
 
 **Upgrading from 1.10.1.** Nothing to change.
