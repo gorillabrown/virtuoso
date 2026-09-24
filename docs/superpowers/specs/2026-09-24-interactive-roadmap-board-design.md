@@ -24,7 +24,7 @@ they can:
 - **One page in the project root**: an always-current, self-contained, interactive HTML file.
 - **Created on the first `roadmap-review`** if it is not already there, and regenerated
   whenever the register changes after that.
-- **Three tabs**: Dashboard, Roadmap, and a third view (see Open Questions).
+- **Three tabs**: Dashboard, Roadmap (live work), and Completed (completed and retired work).
 - **Roadmap tab laid out as a monday.com-style board**, with a comment box and a copy
   button on every row.
 - **Dashboard with smart slicers**: complete/incomplete, lane, group/phase and the other
@@ -59,8 +59,9 @@ they can:
   badge, the same way the cockpit labels snapshot-backed reads today.
 - **Successor to the cockpit.** One generator and one `PlanningModel` feed both outputs.
   `planning-cockpit.html` keeps being written for one release, with a banner pointing to the
-  board, and is then retired. The cockpit's views move into the board: pace, buffer and
-  drift go to the Dashboard; group, lane and prerequisites become Roadmap columns.
+  board, and is then retired. The cockpit's views move into the board: pace, buffer, drift
+  findings and provenance go to the Dashboard; group, lane and prerequisites become Roadmap
+  columns.
 
 ### 2. Tab 1 — Dashboard
 
@@ -99,8 +100,9 @@ Nothing is synced with monday.
 | In Flight | `in-flight` | amber | open |
 | Conveyor | `queued` | blue | open |
 | Blocked / Gated | `blocked` | red | open |
-| Completed | `completed` | green | collapsed |
-| Dissolved / Superseded | `dissolved`, `superseded` | grey | collapsed |
+
+The Roadmap tab holds live work only. Items with a terminal status (`completed`,
+`dissolved`, `superseded`) move to the Completed tab (§4).
 
 - **What each group shows.** A collapse chevron and the title in the group's colour. The
   column header row repeats under every group. Every row carries the group's coloured left
@@ -118,7 +120,7 @@ register carries that field, and its header uses the register's own name ("Impl 
 | Column | Register field | Rendering |
 |---|---|---|
 | Item | `id` + `title` | `ID — Title`, cut short with an ellipsis; the full text shows on hover. Frozen on the left. |
-| *(row actions)* | — | Comment bubble and copy button, in the slot where monday puts its updates icon (§4, §5) |
+| *(row actions)* | — | Comment bubble and copy button, in the slot where monday puts its updates icon (§5, §6) |
 | Seq | `sequence` | Right-aligned, with thousands separator |
 | Lane | `lane` | Full-cell colour label (ENGINE, GOV, …) |
 | Impl Status | `status` | Full-cell colour label. The register's own spelling is shown; the colour comes from the canonical status. |
@@ -140,7 +142,7 @@ register carries that field, and its header uses the register's own name ("Impl 
 - **Colours.** Label columns (Lane, Impl Status, Written, LOE) fill the whole cell with
   white text, like monday's status columns.
   - Status colours follow the canonical status: queued blue, in-flight amber, blocked
-    purple, completed green, dissolved and superseded grey. These match the reference, where
+    purple, and, on the Completed tab, completed green and dissolved or superseded grey. These match the reference, where
     Queued is blue and Blocked is purple.
   - Written: Full Spec blue, Stub purple.
   - Lane and LOE values take slots from a fixed palette. Each value's slot is derived from
@@ -178,7 +180,61 @@ mapping cases that the board, and its tests, must handle:
   default. Add `impl status` and `written` to `DEFAULT_ALIASES` so a board like this one reads
   without any `fieldMappings`.
 
-### 4. Row comments
+### 4. Tab 3 — Completed (completed and retired work)
+
+This tab is the project's record of finished and retired work, kept out of the way of the
+live board. It uses the same board style as the Roadmap tab.
+
+**Groups**
+
+| Group | Canonical statuses | Rail |
+|---|---|---|
+| Completed | `completed` | green |
+| Retired | `dissolved`, `superseded` | grey |
+
+- **Row order.** Newest completion first. A **Group by** control can also regroup by
+  completion month, Phase or Lane.
+
+**Where the data comes from.** Two sources are joined on the item id:
+
+- **The register:** every terminal item, with the same fields the Roadmap tab uses.
+- **The completion ledger:** the records `record-completion` and `pointer-closeout`
+  append.
+
+A completed item with no ledger record, or a ledger record with no terminal item in the
+register, still gets a row, marked *unreconciled*. The page shows the mismatch; it never
+hides it.
+
+**Columns**
+
+| Column | Source | Rendering |
+|---|---|---|
+| Item | `id` + `title` | `ID — Title`, frozen on the left, same as the Roadmap tab |
+| *(row actions)* | — | Comment and copy, same as the Roadmap tab |
+| Result | ledger `result`, else register status | Full-cell label: Completed green; Dissolved and Superseded grey |
+| Completed | ledger `completed`, else register `completed` | Date |
+| Close-out | ledger `evidence`, else register `evidence` | A link that opens the close-out report relative to the project root |
+| Branch | `branch` | Monospace text |
+| Lane · Phase · Stage | register | Same rendering as the Roadmap tab |
+| LOE | `effort` | Same label as the Roadmap tab |
+| Est. → Actual | ledger `effortEstimate`, `effortActual` | For example `S → M`. Highlighted when the actual size is larger than the estimate. |
+| Superseded by | register `notes` / `extra`, when named | Links to the replacing item's row |
+| Notes | `notes` | Plain text, cut short |
+
+- **Corrections.** A ledger record that corrects an earlier one (`corrects`) replaces that
+  record in the row. The row shows a "corrected" mark, and its history opens on hover.
+- **Tab header.** Above the groups sit a count of items completed and retired, and a
+  completions-per-week sparkline taken from the same data the Dashboard's trailing-weeks
+  chart uses.
+- **Slicers and search.** The shared filter still applies, with one addition that is only
+  offered on this tab: a completion date range.
+- **Why copy matters here.** The copy button still copies `ID — Title`. On this tab, that
+  lets a person cite finished work in a new dispatch or conversation ("builds on …").
+- **Comments.** Comments work the same way here. A comment on finished work is treated as a
+  follow-up candidate. `roadmap-review` B.3 reads it as a proposed new item, never as a
+  change to the closed one.
+
+### 5. Row comments
 
 - **Editing.** Each row's comment control opens an inline text box. A comment saves on blur
   or Ctrl/Cmd+Enter. The row then shows a comment count badge and the first line as a
@@ -201,7 +257,7 @@ mapping cases that the board, and its tests, must handle:
   `findings`. The review addresses, adopts or answers each one. Answered comments are marked
   resolved in the sidecar by the review, and the page shows them greyed out.
 
-### 5. Copy button
+### 6. Copy button
 
 - **What it copies:** the row's work name, `<ID> — <Title>` (for example, `SK-01 — Deadline
   support`). This is the handle the ceremonies and dispatch prompts already use.
@@ -211,7 +267,7 @@ mapping cases that the board, and its tests, must handle:
   hidden-textarea `execCommand("copy")` for `file://` contexts that block the async API. It
   confirms with a transient "Copied" state.
 
-### 6. Rendering and safety
+### 7. Rendering and safety
 
 - **One file.** The page stays self-contained: inline CSS and JS, and the model embedded as
   JSON with `</` escaped, as `render.py` does today.
@@ -228,6 +284,8 @@ mapping cases that the board, and its tests, must handle:
   - a fixture register with the reference board's headers (Item, Seq, Lane, Impl Status,
     Written, Description, Depends On, Sprint Code, Branch, Repo Spec, Notes, LOE, Points,
     Phase, Stage) that renders every column in order, with nothing dropped;
+  - Completed tab: register and ledger are joined, unreconciled rows are marked on both
+    sides, and a correcting record replaces the one it corrects;
   - an HTML escape test with a hostile title and comment.
 
 ## Delivery slices
@@ -235,18 +293,33 @@ mapping cases that the board, and its tests, must handle:
 1. **Board role and generator.** Registry role, default path, and create-on-first-review in
    D.7. The Roadmap tab as specified in §3: pipeline-state groups, the reference column set,
    label colours, footer bars and the copy button. The two new default aliases.
-2. **Dashboard.** KPI tiles, charts, derived and cross-filtering slicers, URL-hash state.
-3. **Comments.** Browser storage, sidecar save/export, merge on regeneration, and the
+2. **Completed tab.** Register and ledger join, unreconciled marks, Est. → Actual, and
+   correction history.
+3. **Dashboard.** KPI tiles, charts, derived and cross-filtering slicers, URL-hash state.
+4. **Comments.** Browser storage, sidecar save/export, merge on regeneration, and the
    `roadmap-review` B.3 intake.
-4. **Freshness.** Regeneration from `pointer-closeout`, `record-completion` and
+5. **Freshness.** Regeneration from `pointer-closeout`, `record-completion` and
    `next-pointer`; the preflight `board: stale` advisory; the cockpit deprecation banner.
 
-## Open Questions
+## Decisions
 
-- **Third tab.** The request names three tabs but describes two (Dashboard, Roadmap). The
-  proposed default is **Health**: the cockpit's drift findings, dependency graph and
-  provenance, so nothing the cockpit shows today is lost. Alternatives are a **Comments**
-  inbox (every open comment in one list) or a **Timeline** (deadlines and pace).
-- **Committing the board.** Should `roadmap-board.html` be committed or gitignored? Proposed:
-  commit the sidecar, which is the durable record, and let the project decide for the
-  HTML. The scaffolded `.gitignore` entry stays commented out.
+- **Third tab (2026-09-24).** The third tab is **Completed**: completed and retired work,
+  specified in §4. Health content that has no tab of its own goes to the Dashboard (§1).
+- **Version control (2026-09-24).** Commit the comments file. Ignore the HTML page.
+  - **The page is a build output.** It is regenerated from the register and ledger by every
+    ceremony. Committing it would add a full-file diff to almost every commit.
+  - **It would conflict constantly.** Parallel dispatches work on separate branches, and each
+    one would regenerate the page, so merges would conflict on a file nobody edits by hand.
+  - **It is machine-specific.** The embedded model carries the workspace's absolute paths
+    and the snapshot time, so two machines never produce the same file.
+  - **The comments file is the opposite.** It is written by people and cannot be rebuilt,
+    so it is the one part worth committing. It is written with sorted keys, one entry per
+    item, so concurrent comments on different items merge cleanly.
+  - **What D.7 does.** When D.7 creates the board, it adds the page's registered path to
+    the project's `.gitignore`. It skips this if the path is already ignored or the project
+    is not a git repository, and it reports what it did in the D.8 summary.
+  - **A fresh clone.** A new clone has no page until the next ceremony. Preflight prints
+    `board: missing` as an advisory, and
+    `"$HOME/.virtuoso/bin/virtuoso" generate_cockpit --root .` builds it on demand.
+  - **Opting out.** A project that wants the page committed (to publish it, for example)
+    removes the ignore line. Nothing depends on the page being ignored.
