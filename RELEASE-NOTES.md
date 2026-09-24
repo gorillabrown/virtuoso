@@ -39,6 +39,16 @@ outcome stated ad hoc goes to `/storyboard` first, and the next roadmap review p
   origin line.
 - **`references/execution-paths.md`** is the one home for the contract that all three
   paths must meet before execution starts.
+- **Retirement records go to the close-out ceremony, and the docs now say so.**
+  roadmap-review A.4 and roadmap-status's straggler migration said they could append a
+  retirement's terminal record when `policy.terminalLedger.correctionWriters` named them.
+  The ledger has always checked `writers` for such a record, because a retirement
+  corrects nothing, so under the defaults the append was refused. Both ceremonies now
+  gate on `writers` and route the record to `/pointer-closeout`, whose new section
+  *Retirement records routed here* covers each case: a completion never closed out, a
+  close-out missing only its record, and a dissolution. `record-completion` now refuses
+  a non-writer before it previews, so a preview no longer promises an append that
+  `--apply` would refuse. No policy default changed.
 
 ## v1.10.2 (2026-09-24) — a privacy policy
 

@@ -98,7 +98,7 @@ Read the provider description and **negotiate capabilities up front**:
 | read the pipeline at all | `list-active`, `read-status` |
 | re-sequence the conveyor belt | `read-sequence` **and** `write-status` on a sequence field |
 | replenish the dispatch buffer | `store-spec-link` (or inline specs — see policy) |
-| record completion in Phase A | `record-completion` |
+| record completion in Phase A (by `/pointer-closeout`, A.4) | `record-completion` |
 | register a newly specified item that has no row yet | `create-item` |
 | absorb a held ad hoc plan (Phase A.4b, C.3) | `create-item`, plus `record-completion` for one that already ran |
 
@@ -110,9 +110,12 @@ and stop, rather than starting and failing halfway.
 **Three roles, not one.** The live work register (`workRegister`), the append-only
 terminal ledger (`terminalLedger`), and any compatibility export (`sprintCatalog`,
 `sprintQueue`) are separate. This ceremony writes to the live register when its
-`allowedWriters` names `roadmap-review`; it appends corrections to the terminal
-ledger only when `policy.terminalLedger.correctionWriters` permits it; and it
-regenerates exports only via their registered generator.
+`allowedWriters` names `roadmap-review`. It appends a correction to the terminal
+ledger only when `policy.terminalLedger.correctionWriters` permits it, and an
+ordinary record, such as a retirement, only when `policy.terminalLedger.writers`
+names it. By default that never happens, so it routes those records to
+`/pointer-closeout` (A.4). It regenerates exports only through their registered
+generator.
 
 **If the project has no `workRegister` role,** the provider layer serves a
 registered legacy `sprintCatalog` **read-only** through the compatibility adapter
@@ -356,17 +359,34 @@ Batched, 5 at a time, with the bounded-question protocol.
 
 ### A.4 Apply changes
 For each item being retired:
-1. Append one record to the **terminal ledger** — but only if
-   `policy.terminalLedger.correctionWriters` names `roadmap-review`. If it does
-   not, list the records that need appending and route them to the close-out
-   ceremony instead. Terminal records are append-only: a correction is a *new*
-   record referencing the one it corrects. Never reorder, rewrite, or delete.
+1. **Route its terminal record to the close-out ceremony.** A retirement is an
+   *ordinary* terminal record, and only an actor `policy.terminalLedger.writers`
+   names may append one. By default that is `pointer-closeout` alone.
+   `correctionWriters` does not cover a retirement: it permits only
+   *corrections*, which are new records naming the record they correct, and a
+   retirement corrects nothing. So invoke `/pointer-closeout` for the item, as
+   A.4b does for held plans. Its section *Retirement records routed here* says
+   what runs:
+   - completed but never closed out → its full crossing, because no record is
+     appended without verified evidence and lessons;
+   - completed and closed out, with only the record missing → its recording
+     crossing;
+   - dissolved or superseded → one record with that result, and this review's
+     decision as the evidence.
+
+   Append the record yourself only when `writers` names `roadmap-review`. That is
+   a project's explicit choice, never a default. Terminal records are append-only:
+   never reorder, rewrite, or delete one. When this audit finds a record wrong, it
+   appends a correction, a new record naming the one it corrects. That is what
+   `correctionWriters` lets this ceremony append.
 2. Add its one-line entry to the roadmap's completed summary.
 3. Move its full content to the current dated archive.
 4. Remove the full content from the active roadmap.
-5. Update the item in the live register through the provider: set status, clear
-   the sequence, record the completion date and the evidence link. Pass the
-   `revision` you read so a concurrent change is refused rather than clobbered.
+5. Update the item in the live register through the provider: its status, a
+   cleared sequence, the date, and the evidence link. Skip anything
+   `/pointer-closeout`'s crossing already wrote for a completion; never write it
+   twice. Pass the `revision` you read, so a concurrent change is refused rather
+   than clobbered.
 6. Re-running this step must not duplicate anything: the provider's writes are
    idempotent, and a terminal record that already exists is a no-op.
 

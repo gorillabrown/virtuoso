@@ -408,3 +408,28 @@ def test_the_holding_bay_is_reconciled_at_review_and_closed_out_in_held_plan_mod
     closeout = skill_text("pointer-closeout")
     assert "--actor pointer-closeout holding --record <entry> --state executed" in closeout
     assert "**The recording crossing.**" in closeout
+
+
+# --- the terminal ledger: who appends a retirement ---------------------------------
+
+
+def test_retirement_records_are_gated_on_writers_and_routed_to_the_close_out():
+    """A retirement is an ordinary terminal record: the ledger lets only
+    `terminalLedger.writers` append one, and `correctionWriters` only a record that
+    names the record it corrects. The two ceremonies that retire items say the same,
+    and route the record to the close-out, which says how it handles it."""
+    assert policy_mod.DEFAULTS["terminalLedger"]["writers"] == ["pointer-closeout"]
+    review = skill_text("roadmap-review")
+    a4 = review.split("### A.4 Apply changes", 1)[1].split("### A.4b", 1)[0]
+    status = skill_text("roadmap-status")
+    straggler = status.split("- **Straggler migration**", 1)[1].split(
+        "- **Drift reconciliation**", 1)[0]
+    for where, text, actor in (("roadmap-review A.4", a4, "roadmap-review"),
+                               ("roadmap-status 2.1", straggler, "roadmap-status")):
+        text = " ".join(text.split())                       # prose wraps anywhere
+        assert "`policy.terminalLedger.writers`" in text, where
+        assert "`/pointer-closeout`" in text and "*Retirement records routed here*" in text, where
+        assert "`policy.terminalLedger.correctionWriters` names `%s`" % actor not in text, where
+    assert "## Retirement records routed here" in skill_text("pointer-closeout")
+    contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
+    assert "**Who may append what.**" in contract

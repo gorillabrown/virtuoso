@@ -837,6 +837,16 @@ def cmd_record_completion(args) -> int:
     if item is None:
         raise GovernanceError("%s is not in the live register (%s)" % (args.item, provider.source))
     prior = [r for r in book.records() if r.item_id == args.item and not r.corrects]
+    # A completion is an ordinary record: only `terminalLedger.writers` may append one.
+    # Refuse before the preview too, so a preview never promises a write the apply
+    # would refuse. `correctionWriters` covers corrections, which this never is.
+    if not prior and not book.may_append(actor):
+        raise ledger_mod.LedgerError(
+            "%s may not append an ordinary terminal record: policy.terminalLedger.writers "
+            "names %s. A completion or a retirement corrects no record, so "
+            "correctionWriters does not cover it. Route the record to /pointer-closeout."
+            % (actor, ", ".join(book.writers) or "nobody"),
+            detail={"actor": actor, "writers": list(book.writers)})
     record = ledger_mod.LedgerRecord(record_id=book.next_record_id(), item_id=args.item,
                                      completed=args.date, result=args.result,
                                      evidence=args.evidence, effort_estimate=args.estimate,

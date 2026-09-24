@@ -708,6 +708,19 @@ it until it is resolved. An external register is refused and pointed at the
 `mutation-plan --operation record-completion` handshake; an external ledger is refused by
 name.
 
+**Who may append what.** The terminal ledger takes two kinds of record, and each is
+checked against its own list:
+
+| Record | What it is | Who may append | Default |
+|---|---|---|---|
+| ordinary | a completion, or a retirement (`dissolved`, `superseded`) | `policy.terminalLedger.writers` | `pointer-closeout` |
+| correction | a new record that names the record it corrects, in `corrects` | `policy.terminalLedger.correctionWriters` | `pointer-closeout`, `roadmap-review` |
+
+A retirement corrects nothing, so it is an ordinary record. A ceremony that is not a
+writer routes it to `/pointer-closeout` (its section *Retirement records routed here*)
+and never relabels it as a correction. `record-completion` refuses a non-writer before
+it previews, so a preview never promises an append the apply would refuse.
+
 ## Sprint guards
 
 `scripts/sprint_guards.py` holds the executable halves of the execution rules, run

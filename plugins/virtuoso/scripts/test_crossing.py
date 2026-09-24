@@ -311,3 +311,60 @@ def test_record_completion_refuses_a_writer_the_ledger_does_not_allow(workspace)
     completed = record_completion(workspace, "--apply", actor="roadmap-status")
     assert completed.returncode != 0
     assert (workspace / "docs" / "ledger.md").read_text(encoding="utf-8").count("ITEM-1") == 0
+
+
+# --- who may append: ordinary records and corrections, under the default policy ---------
+#
+# A retirement at audit (roadmap-review A.4, roadmap-status's straggler migration) is an
+# ordinary terminal record: it names no record it corrects. The ledger lets only
+# `policy.terminalLedger.writers` append one, and by default that is pointer-closeout
+# alone, so the retiring ceremonies route the record there. These pin that agreement.
+
+from conftest import snapshot_tree  # noqa: E402
+
+PREFLIGHT = str(Path(__file__).resolve().parent / "virtuoso_preflight.py")
+
+
+@pytest.fixture
+def default_workspace(tmp_path):
+    """A workspace `create` laid down, with no terminal-ledger policy of its own, so the
+    plugin's defaults decide who may append — and ITEM-1 in its register."""
+    root = tmp_path / "default"
+    root.mkdir()
+    made = subprocess.run([sys.executable, PREFLIGHT, "--root", str(root), "--mode", "create",
+                           "--authorize"], capture_output=True, text=True)
+    assert made.returncode == 0, made.stdout + made.stderr
+    created = subprocess.run([sys.executable, REGISTRY_CLI, "--root", str(root), "--actor",
+                              "roadmap-review", "create-item", "--item", "ITEM-1",
+                              "--fields-json", '{"title": "First thing"}'],
+                             capture_output=True, text=True)
+    assert created.returncode == 0, created.stdout + created.stderr
+    return root
+
+
+def test_the_default_policy_keeps_ordinary_records_to_the_close_out(default_workspace):
+    reg = registry_mod.load(str(default_workspace))
+    assert "terminalLedger" not in (reg.policy or {})          # the defaults decide
+    book = providers.terminal_ledger(reg)
+    assert book.may_append("pointer-closeout") is True
+    assert book.may_append("roadmap-review") is False          # a retirement is ordinary
+    assert book.may_append("roadmap-review", correction=True) is True
+
+
+@pytest.mark.parametrize("extra", [(), ("--apply",)], ids=["preview", "apply"])
+def test_record_completion_refuses_roadmap_review_before_it_previews(default_workspace, extra):
+    before = snapshot_tree(str(default_workspace))
+    refused = record_completion(default_workspace, *extra, actor="roadmap-review")
+    assert refused.returncode == 3
+    assert "policy.terminalLedger.writers" in refused.stderr
+    assert "/pointer-closeout" in refused.stderr
+    assert "preview" not in refused.stdout                     # no promise of a write
+    assert snapshot_tree(str(default_workspace)) == before
+
+
+def test_the_close_out_records_the_retirement_the_review_routes_to_it(default_workspace):
+    routed = record_completion(default_workspace, "--apply")
+    assert routed.returncode == 0, routed.stdout + routed.stderr
+    reg = registry_mod.load(str(default_workspace))
+    assert [r.item_id for r in providers.terminal_ledger(reg).records()] == ["ITEM-1"]
+    assert providers.work_register(reg).provider.get("ITEM-1").status == base.COMPLETED

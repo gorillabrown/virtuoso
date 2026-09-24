@@ -382,10 +382,13 @@ a hand-off to a ceremony that is permitted to make it, and say which check faile
   3. Update the item in the live register through the provider: status, clear the
      sequence, completion date, evidence link — passing the `revision` read in
      Phase 1 so a concurrent change is refused rather than clobbered.
-  4. The terminal record belongs to the close-out ceremony. Append it here only if
-     `policy.terminalLedger.correctionWriters` names `roadmap-status`; otherwise
-     list it as a hand-off. Terminal records are append-only: a correction is a
-     new record referencing the one it corrects, never an edit to history.
+  4. The terminal record belongs to the close-out ceremony. A straggler's record is
+     an *ordinary* record: it corrects nothing, so `correctionWriters` does not cover
+     it. Append it here only if `policy.terminalLedger.writers` names
+     `roadmap-status`. Otherwise, and by default, list it as a hand-off to
+     `/pointer-closeout`, which handles it as its section *Retirement records routed
+     here* describes. Terminal records are append-only: a correction is a new record
+     referencing the one it corrects, never an edit to history.
 
   All of this counts as one logical migration.
 

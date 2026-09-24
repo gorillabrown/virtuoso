@@ -157,6 +157,25 @@ lessons were recorded, when the work ran. Nothing is re-verified, and nothing is
 twice. The item never stood on the conveyor belt, so Step 5 retires it and elevates
 nothing.
 
+## Retirement records routed here
+
+A roadmap review retires items at audit (its A.4): work that finished without a
+close-out, and work it dissolves or supersedes. A status check's straggler migration
+(roadmap-status, 2.1) retires finished work the same way. Each retirement needs one
+terminal record, and a retirement is an *ordinary* record. Only an actor
+`policy.terminalLedger.writers` names may append one, and by default that is this
+ceremony alone. `correctionWriters` covers corrections only: records that name the
+record they correct. So the retiring ceremony invokes this one, and what runs depends
+on what the item already has:
+
+| The retired item | What runs here |
+|---|---|
+| Completed, never closed out | The full crossing, both waves. No record is appended without verified evidence and lessons. |
+| Completed and closed out, with the record missing | The recording crossing (above): Steps 3, 5 and 6, from the existing close-out, with `record-completion`. |
+| Dissolved or superseded | Step 3 alone: one record whose result is `dissolved` or `superseded`, with the review's decision as its evidence, appended in the ledger's own format. `record-completion` is not used, because it closes the item as completed. The retiring ceremony sets the register status. |
+
+Every case stays idempotent: a record already in the ledger for the item is a no-op.
+
 ## Wave 1 — Draft & Confirm
 
 1. **Lead with the five-line brief** (below).
