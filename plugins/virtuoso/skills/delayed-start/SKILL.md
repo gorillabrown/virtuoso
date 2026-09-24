@@ -2,8 +2,8 @@
 name: delayed-start
 description: >
   Wait until a specified target time before executing the task that follows. Use when the
-  user says "start at <time>", "in N minutes/hours", "at midnight/noon", "kick off at
-  <clock time>", or otherwise wants execution deferred to a clock time or relative delay.
+  user says "start at 3pm", "in N minutes/hours", "at midnight/noon", "kick off at 9:30",
+  or otherwise wants execution deferred to a clock time or relative delay.
   Parses absolute times, named times, and relative delays; sleeps until the target; then
   runs whatever task comes after. Governs only the wait — normal execution resumes after.
 ---

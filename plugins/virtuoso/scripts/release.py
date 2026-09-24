@@ -8,9 +8,12 @@ validate.py. Every gate below traces to one of those.
 
 Usage:
     python release.py X.Y.Z [--notes "..."] [--allow-regen-diff]
-    python release.py X.Y.Z --redeploy     # resume deploy/verify after main was already
-                                           # released (bump+push done) but a later gate failed
+    python release.py X.Y.Z --redeploy     # resume publish/deploy/verify after main was
+                                           # already released (bump+push done) but a later
+                                           # gate failed
     python release.py --dry-run            # all read-only gates vs the CURRENT state
+    python release.py --public-tree        # print the public release tree and how it
+                                           # differs from the public main; nothing else
 
 Steps (real run):
   1  preflight   clean tree; main == origin/main (fetched); validate.py green; full pytest
@@ -18,21 +21,26 @@ Steps (real run):
   2  regen-diff  installed writer vs repo writer on a fresh fixture: file sets + bytes must
                  match, else --allow-regen-diff is required and the diff is printed
   3  bump        bump_version.py X.Y.Z (writes every manifest .version-bump.json declares)
-  4  git         explicit-stage exactly those files; chore(release) commit; push main
-  5  deploy      marketplace clone pull --ff-only (version must match target);
+  4  git         explicit-stage exactly those files; chore(release) commit; push main to
+                 origin, the development repository
+  5  publish     the release tree -- PUBLIC_TREE only -- becomes one commit on the public
+                 repository's main, tagged vX.Y.Z (VIR-008); a repeat run is a no-op
+  6  deploy      marketplace clone pull --ff-only (version must match target);
                  cache/<ver> installed fresh from the clone
-  6  sweep       SR-5 from THIS process (the harness's own filesystem view): normalized
-                 writer hash equal across repo / clone / cache-target; bridge state
-                 reported. Per-session snapshots are named UNVERIFIABLE (no local process
-                 shares that subtree's view) -- the restart instruction is the mitigation.
-  7  verify      the INSTALLED copy runs a fixture battery: create, then a second run that
+  7  sweep       SR-5 from THIS process (the harness's own filesystem view): normalized
+                 writer hash equal across repo / clone / cache-target. Per-session
+                 snapshots are named UNVERIFIABLE (no local process shares that subtree's
+                 view) -- the restart instruction is the mitigation.
+  8  verify      the INSTALLED copy runs a fixture battery: create, then a second run that
                  must report nothing to do with byte-identical output
-  8  registry    LAST, only after sweep+verify pass: installed_plugins.json updated after
+  9  registry    LAST, only after sweep+verify pass: installed_plugins.json updated after
                  shape validation, atomically (write-beside + os.replace), with a
                  timestamped backup written first; .last-update-check refreshed
 Exit codes: 0 all gates passed; 1 a gate failed (message names it); 2 usage error.
 
-Dry-run performs 1, 2, 7 and 8 against the current installed version and writes NOTHING.
+Dry-run performs 1, 2, the step-5 preview, 7 and 8 against the current installed version,
+reads (never writes) the registry of step 9, and writes NOTHING -- fetching the public main
+aside.
 """
 import argparse
 import hashlib
@@ -59,10 +67,19 @@ REGISTRY = os.environ.get(
     os.path.join(HOME, ".claude", "plugins", "installed_plugins.json"),
 )
 LAST_UPDATE_CHECK = os.path.join(HOME, ".claude", "plugins", ".last-update-check")
-BRIDGE = os.path.join(HOME, ".virtuoso", "plugin-root")
 PLUGIN_KEY = "virtuoso@virtuoso-marketplace"
 WRITER_REL = os.path.join("scripts", "virtuoso_preflight.py")
 _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+
+#: What the public repository carries (VIR-008), as repository-relative paths; a directory
+#: brings its whole tree. Development material -- the rest of docs/, Project Documentation/,
+#: the Virtuoso/ workspace -- stays in the development repository. Every entry must exist in
+#: the release commit, so dropping one is a deliberate edit here, never a side effect.
+PUBLIC_TREE = (".claude-plugin", ".gitattributes", ".github", ".gitignore", "LICENSE",
+               "README.md", "RELEASE-NOTES.md", "docs/MIGRATION-1.4.md", "plugins")
+#: Names a publish target other than plugin.json's `repository` (tests use a local bare repo).
+PUBLIC_REMOTE_ENV = "VIRTUOSO_RELEASE_PUBLIC_REMOTE"
+_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 
 class Gate(Exception):
@@ -255,7 +272,169 @@ def do_bump_and_push(target, notes):
     say("[git] release commit pushed: %s" % run(["git", "rev-parse", "--short", "HEAD"]).stdout.strip())
 
 
-# --- steps 5-6: deploy + registry ----------------------------------------------------------
+# --- step 5: publish (VIR-008) -------------------------------------------------------------
+
+def _git(args, input=None, env=None, check=True):
+    """git in the development repository, bytes in and out: tree plumbing carries
+    NUL-separated paths, and no console codepage may touch them. REPO is read at call
+    time, so tests can point it at a fixture."""
+    p = subprocess.run(["git", *args], cwd=REPO, input=input, env=env,
+                       capture_output=True, timeout=600)
+    if check and p.returncode != 0:
+        raise Gate("command failed (%d): git %s\n%s" % (
+            p.returncode, " ".join(args),
+            (p.stderr or p.stdout).decode("utf-8", "replace").strip()[:800]))
+    return p.stdout
+
+
+def _normalized_remote(url):
+    """host/owner/repo, lower-cased, so the https, ssh and .git spellings of one repository
+    compare equal. An existing local path compares as its real path."""
+    u = (url or "").strip()
+    if u and os.path.isdir(u):
+        return os.path.realpath(u)
+    u = re.sub(r"^[a-z][a-z0-9+.-]*://", "", u.rstrip("/"))
+    u = re.sub(r"^[^@/]*@", "", u)
+    u = re.sub(r"^([^/:]+):(?!\d)", r"\1/", u)
+    return re.sub(r"\.git$", "", u).lower()
+
+
+def public_remote():
+    """Where releases publish: plugin.json's `repository`, unless PUBLIC_REMOTE_ENV names
+    another. `origin` is the development repository; the two are never the same."""
+    override = os.environ.get(PUBLIC_REMOTE_ENV, "").strip()
+    if override:
+        return override
+    with open(PLUGIN_JSON, encoding="utf-8") as f:
+        remote = (json.load(f).get("repository") or "").strip()
+    if not remote:
+        raise Gate("plugin.json names no `repository`, so the public repository is unknown")
+    return remote
+
+
+def public_tree_files(ref="HEAD"):
+    """The public repository's files at ``ref``, as (mode, sha, path) in tree order.
+    Raises Gate, naming it, when a PUBLIC_TREE entry is missing."""
+    raw = _git(["ls-tree", "-r", "-z", "--full-tree", ref, "--", *PUBLIC_TREE])
+    entries = []
+    for record in raw.split(b"\0"):
+        if not record:
+            continue
+        meta, path = record.split(b"\t", 1)
+        mode, kind, sha = meta.decode("ascii").split()
+        if kind != "blob":
+            raise Gate("public path %s is a %s, not a file; only files are published"
+                       % (path.decode("utf-8", "replace"), kind))
+        entries.append((mode, sha, path.decode("utf-8")))
+    paths = [p for _mode, _sha, p in entries]
+    missing = [entry for entry in PUBLIC_TREE
+               if not any(p == entry or p.startswith(entry + "/") for p in paths)]
+    if missing:
+        raise Gate("public path(s) missing from %s: %s -- rename or drop one only by "
+                   "editing PUBLIC_TREE" % (ref, ", ".join(missing)))
+    return entries
+
+
+def _write_public_tree(entries):
+    """Write ``entries`` as a tree object through a throwaway index, so blobs and modes are
+    copied exactly: no working tree, no line-ending conversion."""
+    workdir = tempfile.mkdtemp(prefix="virtuoso-public-")
+    env = dict(os.environ, GIT_INDEX_FILE=os.path.join(workdir, "index"))
+    try:
+        info = b"".join(b"%s blob %s\t%s\0" % (mode.encode(), sha.encode(), path.encode("utf-8"))
+                        for mode, sha, path in entries)
+        _git(["update-index", "--add", "-z", "--index-info"], input=info, env=env)
+        return _git(["write-tree"], env=env).decode("ascii").strip()
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def _remote_ref(remote, ref):
+    """The commit ``ref`` names on ``remote`` (a tag is peeled), or None when it is absent."""
+    out = _git(["ls-remote", remote, ref, ref + "^{}"]).decode("utf-8", "replace")
+    found = {}
+    for line in out.splitlines():
+        sha, _, name = line.partition("\t")
+        if name:
+            found[name] = sha
+    return found.get(ref + "^{}") or found.get(ref)
+
+
+def _changes(old_tree, new_tree):
+    """(status, path) for every file that differs between two trees."""
+    out = _git(["diff-tree", "-r", "-z", "--no-renames", "--name-status", old_tree, new_tree])
+    parts = [p.decode("utf-8") for p in out.split(b"\0") if p]
+    return list(zip(parts[0::2], parts[1::2]))
+
+
+def publish_release(target, notes="", preview=False):
+    """Step 5: make the public repository's main carry the release tree and nothing else.
+
+    The tree is PUBLIC_TREE at the release commit, built from git objects. It lands as one
+    commit on top of the public main, tagged v<target>; both pushes are plain pushes, never
+    forced, so a public main that moved meanwhile refuses the push and nothing is
+    overwritten. Re-running is safe: when the public main already carries the tree there is
+    nothing to commit, and a tag already naming the release commit is left alone -- which
+    is what lets --redeploy pass through this step. A tag naming any other commit stops the
+    release: a published tag is never moved. ``preview`` prints the tree and how it differs
+    from the public main, and pushes nothing."""
+    remote = public_remote()
+    origin = _git(["remote", "get-url", "origin"], check=False).decode("utf-8", "replace").strip()
+    if origin and _normalized_remote(origin) == _normalized_remote(remote):
+        raise Gate("origin is the public repository (%s); releases run from the development "
+                   "repository and publish to the public one" % remote)
+    head = _git(["rev-parse", "HEAD"]).decode("ascii").strip()
+    if not preview:
+        main_ref = _git(["rev-parse", "--verify", "-q", "refs/heads/main"], check=False)
+        if main_ref.decode("ascii").strip() != head:
+            raise Gate("HEAD is not main; the release commit is main's, so publish from main")
+    entries = public_tree_files(head)
+    tree = _write_public_tree(entries)
+    public_main = _remote_ref(remote, "refs/heads/main")
+    if public_main:
+        _git(["fetch", "--no-tags", remote, "refs/heads/main"])
+        public_tree = _git(["rev-parse", public_main + "^{tree}"]).decode("ascii").strip()
+    else:
+        public_tree = _EMPTY_TREE
+    changes = _changes(public_tree, tree)
+
+    if preview:
+        say("[publish] public tree at %s: %d files, for %s" % (head[:9], len(entries), remote))
+        for _mode, _sha, path in entries:
+            say("    %s" % path)
+        say("[publish] against the public main (%s): %s" % (
+            public_main[:9] if public_main else "none yet",
+            ("%d file(s) differ" % len(changes)) if changes else "identical"))
+        for status, path in changes:
+            say("    %s %s" % (status, path))
+        return None
+
+    tag = "v%s" % target
+    if public_main and public_tree == tree:
+        commit = public_main
+        say("[publish] the public main already carries this tree @ %s" % commit[:9])
+    else:
+        message = "release: %s — %s\n\nBuilt from development commit %s.\n" % (
+            tag, notes or "release", head)
+        command = ["commit-tree", tree, "-m", message]
+        if public_main:
+            command += ["-p", public_main]
+        commit = _git(command).decode("ascii").strip()
+    tagged = _remote_ref(remote, "refs/tags/" + tag)
+    if tagged and tagged != commit:
+        raise Gate("tag %s already names %s on the public repository, not %s; a published "
+                   "tag is never moved -- resolve it by hand" % (tag, tagged[:9], commit[:9]))
+    if commit != public_main:
+        _git(["push", remote, "%s:refs/heads/main" % commit])
+        say("[publish] public main -> %s (%d files; %d changed)"
+            % (commit[:9], len(entries), len(changes)))
+    if not tagged:
+        _git(["push", remote, "%s:refs/tags/%s" % (commit, tag)])
+    say("[publish] %s tagged %s on the public repository" % (commit[:9], tag))
+    return commit
+
+
+# --- steps 6 and 9: deploy + registry ------------------------------------------------------
 
 def deploy_cache(target):
     run(["git", "pull", "--ff-only"], cwd=CLONE)
@@ -366,13 +545,6 @@ def sweep(target_dir, dry_run=False):
             bad.append(label)
     if bad:
         raise Gate("SR-5 sweep mismatch vs %s: %s" % (ref_label, bad))
-    try:
-        with open(BRIDGE, encoding="utf-8") as f:
-            b = f.read().strip()
-        valid = os.path.isfile(os.path.join(b, WRITER_REL))
-        say("[sweep] bridge -> %s (%s)" % (b, "valid" if valid else "INVALID"))
-    except OSError:
-        say("[sweep] bridge absent (will be written by the next hook run)")
     say("[sweep] per-session snapshots: UNVERIFIABLE from any local process (the harness and "
         "shell disagree about that subtree — known divergence, 2026-07-19).")
     say("[sweep] >>> RESTART the Claude app to re-provision session snapshots from this cache. <<<")
@@ -414,9 +586,22 @@ def main():
     ap.add_argument("--notes", default="", help="release-note line for the commit message")
     ap.add_argument("--allow-regen-diff", action="store_true")
     ap.add_argument("--redeploy", action="store_true",
-                    help="resume deploy/verify for the CURRENT (already bumped+pushed) version")
+                    help="resume publish/deploy/verify for the CURRENT (already bumped+pushed) "
+                         "version")
+    ap.add_argument("--public-tree", action="store_true",
+                    help="print the public release tree and how it differs from the public "
+                         "main, then exit; reads only")
     a = ap.parse_args()
 
+    if a.public_tree:
+        if a.version or a.dry_run or a.redeploy:
+            ap.error("--public-tree takes no version and runs alone")
+        try:
+            publish_release(None, preview=True)
+            return 0
+        except Gate as exc:
+            say("\nGATE FAILURE:\n%s" % exc)
+            return 1
     if not a.dry_run and not a.version:
         ap.error("a target version is required unless --dry-run")
     if a.dry_run and a.redeploy:
@@ -438,6 +623,7 @@ def main():
         gate_regen_diff(installed_root, a.allow_regen_diff)
         progress.append("regen-diff")
         if a.dry_run:
+            publish_release(cur, preview=True)
             sweep(installed_root, dry_run=True)
             verify_installed(installed_root)
             say("\nDRY-RUN COMPLETE: every gate green against version %s. Nothing written." % cur)
@@ -449,6 +635,8 @@ def main():
         # Same state either way (preflight proved main==origin at target), but the failure
         # report distinguishes "pushed in THIS run" from "verified as already released".
         progress.append("released-to-main" if not a.redeploy else "release-verified-preexisting")
+        publish_release(a.version, a.notes)
+        progress.append("published")
         cache_dir = deploy_cache(a.version)
         progress.append("cache-installed")
         sweep(cache_dir)
@@ -465,6 +653,9 @@ def main():
             how = ("bump commit pushed in this run" if "released-to-main" in progress
                    else "already released prior to this run")
             say("\nSTATE: main IS RELEASED (%s). Completed: %s." % (how, ", ".join(progress)))
+            if "published" not in progress:
+                say("The public repository has NOT received this release; --redeploy "
+                    "publishes it first (publishing again is a no-op).")
             if "registry-updated" in progress:
                 say("The registry was already updated — investigate before trusting the install.")
             else:

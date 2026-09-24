@@ -18,6 +18,8 @@ portability and single-authority rules the v2 redesign introduced (item 99):
   * the project-overlay clause, in every shipped skill and agent
   * overlay pairings: every declared policy key and mirror path actually exists
   * agent memory directory names, against both disk and git's index
+  * the frontmatter hosts load: every file under agents/ is an agent, and every
+    skill's name and description meet the documented host rules
 
 Run from anywhere: paths resolve from __file__.
 """
@@ -227,6 +229,134 @@ def check_frontmatter_and_manifests(skills_dir: str) -> list[str]:
     elif distinct:
         ok("%d install surface(s) all advertise %s" % (len(versions), distinct[0]))
     return skill_names
+
+
+#: A skill name hosts accept: lowercase letters, digits and single hyphens, with no hyphen
+#: at either end, 64 characters at most.
+SKILL_NAME_RE = re.compile(r"(?!.*--)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?")
+#: Words no skill name may contain.
+RESERVED_NAME_WORDS = ("anthropic", "claude")
+#: The longest skill description hosts accept, in characters.
+MAX_DESCRIPTION = 1024
+
+
+#: The escapes a double-quoted YAML scalar uses in practice.
+_YAML_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "0": "\0", " ": " ", "/": "/",
+                 '"': '"', "\\": "\\"}
+
+
+def _unquote(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] == "'":
+        return value[1:-1].replace("''", "'")
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        return re.sub(r"\\(.)", lambda m: _YAML_ESCAPES.get(m.group(1), m.group(0)),
+                      value[1:-1])
+    return value
+
+
+def frontmatter_fields(text: str) -> dict[str, str]:
+    """The top-level scalar fields of the YAML frontmatter that opens ``text``.
+
+    Just enough YAML to read a skill's or an agent's header without a YAML dependency,
+    which CI does not install: plain, quoted, folded (``>``) and literal (``|``)
+    scalars, with their indented continuation lines. ``{}`` when ``text`` does not open
+    with frontmatter.
+    """
+    match = re.match(r"---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|$)", text, re.S)
+    if not match:
+        return {}
+    entries: list[tuple[str, str, list[str]]] = []
+    for line in match.group(1).splitlines():
+        key = None if line[:1].isspace() else \
+            re.match(r"([A-Za-z_][\w-]*):(?:[ \t]+(.*))?$", line)
+        if key:
+            head = (key.group(2) or "").strip()
+            if not head.startswith(("'", '"')):
+                head = re.sub(r"[ \t]+#.*$", "", head)
+            entries.append((key.group(1), head, []))
+        elif entries and not line.startswith("#"):
+            entries[-1][2].append(line.strip())
+    fields = {}
+    for key, head, lines in entries:
+        block = re.fullmatch(r"[>|][0-9+-]*", head)
+        if head and not block:
+            lines = [head] + lines
+        while lines and not lines[0]:
+            lines.pop(0)
+        while lines and not lines[-1]:
+            lines.pop()
+        if block and head[0] == "|":
+            fields[key] = "\n".join(lines)
+            continue
+        # Folding: lines join with a space, and each blank line becomes a line break.
+        paragraphs: list[list[str]] = [[]]
+        for part in lines:
+            if part:
+                paragraphs[-1].append(part)
+            else:
+                paragraphs.append([])
+        value = "\n".join(" ".join(p) for p in paragraphs)
+        fields[key] = value if block else _unquote(value)
+    return fields
+
+
+def check_host_frontmatter() -> None:
+    """The frontmatter hosts load must be what they expect (VIR-001).
+
+    Every .md under agents/ is loaded as an agent, so each must open with frontmatter
+    declaring a name and a description; guidance about agents belongs in references/.
+    Every skill's name and description must meet the rules the strictest published skill
+    validator applies: a name of at most 64 lowercase letters, digits and single hyphens,
+    with no hyphen at either end and no reserved word; a non-empty description of at most
+    1,024 characters, with no `<` or `>` at all. Uploads refuse a description that
+    "cannot contain XML tags", and a validator reads the raw string, so a tag inside
+    backticks is still a tag. The command-line plugin validator checks none of the skill
+    rules, and claude.ai's marketplace import is stricter than it, so this check stands
+    in for the stricter one.
+    """
+    problems = []
+    agents = shipped_agent_files()
+    for name in agents:
+        rel = "agents/%s" % name
+        with open(os.path.join(ROOT, "agents", name), encoding="utf-8") as handle:
+            fields = frontmatter_fields(handle.read())
+        if not fields:
+            problems.append("%s: no frontmatter. Hosts load every .md under agents/ as an "
+                            "agent; guidance about agents belongs in references/" % rel)
+            continue
+        problems.extend("%s: no %s" % (rel, field) for field in ("name", "description")
+                        if not fields.get(field))
+
+    skills = shipped_skill_names()
+    for skill in skills:
+        rel = "skills/%s/SKILL.md" % skill
+        path = os.path.join(ROOT, "skills", skill, "SKILL.md")
+        if not os.path.isfile(path):
+            continue    # check_frontmatter_and_manifests reports it
+        with open(path, encoding="utf-8") as handle:
+            fields = frontmatter_fields(handle.read())
+        name, description = fields.get("name", ""), fields.get("description", "")
+        if not SKILL_NAME_RE.fullmatch(name):
+            problems.append("%s: name %r is not 1-64 lowercase letters, digits and single "
+                            "hyphens, with no hyphen at either end" % (rel, name))
+        problems.extend("%s: name %r contains the reserved word %r" % (rel, name, word)
+                        for word in RESERVED_NAME_WORDS if word in name)
+        if not description:
+            problems.append("%s: no description" % rel)
+        elif len(description) > MAX_DESCRIPTION:
+            problems.append("%s: description is %d characters; hosts accept %d at most"
+                            % (rel, len(description), MAX_DESCRIPTION))
+        bracket = re.search(r"[<>]", description)
+        if bracket:
+            at = bracket.start()
+            problems.append("%s: description contains %r, in %r; hosts refuse any < or > "
+                            "there, inside backticks too"
+                            % (rel, bracket.group(), description[max(0, at - 20):at + 20]))
+
+    (ok if not problems else fail)(
+        "%d skill(s) and %d agent(s) carry frontmatter the hosts accept"
+        % (len(skills), len(agents)) if not problems
+        else "frontmatter the hosts would refuse: %s" % "; ".join(problems))
 
 
 def check_session_hook() -> None:
@@ -482,8 +612,6 @@ def check_commands() -> None:
     ok("%d commands; all map to skills" % len(commands))
 
 
-#: The one file under agents/ that is guidance about agents, not an agent.
-AGENT_GUIDE = "AGENT_MEMORY_GUIDE.md"
 #: A documented memory directory, e.g. `.claude/agent-memory/socrates/`.
 MEMORY_DIR_RE = re.compile(r"agent-memory/([^/`\s]+)/")
 #: The agent frontmatter field that turns persistent memory on.
@@ -498,12 +626,12 @@ def shipped_skill_names() -> list[str]:
 
 
 def shipped_agent_files() -> list[str]:
-    """Agent bodies, read off disk. The memory guide is documentation, not an agent."""
+    """Agent bodies, read off disk. Hosts load every .md under agents/ as an agent, so
+    every one is audited as one; guidance about agents lives in references/."""
     agents_dir = os.path.join(ROOT, "agents")
     if not os.path.isdir(agents_dir):
         return []
-    return sorted(f for f in os.listdir(agents_dir)
-                  if f.endswith(".md") and f != AGENT_GUIDE)
+    return sorted(f for f in os.listdir(agents_dir) if f.endswith(".md"))
 
 
 #: Words that follow an agent-reference construct and are not agent names
@@ -675,8 +803,6 @@ def check_agent_memory_names() -> None:
     else:
         note = " (disk and git index agree)"
         on_disk = set(agent_files)
-        if os.path.isfile(os.path.join(ROOT, "agents", AGENT_GUIDE)):
-            on_disk.add(AGENT_GUIDE)
         in_index = {p.split("/")[-1] for p in tracked}
         # Compared as exact strings: a case-only rename is invisible to the
         # filesystem on Windows and macOS but plainly visible here.
@@ -719,6 +845,7 @@ def check_promoted_rule_text() -> None:
 
 def main() -> int:
     skill_names = check_frontmatter_and_manifests(os.path.join(ROOT, "skills"))
+    check_host_frontmatter()
     check_session_hook()
     check_overlay_clause()
     check_overlay_pairings()

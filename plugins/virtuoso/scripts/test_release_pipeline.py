@@ -211,6 +211,25 @@ def test_dry_run_sweep_rejects_a_clone_matching_neither_lineage(tmp_path, monkey
         assert "clone" in str(exc)
 
 
+def test_the_sweep_reports_no_retired_bridge(tmp_path, monkeypatch, capsys):
+    """1.4 retired the plugin-root bridge, and nothing reads it. The sweep went on
+    reporting it, as a stale version or as "absent (will be written by the next hook
+    run)", and both were false."""
+    repo = tmp_path / "repo" / "plugins" / "virtuoso"
+    clone = tmp_path / "clone"
+    cache = tmp_path / "cache"
+    for root in (repo, clone / "plugins" / "virtuoso", cache):
+        _write_sweep_fixture(root, "same")
+    monkeypatch.setattr(rp, "PLUGIN", str(repo))
+    monkeypatch.setattr(rp, "CLONE", str(clone))
+
+    rp.sweep(str(cache))
+
+    out = capsys.readouterr().out
+    assert "[sweep] cache-target" in out
+    assert [line for line in out.splitlines() if "bridge" in line] == []
+
+
 def test_update_registry_survives_replace_failure(tmp_path, monkeypatch):
     """Fault injection for the atomicity contract: if os.replace fails, the original
     registry bytes must be intact and the error must surface as a Gate (so the pipeline's

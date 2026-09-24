@@ -124,5 +124,5 @@ At the START of every task, count the total fixes/steps and print a progress hea
 2. **Do NOT suggest next steps or offer to investigate further.** Report and stop.
 3. **Do NOT ask questions.** End with findings summary. No postamble.
 
-See `AGENT_MEMORY_GUIDE.md` for memory system instructions.
+See the plugin's `references/agent-memory-guide.md` for memory system instructions.
 Memory location: `<project-root>/.claude/agent-memory/archimedes/`

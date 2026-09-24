@@ -337,5 +337,5 @@ before it is attributed to a mechanism.
 After reporting pass/fail, list modules with thin or absent test coverage — untested public
 functions, modules with no test file, and recently-changed code lacking tests.
 
-See `AGENT_MEMORY_GUIDE.md` for memory system instructions.
+See the plugin's `references/agent-memory-guide.md` for memory system instructions.
 Memory location: `<project-root>/.claude/agent-memory/hippocrates/`

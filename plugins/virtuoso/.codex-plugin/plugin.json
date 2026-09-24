@@ -1,7 +1,7 @@
 {
   "name": "virtuoso",
-  "version": "1.10.0",
-  "description": "Provider-based governance & dispatch suite: roadmap planning, execution discipline, close-outs, mid-dispatch decisions, audits, and doc hygiene, joined into a learning loop in which every close-out records its lessons and every new specification is checked against them — driven by a per-project registry that declares its live work register, terminal ledger, ownership rules, and permitted mutations.",
+  "version": "1.10.1",
+  "description": "A living roadmap that makes every task your agents finish improve the next one. Each task is scoped against what earlier work proved, run on the model and effort it needs, and closed out with evidence and a record of what it taught; lessons that keep holding become standing rules. The roadmap, ledger, lessons and rules live in plain files in your project.",
   "author": {
     "name": "Evan Brown",
     "email": "evan@heyevanbrown.com",
@@ -22,14 +22,15 @@
   "hooks": "./hooks/hooks-codex.json",
   "interface": {
     "displayName": "Virtuoso",
-    "shortDescription": "Governance and dispatch discipline for agent-run projects",
-    "longDescription": "Use Virtuoso to plan a roadmap, dispatch work at a declared effort level, decide mid-dispatch without losing the thread, close out against a terminal ledger, prepare outside audits, and keep project documentation honest. The ceremonies form one learning loop: every close-out records what the work taught, and every new specification and epic is checked against those lessons before it runs — all driven by a per-project registry that declares where the work lives and what may change it.",
+    "shortDescription": "A living roadmap that makes every task your agents finish improve the next one",
+    "longDescription": "Use Virtuoso to keep one living roadmap across many efforts, reconciled against the work actually done. Each new task is scoped against what earlier work proved: approaches that won become the starting path, and known traps are designed out before work begins. Each step runs at the effort level it needs, and every task closes out with evidence and a record of what it taught. Lessons that keep holding become standing rules, written once and inherited by all new work, and regular sweeps merge, retire and tidy the rest, so documentation hardens instead of sprawling. The roadmap, ledger, lessons and rules live in plain files in your project, versioned with your code.",
     "developerName": "Evan Brown",
     "category": "Developer Tools",
     "capabilities": [
       "Interactive",
       "Read",
-      "Write"
+      "Write",
+      "Lifecycle hooks"
     ],
     "defaultPrompt": [
       "Set this project up for governed dispatch.",

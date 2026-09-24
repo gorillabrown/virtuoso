@@ -1,5 +1,52 @@
 # Virtuoso Release Notes
 
+## v1.10.1 (2026-09-24) — what hosts load, and where releases come from
+
+**Upgrading from 1.10.0.** Nothing to change: no schema, policy or rubric change. If your
+project overlays the agent memory guide, move the overlay from `agents/AGENT_MEMORY_GUIDE.md`
+to `references/agent-memory-guide.md`. Until you do, session start reports the old one as
+`overlay-orphan`.
+
+### What hosts load is what they expect
+
+- **The agent memory guide moved to `references/agent-memory-guide.md`.** Hosts load every
+  file under `agents/` as an agent, so the guide appeared as an eleventh agent with no
+  frontmatter, and `claude plugin validate` warned about it. The six agents that cite it
+  point at the new path.
+- **`delayed-start` describes itself without placeholder tags.** A skill description may
+  not contain XML tags, and to a host `<time>` and `<clock time>` are tags. The triggers
+  are now examples: "start at 3pm" and "kick off at 9:30".
+- **`validate.py` checks the frontmatter hosts load.** Every file under `agents/` must open
+  with frontmatter that declares a name and a description. Every skill needs a name of at
+  most 64 lowercase letters, digits and single hyphens, with no hyphen at either end and
+  no reserved word. Its description must be non-empty, at most 1,024 characters, and free
+  of `<` and `>`: an upload refuses a tag even inside backticks. The command-line plugin
+  validator checks none of the skill rules.
+
+### Releases publish to the public repository
+
+The public repository now carries finished releases only. `release.py` gains step 5,
+**publish**: the release tree, and nothing else, becomes one commit on the public
+repository's `main`, tagged `vX.Y.Z`.
+- A repeat run changes nothing.
+- A tag already pointing elsewhere stops the release; a published tag is never moved.
+- The public `main` is never force-pushed.
+- `release.py --public-tree` previews the tree and how it differs from the public `main`,
+  and `--dry-run` prints the same preview.
+
+This is the first release published this way, so the public repository also drops the
+development documents it used to carry.
+
+### Also
+
+- **The release sweep no longer reports the plugin-root bridge.** 1.4 retired
+  `~/.virtuoso/plugin-root`, and nothing reads it. The sweep still printed it, either at a
+  stale version or as "absent (will be written by the next hook run)", and both were false.
+- **The alternate host's plugin page lists `Lifecycle hooks`,** for the session hook the
+  plugin ships, beside Interactive, Read and Write.
+- **Every listing describes Virtuoso as a living roadmap**: the marketplace entry, both
+  manifests, and the alternate host's tagline and description.
+
 ## v1.10.0 (2026-09-23) — the learning loop, hardened
 
 **Upgrading from 1.8.2.** This release ships two bodies of work: the learning loop (the

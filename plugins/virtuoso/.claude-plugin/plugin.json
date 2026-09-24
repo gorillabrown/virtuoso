@@ -1,8 +1,8 @@
 {
   "name": "virtuoso",
   "displayName": "Virtuoso",
-  "version": "1.10.0",
-  "description": "Provider-based governance & dispatch suite: roadmap planning, execution discipline, close-outs, mid-dispatch decisions, audits, and doc hygiene, joined into a learning loop in which every close-out records its lessons and every new specification is checked against them — driven by a per-project registry that declares its live work register, terminal ledger, ownership rules, and permitted mutations.",
+  "version": "1.10.1",
+  "description": "A living roadmap that makes every task your agents finish improve the next one. Each task is scoped against what earlier work proved, run on the model and effort it needs, and closed out with evidence and a record of what it taught; lessons that keep holding become standing rules. The roadmap, ledger, lessons and rules live in plain files in your project.",
   "author": {
     "name": "Evan Brown",
     "email": "evan@heyevanbrown.com",

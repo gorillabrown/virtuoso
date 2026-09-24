@@ -755,10 +755,10 @@ def test_no_shipped_agent_carries_another_projects_residue():
 
 
 def test_the_memory_boundary_is_stated_once_and_agents_defer_to_it():
-    guide = (ROOT / "agents" / "AGENT_MEMORY_GUIDE.md").read_text(encoding="utf-8")
+    guide = (ROOT / "references" / "agent-memory-guide.md").read_text(encoding="utf-8")
     assert "## The boundary — memory, lessons, findings" in guide
     plato = (ROOT / "agents" / "Plato.md").read_text(encoding="utf-8")
-    assert "AGENT_MEMORY_GUIDE.md" in plato and "memory.yaml" not in plato
+    assert "references/agent-memory-guide.md" in plato and "memory.yaml" not in plato
 
 
 # --- D18: anchors prove rule text; the buffer counts readiness -----------------------------

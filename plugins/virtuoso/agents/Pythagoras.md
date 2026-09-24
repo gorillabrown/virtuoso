@@ -110,5 +110,5 @@ At the START of every task, count the total steps and print a progress header. A
 2. **Do NOT suggest next steps or offer to investigate further.** Report and stop.
 3. **Do NOT ask questions.** End with the validation results table. No postamble.
 
-See `AGENT_MEMORY_GUIDE.md` for memory system instructions.
+See the plugin's `references/agent-memory-guide.md` for memory system instructions.
 Memory location: `<project-root>/.claude/agent-memory/pythagoras/`

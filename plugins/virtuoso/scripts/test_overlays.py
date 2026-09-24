@@ -36,8 +36,7 @@ REGISTRY_CLI = str(ROOT / "scripts" / "virtuoso_registry.py")
 VALIDATE = str(ROOT / "scripts" / "validate.py")
 
 SKILL_NAMES = sorted(d.name for d in (ROOT / "skills").iterdir() if d.is_dir())
-AGENT_FILES = sorted(p.name for p in (ROOT / "agents").glob("*.md")
-                     if p.name != "AGENT_MEMORY_GUIDE.md")
+AGENT_FILES = sorted(p.name for p in (ROOT / "agents").glob("*.md"))
 
 
 def run(script, *args):
@@ -150,14 +149,14 @@ def fake_plugin(tmp_path):
         folder = root / "skills" / name
         folder.mkdir(parents=True)
         (folder / "SKILL.md").write_text(
-            "---\nname: %s\n---\n\n%s\n\n# %s\n" % (name, overlays_mod.OVERLAY_CLAUSE, name),
-            encoding="utf-8")
+            "---\nname: %s\ndescription: The %s fixture.\n---\n\n%s\n\n# %s\n"
+            % (name, name, overlays_mod.OVERLAY_CLAUSE, name), encoding="utf-8")
     (root / "agents").mkdir(parents=True)
     for name in ("Alpha", "Beta"):
         (root / "agents" / ("%s.md" % name)).write_text(
-            "---\nname: %s\nmemory: project\n---\n\n%s\n\nMemory location: "
-            "`<project-root>/.claude/agent-memory/%s/`\n"
-            % (name, overlays_mod.OVERLAY_CLAUSE, name.lower()), encoding="utf-8")
+            "---\nname: %s\ndescription: The %s fixture.\nmemory: project\n---\n\n%s\n\n"
+            "Memory location: `<project-root>/.claude/agent-memory/%s/`\n"
+            % (name, name, overlays_mod.OVERLAY_CLAUSE, name.lower()), encoding="utf-8")
     return root
 
 
@@ -1247,6 +1246,109 @@ def test_every_shipped_agent_that_declares_memory_documents_where_it_lives():
             assert "agent-memory/%s/" % name[:-3].lower() in text, name
 
 
+def test_the_memory_guide_ships_in_references_and_agents_cite_it_there():
+    assert (ROOT / "references" / "agent-memory-guide.md").is_file()
+    assert not (ROOT / "agents" / "AGENT_MEMORY_GUIDE.md").exists()
+    # Written out, not found by a search: an agent that loses its pointer fails here.
+    for name in ("Archimedes", "Hesiod", "Hippocrates", "Plato", "Pythagoras", "Socrates"):
+        text = (ROOT / "agents" / ("%s.md" % name)).read_text(encoding="utf-8")
+        assert "references/agent-memory-guide.md" in text, name
+        assert "AGENT_MEMORY_GUIDE" not in text, name
+
+
+# =============================================================================
+# The frontmatter hosts load
+# =============================================================================
+
+
+def _write_skill(plugin, name, frontmatter):
+    folder = plugin / "skills" / name
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "SKILL.md").write_text(
+        "---\n%s---\n\n%s\n" % (frontmatter, overlays_mod.OVERLAY_CLAUSE), encoding="utf-8")
+
+
+def test_the_host_frontmatter_check_passes_on_a_complete_tree(fake_plugin):
+    # The skill bodies carry the overlay clause's placeholders. Only frontmatter is held
+    # to the hosts' rules, so a tag in a body is legal.
+    assert "<skill>" in (fake_plugin / "skills" / "alpha" / "SKILL.md").read_text(
+        encoding="utf-8")
+    module = load_validate()
+    oks, fails = check_against(module, fake_plugin, "check_host_frontmatter")
+    assert fails == []
+    assert "2 skill(s) and 2 agent(s)" in oks[0]
+
+
+def test_the_host_frontmatter_check_catches_a_guide_among_the_agents(fake_plugin):
+    # Hosts load every .md under agents/ as an agent; the memory guide was counted as one.
+    (fake_plugin / "agents" / "GUIDE.md").write_text("# A guide\n", encoding="utf-8")
+    module = load_validate()
+    _oks, fails = check_against(module, fake_plugin, "check_host_frontmatter")
+    assert len(fails) == 1
+    assert "agents/GUIDE.md: no frontmatter" in fails[0]
+    assert "Alpha" not in fails[0] and "Beta" not in fails[0]
+
+
+@pytest.mark.parametrize("description, bracket", [
+    ('Use when the user says "start at <time>".', "<"),
+    # A validator reads the raw string: a code span does not hide a tag. An upload was
+    # refused over a backtick-wrapped `<ViewTransition>`.
+    ("Wraps route changes in `<ViewTransition>`.", "<"),
+    ("Use when the queue depth > 10.", ">"),
+])
+def test_the_host_frontmatter_check_refuses_any_angle_bracket_in_a_description(
+        fake_plugin, description, bracket):
+    _write_skill(fake_plugin, "alpha", "name: alpha\ndescription: %s\n" % description)
+    module = load_validate()
+    _oks, fails = check_against(module, fake_plugin, "check_host_frontmatter")
+    assert len(fails) == 1
+    assert "skills/alpha/SKILL.md: description contains %r" % bracket in fails[0]
+
+
+def test_the_host_frontmatter_check_catches_a_description_over_the_limit(fake_plugin):
+    # Folded across two lines, as the shipped skills write it: 500 + 1 + 523 is exactly
+    # the documented limit, and one character more is over it.
+    module = load_validate()
+    _write_skill(fake_plugin, "alpha", "name: alpha\ndescription: >\n  %s\n  %s\n"
+                 % ("a" * 500, "b" * 523))
+    assert check_against(module, fake_plugin, "check_host_frontmatter")[1] == []
+    _write_skill(fake_plugin, "alpha", "name: alpha\ndescription: >\n  %s\n  %s\n"
+                 % ("a" * 500, "b" * 524))
+    _oks, fails = check_against(module, fake_plugin, "check_host_frontmatter")
+    assert len(fails) == 1 and "description is 1025 characters" in fails[0]
+
+
+def test_the_host_frontmatter_check_catches_a_name_hosts_refuse(fake_plugin):
+    module = load_validate()
+    _write_skill(fake_plugin, "claude-helper", "name: claude-helper\ndescription: Helps.\n")
+    _oks, fails = check_against(module, fake_plugin, "check_host_frontmatter")
+    assert len(fails) == 1 and "skills/claude-helper/SKILL.md" in fails[0]
+    assert "reserved word 'claude'" in fails[0]
+    shutil.rmtree(fake_plugin / "skills" / "claude-helper")
+    for name in ("Helper", "alpha--beta", "-alpha", "alpha-", "a" * 65):
+        _write_skill(fake_plugin, name, "name: %s\ndescription: Helps.\n" % name)
+        _oks, fails = check_against(module, fake_plugin, "check_host_frontmatter")
+        assert len(fails) == 1 and "name %r is not 1-64 lowercase" % name in fails[0], name
+        shutil.rmtree(fake_plugin / "skills" / name)
+    for name in ("a", "3rd-party-audit", "a" * 64):
+        _write_skill(fake_plugin, name, "name: %s\ndescription: Helps.\n" % name)
+        assert check_against(module, fake_plugin, "check_host_frontmatter")[1] == [], name
+        shutil.rmtree(fake_plugin / "skills" / name)
+
+
+def test_the_frontmatter_reader_agrees_with_a_yaml_parser():
+    yaml = pytest.importorskip("yaml")
+    module = load_validate()
+    files = [ROOT / "skills" / name / "SKILL.md" for name in SKILL_NAMES]
+    files += [ROOT / "agents" / name for name in AGENT_FILES]
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        header = yaml.safe_load(re.match(r"---\s*\n(.*?)\n---\s*\n", text, re.S).group(1))
+        fields = module.frontmatter_fields(text)
+        for key in ("name", "description"):
+            assert fields[key] == str(header[key]).strip(), (path.name, key)
+
+
 # =============================================================================
 # Scaffolding — emitted, never written
 # =============================================================================
@@ -1897,6 +1999,15 @@ def test_the_alternate_host_manifest_describes_itself_for_the_plugin_page():
     for key in ("composerIcon", "logo"):
         asset = ROOT / interface[key].lstrip("./")
         assert asset.is_file(), f"{key} points at a file that is not shipped: {interface[key]}"
+
+
+def test_the_alternate_host_manifest_lists_the_hooks_it_ships():
+    """The plugin page lists `interface.capabilities`, a free-text list. The manifest
+    ships a session hook, so the page says so, in the words published manifests that
+    ship hooks use."""
+    manifest = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    assert manifest["hooks"]
+    assert "Lifecycle hooks" in manifest["interface"]["capabilities"]
 
 
 def test_both_hosts_and_the_marketplace_describe_the_plugin_the_same_way():

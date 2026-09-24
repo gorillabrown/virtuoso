@@ -7,8 +7,9 @@ Thumbs.db
 desktop.ini
 skills.zip
 
-# Dogfooding workspace & local WIP — dev clone only, never published
-/Virtuoso/
+# The Virtuoso workspace for this repository: the registry, the work-register snapshot
+# and recovery records under Virtuoso/ are versioned; repair backups stay local.
+/Virtuoso/.backups/
 # Anchored on purpose. A dev clone's repository-root .codex-plugin/ is local WIP and
 # stays out of the repo; plugins/virtuoso/.codex-plugin/ is the shipped alternate-host
 # manifest and must not match. An unanchored `.codex-plugin/` ignores both, and

@@ -130,5 +130,5 @@ When reporting BKM findings, state whether the result is merely a behavioral KPI
 - If a KPI cannot be measured (e.g., a missing data field), report it as UNMEASURABLE with an explanation. Do not substitute a proxy metric.
 - Use seed ranges for reproducibility (e.g., seeds 0-199 for 200 trials).
 
-See `AGENT_MEMORY_GUIDE.md` for memory system instructions.
+See the plugin's `references/agent-memory-guide.md` for memory system instructions.
 Memory location: `<project-root>/.claude/agent-memory/hesiod/`
