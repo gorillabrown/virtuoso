@@ -218,10 +218,26 @@ located rather than guessing a path.
 | Script | Purpose |
 |---|---|
 | `virtuoso_preflight.py` | check / adopt / create / repair, plus `--check-document` |
-| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `overlays` (incl. `--scaffold`), `provider`, `items`, `next`, `kpis`, `closeout`, `repo`, `recovery`; and the explicit writers `snapshot`, `closeout --prepare`, `create-item`, `mutation-plan`, `mutation-confirm` |
+| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `overlays` (incl. `--scaffold`), `provider`, `items`, `next`, `kpis`, `closeout`, `holding`, `repo`, `recovery`; and the explicit writers `snapshot`, `closeout --prepare`, `holding --record`, `create-item`, `mutation-plan`, `mutation-confirm` |
 | `generate_cockpit.py` | the planning cockpit, read from the configured provider |
 | `build_register_report.py` | the generated spreadsheet report (declared generated roles only) |
 | `validate.py` | structural validation of the plugin itself |
+
+## Three paths to execution, one destination
+
+| Path | Opens | May start |
+|---|---|---|
+| **Ad hoc** | `/storyboard` → `/write-plan` → the `virtuoso` skill | any time, for work that is not on the roadmap |
+| **Roadmap dispatch** | `/next-pointer` → the `virtuoso` skill | after a roadmap review has placed the item |
+| **Roadmap epic** | `/epic` → the `virtuoso` skill, every session | after a roadmap review has placed the item as `Path: epic` |
+
+Every path delivers the same thing to execution. That means work aligned with you, a
+specification that passes the shared readiness rubric, and awareness of the project and
+codebase around it (verified edit sites, impact on other work, lessons applied). The work
+runs under the `virtuoso` skill and closes through `/pointer-closeout`. The ad hoc path
+never writes the roadmap. Its plans wait in an opt-in `holdingBay` role until the next
+`/roadmap-review` absorbs them onto the master roadmap, whether they ran or not. The contract:
+[`execution-paths.md`](plugins/virtuoso/references/execution-paths.md).
 
 ## Skills
 
@@ -230,7 +246,9 @@ Invoked through the plugin namespace, e.g. `/virtuoso:roadmap-review`.
 | Skill | Slash | Purpose |
 |-------|-------|---------|
 | `virtuoso` | — | Multi-step execution discipline |
-| `epic` | `/virtuoso:epic` | Launch materials for goal-scale, multi-session runs |
+| `storyboard` | `/virtuoso:storyboard` | Get aligned on ad hoc work before anything is planned; held for review |
+| `write-plan` | `/virtuoso:write-plan` | Turn an approved storyboard into a dispatch-ready plan; execute now or hold |
+| `epic` | `/virtuoso:epic` | Launch materials for an epic-scale roadmap item's multi-session run |
 | `roadmap-review` | `/virtuoso:roadmap-review` | Heavyweight roadmap recalibration |
 | `roadmap-status` | `/virtuoso:roadmap-status` | Read-only status briefing |
 | `next-pointer` | `/virtuoso:next-pointer` | Finalize and dispatch the next item |
@@ -256,6 +274,7 @@ One home each, so nothing can drift apart:
 | [`readiness-rubric.md`](plugins/virtuoso/references/readiness-rubric.md) | the single versioned readiness rubric (v1.0) |
 | [`git-policy.md`](plugins/virtuoso/references/git-policy.md) | the git policy ladder, detection, and the universal safety rules |
 | [`actors-and-interaction.md`](plugins/virtuoso/references/actors-and-interaction.md) | actor roles and the interaction adapter |
+| [`execution-paths.md`](plugins/virtuoso/references/execution-paths.md) | the three paths to execution and the one destination they share |
 
 ## Git behaviour is project policy
 

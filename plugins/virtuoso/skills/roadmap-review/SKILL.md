@@ -8,7 +8,8 @@ description: |
   work items, phases, or specs — those belong to other skills. When
   invoked: reconciles the roadmap document against the project's
   configured work register through its provider, migrates completed
-  work to the terminal record, assesses progress and scope
+  work to the terminal record, reconciles the ad hoc plans waiting
+  in the holding bay, assesses progress and scope
   discipline, replans and re-sequences remaining work, replenishes
   the dispatch buffer to the size the project's policy declares —
   each specification passing the shared versioned readiness rubric —
@@ -97,8 +98,9 @@ Read the provider description and **negotiate capabilities up front**:
 | read the pipeline at all | `list-active`, `read-status` |
 | re-sequence the conveyor belt | `read-sequence` **and** `write-status` on a sequence field |
 | replenish the dispatch buffer | `store-spec-link` (or inline specs — see policy) |
-| record completion in Phase A | `record-completion` |
+| record completion in Phase A (by `/pointer-closeout`, A.4) | `record-completion` |
 | register a newly specified item that has no row yet | `create-item` |
+| absorb a held ad hoc plan (Phase A.4b, C.3) | `create-item`, plus `record-completion` for one that already ran |
 
 If a capability you need is missing, say so plainly and adjust the plan before
 starting. Example: a project whose register is a read-only snapshot can still get
@@ -108,9 +110,12 @@ and stop, rather than starting and failing halfway.
 **Three roles, not one.** The live work register (`workRegister`), the append-only
 terminal ledger (`terminalLedger`), and any compatibility export (`sprintCatalog`,
 `sprintQueue`) are separate. This ceremony writes to the live register when its
-`allowedWriters` names `roadmap-review`; it appends corrections to the terminal
-ledger only when `policy.terminalLedger.correctionWriters` permits it; and it
-regenerates exports only via their registered generator.
+`allowedWriters` names `roadmap-review`. It appends a correction to the terminal
+ledger only when `policy.terminalLedger.correctionWriters` permits it, and an
+ordinary record, such as a retirement, only when `policy.terminalLedger.writers`
+names it. By default that never happens, so it routes those records to
+`/pointer-closeout` (A.4). It regenerates exports only through their registered
+generator.
 
 **If the project has no `workRegister` role,** the provider layer serves a
 registered legacy `sprintCatalog` **read-only** through the compatibility adapter
@@ -153,8 +158,8 @@ Run this skill when:
 
 Do NOT use this skill for:
 - Routine single-item planning
-- Single-item planning that needs no re-sequencing (write the specification to the
-  D.5.2 format and dispatch it with `/next-pointer`)
+- Ad hoc work that arrives between reviews — that is `/storyboard`, then `/write-plan`.
+  What they produce waits in the holding bay, and this ceremony reconciles it.
 - Weekly status updates (use `/roadmap-status`)
 
 ## Invocation
@@ -238,6 +243,10 @@ execution-environment). Never blend them into one verdict.
     decisions — structured when the host supports it, plain text when it does not.
 14. **Orchestrate, don't reimplement.** Where an existing skill handles a
     sub-task well, invoke it.
+15. **The holding bay empties at every review.** This is the one ceremony that brings ad
+    hoc work onto the roadmap. Each open held entry is absorbed or withdrawn here. The
+    exception is one that is in flight, which is reported and reconciled at the next
+    review. See `references/execution-paths.md`.
 
 ## Inputs
 
@@ -248,6 +257,9 @@ execution-environment). Never blend them into one verdict.
    their registered roles.
 5. The terminal ledger, for what is already final.
 6. The project codebase — required for Phase D.3 rubric verification.
+7. The holding bay, if the project registers one: `holding --open --json`. It lists the
+   ad hoc plans `/storyboard` and `/write-plan` held since the last review. Every open
+   entry is reconciled here.
 
 ## Outputs
 
@@ -313,6 +325,14 @@ section, append its terminal record, and reconcile the register.
 Inventory every item and its claimed status, from the register and the roadmap
 separately. Record where they disagree; do not silently pick a winner.
 
+Read the holding bay too:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . holding --open --json
+
+Exit 3 naming `holdingBay` means the project holds no ad hoc work. Say so and move on.
+An entry listed with problems (`holding --check <entry>` names them) is surfaced, not
+skipped.
+
 Read every close-out written since the last review, and check that each carries
 its Lessons section:
 
@@ -325,27 +345,76 @@ recorded nothing and gave no reason.
 Classify each item as *likely complete*, *likely dissolved*, or *definitely live*,
 citing the signal for each.
 
+Classify each open held entry by its trail state:
+
+| State | Reconciled in |
+|---|---|
+| `executed` | A.4b. It ran ad hoc and was closed out, and it becomes a completed register item now. |
+| `storyboarded`, `planned` | C.3. It is absorbed onto the roadmap, or withdrawn. A `planned` entry whose trail names items that already closed out sends those items to A.4b first. |
+| `in-flight` | Nowhere yet. Report it: it is executing, and the review after its close-out absorbs it. |
+| `unrecorded`, or listed with problems | Surfaced to the user in A.3: repaired through its owner, or withdrawn. |
+
 ### A.3 Confirm with the user
 Batched, 5 at a time, with the bounded-question protocol.
 
 ### A.4 Apply changes
 For each item being retired:
-1. Append one record to the **terminal ledger** — but only if
-   `policy.terminalLedger.correctionWriters` names `roadmap-review`. If it does
-   not, list the records that need appending and route them to the close-out
-   ceremony instead. Terminal records are append-only: a correction is a *new*
-   record referencing the one it corrects. Never reorder, rewrite, or delete.
+1. **Route its terminal record to the close-out ceremony.** A retirement is an
+   *ordinary* terminal record, and only an actor `policy.terminalLedger.writers`
+   names may append one. By default that is `pointer-closeout` alone.
+   `correctionWriters` does not cover a retirement: it permits only
+   *corrections*, which are new records naming the record they correct, and a
+   retirement corrects nothing. So invoke `/pointer-closeout` for the item, as
+   A.4b does for held plans. Its section *Retirement records routed here* says
+   what runs:
+   - completed but never closed out → its full crossing, because no record is
+     appended without verified evidence and lessons;
+   - completed and closed out, with only the record missing → its recording
+     crossing;
+   - dissolved or superseded → one record with that result, and this review's
+     decision as the evidence.
+
+   Append the record yourself only when `writers` names `roadmap-review`. That is
+   a project's explicit choice, never a default. Terminal records are append-only:
+   never reorder, rewrite, or delete one. When this audit finds a record wrong, it
+   appends a correction, a new record naming the one it corrects. That is what
+   `correctionWriters` lets this ceremony append.
 2. Add its one-line entry to the roadmap's completed summary.
 3. Move its full content to the current dated archive.
 4. Remove the full content from the active roadmap.
-5. Update the item in the live register through the provider: set status, clear
-   the sequence, record the completion date and the evidence link. Pass the
-   `revision` you read so a concurrent change is refused rather than clobbered.
+5. Update the item in the live register through the provider: its status, a
+   cleared sequence, the date, and the evidence link. Skip anything
+   `/pointer-closeout`'s crossing already wrote for a completion; never write it
+   twice. Pass the `revision` you read, so a concurrent change is refused rather
+   than clobbered.
 6. Re-running this step must not duplicate anything: the provider's writes are
    idempotent, and a terminal record that already exists is a no-op.
 
 If the register write succeeds but an external half fails, a recovery record is
 written under `Virtuoso/.recovery/`. Surface it; do not paper over it.
+
+### A.4b Absorb held plans that already ran
+
+For each `executed` entry, per `HB-<n>` item it closed out:
+
+1. **Create the register item** through `create-item`, with an identifier in the
+   register's own scheme. Give it the title, the effort, and `notes` reading
+   `origin: held plan <entry> (HB-<n>)`. Use the mutation handshake for an external
+   register, as in D.5.3.
+2. **Record its completion by invoking `/pointer-closeout`'s recording crossing**
+   (its *Held plans* section). Do not write the terminal ledger yourself: that ceremony
+   is the ledger's writer. It appends the terminal record and closes the item, using
+   the close-out, date, and result the entry's `executed` row names, and nothing is
+   re-verified or re-taught.
+3. Add its one-line entry to the roadmap's completed summary, citing the entry.
+4. Record the absorption, naming what it became:
+
+       "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor roadmap-review holding --record <entry> --state absorbed --note "as <ITEM-ID> (completed)" --apply
+
+A run that stopped partway returns its entry to `planned`, and the trail note names the
+items that did close out. That entry is absorbed in two halves. The closed-out items take
+the steps above, using their own close-outs. The rest go to C.3 as queued items. Record
+the entry's absorption once, naming every item it became.
 
 ### A.5 Length-ceiling check
 If the active roadmap exceeds `policy.roadmap.lengthCeilingLines`, snapshot and trim.
@@ -403,6 +472,10 @@ reads it from the policy, and a copy is a second authority that drifts.
 Forward / sideways / backward deltas since the previous review. Score =
 forward / (forward + sideways + backward).
 
+Count the held entries this review absorbs (A.4b and C.3) as deltas like any other,
+and name each one by title and entry. Ad hoc entry is legitimate. Ad hoc entry that
+nobody reviews is how scope drifts unseen. Name each withdrawn entry with its reason.
+
 Then read what the previous cycle left for this one: the previous review's
 `YYYY-MM-DD-lessons-applied.md` in the registered reviews directory (the lessons it
 applied, the candidates it left undecided — decide them in D.4), and every entry in
@@ -430,6 +503,27 @@ skip this step entirely — do not invent phases.
 
 ### C.3 Decompose into items
 Each becomes a stub in the roadmap and a row in the register.
+
+**Absorb the open held entries.** Each `storyboarded` or `planned` entry either
+comes onto the roadmap here or is withdrawn. Ask the user, in a batch, using the
+bounded-question protocol. Nothing is carried past the review.
+
+| Held as | Absorbed as |
+|---|---|
+| `planned` | Each `HB-<n>` becomes an item. Its specification moves into `policy.roadmap.specStorage`, with the provisional id replaced by the register's id. It is re-audited in D.3/D.4.5 before it counts as dispatch-ready, because code moves between planning and review. |
+| `storyboarded`, dispatch-sized | A stub per skeleton item, with the entry's alignment record and frames cited as its source |
+| `storyboarded`, epic-scale | One item whose structural fields carry `Path: epic`, with the entry cited as the source its charter is built from. `/next-pointer` routes it to `/epic` when it reaches the head. |
+
+Create each item through `create-item`, with `notes` reading
+`origin: held plan <entry> (HB-<n>)`. Add the entry's downstream flags to the
+non-blocking follow-up queue, and read the entry's placement recommendation into C.4.
+Then record the absorption. The note names what the entry became, for example
+`as ADD-052 (queued, full-spec)`, `as ADD-053, ADD-054 (queued, stubs)`, or
+`as ADD-055 (Path: epic)`. A note is one line, and it cannot contain `|`:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor roadmap-review holding --record <entry> --state absorbed --note "as <ITEM-ID> (queued, full-spec)" --apply
+
+A withdrawn entry records `--state withdrawn --note "<the user's reason>"`.
 
 ### C.4 Sequence the conveyor belt
 Prerequisites → risk → hardest-first. Write the sequence back through the
@@ -472,7 +566,9 @@ Then take the first *N* active items in sequence order, where *N* is the buffer 
    Say that eager specification is disabled for this project and move to D.4.
 3. Walk the belt from the head; count items already dispatch-ready.
 4. `new specifications = target − already_ready`.
-5. Target the next items in sequence order that are still stubs.
+5. Target the next items in sequence order that are still stubs. Skip an item whose
+   entry declares `Path: epic`: `/epic` charters it, and the dispatch rubric is not its
+   gate. It does not count toward the buffer.
 
 Edge cases: fewer than *N* active items → specify all of them. Group boundaries
 are not a stopping condition. A hard blocker mid-buffer → stop there, flag it in
@@ -593,6 +689,8 @@ appear only if `policy.roadmap.hierarchy` declares them:
 - **Effort:** …
 - **Owners:** … (roles from policy.actors)
 - **Source:** …
+- **Path:** dispatch | epic — … (optional; absent means dispatch — see references/execution-paths.md)
+- **Origin:** … (for absorbed ad hoc work: held plan <entry> (HB-<n>))
 
 ##### Implementation detail
 - **Edit sites:** …
@@ -678,6 +776,8 @@ snapshot-backed read is labelled with its age.
 - Pace and scope-discipline read, with any *not computable* metrics named as such
 - The phase brief, in chat
 - Buffer status: N dispatch-ready of the policy target
+- Holding bay: N absorbed (by title, and what each became), N withdrawn (with the
+  reasons), N still in flight
 - Lessons applied
 - Cockpit path
 - Any outstanding recovery records

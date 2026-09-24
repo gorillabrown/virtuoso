@@ -406,6 +406,22 @@ DEFAULT_ROLES: dict[str, dict] = {
         "origin": "authored",
         "label": "Epic packets (directory)",
     },
+    "holdingBay": {
+        # Ad hoc plans between `storyboard`/`write-plan` and the next roadmap review:
+        # one `<yyyy-mm-dd>-<slug>.md` file per piece of work, its trail moved only
+        # through `virtuoso_registry holding --record`. Neither ad hoc ceremony
+        # touches the roadmap or the register; `roadmap-review` absorbs or withdraws
+        # every open entry. Opt-in, like epics: registered on first ad hoc use.
+        "provider": "directory",
+        "authority": "reference",
+        "mutability": "read-write",
+        "owner": "write-plan",
+        "allowedWriters": ["storyboard", "write-plan", "pointer-closeout", "roadmap-review"],
+        "validation": "exists",
+        "classification": "active",
+        "origin": "authored",
+        "label": "Holding bay — ad hoc plans awaiting roadmap review (directory)",
+    },
     "governance": {
         "provider": "directory",
         "authority": "reference",
@@ -474,9 +490,9 @@ DEFAULT_ROLES: dict[str, dict] = {
 
 #: Roles created by ``create`` on a brand-new workspace, in readme order.
 #:
-#: ``overlays`` and ``epics`` are deliberately not here. Each is opt-in: a project registers it
-#: when it has something to overlay, and until then `create` lays down no empty
-#: directory for it. Leaving a role out of this tuple is how the plugin says
+#: ``overlays``, ``epics`` and ``holdingBay`` are deliberately not here. Each is opt-in: a
+#: project registers it when it first has something to put there, and until then `create`
+#: lays down no empty directory for it. Leaving a role out of this tuple is how the plugin says
 #: "supported, not assumed".
 CREATE_ROLE_ORDER = (
     "roadmap",

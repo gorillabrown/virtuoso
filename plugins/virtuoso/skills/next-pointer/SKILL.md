@@ -6,9 +6,11 @@ description: |
   finalizes its specification against the shared readiness rubric,
   drives every pre-flight check to a resolved state, and prints a
   dispatch pointer with a repository-reconciliation recipe matched to
-  the project's declared git policy. Triggered by "/next-pointer",
-  "next pointer", "show next", or "what's next". Does NOT replan,
-  re-sequence, or author new items — that is /roadmap-review.
+  the project's declared git policy. Routes a head item whose path is
+  epic to /epic. Triggered by "/next-pointer", "next pointer", "show
+  next", or "what's next". Does NOT replan, re-sequence, or author new
+  items — that is /roadmap-review; new work that is not on the roadmap
+  starts at /storyboard.
 ---
 
 <!-- virtuoso-shared-contract v2 -->
@@ -92,6 +94,12 @@ between hosts, products, or models.
 **Bookend with `/pointer-closeout`.** This skill opens a dispatch; that one
 closes it, transactionally.
 
+**One of three paths, one destination.** This is the roadmap-dispatch path: it opens
+only on an item a roadmap review has placed on the master roadmap. The ad hoc path
+(`/storyboard`, then `/write-plan`) and the epic path (`/epic`) deliver the same thing
+to execution. `references/execution-paths.md` holds that contract, and this skill
+meets it.
+
 ## Resolve the register before anything else
 
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor next-pointer provider
@@ -132,6 +140,7 @@ figures may not reflect current state.
 
 - A full status briefing — use `/roadmap-status`
 - Replanning, re-sequencing, or authoring new items — use `/roadmap-review`
+- Planning new work that is not on the roadmap — use `/storyboard`, then `/write-plan`
 - Dispatching when the head item is still a stub — this skill refuses
 
 ## Invocation
@@ -336,7 +345,11 @@ sequence order, together with its provenance. If the provider lacks
 
 If there are no active items → **Queue empty** edge case.
 
-### 1.2 Hard-halt check (stub at head)
+### 1.2 Hard-halt checks (epic path, stub at head)
+
+If the head item's roadmap entry declares `Path: epic` → STOP and branch to the
+**Epic at head** edge case. An epic is chartered, not dispatched, and the rubric
+below is not its gate.
 
 If the head item's specification state is not `full-spec` → STOP and branch to
 the **Stub at head** edge case.
@@ -592,6 +605,7 @@ matters.]** *(item [ITEM-ID])*
 
 \```
 [Item title]  ([ITEM-ID])
+Origin: roadmap — [ITEM-ID]
 [Group / lane, if the project uses them]
 Effort: [size]
 Branch: [branch-name] from [default branch] @ [sha carrying the specification]
@@ -672,6 +686,26 @@ The item at the head of the conveyor belt has no specification.
 Run **/roadmap-review** to author specifications up to the project's dispatch
 buffer ([policy.roadmap.dispatchBuffer]). Then run /next-pointer again.
 ```
+
+---
+
+## Edge case: Epic at head
+
+```
+# Route to Epic — [Item title]
+
+The item at the head of the conveyor belt is epic-scale (Path: epic). It is
+chartered for a long-horizon run rather than dispatched.
+
+## Required action
+
+Run **/epic [ITEM-ID]**. It builds the packet from this item's roadmap entry,
+and from the storyboard it was absorbed from, if there is one.
+```
+
+If a packet for this item already exists in the registered `epics` role (a charter
+whose `item:` names it), the run is under way. Do not route it to `/epic` again. Name
+the packet, and point to its launch file's resume prompt.
 
 ---
 

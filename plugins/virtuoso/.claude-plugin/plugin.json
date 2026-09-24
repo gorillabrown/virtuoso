@@ -1,7 +1,7 @@
 {
   "name": "virtuoso",
   "displayName": "Virtuoso",
-  "version": "1.10.2",
+  "version": "1.11.0",
   "description": "A living roadmap that makes every task your agents finish improve the next one. Each task is scoped against what earlier work proved, run on the model and effort it needs, and closed out with evidence and a record of what it taught; lessons that keep holding become standing rules. The roadmap, ledger, lessons and rules live in plain files in your project.",
   "author": {
     "name": "Evan Brown",

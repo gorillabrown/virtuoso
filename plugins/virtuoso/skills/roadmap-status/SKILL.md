@@ -244,6 +244,7 @@ compute. Report them as returned:
 | Dispatch-ready items | against `policy.roadmap.dispatchBuffer`; if the buffer is 0, report "eager specification disabled" |
 | Group progress | only if the project uses grouping |
 | Pace against each declared deadline | from the `pace` block: verdict, required vs trailing rate, projected finish, blocked share, scope. With no deadline declared, say so |
+| Held ad hoc plans | `virtuoso_registry holding --open`: the count by state, and the oldest entry's age. No `holdingBay` role: the project holds no ad hoc work |
 
 The status *words* in the register are the project's own; the canonical statuses
 above come from `policy.workRegister.statusMappings`. Never assume a project
@@ -296,6 +297,7 @@ Each becomes a Phase 2 candidate, never a Phase 1 edit.
 - [Dispatch buffer: N of [policy target] — or: eager specification is disabled.]
 - [If stragglers: N items look complete and need migration.]
 - [If drift: the roadmap and the register disagree about N items.]
+- [If anything is held: N ad hoc plans are waiting for the next roadmap review (N planned, N storyboarded, N executed, N in flight).]
 
 ### Recently completed (since YYYY-MM-DD)
 - **[Item title]** — summary. *(ITEM-ID)*
@@ -380,10 +382,13 @@ a hand-off to a ceremony that is permitted to make it, and say which check faile
   3. Update the item in the live register through the provider: status, clear the
      sequence, completion date, evidence link — passing the `revision` read in
      Phase 1 so a concurrent change is refused rather than clobbered.
-  4. The terminal record belongs to the close-out ceremony. Append it here only if
-     `policy.terminalLedger.correctionWriters` names `roadmap-status`; otherwise
-     list it as a hand-off. Terminal records are append-only: a correction is a
-     new record referencing the one it corrects, never an edit to history.
+  4. The terminal record belongs to the close-out ceremony. A straggler's record is
+     an *ordinary* record: it corrects nothing, so `correctionWriters` does not cover
+     it. Append it here only if `policy.terminalLedger.writers` names
+     `roadmap-status`. Otherwise, and by default, list it as a hand-off to
+     `/pointer-closeout`, which handles it as its section *Retirement records routed
+     here* describes. Terminal records are append-only: a correction is a new record
+     referencing the one it corrects, never an edit to history.
 
   All of this counts as one logical migration.
 

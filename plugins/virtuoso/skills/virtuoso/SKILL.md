@@ -135,6 +135,10 @@ for similar tasks." This feedback helps the planner calibrate future dispatches.
 Before touching any file or running any command:
 
 1. **Read the full task specification.** If the task references external docs, read those too.
+   When the task is a governed dispatch, read its **origin line** as well
+   (`references/execution-paths.md`). The spec may be a roadmap item from `/next-pointer`, a
+   held plan from `/write-plan`, or an epic packet from `/epic`. All three arrive meeting
+   the same destination contract. The origin tells Phase 6 how the close-out runs.
 2. **Read the behavioral reference** — the bundled [`references/zeus.md`](references/zeus.md)
    (Virtuoso's orchestration protocol: routing decision tree, agent hierarchy, escalation
    rules), or the project's own lead-agent definition if it overrides — to load the routing
@@ -966,6 +970,11 @@ what was learned]
      Removing the worktree before this check passes destroys the evidence that would
      have caught the gap.
 
+- **For a held plan, the ledger row waits on purpose.** `/pointer-closeout` records the
+  held entry `executed`, and the `/roadmap-review` that absorbs it runs the recording
+  crossing (`references/execution-paths.md`). The close-out file and the
+  deliverable-existence check above still happen now.
+
 <!-- rule:verification-spawns-remediation (verification-scope) -->
 - **A verification task that finds more than a handful of issues stops and spawns a
   remediation task.** It does not quietly become an implementation task. Silent
@@ -996,7 +1005,10 @@ what was learned]
 - Git state and Key engineering finding close the block — these are what the planner
   reads first when processing a close-out into a Pointer Close-Out Report. Run
   **`/pointer-closeout`** on this block to fold the result into the roadmap, sprint queue,
-  and retrospective. (This sprint's spec arrived via **`/next-pointer`**'s dispatch pointer.)
+  and retrospective. (The spec arrived through one of the three paths in
+  `references/execution-paths.md`: `/next-pointer`'s pointer, `/write-plan`'s held plan,
+  or `/epic`'s packet. `/pointer-closeout` reads the origin line to close each one
+  correctly.)
 
 **Performance Recommendations** (append after the close-out block when warranted):
 Focus on three dimensions with concrete task references:

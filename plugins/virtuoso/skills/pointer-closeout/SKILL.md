@@ -73,7 +73,9 @@ never write to a role whose `allowedWriters` does not name this ceremony; never 
 
 Read the `roadmap-integrity:` line the preflight printed (it follows the `deadlines:` line; `--json` carries it as `roadmapIntegrity`). On `fail` (missing, not text, or null bytes), STOP and report the corruption to the user; do not migrate or rewrite a corrupt roadmap. On `warn` (empty or unusually large), surface it and confirm with the user before proceeding. On `ok`, or `external` (a roadmap the preflight does not read), continue. Before rewriting the roadmap, re-check it: `virtuoso_preflight --check-document <path>` prints the same state for one file.
 
-**Bookend with `/next-pointer`.** That skill opens a dispatch; this one closes it.
+**Bookend with `/next-pointer`.** That skill opens a dispatch; this one closes it. It
+closes a held plan from `/write-plan` and an epic from `/epic` too; see *Held plans*
+below and `references/execution-paths.md`.
 
 Two waves:
 
@@ -117,6 +119,62 @@ Confirm before drafting:
 Any of these that is unavailable changes the plan **before** Wave 1 drafts
 anything. Say what will happen instead — a hand-off, or a manual step — rather
 than discovering it mid-crossing.
+
+## Held plans — ad hoc work that is not on the roadmap yet
+
+Every execution path ends here (`references/execution-paths.md`). Read the dispatch's
+origin line first. `Origin: held plan — <entry> (HB-<n>)`, or a provisional `HB-<n>`
+identifier, means the work came through `/storyboard` and `/write-plan`. It has no
+register row yet, because bringing work onto the roadmap is `/roadmap-review`'s job. The
+close-out adapts in exactly these ways:
+
+| Step | For a held plan |
+|---|---|
+| Wave 1, item 6 | Propose no register or roadmap change. The crossing plan says those wait for the review that absorbs the entry. |
+| Step 1 — evidence | Unchanged. Verify every *Done when* row of the held specification. |
+| Step 2 — artifact | Unchanged, keyed by `HB-<n>`: `closeout --item "HB-<n>"`. A staging fold-in that targets the roadmap or the register is not applied. List it in the report for the review. |
+| Step 3 — terminal record | Deferred. There is no register item for the record to name yet. |
+| Step 4 — persist | Lessons and the close-out only. The roadmap is not touched. |
+| Step 5 — register | Deferred to the absorbing review. |
+| Then | Record the entry `executed`, once every item of the entry has closed out, with the note naming each close-out, its result, and its date: |
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout holding --record <entry> --state executed --note "HB-<n>: <close-out path>, <result>, <YYYY-MM-DD>, estimate <e>, actual <a>" --apply
+
+Step 6 verifies the close-out, the lessons gate, and that `holding --check <entry>` reads
+`executed`. It does not verify a terminal record or a register status, because there are
+none yet. The buffer check is skipped, since ad hoc work never drew on the buffer. If an
+item set stops partway, the entry is not `executed`. `/write-plan` returns it to
+`planned`, and the note names which items closed out.
+
+**The recording crossing.** When `/roadmap-review` absorbs an `executed` entry (its
+A.4b), it creates each register item and then invokes this ceremony for **Steps 3, 5,
+and 6 only**. Those steps append the terminal record and close the item:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout record-completion --item "<ITEM-ID>" --date "<close-out date>" --result "<result>" --evidence "<close-out path>" --estimate "<e>" --actual "<a>" --revision "<revision>" --apply
+
+The values come from the entry's `executed` row. The evidence was verified, and the
+lessons were recorded, when the work ran. Nothing is re-verified, and nothing is taught
+twice. The item never stood on the conveyor belt, so Step 5 retires it and elevates
+nothing.
+
+## Retirement records routed here
+
+A roadmap review retires items at audit (its A.4): work that finished without a
+close-out, and work it dissolves or supersedes. A status check's straggler migration
+(roadmap-status, 2.1) retires finished work the same way. Each retirement needs one
+terminal record, and a retirement is an *ordinary* record. Only an actor
+`policy.terminalLedger.writers` names may append one, and by default that is this
+ceremony alone. `correctionWriters` covers corrections only: records that name the
+record they correct. So the retiring ceremony invokes this one, and what runs depends
+on what the item already has:
+
+| The retired item | What runs here |
+|---|---|
+| Completed, never closed out | The full crossing, both waves. No record is appended without verified evidence and lessons. |
+| Completed and closed out, with the record missing | The recording crossing (above): Steps 3, 5 and 6, from the existing close-out, with `record-completion`. |
+| Dissolved or superseded | Step 3 alone: one record whose result is `dissolved` or `superseded`, with the review's decision as its evidence, appended in the ledger's own format. `record-completion` is not used, because it closes the item as completed. The retiring ceremony sets the register status. |
+
+Every case stays idempotent: a record already in the ledger for the item is a no-op.
 
 ## Wave 1 — Draft & Confirm
 

@@ -1,5 +1,56 @@
 # Virtuoso Release Notes
 
+## v1.11.0 (2026-09-24) — three paths to execution, one destination
+
+**Upgrading from 1.10.2.** The ad hoc path needs the opt-in `holdingBay` role:
+`/storyboard` prints the entry to add, and you choose the directory. Two behaviours change.
+`/epic` now starts only from a roadmap item marked `Path: epic`, and `/next-pointer` routes
+such items to it. An outcome stated ad hoc goes to `/storyboard` first, and the next roadmap
+review places it.
+
+- **`/virtuoso:storyboard`** is the ad hoc way in, and its one job is alignment. It sizes
+  the work out loud and investigates before it asks. It asks one bounded question at a
+  time, through six lenses: outcome, placement, touchpoints, externalities, upstream,
+  and downstream. It writes back what you said apart from what it assumed, with an impact
+  map, and walks concrete *frames* of the finished work, including one where something
+  goes wrong. It proposes approaches and a skeleton, and records an *Aligned* verdict
+  only when every assumption is resolved and you approve. The result is held, never put
+  on the roadmap.
+- **`/virtuoso:write-plan`** continues from the storyboard, and always starts there. With
+  no storyboard it runs `/storyboard`. With one, it re-anchors and checks for drift, and
+  any question about intent goes back to the storyboard. It writes D.5.2 specifications
+  against the shared rubric and the lessons check, then runs next-pointer's readiness
+  audit, pre-flight, and repository reconciliation. After that it asks: execute now
+  under the virtuoso skill, execute from another session, hold for review, or withdraw.
+  It never writes the roadmap or the register.
+- **The holding bay** (`holdingBay`, opt-in) keeps one file per piece of ad hoc work.
+  Each file has a trail of states that only the owning ceremony may move, through
+  `virtuoso_registry holding --record`: `storyboarded`, `planned`, `in-flight`,
+  `executed`, `absorbed`, and `withdrawn`. `holding --open` lists what the next review
+  must reconcile, and `holding --check` validates an entry. Provisional item identifiers
+  are `HB-<n>`, never reused.
+- **`/roadmap-review`** empties the holding bay at every review. Work that already ran
+  becomes a completed item, through pointer-closeout's recording crossing. Planned and
+  storyboarded work comes onto the roadmap as specifications, stubs, or `Path: epic`
+  items, or is withdrawn with a reason. Only work in flight carries over.
+- **`/pointer-closeout`** closes a held plan in held-plan mode: the evidence and lessons
+  are written now, and the register and terminal ledger wait for the absorbing review.
+- **`/epic`** pulls from the master roadmap, and every session runs under the virtuoso
+  skill. **`/next-pointer`** routes `Path: epic` items to it, and every pointer carries an
+  origin line.
+- **`references/execution-paths.md`** is the one home for the contract that all three
+  paths must meet before execution starts.
+- **Retirement records go to the close-out ceremony, and the docs now say so.**
+  roadmap-review A.4 and roadmap-status's straggler migration said they could append a
+  retirement's terminal record when `policy.terminalLedger.correctionWriters` named them.
+  The ledger has always checked `writers` for such a record, because a retirement
+  corrects nothing, so under the defaults the append was refused. Both ceremonies now
+  gate on `writers` and route the record to `/pointer-closeout`, whose new section
+  *Retirement records routed here* covers each case: a completion never closed out, a
+  close-out missing only its record, and a dissolution. `record-completion` now refuses
+  a non-writer before it previews, so a preview no longer promises an append that
+  `--apply` would refuse. No policy default changed.
+
 ## v1.10.2 (2026-09-24) — a privacy policy
 
 **Upgrading from 1.10.1.** Nothing to change.

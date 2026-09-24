@@ -25,6 +25,10 @@ Subcommands:
           --hygiene         what to merge, retire, tidy or repair (governance-sweep)
           --candidates      lessons that have earned promotion or revision
           --record-status ID --status S   append a status record (--apply writes)
+  holding [--open]          the held ad hoc plans awaiting roadmap review (read-only)
+          --check PATH      check one held plan's structure and trail
+          --next-id         the next provisional item identifier (HB-<n>)
+          --record ENTRY --state S   append a trail row (--apply writes)
   repo [--expect PATHS]     read-only repository state and readiness finding
   deps                      check the project's declared runtime dependencies
   protected                 hash every protected file (immutable-hash verification)
@@ -52,8 +56,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.governance import (  # noqa: E402
-    backup as backup_mod, learning as learning_mod, lessons as lessons_mod,
-    overlays as overlays_mod,
+    backup as backup_mod, holding as holding_mod, learning as learning_mod,
+    lessons as lessons_mod, overlays as overlays_mod,
     policy as policy_mod, providers,
     registry as registry_mod, repair as repair_mod, schema, textio,
 )
@@ -552,6 +556,153 @@ def cmd_lessons(args) -> int:
     return EXIT_OK
 
 
+_HOLDING_ENTRY = ('"holdingBay": { "path": "<directory>", "provider": "directory", '
+                  '"authority": "reference", "mutability": "read-write", "owner": "write-plan", '
+                  '"allowedWriters": ["storyboard", "write-plan", "pointer-closeout", '
+                  '"roadmap-review"] }')
+
+
+def _holding_directory(reg) -> str:
+    try:
+        path = reg.resolve("holdingBay")
+    except RoleNotRegistered:
+        raise GovernanceError(
+            "no `holdingBay` role is registered, so no ad hoc plan can be held and there is "
+            "nothing to reconcile. Register one in %s (you choose the directory): %s"
+            % (schema.MANIFEST_RELPATH, _HOLDING_ENTRY))
+    spec = reg.role("holdingBay")
+    if spec is not None and spec.is_external:
+        raise GovernanceError("the holdingBay role %r is external; the holding bay is a "
+                              "directory of held-plan files" % path)
+    return path
+
+
+def _holding_entries(root: str, directory: str) -> list:
+    entries = []
+    for path in holding_mod.entry_paths(directory):
+        text = textio.read_text(path)
+        entry = holding_mod.load(path, text or "", root)
+        if text is None:
+            entry.problems.insert(0, {"code": holding_mod.MARKER_MISSING, "severity": "error",
+                                      "message": "not readable as text"})
+        entries.append(entry)
+    return entries
+
+
+def _held_path(root: str, directory: str, name: str) -> str:
+    """The held-plan file an ``--record`` or ``--check`` argument names: an entry id
+    (the file stem) or a path."""
+    if name.endswith(".md") or os.sep in name or "/" in name:
+        return name if os.path.isabs(name) else os.path.join(root, name)
+    return os.path.join(directory, name + ".md")
+
+
+def _record_holding(args, reg, directory) -> int:
+    """Append one trail row — the only way a held plan changes state. Previews unless
+    ``--apply``; refuses an actor the role or the state does not allow, an illegal
+    move, and a state the entry does not yet carry the content for."""
+    actor = getattr(args, "actor", "") or ""
+    if not actor:
+        raise GovernanceError("--record needs --actor: the ceremony recording the move")
+    if not reg.writable("holdingBay", actor):
+        raise GovernanceError("%s may not write the holdingBay role (allowedWriters in %s)"
+                              % (actor, schema.MANIFEST_RELPATH))
+    path = _held_path(args.root, directory, args.record)
+    text = textio.read_text(path)
+    if text is None:
+        raise GovernanceError("%s cannot be read as a held plan" % args.record)
+    entry = holding_mod.load(path, text, args.root)
+    date = args.date or _today().isoformat()
+    problems = holding_mod.record_problems(entry, args.state, actor, args.note, date)
+    if problems:
+        raise GovernanceError("cannot record %s on %s:\n%s" % (
+            args.state, entry.id, "\n".join("  [%s] %s" % (p["code"], p["message"])
+                                             for p in problems)))
+    row = holding_mod.trail_row(date, args.state.strip().lower(), actor, args.note)
+    if not args.apply:
+        print("preview — append to the trail of %s (run again with --apply):\n\n%s"
+              % (entry.path, row))
+        return EXIT_OK
+    textio.write_if_changed(path, holding_mod.append_row(text, entry, row))
+    after = holding_mod.load(path, textio.read_text(path) or "", args.root)
+    if after.state != args.state.strip().lower():
+        raise GovernanceError("the row was appended but %s does not read back as %s; "
+                              "inspect %s" % (entry.id, args.state, entry.path))
+    return _emit({"entry": after.as_dict(), "recorded": row}, args.as_json,
+                 lambda: "recorded %s: %s -> %s (%s)" % (after.id, entry.state, after.state,
+                                                       after.path))
+
+
+def cmd_holding(args) -> int:
+    """The holding bay's read side, and the one way a held plan changes state.
+
+    Lists the held ad hoc plans with their state (``--open``: only those the next
+    roadmap review must still reconcile), checks one (``--check``), names the next
+    provisional item identifier (``--next-id``), or appends one trail row
+    (``--record ENTRY --state S``, previewed unless ``--apply``).
+
+    Exit 0 ok, 1 when a check fails, 3 when no holdingBay role is registered.
+    """
+    reg = _load(args.root)
+    directory = _holding_directory(reg)
+    source = os.path.relpath(directory, args.root).replace(os.sep, "/")
+
+    if args.record:
+        if not args.state:
+            raise GovernanceError("--record needs --state: one of %s"
+                                  % ", ".join(holding_mod.STATES))
+        return _record_holding(args, reg, directory)
+
+    if args.check:
+        path = _held_path(args.root, directory, args.check)
+        text = textio.read_text(path)
+        if text is None:
+            raise GovernanceError("%s cannot be read" % args.check)
+        entry = holding_mod.load(path, text, args.root)
+        passed = not entry.problems
+        if args.as_json:
+            _emit(dict(entry.as_dict(), passed=passed), True)
+        else:
+            print("held plan %s: %s (state %s)" % (entry.id, "PASS" if passed else "FAIL",
+                                                  entry.state))
+            for problem in entry.problems:
+                print("  [%s] %s: %s" % (problem["severity"], problem["code"],
+                                         problem["message"]))
+        return EXIT_OK if passed else EXIT_CHECK_FAILED
+
+    entries = _holding_entries(args.root, directory)
+    texts = [textio.read_text(path) or "" for path in holding_mod.entry_paths(directory)]
+    upcoming = holding_mod.next_id(texts)
+    if args.next_id:
+        return _emit({"nextId": upcoming, "source": source}, args.as_json, lambda: upcoming)
+
+    shown = [entry for entry in entries if entry.open or not args.open]
+    open_count = sum(1 for entry in entries if entry.open)
+    notes = [] if os.path.isdir(directory) else [
+        "the registered holding bay %s does not exist yet — nothing is held" % source]
+    payload = {"entries": [entry.as_dict() for entry in shown], "source": source,
+               "open": open_count, "closed": len(entries) - open_count, "nextId": upcoming,
+               "notes": notes}
+    if args.as_json:
+        return _emit(payload, True)
+    print("%d held plan(s) in %s: %d open, %d closed%s"
+          % (len(entries), source, open_count, len(entries) - open_count,
+             " (showing open only)" if args.open else ""))
+    for entry in shown:
+        print("  %-12s %-32s %s" % (entry.state, entry.id, entry.title))
+        detail = [entry.size or "size ?"]
+        if entry.items:
+            detail.append("items " + ", ".join(entry.items))
+        if entry.since:
+            detail.append("since " + entry.since)
+        print("               %s" % " · ".join(detail))
+        for problem in entry.problems:
+            print("               [%s] %s" % (problem["code"], problem["message"]))
+    for note in notes:
+        print("note: %s" % note)
+    return EXIT_OK
+
+
 def cmd_snapshot(args) -> int:
     reg = _load(args.root)
     selection = providers.work_register(reg, actor=args.actor)
@@ -686,6 +837,16 @@ def cmd_record_completion(args) -> int:
     if item is None:
         raise GovernanceError("%s is not in the live register (%s)" % (args.item, provider.source))
     prior = [r for r in book.records() if r.item_id == args.item and not r.corrects]
+    # A completion is an ordinary record: only `terminalLedger.writers` may append one.
+    # Refuse before the preview too, so a preview never promises a write the apply
+    # would refuse. `correctionWriters` covers corrections, which this never is.
+    if not prior and not book.may_append(actor):
+        raise ledger_mod.LedgerError(
+            "%s may not append an ordinary terminal record: policy.terminalLedger.writers "
+            "names %s. A completion or a retirement corrects no record, so "
+            "correctionWriters does not cover it. Route the record to /pointer-closeout."
+            % (actor, ", ".join(book.writers) or "nobody"),
+            detail={"actor": actor, "writers": list(book.writers)})
     record = ledger_mod.LedgerRecord(record_id=book.next_record_id(), item_id=args.item,
                                      completed=args.date, result=args.result,
                                      evidence=args.evidence, effort_estimate=args.estimate,
@@ -1021,6 +1182,23 @@ def build_parser() -> argparse.ArgumentParser:
     lessons.add_argument("--apply", action="store_true",
                          help="append the record (without it, --record-status previews)")
     lessons.set_defaults(func=cmd_lessons)
+
+    holding = sub.add_parser("holding", parents=[common])
+    holding.add_argument("--open", action="store_true",
+                         help="only entries not yet absorbed or withdrawn")
+    holding.add_argument("--check", default="", metavar="PATH",
+                         help="check one held plan (an entry id or a path)")
+    holding.add_argument("--next-id", action="store_true",
+                         help="the next provisional item identifier")
+    holding.add_argument("--record", default="", metavar="ENTRY",
+                         help="append a trail row to ENTRY (with --state, --actor)")
+    holding.add_argument("--state", default="",
+                         help="the state to record: %s" % ", ".join(holding_mod.STATES))
+    holding.add_argument("--note", default="", help="the trail row's note (one line)")
+    holding.add_argument("--date", default="", help="the row's date (default: today)")
+    holding.add_argument("--apply", action="store_true",
+                         help="append the row (without it, --record previews)")
+    holding.set_defaults(func=cmd_holding)
 
     completion = sub.add_parser("record-completion", parents=[common])
     completion.add_argument("--item", required=True)

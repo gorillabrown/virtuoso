@@ -238,7 +238,7 @@ def test_the_rubric_reports_five_separate_findings():
 
 
 def test_the_ceremonies_defer_to_the_shared_rubric():
-    for name in ("roadmap-review", "next-pointer"):
+    for name in ("roadmap-review", "next-pointer", "write-plan"):
         text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
         assert "references/readiness-rubric.md" in text, (
             "%s does not point at the shared rubric" % name)
@@ -315,7 +315,7 @@ def test_every_skill_carries_the_shared_contract_block():
 
 def test_ceremony_skills_run_the_read_only_preflight():
     ceremonies = ["roadmap-review", "roadmap-status", "next-pointer", "pointer-closeout",
-                  "mid-dispatch-decision", "3rd-party-audit"]
+                  "mid-dispatch-decision", "3rd-party-audit", "storyboard", "write-plan"]
     for name in ceremonies:
         text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
         assert "--mode check" in text, "%s does not run the read-only preflight" % name
@@ -356,3 +356,80 @@ def test_the_preflight_docstring_lists_every_machine_line():
                                             outcome.roadmap_integrity_line()]:
         token = line.split(":")[0] + ":"
         assert token in module.__doc__, "%s is not in the preflight's docstring" % token
+
+
+# --- three paths to execution, one destination ---------------------------------
+
+
+def skill_text(name: str) -> str:
+    return (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+
+
+def test_every_path_points_at_the_one_destination_contract():
+    """Storyboard -> write-plan, next-pointer and epic must arrive at the same place;
+    the contract has one home, and every ceremony on a path reads it."""
+    assert (ROOT / "references" / "execution-paths.md").is_file()
+    for name in ("storyboard", "write-plan", "next-pointer", "epic", "virtuoso",
+                 "pointer-closeout", "roadmap-review"):
+        assert "references/execution-paths.md" in skill_text(name), name
+
+
+def test_the_ad_hoc_path_does_no_roadmapping():
+    """storyboard and write-plan write the holding bay and nothing else: every command
+    they run under their own name is a read or a holding-bay move."""
+    reads_and_holding = {"holding", "provider", "items", "next", "kpis", "lessons", "repo",
+                         "deps", "roles", "resolve"}
+    for name in ("storyboard", "write-plan"):
+        text = skill_text(name)
+        used = set(re.findall(r"--actor %s (\S+)" % re.escape(name), text))
+        assert used, name
+        assert used <= reads_and_holding, (name, sorted(used - reads_and_holding))
+
+
+def test_write_plan_always_starts_from_the_storyboard():
+    text = skill_text("write-plan")
+    assert "## Step 0 — Pull back into the storyboard (always first)" in text
+    assert "run `/storyboard`" in text
+
+
+def test_the_roadmap_paths_open_only_on_the_master_roadmap():
+    epic = skill_text("epic")
+    assert "### Step 1 — Pull the item from the master roadmap" in epic
+    assert "`/storyboard`" in epic
+    pointer = skill_text("next-pointer")
+    assert "`Path: epic`" in pointer and "## Edge case: Epic at head" in pointer
+    assert "Origin: roadmap — [ITEM-ID]" in pointer
+
+
+def test_the_holding_bay_is_reconciled_at_review_and_closed_out_in_held_plan_mode():
+    review = skill_text("roadmap-review")
+    assert "holding --open" in review
+    assert "--actor roadmap-review holding --record <entry> --state absorbed" in review
+    closeout = skill_text("pointer-closeout")
+    assert "--actor pointer-closeout holding --record <entry> --state executed" in closeout
+    assert "**The recording crossing.**" in closeout
+
+
+# --- the terminal ledger: who appends a retirement ---------------------------------
+
+
+def test_retirement_records_are_gated_on_writers_and_routed_to_the_close_out():
+    """A retirement is an ordinary terminal record: the ledger lets only
+    `terminalLedger.writers` append one, and `correctionWriters` only a record that
+    names the record it corrects. The two ceremonies that retire items say the same,
+    and route the record to the close-out, which says how it handles it."""
+    assert policy_mod.DEFAULTS["terminalLedger"]["writers"] == ["pointer-closeout"]
+    review = skill_text("roadmap-review")
+    a4 = review.split("### A.4 Apply changes", 1)[1].split("### A.4b", 1)[0]
+    status = skill_text("roadmap-status")
+    straggler = status.split("- **Straggler migration**", 1)[1].split(
+        "- **Drift reconciliation**", 1)[0]
+    for where, text, actor in (("roadmap-review A.4", a4, "roadmap-review"),
+                               ("roadmap-status 2.1", straggler, "roadmap-status")):
+        text = " ".join(text.split())                       # prose wraps anywhere
+        assert "`policy.terminalLedger.writers`" in text, where
+        assert "`/pointer-closeout`" in text and "*Retirement records routed here*" in text, where
+        assert "`policy.terminalLedger.correctionWriters` names `%s`" % actor not in text, where
+    assert "## Retirement records routed here" in skill_text("pointer-closeout")
+    contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
+    assert "**Who may append what.**" in contract
