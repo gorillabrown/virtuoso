@@ -265,7 +265,8 @@ makes the plan *not executable now*.
 Fill next-pointer's reconciliation recipe with detected values: the remote, the default
 branch, and the branch name from `policy.git.branchNameTemplate`. Include only steps
 the project's git policy permits, and leave no placeholders. Then compose the pointer.
-It carries the origin line:
+It carries the origin line, and the filled recipe sits inside the same fenced block, as
+next-pointer's does, so one copy hands an executing session all of it:
 
 ```
 [Item title]  (HB-<n>)
@@ -275,6 +276,11 @@ Branch: [branch] from [default branch] @ [sha that carries the held plan, or "un
 Specification: [holding bay path]/[entry].md#HB-<n>
 Status: planned — held | Prerequisites: [descriptive names, met/pending]
 Readiness: specification ✓ · prerequisites ✓ · repository ✓ · register ✓ · environment ✓
+
+[the filled recipe, from its Step 0 header down]
+
+# Halt on any STOP and report the git output. A halt is a dispatch blocker,
+# not something to improvise around.
 ```
 
 ## Step 6 — The plan gate
@@ -286,8 +292,8 @@ agreed goes back to the storyboard first.
 ## Step 7 — Hold the plan
 
 1. Write the `## Plan` section into the held entry: **Readiness** (the five findings),
-   **Pointer**, **Repository reconciliation — run this FIRST**, then the
-   **Specifications**, one `#### HB-<n> — Title` per item.
+   **Pointer** (one fenced block that carries the repository-reconciliation recipe to
+   run first), then the **Specifications**, one `#### HB-<n> — Title` per item.
 2. Check the entry, then record it (preview first, then `--apply`):
 
        "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . holding --check <entry>

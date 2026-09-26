@@ -401,6 +401,20 @@ def test_the_roadmap_paths_open_only_on_the_master_roadmap():
     assert "Origin: roadmap — [ITEM-ID]" in pointer
 
 
+def test_the_pointer_carries_its_reconciliation_recipe_in_one_block():
+    """One copy hands the executing session everything: the recipe and the halt line sit
+    inside the pointer's fence, never in a block of their own."""
+    pointer = skill_text("next-pointer")
+    assert "## Repository reconciliation — run this FIRST" not in pointer
+    fence = pointer.split("## Pointer — copy this whole block", 1)[1].split("\\```", 2)[1]
+    assert "Origin: roadmap — [ITEM-ID]" in fence
+    assert "[the filled recipe" in fence and "# Halt on any STOP" in fence
+    plan = skill_text("write-plan")
+    assert "**Repository reconciliation — run this FIRST**" not in plan
+    fence = plan.split("Origin: held plan — [entry]", 1)[1].split("```", 1)[0]
+    assert "[the filled recipe" in fence and "# Halt on any STOP" in fence
+
+
 def test_the_holding_bay_is_reconciled_at_review_and_closed_out_in_held_plan_mode():
     review = skill_text("roadmap-review")
     assert "holding --open" in review

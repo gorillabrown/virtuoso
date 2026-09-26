@@ -89,6 +89,7 @@ Not aligned — [the open assumptions, frames, or questions, by name].
 
 ## Plan
 
-<!-- Filled by write-plan: readiness, pointer, repository reconciliation, and one
-     specification per skeleton item, each headed `#### HB-<n> — Title`. Empty until
-     then. An epic-scale entry is never planned here. -->
+<!-- Filled by write-plan: readiness, the pointer (one fenced block that carries the
+     repository reconciliation to run first), and one specification per skeleton item,
+     each headed `#### HB-<n> — Title`. Empty until then. An epic-scale entry is never
+     planned here. -->

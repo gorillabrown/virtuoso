@@ -155,7 +155,8 @@ Manual only: `/next-pointer`, "next pointer", "show next", "what's next".
   puts it.
 - **Dispatch-ready** — a specification that passes the shared readiness rubric.
 - **Pointer** — the code-boxed block telling the dispatcher exactly where the
-  specification lives, plus its immediate context.
+  specification lives, plus its immediate context and the repository-reconciliation
+  recipe to run first. It is one block, so a single copy carries all of it.
 - **Buffer** — the dispatch-ready items carried ahead, sized by
   `policy.roadmap.dispatchBuffer`.
 - **Conveyor belt** — the sequenced list of active items in the live register.
@@ -283,7 +284,7 @@ approval rather than running it silently, and treat offline as a normal state.
 ### The recipe
 
 ```
-# ── Step 0: REPOSITORY RECONCILIATION — before any implementation ──
+# ── Step 0: REPOSITORY RECONCILIATION — run this FIRST, before any implementation ──
 
 # 0a. Scope the working tree.
 git status --porcelain
@@ -601,7 +602,7 @@ matters.]** *(item [ITEM-ID])*
 
 *Source: [register] via [provider], snapshot [timestamp][ — STALE: reason].*
 
-## Pointer
+## Pointer — copy this whole block into the executing session
 
 \```
 [Item title]  ([ITEM-ID])
@@ -612,17 +613,14 @@ Branch: [branch-name] from [default branch] @ [sha carrying the specification]
 Specification: [resolved location]
 Status: next up (not in flight) | Prerequisites: [descriptive names, met/pending]
 Readiness: specification ✓ · prerequisites ✓ · repository ✓ · register ✓ · environment ✓
-\```
 
-## Repository reconciliation — run this FIRST
+[the filled recipe, from its Step 0 header down: detected remote and default
+ branch, no placeholders, only steps this project's git policy permits]
 
+# Halt on any STOP and report the git output. A halt is a dispatch blocker,
+# not something to improvise around.
+[# Housekeeping, not a blocker: [stale branches or worktrees found, if any]]
 \```
-[the filled recipe: detected remote and default branch, no placeholders,
- only steps this project's git policy permits]
-\```
-
-Halt on any STOP and report the git output — a halt is a dispatch blocker, not
-something to improvise around.
 
 ## Standing rules that apply
 - **[project rule id] — [short title].** [One-sentence statement.]
@@ -647,6 +645,11 @@ something to improvise around.
 | [Not ready — [the named open item].]
 ```
 
+**The pointer is one fenced block.** The item context, the filled reconciliation recipe,
+the halt line, and any housekeeping note share a single fence, so one copy hands the
+executing session everything it must run and obey. Never split the recipe into a block
+of its own, and never leave an instruction the executor needs outside the fence.
+
 ### 4.3 Pre-print verification
 
 1. Does the summary pass the stranger test, and lead with the descriptive name?
@@ -658,10 +661,12 @@ something to improvise around.
 6. If enrichment ran, did the re-audit pass?
 7. Is the recipe filled with real detected values — remote, default branch, branch
    name — and does it contain only steps `policy.git` permits?
-8. If a specification edit is still unreachable from the execution base, is
+8. Do the pointer, the recipe, and the halt line sit in one fenced block, so a
+   single copy carries them all?
+9. If a specification edit is still unreachable from the execution base, is
    repository readiness BLOCKED and the verdict "Not ready"?
-9. Is every pre-flight item resolved? Under a Ready verdict there are no open
-   items at all.
+10. Is every pre-flight item resolved? Under a Ready verdict there are no open
+    items at all.
 
 ---
 
