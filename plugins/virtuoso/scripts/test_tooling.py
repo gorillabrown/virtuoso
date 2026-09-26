@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from conftest import PLUGIN_ROOT, snapshot_tree
-from tools.governance import registry as registry_mod
+from tools.governance import policy as policy_mod, registry as registry_mod
 
 PREFLIGHT = str(Path(PLUGIN_ROOT) / "scripts" / "virtuoso_preflight.py")
 REGISTRY_CLI = str(Path(PLUGIN_ROOT) / "scripts" / "virtuoso_registry.py")
@@ -387,6 +387,77 @@ def test_the_protected_command_is_read_only(workspace):
     completed = run(REGISTRY_CLI, "--root", str(workspace), "protected")
     assert completed.returncode == 0
     assert snapshot_tree(workspace) == before
+
+
+# --- Windows: output survives a legacy code page ---------------------------------
+
+#: Neither character is in cp1252, the code page a Windows pipe or `>` defaults to.
+OUTSIDE_CP1252 = "A→B ✓"
+SPRINT_GUARDS = str(Path(PLUGIN_ROOT) / "scripts" / "sprint_guards.py")
+
+
+def run_cp1252(script, *args):
+    """A CLI as a Windows pipe runs it: stdout encoded in cp1252, strictly. The
+    output is returned as bytes, so the test decides how to read it."""
+    return subprocess.run([sys.executable, script, *args], capture_output=True,
+                          env=dict(os.environ, PYTHONIOENCODING="cp1252"))
+
+
+def utf8_json(completed):
+    assert completed.returncode == 0, completed.stderr.decode("utf-8", "replace")
+    return json.loads(completed.stdout.decode("utf-8"))
+
+
+def test_protected_json_survives_a_legacy_code_page(workspace):
+    """A governance sweep hashes protected files with `protected --json > file` and
+    reads the file back. Under cp1252 a path the code page cannot carry crashed the
+    command, so the hash set the sweep compares against was never written."""
+    close_outs = workspace / registry_mod.load(str(workspace)).roles["closeOuts"].path
+    report = close_outs / ("CloseOut.%s.2026-09-25.md" % OUTSIDE_CP1252)
+    report.write_text("# Close-out\n", encoding="utf-8")
+    rel = report.relative_to(workspace).as_posix()
+
+    payload = utf8_json(run_cp1252(REGISTRY_CLI, "--root", str(workspace), "protected",
+                                   "--json"))
+    assert rel in payload["hashes"]
+    assert rel in payload["roles"]["closeOuts"]
+
+    listed = run_cp1252(REGISTRY_CLI, "--root", str(workspace), "protected")
+    assert listed.returncode == 0, listed.stderr
+    assert rel in listed.stdout.decode("utf-8")
+
+
+def test_lessons_json_survives_a_legacy_code_page(workspace):
+    lessons = workspace / registry_mod.load(str(workspace)).roles["lessons"].path
+    with open(lessons, "a", encoding="utf-8") as handle:
+        handle.write("\n### %s-1 — %s (ITEM-1, 2026-09-25)\n**Status:** Observation\n"
+                     % (policy_mod.load({}).lesson_prefix, OUTSIDE_CP1252))
+    payload = utf8_json(run_cp1252(REGISTRY_CLI, "--root", str(workspace), "lessons",
+                                   "--json"))
+    assert [lesson["title"] for lesson in payload["lessons"]] == [OUTSIDE_CP1252]
+
+
+def test_preflight_json_survives_a_legacy_code_page(workspace):
+    """The session-start hook runs preflight through a pipe. A finding that names a
+    path the code page cannot carry must not take the status lines down with it."""
+    manifest = workspace / "Virtuoso" / "workspace-layout.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data["roles"]["roadmap"]["path"] = "Project Documentation/%s.md" % OUTSIDE_CP1252
+    manifest.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    completed = run_cp1252(PREFLIGHT, "--root", str(workspace), "--mode", "check", "--json")
+    text = completed.stdout.decode("utf-8")
+    assert "virtuoso-status:" in text, completed.stderr
+    assert OUTSIDE_CP1252 in text
+
+
+def test_sprint_guards_survive_a_legacy_code_page(workspace):
+    close_outs = workspace / registry_mod.load(str(workspace)).roles["closeOuts"].path
+    memo = "Memo.%s.GovernanceStaging.ITEM-1.md" % OUTSIDE_CP1252
+    (close_outs / memo).write_text("staged\n", encoding="utf-8")
+    completed = run_cp1252(SPRINT_GUARDS, "staging-sweep", "--root", str(workspace))
+    assert completed.returncode == 1, completed.stderr      # 1: a resident memo is a finding
+    assert memo in completed.stdout.decode("utf-8")
 
 
 # --- item 79: declared runtime dependencies ------------------------------------

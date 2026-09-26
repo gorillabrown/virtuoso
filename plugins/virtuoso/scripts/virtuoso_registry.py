@@ -81,12 +81,16 @@ def _load(root: str) -> registry_mod.Registry:
 
 
 def _emit(payload, as_json: bool, renderer=None) -> int:
+    """Print a command's answer as UTF-8. `main` already sets the streams to UTF-8;
+    this writes bytes too, so a caller that imports the module and skips `main`
+    gets the same answer rather than a code page's refusal."""
     if as_json:
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        text = json.dumps(payload, indent=2, ensure_ascii=False)
     elif renderer is not None:
-        print(renderer())
+        text = renderer()
     else:
-        print(payload)
+        text = str(payload)
+    _write_bytes_to_stdout(text + "\n")
     return EXIT_OK
 
 
@@ -1263,6 +1267,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    textio.utf8_stdio()
     args = build_parser().parse_args(argv)
     # SUPPRESS leaves the attribute absent when the flag was not given anywhere.
     args.root = os.path.abspath(getattr(args, "root", None) or os.getcwd())

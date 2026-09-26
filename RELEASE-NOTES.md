@@ -1,5 +1,20 @@
 # Virtuoso Release Notes
 
+## Unreleased
+
+### Output is UTF-8 on every console
+
+- **Every command writes UTF-8, whatever the code page.** A Windows pipe or `>` redirect
+  defaults to the legacy code page (cp1252). Before this, a character the page lacks, such as
+  `→` in a message or in a file path, made the command fail after it had done its work.
+  `virtuoso_registry --root . protected --json`, which the governance sweep redirects into
+  its backup set and compares at the end, failed on the first protected path containing one.
+  Session-start preflight printed its first four status lines and then stopped. The
+  registry, preflight, sprint-guard, register-report and cockpit commands now set their
+  streams to UTF-8 on start. A path the filesystem could not decode is written as an escape
+  instead of raising, which keeps JSON valid. The `PYTHONIOENCODING=utf-8` workaround is no
+  longer needed.
+
 ## v1.11.0 (2026-09-24) — three paths to execution, one destination
 
 **Upgrading from 1.10.2.** The ad hoc path needs the opt-in `holdingBay` role:

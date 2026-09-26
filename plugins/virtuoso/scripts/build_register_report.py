@@ -21,7 +21,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tools.governance import policy as policy_mod, providers, registry as registry_mod  # noqa: E402
+from tools.governance import policy as policy_mod, providers, registry as registry_mod, textio  # noqa: E402
 from tools.governance.errors import GovernanceError, RoleNotRegistered  # noqa: E402
 from tools.governance.providers import kpi  # noqa: E402
 
@@ -145,6 +145,7 @@ def build(root: str, *, role_name: str = DEFAULT_ROLE, out: str = "") -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    textio.utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--root", default=os.getcwd())
     parser.add_argument("--role", default=DEFAULT_ROLE)

@@ -14,6 +14,7 @@ from __future__ import annotations
 import codecs
 import hashlib
 import os
+import sys
 
 
 def read_bytes(path: str) -> bytes | None:
@@ -110,6 +111,38 @@ def write_if_changed(path: str, content: str) -> bool:
     with open(path, "w", encoding="utf-8", newline=eol or "\n") as handle:
         handle.write(normalized(content))
     return True
+
+
+def utf8_stdio() -> None:
+    """Make this process's stdout and stderr write UTF-8, whatever the code page.
+
+    Every command's output is read by something: a hook, an agent's shell, or a
+    ``> file`` that the plugin later reads back as UTF-8. A Windows pipe or
+    redirect defaults to the legacy code page, and the text layer then refuses
+    any character the page lacks. ``→`` in a message or a path in a hash listing
+    made the whole command fail after it had done its work. UTF-8 carries every
+    character, and it is the encoding every reader of this output decodes.
+
+    UTF-8 can encode every character except a lone surrogate: a path the
+    filesystem could not decode. A ``strict`` stream would raise on one, so it
+    becomes ``backslashreplace``, which writes the escape. Inside a JSON string
+    that is still valid JSON. Any other handler the stream already has (the C
+    locale's ``surrogateescape``) is kept, so no stream is left able to raise.
+
+    A stream without ``reconfigure`` (a replaced stream) takes text as it is.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        errors = stream.errors if stream.errors not in (None, "strict") else "backslashreplace"
+        try:
+            if (codecs.lookup(stream.encoding or "ascii").name == "utf-8"
+                    and errors == stream.errors):
+                continue
+            reconfigure(encoding="utf-8", errors=errors)
+        except (AttributeError, LookupError, OSError, ValueError):
+            continue
 
 
 def sha256_file(path: str) -> str:

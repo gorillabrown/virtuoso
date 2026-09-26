@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tools.governance import policy as policy_mod, providers, registry as registry_mod  # noqa: E402
+from tools.governance import policy as policy_mod, providers, registry as registry_mod, textio  # noqa: E402
 from tools.governance.providers import kpi  # noqa: E402
 
 from .health import summarize_health  # noqa: E402
@@ -54,6 +54,7 @@ def generate(root: Path | str, output: Path | str | None = None) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
+    textio.utf8_stdio()
     parser = argparse.ArgumentParser(description="Generate the Virtuoso planning cockpit.")
     parser.add_argument("--root", default=".",
                         help="project root carrying Virtuoso/workspace-layout.json")
