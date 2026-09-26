@@ -357,7 +357,7 @@ CATALOG = """# Lessons
 ### LSN-002 — Consumer fallback before an export-format change (ADD-051, 2026-02-01)
 **Verdict:** consumers broke on the new export shape
 **Evidence:** three consumers down for a day
-**Recommendation:** ship the consumer fallback first
+**Recommendation:** merge the reader fallback before the migration runs
 **Applies to:** any item that changes a stored row shape
 **Status:** Observation
 
@@ -400,7 +400,7 @@ def test_hygiene_proposes_merge_retire_tidy_and_repair():
     report = learning_mod.hygiene(recorded, outcomes, today=TODAY, stale_after_days=180)
     assert report["duplicates"] == [{"keep": "LSN-001", "supersede": ["LSN-002"],
                                      "why": "the same Applies to (any item that changes a "
-                                            "stored row shape)"}]
+                                            "stored row shape) and the same recommendation"}]
     assert [s["id"] for s in report["stale"]] == ["LSN-001", "LSN-002", "LSN-003", "LSN-004",
                                                  "LSN-005"]
     assert report["incomplete"] == [{"id": "LSN-004",

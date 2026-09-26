@@ -123,23 +123,83 @@ def load_outcomes(directory: str, prefix: str) -> Outcomes:
 
 # --- hygiene ----------------------------------------------------------------------------
 
+#: Titles sharing this share of their words name one pattern.
+SAME_TITLE = 0.6
+#: Two lessons scoped alike whose recommendations (or verdicts) share this share of
+#: their words ask for one change.
+SAME_CHANGE = 0.5
+#: This many live lessons sharing one *Applies to* line suggests the line names a
+#: category rather than when a lesson bears. Advisory only.
+CATEGORY_MINIMUM = 3
+
+_normal = lessons_mod._normal
+
+
 def _words(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z0-9]+", (text or "").lower())
             if len(w) >= 4 and w not in _STOPWORDS}
 
 
-def _normal(text: str) -> str:
-    return " ".join(re.findall(r"[a-z0-9]+", (text or "").lower()))
+def _overlap(a: str, b: str) -> float:
+    """The share of words ``a`` and ``b`` have in common (Jaccard); 0 when either is empty."""
+    wa, wb = _words(a), _words(b)
+    return len(wa & wb) / len(wa | wb) if wa and wb else 0.0
 
 
 def _similar(a: lessons_mod.Lesson, b: lessons_mod.Lesson) -> str:
-    """Why ``a`` and ``b`` look like one pattern, or ``""``."""
-    if a.applies_to and _normal(a.applies_to) == _normal(b.applies_to):
-        return "the same Applies to (%s)" % a.applies_to
-    wa, wb = _words(a.title), _words(b.title)
-    if wa and wb and len(wa & wb) / len(wa | wb) >= 0.6:
+    """Why ``a`` and ``b`` look like one pattern, or ``""``.
+
+    A shared *Applies to* is never enough on its own. It says when two lessons bear,
+    not what they teach, and distinct lessons often share one ("any worktree
+    dispatch"). Scoped alike, they are one pattern only when they also ask for the
+    same change."""
+    if _overlap(a.title, b.title) >= SAME_TITLE:
         return "near-identical titles"
+    if a.applies_to and _normal(a.applies_to) == _normal(b.applies_to):
+        for name in ("recommendation", "verdict"):
+            if _overlap(a.fields.get(name, ""), b.fields.get(name, "")) >= SAME_CHANGE:
+                return "the same Applies to (%s) and the same %s" % (a.applies_to, name)
     return ""
+
+
+def shared_scopes(lessons: list[lessons_mod.Lesson]) -> list[dict]:
+    """*Applies to* lines shared by ``CATEGORY_MINIMUM`` or more live lessons.
+
+    Not a duplicate: the lessons may each be distinct. The line is written to say
+    when a lesson bears, so one shared this widely may name a category instead, and
+    a future author matching it against a new item learns nothing from it."""
+    groups: dict[str, list[lessons_mod.Lesson]] = {}
+    for lesson in lessons:
+        if lesson.live and _normal(lesson.applies_to):
+            groups.setdefault(_normal(lesson.applies_to), []).append(lesson)
+    return [{"appliesTo": members[0].applies_to, "ids": [m.id for m in members]}
+            for members in groups.values() if len(members) >= CATEGORY_MINIMUM]
+
+
+_CUTOFF_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def requires_fields(lesson: lessons_mod.Lesson, required_from: str) -> bool:
+    """Whether ``lesson`` is held to the four fields under
+    ``policy.lessons.fieldsRequiredFrom``.
+
+    Empty holds every lesson to them. A date holds lessons recorded on or after
+    it. An undated lesson is older than the dated heading format, so it predates
+    the cutoff. An identifier holds that lesson and every later-numbered one."""
+    required_from = (required_from or "").strip()
+    if not required_from:
+        return True
+    if _CUTOFF_DATE_RE.match(required_from):
+        try:
+            cutoff = _dt.date.fromisoformat(required_from)
+        except ValueError:
+            return True
+        return lesson.date is not None and lesson.date >= cutoff
+    number = re.search(r"-(\d+)$", required_from)
+    own = re.search(r"-(\d+)$", lesson.id)
+    if not number or not own:
+        return True
+    return int(own.group(1)) >= int(number.group(1))
 
 
 def duplicate_groups(lessons: list[lessons_mod.Lesson]) -> list[dict]:
@@ -166,9 +226,14 @@ def duplicate_groups(lessons: list[lessons_mod.Lesson]) -> list[dict]:
 
 
 def hygiene(lessons: list[lessons_mod.Lesson], outcomes: Outcomes, *,
-            today: _dt.date, stale_after_days: int) -> dict:
-    """What ``governance-sweep`` should tidy, merge and retire. Proposals only."""
+            today: _dt.date, stale_after_days: int, fields_required_from: str = "") -> dict:
+    """What ``governance-sweep`` should tidy, merge and retire. Proposals only.
+
+    ``sharedScopes`` is advisory, for the user to judge; it proposes no record.
+    ``incompleteBeforeCutoff`` counts the incomplete lessons that
+    ``fields_required_from`` exempts, so an exemption is never silent."""
     stale, incomplete, malformed = [], [], []
+    exempt = 0
     for lesson in lessons:
         if lesson.reused:
             malformed.append({"id": lesson.id, "why": "a later entry under this id records a "
@@ -177,7 +242,9 @@ def hygiene(lessons: list[lessons_mod.Lesson], outcomes: Outcomes, *,
         if not lesson.live:
             continue
         missing = [f for f in lessons_mod.LESSON_FIELDS if not lesson.fields.get(f)]
-        if missing:
+        if missing and not requires_fields(lesson, fields_required_from):
+            exempt += 1
+        elif missing:
             incomplete.append({"id": lesson.id, "missing": missing})
         when = lesson.date
         if (stale_after_days and lesson.status.lower().startswith("observation")
@@ -187,7 +254,10 @@ def hygiene(lessons: list[lessons_mod.Lesson], outcomes: Outcomes, *,
                           "ageDays": (today - when).days})
     return {"duplicates": duplicate_groups(lessons), "stale": stale,
             "incomplete": incomplete, "malformed": malformed,
-            "staleAfterDays": stale_after_days}
+            "sharedScopes": shared_scopes(lessons),
+            "incompleteBeforeCutoff": exempt,
+            "staleAfterDays": stale_after_days,
+            "fieldsRequiredFrom": (fields_required_from or "").strip()}
 
 
 def candidates(lessons: list[lessons_mod.Lesson], outcomes: Outcomes) -> list[dict]:

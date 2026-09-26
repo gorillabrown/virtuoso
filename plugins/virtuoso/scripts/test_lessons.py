@@ -63,8 +63,10 @@ CATALOG = """# Retrospective — Lessons Learned
 
 
 def run(script, *args):
+    """Run a plugin script. Its output is UTF-8 on every platform, so it is read as
+    UTF-8, never in the locale's code page."""
     return subprocess.run([sys.executable, script, *args], capture_output=True,
-                          text=True, env=dict(os.environ))
+                          text=True, encoding="utf-8", env=dict(os.environ))
 
 
 # =============================================================================
@@ -453,3 +455,195 @@ def test_the_specification_format_the_review_ships_carries_the_section_u9_reads(
     result = lessons_mod.check(block, LESSONS, "LSN")
     assert result.passed is True
     assert not any(f["code"].startswith("lessons-section") for f in result.findings)
+
+
+# =============================================================================
+# Hygiene: a shared scope is not a duplicate, a status record is not a reuse
+# =============================================================================
+
+from tools.governance import learning as learning_mod   # noqa: E402
+
+HYGIENE_DAY = __import__("datetime").date(2026, 9, 26)
+
+
+def entry(number, title, *, recommendation, applies="any worktree dispatch",
+          evidence="it happened once", date="2026-09-20"):
+    """A complete lesson whose verdict is its own title, so no two fixtures share one."""
+    return ("### LSN-%03d — %s (ITEM-%d, %s)\n**Verdict:** %s\n**Evidence:** %s\n"
+            "**Recommendation:** %s\n**Applies to:** %s\n**Status:** Observation\n\n"
+            % (number, title, number, date, title.lower(), evidence, recommendation, applies))
+
+
+#: Five different lessons whose one common line is *Applies to*. A real sweep was told
+#: to merge all five into the first.
+SHARED_SCOPE = "# Lessons\n\n" + "".join([
+    entry(139, "Freeze the baseline before a gate sweep",
+          recommendation="snapshot the gate's baseline before the first change"),
+    entry(140, "Seed drift hides calibration regressions",
+          recommendation="pin every random seed the harness reads"),
+    entry(142, "A worktree needs its own interpreter",
+          recommendation="create the virtual environment inside each worktree"),
+    entry(143, "Long jobs outlive their session",
+          recommendation="hand any job over twenty minutes to the orchestrator"),
+    entry(144, "Name the tested tree by hash",
+          recommendation="cite the commit hash beside every quoted result"),
+])
+
+
+def hygiene(text, **kwargs):
+    recorded = lessons_mod.parse(text, "LSN")
+    return learning_mod.hygiene(recorded, learning_mod.Outcomes(), today=HYGIENE_DAY,
+                                stale_after_days=180, **kwargs)
+
+
+def test_lessons_sharing_only_an_applies_to_line_are_not_duplicates():
+    report = hygiene(SHARED_SCOPE)
+    assert report["duplicates"] == []
+    recorded = lessons_mod.parse(SHARED_SCOPE, "LSN")
+    assert learning_mod.candidates(recorded, learning_mod.Outcomes()) == []
+    rate = {m.name: m for m in learning_mod.metrics(recorded, learning_mod.Outcomes())}
+    assert rate["repeated-trap-rate"].value == 0.0
+
+
+def test_a_widely_shared_applies_to_line_is_advised_not_merged():
+    assert hygiene(SHARED_SCOPE)["sharedScopes"] == [{
+        "appliesTo": "any worktree dispatch",
+        "ids": ["LSN-139", "LSN-140", "LSN-142", "LSN-143", "LSN-144"]}]
+    two = "# Lessons\n\n" + SHARED_SCOPE.split("# Lessons\n\n", 1)[1].split("### LSN-142")[0]
+    assert len(lessons_mod.parse(two, "LSN")) == 2
+    assert hygiene(two)["sharedScopes"] == []            # fewer than CATEGORY_MINIMUM
+
+
+def test_the_same_scope_and_the_same_change_is_still_a_duplicate():
+    text = "# Lessons\n\n" + entry(
+        1, "Worktrees need their own environment",
+        recommendation="create the virtual environment inside each worktree") + entry(
+        2, "Shared interpreter broke a second lane",
+        recommendation="create a virtual environment inside every worktree")
+    report = hygiene(text)
+    assert report["duplicates"] == [{
+        "keep": "LSN-001", "supersede": ["LSN-002"],
+        "why": "the same Applies to (any worktree dispatch) and the same recommendation"}]
+    found = learning_mod.candidates(lessons_mod.parse(text, "LSN"), learning_mod.Outcomes())
+    assert [(c["id"], c["action"]) for c in found] == [("LSN-001", "promote")]
+
+
+def test_near_identical_titles_are_still_a_duplicate_whatever_the_scope():
+    text = "# Lessons\n\n" + entry(
+        1, "Record the failing set before the first change", recommendation="a",
+        applies="continuations on a red base") + entry(
+        2, "Record the failing set before the first change again", recommendation="b",
+        applies="any item that adds a gate")
+    assert hygiene(text)["duplicates"][0]["why"] == "near-identical titles"
+
+
+PROMOTION_BY_HAND = """# Lessons
+
+### LSN-109 — Worktrees need their own environment (OPS-9, 2026-09-01)
+**Verdict:** a shared interpreter leaked packages between lanes
+**Evidence:** two lanes failed on one upgrade
+**Recommendation:** create the virtual environment inside each worktree
+**Applies to:** any worktree dispatch
+**Status:** Observation
+
+### LSN-109 — Promoted (OPS-12, 2026-09-10)
+**Evidence:** second occurrence in OPS-12
+**Status:** Promoted -> standing rule R-7
+"""
+
+
+def test_a_hand_written_promotion_record_is_a_status_record_not_a_reuse():
+    [lesson] = lessons_mod.parse(PROMOTION_BY_HAND, "LSN")
+    assert lesson.reused is False
+    assert lesson.status == "Promoted -> standing rule R-7" and not lesson.live
+    assert lesson.fields["evidence"] == "two lanes failed on one upgrade"   # the first entry's
+    assert hygiene(PROMOTION_BY_HAND)["malformed"] == []
+
+
+@pytest.mark.parametrize("record", [
+    # a heading titled status is a status record, whatever it records
+    "### LSN-109 — status (OPS-12, 2026-09-10)\n**Evidence:** reopened after OPS-12\n"
+    "**Status:** Observation\n",
+    # a retirement carrying its reason as a recommendation
+    "### LSN-109 — Retired (OPS-12, 2026-09-10)\n**Recommendation:** none; the lanes merged\n"
+    "**Status:** Retired — the lanes merged\n",
+    # the same lesson restated under its own id is not a second lesson
+    "### LSN-109 — Worktrees need their own environment (OPS-12, 2026-09-10)\n"
+    "**Verdict:** still true\n**Status:** Observation\n",
+])
+def test_status_records_and_restatements_are_not_reuses(record):
+    text = PROMOTION_BY_HAND.split("### LSN-109 — Promoted")[0] + record
+    [lesson] = lessons_mod.parse(text, "LSN")
+    assert lesson.reused is False
+
+
+@pytest.mark.parametrize("record", [
+    # a verdict under another title is a second lesson, whatever status it carries
+    "### LSN-109 — Pin the harness seed (ENG-3, 2026-09-10)\n**Verdict:** seeds drifted\n"
+    "**Status:** Promoted -> standing rule R-8\n",
+    # lesson fields under another title with a live status are a second lesson too
+    "### LSN-109 — Pin the harness seed (ENG-3, 2026-09-10)\n"
+    "**Recommendation:** pin every seed\n**Status:** Observation\n",
+])
+def test_a_second_lesson_under_one_id_is_still_a_reuse(record):
+    text = PROMOTION_BY_HAND.split("### LSN-109 — Promoted")[0] + record
+    [lesson] = lessons_mod.parse(text, "LSN")
+    assert lesson.reused is True
+    assert [m["id"] for m in hygiene(text)["malformed"]] == ["LSN-109"]
+
+
+LEGACY = """# Lessons
+
+### LSN-001 — An early note without the four fields
+**Verdict:** kept short in the old format
+**Status:** Observation
+
+### LSN-002 — Another early note (OLD-2, 2026-01-15)
+**Recommendation:** only this field
+**Status:** Observation
+
+### LSN-003 — A lesson in the current format that lost a field (NEW-3, 2026-09-24)
+**Verdict:** recorded after the format settled
+**Evidence:** one run
+**Recommendation:** fill every field
+**Status:** Observation
+"""
+
+
+@pytest.mark.parametrize("cutoff, proposed, exempt", [
+    ("", ["LSN-001", "LSN-002", "LSN-003"], 0),
+    ("LSN-003", ["LSN-003"], 2),
+    ("2026-09-01", ["LSN-003"], 2),      # an undated lesson predates a dated cutoff
+    ("2026-01-01", ["LSN-002", "LSN-003"], 1),
+])
+def test_lessons_before_the_fields_cutoff_are_counted_not_proposed(cutoff, proposed, exempt):
+    report = hygiene(LEGACY, fields_required_from=cutoff)
+    assert [entry["id"] for entry in report["incomplete"]] == proposed
+    assert report["incompleteBeforeCutoff"] == exempt
+    assert report["fieldsRequiredFrom"] == cutoff
+
+
+def test_the_fields_cutoff_is_a_documented_policy_value():
+    assert policy_mod.documented_default("lessons.fieldsRequiredFrom") == ""
+    for good in ("", "2026-09-01", "%s-200" % policy_mod.load({}).lesson_prefix):
+        assert policy_mod.lessons_problems({"fieldsRequiredFrom": good}) == [], good
+    assert policy_mod.lessons_problems({"idPrefix": "LSN", "fieldsRequiredFrom": "LSN-7"}) == []
+    for bad in ("2026-13-01", "LSN-7", "soon", 200):
+        assert policy_mod.lessons_problems({"fieldsRequiredFrom": bad}), bad
+
+
+def test_the_hygiene_command_prints_the_advice_and_the_exemption(workspace):
+    lessons_file(workspace).write_text(SHARED_SCOPE + LEGACY.split("# Lessons\n\n", 1)[1],
+                                       encoding="utf-8", newline="\n")
+    applied = run(REGISTRY_CLI, "--root", str(workspace), "--actor", "project-profile",
+                  "policy-set", "lessons.fieldsRequiredFrom", "--value-json", '"LSN-003"',
+                  "--apply")
+    assert applied.returncode == 0, applied.stdout + applied.stderr
+    text = lessons_cli(workspace, "--hygiene").stdout
+    assert "merge" not in text
+    assert "tidy     LSN-003 — missing applies to" in text
+    assert "exempt   2 incomplete lesson(s) recorded before LSN-003" in text
+    assert ("advise   LSN-139, LSN-140, LSN-142, LSN-143, LSN-144 share Applies to "
+            "\"any worktree dispatch\"") in text
+    report = json.loads(lessons_cli(workspace, "--hygiene", "--json").stdout)
+    assert report["duplicates"] == [] and report["incompleteBeforeCutoff"] == 2

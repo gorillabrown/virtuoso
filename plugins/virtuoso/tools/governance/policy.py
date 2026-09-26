@@ -117,6 +117,10 @@ DEFAULTS: dict = {
         # a live observation older than this, never applied in a close-out, is a
         # retire candidate in `lessons --hygiene`; 0 turns the check off
         "staleAfterDays": 180,
+        # where the four lesson fields became required: a date (YYYY-MM-DD) or a
+        # lesson identifier. Earlier lessons predate the format and are counted,
+        # not proposed, by the hygiene tidy. Empty holds every lesson to them.
+        "fieldsRequiredFrom": "",
     },
     # --- governance sweep (items 51b, 52b, 53b, 56) --------------------------
     "sweep": {
@@ -195,7 +199,24 @@ def lessons_problems(section) -> list[str]:
         problems.append("policy.lessons.idPrefix=%s is not a prefix: letters, digits and "
                         "'_', starting with a letter (identifiers are <prefix>-NNN)"
                         % _shown(prefix))
+    cutoff = section.get("fieldsRequiredFrom", "")
+    if not isinstance(cutoff, str) or (cutoff.strip() and not _is_lesson_cutoff(
+            cutoff.strip(), prefix if isinstance(prefix, str) else "SRL")):
+        problems.append("policy.lessons.fieldsRequiredFrom=%s is not a date (YYYY-MM-DD) or "
+                        "a lesson identifier (<prefix>-NNN); empty requires the fields of "
+                        "every lesson" % _shown(cutoff))
     return problems
+
+
+def _is_lesson_cutoff(value: str, prefix: str) -> bool:
+    """A real calendar date, or an identifier under the project's own prefix."""
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        try:
+            _dt.date.fromisoformat(value)
+        except ValueError:
+            return False
+        return True
+    return re.fullmatch(r"%s-\d+" % re.escape(prefix), value) is not None
 
 
 #: What one deadline holds. The children of ``roadmap.deadlines`` are named by the

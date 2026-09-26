@@ -248,9 +248,16 @@ definition** and the mirror is out of date (item 57).
       close-out ever applied: `Retired — <why it no longer bears>`. Route any whose
       relevance you cannot judge to the user instead of retiring it.
     - **tidy** — a live lesson missing a field: append a complete restatement under the
-      next free identifier and supersede the incomplete entry by it.
+      next free identifier and supersede the incomplete entry by it. When the list is
+      long because older entries predate the four-field format, do not append one
+      restatement per entry. Ask the user whether to set `policy.lessons.fieldsRequiredFrom`
+      to the point the format began, and record the batch as one finding. The `exempt`
+      line counts the incomplete lessons that cutoff already excludes, and proposes nothing.
     - **repair** — an identifier reused for a second lesson: give the second its own
       identifier by restatement, and record the reuse.
+    - **advise** — an *Applies to* line shared by several distinct lessons. It is not a
+      merge, and it proposes no record. Show it to the user: the line may name a category
+      where it should say when each lesson bears.
     Also flag entries referencing changed names, paths or items (propose the reference
     update as a restatement, never an edit). The catalog is append-only: every one of
     these is a new entry or a status record.

@@ -536,12 +536,27 @@ U9 holds every specification to every live lesson, so the catalog's value is its
 shortness. Two read-only reports keep it short, and one command changes it — by appending.
 
 - **`lessons --hygiene`** (`governance-sweep`) reads the catalog and every close-out
-  report in the `closeOuts` role (`CloseOut.*.md`) and proposes: **merge** — live lessons
-  that record one pattern (the same *Applies to*, or near-identical titles), kept under the
-  first recorded and the rest superseded by it; **retire** — a live observation older than
-  `policy.lessons.staleAfterDays` (default 180; 0 turns it off) that no close-out ever
-  applied; **tidy** — a live lesson missing *Verdict*, *Evidence*, *Recommendation* or
-  *Applies to*; **repair** — an identifier reused for a second lesson.
+  report in the `closeOuts` role (`CloseOut.*.md`) and proposes:
+  - **merge** — live lessons that record one pattern, kept under the first recorded and
+    the rest superseded by it. One pattern means near-identical titles, or the same
+    *Applies to* and the same recommendation (or verdict). A shared *Applies to* alone is
+    never a merge: it says when two lessons bear, not what they teach.
+  - **retire** — a live observation older than `policy.lessons.staleAfterDays` (default
+    180; 0 turns it off) that no close-out ever applied.
+  - **tidy** — a live lesson missing *Verdict*, *Evidence*, *Recommendation* or *Applies
+    to*. `policy.lessons.fieldsRequiredFrom` (a date or a lesson identifier; empty by
+    default) marks where the four fields became required. An incomplete lesson recorded
+    before it is counted as `incompleteBeforeCutoff`, not proposed, and an undated lesson
+    counts as before a dated cutoff.
+  - **repair** — an identifier reused for a second lesson: a later entry that carries a
+    *Verdict*, or lesson fields under a live status, beneath a different title. A later
+    entry with no *Verdict* that is titled `status` or records a `Promoted`, `Retired` or
+    `Superseded` status is a status record, even when it carries its reason as an
+    *Evidence* line. A later entry restating the same title is the same lesson.
+
+  It also reports one advisory, **sharedScopes**: an *Applies to* line shared by three or
+  more live lessons, which may name a category rather than when each bears. It proposes
+  no record.
 - **`lessons --candidates`** (`roadmap-review` D.4) lists the lessons that have earned a
   decision: **promote** a pattern that recurred (the second occurrence) or a lesson applied
   and held in two close-outs; **revise or retire** one that did not hold in two. A

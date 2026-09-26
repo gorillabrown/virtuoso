@@ -508,9 +508,11 @@ def cmd_lessons(args) -> int:
     if args.hygiene or args.candidates:
         outcomes, closeouts = _lesson_outcomes(reg, prefix)
         if args.hygiene:
+            cutoff = project_policy.get("lessons.fieldsRequiredFrom", "")
             report = learning_mod.hygiene(
                 recorded, outcomes, today=_today(),
-                stale_after_days=int(project_policy.get("lessons.staleAfterDays", 180) or 0))
+                stale_after_days=int(project_policy.get("lessons.staleAfterDays", 180) or 0),
+                fields_required_from=cutoff if isinstance(cutoff, str) else "")
             payload = dict(report, source=source, closeOuts=closeouts,
                            closeOutsRead=outcomes.closeouts, notes=notes)
             if args.as_json:
@@ -525,8 +527,16 @@ def cmd_lessons(args) -> int:
                       % (entry["id"], entry["recorded"], entry["ageDays"]))
             for entry in report["incomplete"]:
                 print("  tidy     %s — missing %s" % (entry["id"], ", ".join(entry["missing"])))
+            if report["incompleteBeforeCutoff"]:
+                print("  exempt   %d incomplete lesson(s) recorded before %s, where "
+                      "policy.lessons.fieldsRequiredFrom starts the four fields; not proposed"
+                      % (report["incompleteBeforeCutoff"], report["fieldsRequiredFrom"]))
             for entry in report["malformed"]:
                 print("  repair   %s — %s" % (entry["id"], entry["why"]))
+            for entry in report["sharedScopes"]:
+                print("  advise   %s share Applies to \"%s\" — it may name a category; ask "
+                      "whether each should say when it bears (no record proposed)"
+                      % (", ".join(entry["ids"]), entry["appliesTo"]))
             if not any(report[k] for k in ("duplicates", "stale", "incomplete", "malformed")):
                 print("  clean — nothing to merge, retire, tidy or repair")
             return EXIT_OK

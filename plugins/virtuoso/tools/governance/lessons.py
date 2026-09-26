@@ -66,8 +66,8 @@ class Lesson:
     source: str = ""
     fields: dict = field(default_factory=dict)
     history: list = field(default_factory=list)      # every status recorded, in order
-    #: A later entry under this id carried lesson fields, not only a status: the id
-    #: was reused for a second lesson, which the catalog can no longer tell apart.
+    #: A later entry under this id recorded a second lesson rather than a status (see
+    #: ``_records_another_lesson``), which the catalog can no longer tell apart.
     reused: bool = False
 
     @property
@@ -105,53 +105,104 @@ def id_pattern(prefix: str) -> re.Pattern:
     return re.compile(r"(?<![\w-])%s-(\d+)(?![\w-])" % re.escape(prefix))
 
 
-def parse(text: str, prefix: str) -> list[Lesson]:
-    """Every lesson in ``text``, in first-appearance order, with its current status.
+@dataclass
+class _Entry:
+    """One heading under an identifier and the fields beneath it, in order."""
+    id: str
+    title: str
+    source: str
+    fields: list = field(default_factory=list)      # (name, value), lowercased names
 
-    An entry is a heading at depth 2-4 that starts with an identifier. Fenced blocks
-    are examples, never entries. The first entry for an id carries the lesson; a
-    later entry for the same id is a status record appended after it.
-    """
+    @property
+    def names(self) -> set[str]:
+        return {name for name, _value in self.fields}
+
+    @property
+    def statuses(self) -> list[str]:
+        return [value or DEFAULT_STATUS for name, value in self.fields if name == "status"]
+
+
+def _normal(text: str) -> str:
+    """``text`` as lowercase words, so punctuation and spacing never make two differ."""
+    return " ".join(re.findall(r"[a-z0-9]+", (text or "").lower()))
+
+
+def _entries(text: str, prefix: str) -> list[_Entry]:
+    """Every entry in ``text``: a heading at depth 2-4 that starts with an identifier.
+    Fenced blocks are examples, never entries; any other heading ends the entry."""
     body = overlays_mod.without_fenced_blocks(text or "")
     heading_re = re.compile(r"^#{2,4}[ \t]+(%s-\d+)\b[ \t]*(?:[—–:-][ \t]*)?(.*?)[ \t]*$"
                             % re.escape(prefix))
-    lessons: dict[str, Lesson] = {}
-    order: list[str] = []
-    current: Lesson | None = None
-    first_entry = False
+    entries: list[_Entry] = []
+    current: _Entry | None = None
     for line in body.splitlines():
         line = line.rstrip("\r")
         match = heading_re.match(line)
         if match:
-            lesson_id, heading = match.group(1), match.group(2)
-            current = lessons.get(lesson_id)
-            first_entry = current is None
-            if first_entry:
-                title, source = heading, ""
-                split = _SOURCE_RE.match(heading)
-                if split:
-                    title, source = split.group("title"), split.group("source")
-                current = Lesson(id=lesson_id, title=title.strip(), source=source.strip())
-                lessons[lesson_id] = current
-                order.append(lesson_id)
+            heading = match.group(2)
+            title, source = heading, ""
+            split = _SOURCE_RE.match(heading)
+            if split:
+                title, source = split.group("title"), split.group("source")
+            current = _Entry(id=match.group(1), title=title.strip(), source=source.strip())
+            entries.append(current)
             continue
         if _HEADING_RE.match(line):
-            current = None                       # any other heading ends the entry
+            current = None
             continue
         if current is None:
             continue
         field_match = _FIELD_RE.match(line.strip())
-        if not field_match:
-            continue
-        name = field_match.group("name").strip().lower()
-        value = field_match.group("value").strip()
-        if name == "status":
-            current.history.append(value or DEFAULT_STATUS)
-        elif first_entry and name not in current.fields:
-            current.fields[name] = value
-        elif not first_entry and name in LESSON_FIELDS:
-            current.reused = True
-    return [lessons[i] for i in order]
+        if field_match:
+            current.fields.append((field_match.group("name").strip().lower(),
+                                   field_match.group("value").strip()))
+    return entries
+
+
+def _records_another_lesson(entry: _Entry, lesson: Lesson) -> bool:
+    """Whether a later ``entry`` under ``lesson``'s id records a second lesson.
+
+    A later entry is normally a status record. Before ``lessons --record-status``
+    wrote them, people wrote status records by hand, and a hand-written promotion
+    often carries its reason as an ``Evidence`` line. That is still a status record.
+    It is one when it has no ``Verdict`` and either its heading is titled
+    ``status`` or the status it records closes the lesson. An entry restating the
+    same title is the same lesson. What remains, lesson fields under a different
+    title, is a second lesson the catalog can no longer tell apart from the first.
+    """
+    names = entry.names
+    if not names.intersection(LESSON_FIELDS):
+        return False
+    if _normal(entry.title) == _normal(lesson.title):
+        return False
+    if "verdict" in names:
+        return True
+    if _normal(entry.title) == "status":
+        return False
+    return not any(status.strip().lower().startswith(CLOSED_STATUSES)
+                   for status in entry.statuses)
+
+
+def parse(text: str, prefix: str) -> list[Lesson]:
+    """Every lesson in ``text``, in first-appearance order, with its current status.
+
+    The first entry for an id carries the lesson; a later entry for the same id is a
+    status record appended after it, and every status recorded, in order, is its
+    history.
+    """
+    lessons: dict[str, Lesson] = {}
+    for entry in _entries(text, prefix):
+        lesson = lessons.get(entry.id)
+        if lesson is None:
+            lesson = Lesson(id=entry.id, title=entry.title, source=entry.source)
+            for name, value in entry.fields:
+                if name != "status" and name not in lesson.fields:
+                    lesson.fields[name] = value
+            lessons[entry.id] = lesson
+        elif _records_another_lesson(entry, lesson):
+            lesson.reused = True
+        lesson.history.extend(entry.statuses)
+    return list(lessons.values())
 
 
 # --- checking a specification or a close-out ---------------------------------

@@ -15,6 +15,31 @@
   instead of raising, which keeps JSON valid. The `PYTHONIOENCODING=utf-8` workaround is no
   longer needed.
 
+### Lessons hygiene proposes only what is really wrong
+
+A real sweep was told to merge five different lessons, to repair a lesson whose second
+entry was its own promotion record, and to restate 375 entries that predate the four-field
+format. It rejected all three. Now the tool does too.
+
+- **A shared *Applies to* line is no longer a duplicate.** Two lessons count as one pattern
+  when their titles are near-identical, or when they share an *Applies to* line **and** ask
+  for the same change (recommendation or verdict). The old rule merged on *Applies to*
+  alone, and that false grouping also reached `lessons --candidates`, which proposed
+  promoting it as a "recurring pattern", and the `repeated-trap-rate` KPI. When three or
+  more live lessons share one *Applies to* line, hygiene now reports an **advise** entry
+  (`sharedScopes`) instead: the line may name a category. It proposes no record.
+- **A hand-written status record is not a reused id.** A later entry with no *Verdict*
+  that is titled `status`, or that records a `Promoted`, `Retired` or `Superseded` status,
+  is a status record, even when it carries its reason as an *Evidence* line. So is a
+  later entry restating the same title. A *Verdict*, or lesson fields under a live status,
+  beneath a different title is still flagged for repair.
+- **`policy.lessons.fieldsRequiredFrom`** (new; empty by default, which changes nothing)
+  marks where the four fields became required: a date (`YYYY-MM-DD`) or a lesson
+  identifier. Incomplete lessons recorded before it are counted (`incompleteBeforeCutoff`,
+  printed as an `exempt` line), not proposed as tidies. An undated lesson counts as before a
+  dated cutoff. Set it with
+  `virtuoso_registry policy-set lessons.fieldsRequiredFrom --value-json '"<date or id>"' --apply`.
+
 ## v1.11.0 (2026-09-24) — three paths to execution, one destination
 
 **Upgrading from 1.10.2.** The ad hoc path needs the opt-in `holdingBay` role:
