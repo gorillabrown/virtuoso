@@ -614,8 +614,6 @@ def check_commands() -> None:
 
 #: A documented memory directory, e.g. `.claude/agent-memory/socrates/`.
 MEMORY_DIR_RE = re.compile(r"agent-memory/([^/`\s]+)/")
-#: The agent frontmatter field that turns persistent memory on.
-MEMORY_FIELD_RE = re.compile(r"(?m)^memory:\s*(\S+)\s*$")
 
 
 def shipped_skill_names() -> list[str]:
@@ -761,7 +759,14 @@ def _git_tracked(relative_dir: str) -> list[str] | None:
 
 
 def check_agent_memory_names() -> None:
-    """Agent memory directory names must be the agent's own name, lowercased.
+    """Agent memory directory names must be the agent's own name, lowercased, and no
+    shipped agent may declare a ``memory:`` field.
+
+    The field is refused because it creates a second spelling. A host that honours it
+    keeps the memory in a folder named from ``name:`` (``Socrates/``), and it is
+    honoured exactly when a project copies the agent into its own agent folder (a
+    plugin-loaded agent has it ignored). The brief's lowercase location is then one
+    of two folders. The brief is the one mechanism, so the field has nothing to add.
 
     Audited against two records, because either one alone can lie. The filesystem
     answers case-insensitively on Windows and on a default macOS volume, so a
@@ -793,9 +798,11 @@ def check_agent_memory_names() -> None:
         if wrong:
             problems.append("%s: memory directory %s should be %r"
                             % (rel, wrong, stem.lower()))
-        if MEMORY_FIELD_RE.search(text) and not directories:
-            problems.append("%s: declares a memory: field but documents no memory location, "
-                            "so nothing tells the agent where to read or write it" % rel)
+        if "memory" in frontmatter_fields(text):
+            problems.append("%s: declares a memory: field; a project copy of the agent would "
+                            "get a second memory folder named from name: (%s/) beside the "
+                            "documented %s/, so document the location in the brief instead"
+                            % (rel, stem, stem.lower()))
 
     tracked = _git_tracked("agents")
     if tracked is None:

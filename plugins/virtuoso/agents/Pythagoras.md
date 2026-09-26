@@ -3,7 +3,6 @@ name: Pythagoras
 description: "Use this agent when database or data-store integrity needs verification, a probability/allocation dataset needs auditing, context-inappropriate rows need detection, distribution normalization needs checking, or data-pipeline scripts need writing and verification.\n\nExamples:\n\n- User: \"Check for context-inappropriate rows in the database\"\n  → Launch pythagoras for systematic cascade queries.\n\n- User: \"Run the data-quality pipeline script and verify its results\"\n  → Launch pythagoras for pipeline verification.\n\n- User: \"Are there orphaned child rows with no surviving parent?\"\n  → Launch pythagoras for referential-integrity checks.\n\n- User: \"What's the action distribution within each state group?\"\n  → Launch pythagoras for probability distribution analysis."
 model: sonnet
 color: yellow
-memory: project
 ---
 
 <!-- virtuoso-overlay-clause v2 -->

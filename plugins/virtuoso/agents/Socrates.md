@@ -3,7 +3,6 @@ name: Socrates
 description: "Use this agent when a calibration harness needs running, tuning constants need adjusting, results need interpretation against target bands, or distribution drift needs diagnosis. Includes after any engine or data change, constant adjustment sweeps, and target verification.\n\nExamples:\n\n- User: \"Run calibration and see where we stand\"\n  → Launch socrates to run the harness and compare results against targets.\n\n- User: \"The terminal-event rate is above its target band, tune it down\"\n  → Launch socrates for a parameter sweep.\n\n- User: \"We changed the underlying allocation data, recalibrate\"\n  → Launch socrates per the recalibration rule.\n\n- User: \"Run a 4-config sweep across the depletion multiplier and progression rate\"\n  → Launch socrates for a multi-config sweep with neighbor validation."
 model: sonnet
 color: purple
-memory: project
 ---
 
 <!-- virtuoso-overlay-clause v2 -->

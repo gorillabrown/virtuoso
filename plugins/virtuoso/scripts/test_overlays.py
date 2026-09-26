@@ -154,7 +154,7 @@ def fake_plugin(tmp_path):
     (root / "agents").mkdir(parents=True)
     for name in ("Alpha", "Beta"):
         (root / "agents" / ("%s.md" % name)).write_text(
-            "---\nname: %s\ndescription: The %s fixture.\nmemory: project\n---\n\n%s\n\n"
+            "---\nname: %s\ndescription: The %s fixture.\n---\n\n%s\n\n"
             "Memory location: `<project-root>/.claude/agent-memory/%s/`\n"
             % (name, name, overlays_mod.OVERLAY_CLAUSE, name.lower()), encoding="utf-8")
     return root
@@ -1188,14 +1188,29 @@ def test_the_memory_audit_catches_a_directory_named_for_another_agent(fake_plugi
     assert len(fails) == 1 and "agents/Alpha.md" in fails[0]
 
 
-def test_the_memory_audit_catches_memory_declared_with_nowhere_to_put_it(fake_plugin):
+@pytest.mark.parametrize("location", [
+    "Memory location: `<project-root>/.claude/agent-memory/beta/`\n",   # correctly documented
+    "",                                                                 # or not at all
+])
+def test_the_memory_audit_refuses_a_memory_field(fake_plugin, location):
+    """A host honours `memory:` on a project's copy of an agent and names the folder
+    from `name:`, a second spelling beside the brief's lowercase one."""
     target = fake_plugin / "agents" / "Beta.md"
-    target.write_text(
-        "---\nname: Beta\nmemory: project\n---\n\n%s\n\n# Beta\n" % overlays_mod.OVERLAY_CLAUSE,
-        encoding="utf-8")
+    target.write_text("---\nname: Beta\nmemory: project\n---\n\n%s\n\n# Beta\n%s"
+                      % (overlays_mod.OVERLAY_CLAUSE, location), encoding="utf-8")
     module = load_validate()
     _oks, fails = check_against(module, fake_plugin, "check_agent_memory_names")
-    assert len(fails) == 1 and "documents no memory location" in fails[0]
+    assert len(fails) == 1 and "declares a memory: field" in fails[0]
+    assert "Beta/" in fails[0] and "beta/" in fails[0]
+
+
+def test_a_memory_word_in_the_body_is_not_the_field(fake_plugin):
+    target = fake_plugin / "agents" / "Beta.md"
+    target.write_text(target.read_text(encoding="utf-8") + "\nmemory: kept in the brief\n",
+                      encoding="utf-8")
+    module = load_validate()
+    _oks, fails = check_against(module, fake_plugin, "check_agent_memory_names")
+    assert fails == []
 
 
 def test_the_memory_audit_catches_a_name_that_disagrees_with_its_filename(fake_plugin):
@@ -1239,11 +1254,27 @@ def test_the_memory_audit_catches_an_agent_that_was_never_added(fake_plugin):
     assert len(fails) == 1 and "Beta.md is on disk but not in git's index" in fails[0]
 
 
-def test_every_shipped_agent_that_declares_memory_documents_where_it_lives():
+#: The shipped agents that keep a memory, written out rather than found by a search:
+#: an agent that loses its location fails here.
+MEMORY_AGENTS = ("Archimedes", "Hesiod", "Hippocrates", "Pythagoras", "Socrates")
+
+
+def test_the_agents_with_memory_document_its_lowercase_location_and_no_field():
+    for name in MEMORY_AGENTS:
+        text = (ROOT / "agents" / ("%s.md" % name)).read_text(encoding="utf-8")
+        assert ("Memory location: `<project-root>/.claude/agent-memory/%s/`" % name.lower()
+                in text), name
     for name in AGENT_FILES:
-        text = (ROOT / "agents" / name).read_text(encoding="utf-8")
-        if "\nmemory:" in text:
-            assert "agent-memory/%s/" % name[:-3].lower() in text, name
+        head = (ROOT / "agents" / name).read_text(encoding="utf-8").split("\n---\n", 1)[0]
+        assert "\nmemory:" not in head, name
+
+
+def test_the_memory_guide_states_the_spelling_the_host_behaviour_and_the_repair():
+    guide = (ROOT / "references" / "agent-memory-guide.md").read_text(encoding="utf-8")
+    assert "`.claude/agent-memory/socrates/`" in guide and "**lowercase**" in guide
+    assert "<name-of-agent>" in guide and "memory:" in guide       # the host behaviour
+    assert "## Repairing a memory split by case" in guide
+    assert "git ls-files .claude/agent-memory" in guide
 
 
 def test_the_memory_guide_ships_in_references_and_agents_cite_it_there():

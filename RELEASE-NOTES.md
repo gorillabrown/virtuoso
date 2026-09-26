@@ -40,6 +40,34 @@ format. It rejected all three. Now the tool does too.
   dated cutoff. Set it with
   `virtuoso_registry policy-set lessons.fieldsRequiredFrom --value-json '"<date or id>"' --apply`.
 
+### Agent memory has one spelling: lowercase
+
+**Upgrading.** Nothing to change if your agents come from the plugin. If your project keeps
+its own copy of a plugin agent in its agent folder, remove any `memory:` line from the
+copy. Better still, move the project's additions into an overlay and delete the copy.
+If git and your disk disagree on the case of a memory folder, follow *Repairing a memory
+split by case* in `references/agent-memory-guide.md`.
+
+- **The spelling is the agent's name in lowercase** (`Socrates` →
+  `.claude/agent-memory/socrates/`). Each brief's `Memory location:` line, the validator
+  and the memory guide all state it. Projects already track memory under these names.
+- **The shipped agents no longer declare `memory: project`.** A host that supports the
+  field names the memory folder from the agent's `name:` (`Socrates/`), and it ignores the
+  field on an agent loaded from a plugin. So the field did nothing for a plugin install.
+  On a project's copy of an agent it created a second, capitalised folder beside the
+  documented one: one folder on Windows and macOS, two on Linux and in git. A project on
+  Windows found its memory tracked lowercase and written capitalised. The brief is now the
+  one mechanism: the guide tells each agent to read `MEMORY.md` from its folder at the
+  start of a dispatch. `validate.py` refuses a `memory:` field in a shipped agent.
+- **The guide explains the host behaviour and the repair**: a two-step rename through a
+  temporary name, because a case-only rename is invisible on a case-insensitive filesystem,
+  then `git ls-files .claude/agent-memory` to confirm. It also warns never to commit a note
+  from another worktree while an untracked copy sits in the checkout that will receive it.
+- **`governance-sweep` check 19 compares memory folders case-exactly**, against both the
+  disk and git's index. A folder that matches an agent only when case is ignored is a
+  *case split*, repaired by the guide and never by renaming the lowercase folders to match
+  the disk.
+
 ## v1.11.0 (2026-09-24) — three paths to execution, one destination
 
 **Upgrading from 1.10.2.** The ad hoc path needs the opt-in `holdingBay` role:

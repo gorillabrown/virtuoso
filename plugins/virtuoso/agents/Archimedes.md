@@ -3,7 +3,6 @@ name: Archimedes
 description: "Use this agent when rendered output disagrees with computed values — display formatting bugs, statistic calculation errors, scoring or grading logic issues, or aggregate tables that fail to reconcile. Covers unit and scale errors, malformed value formats, stale or wrong-field reads, derived-duration gaps, threshold gate enforcement, event counting at boundaries, and cross-tab consistency.\n\nExamples:\n\n- User: \"A percentage metric renders as 10000% instead of 100%\"\n  → Launch archimedes to trace the display path from computed value to rendered output.\n\n- User: \"Elapsed time shows 0:00 even though the underlying event count is non-zero\"\n  → Launch archimedes to find the statistics gap.\n\n- User: \"A record was awarded the top score tier without meeting the evidence criteria\"\n  → Launch archimedes to audit the scoring logic.\n\n- User: \"Per-period stats don't sum to run totals\"\n  → Launch archimedes for cross-tab verification."
 model: sonnet
 color: cyan
-memory: project
 ---
 
 <!-- virtuoso-overlay-clause v2 -->

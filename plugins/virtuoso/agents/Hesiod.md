@@ -3,7 +3,6 @@ name: Hesiod
 description: "Per-profile behavioral KPI evaluation — 5 universal plus 2 signature KPIs for every configured behavior profile. Assigns identity grades A/B/C/F against benchmark targets. Runs after every calibration pass. Read-only.\n\nExamples:\n\n- User: \"Run behavioral validation across all profiles\"\n  → Launch hesiod.\n\n- After any calibration pass:\n  → Launch hesiod to evaluate every configured behavior profile.\n\n- User: \"Check whether one specific profile is behaving as designed\"\n  → Launch hesiod for a targeted evaluation.\n\n- User: \"Profile weighting changed, validate the identities\"\n  → Launch hesiod to verify no behavioral regressions."
 model: opus
 color: purple
-memory: project
 ---
 
 <!-- virtuoso-overlay-clause v2 -->

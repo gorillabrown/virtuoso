@@ -229,7 +229,18 @@ definition** and the mirror is out of date (item 57).
 **Agent-specific** (only if agent infrastructure was detected):
 17. Ghost references to agents that no longer exist (record file, line, name, successor).
 18. Deprecated stubs still present.
-19. Memory directories not matching an active agent.
+19. Memory directories not matching an active agent, compared **case-exactly**. An agent's
+    memory folder is its name in lowercase (`Socrates` → `.claude/agent-memory/socrates/`;
+    the plugin's `references/agent-memory-guide.md`). Compare against two records, because
+    a case-insensitive filesystem hides a case-only difference: the disk's listing of
+    `.claude/agent-memory/`, and `git ls-files .claude/agent-memory`.
+    - A folder, on disk or in the index, that matches an active agent only when case is
+      ignored is a **case split**. Propose the guide's *Repairing a memory split by case*.
+      Never rename the lowercase folders to match the disk.
+    - A folder that matches no active agent at all is an orphan.
+    - A project copy of an agent in the project's own agent folder that declares
+      `memory:` is the usual cause of a split, because a host names that folder from
+      `name:`. Report the copy; editing it is the owner's call.
 
 **Parity** (only if parity targets were detected):
 20. Checksum mismatches between a canonical file and its deployed copies.

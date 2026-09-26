@@ -281,7 +281,8 @@ If engine/constants/data/calibration scripts changed, verify:
 ### Memory
 
 Agent memory follows the shared guide, the plugin's `references/agent-memory-guide.md`: one
-directory per agent, outside the registry, for how the agent works in this project. A lesson
+directory per agent, named for it in lowercase, outside the registry, for how the agent
+works in this project. A lesson
 goes to the registered `lessons` role and a finding to the registered `findings` role —
 never to a memory file.
 
