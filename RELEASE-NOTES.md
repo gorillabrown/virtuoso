@@ -1,6 +1,39 @@
 # Virtuoso Release Notes
 
-## v1.11.0 (2026-09-24) — three paths to execution, one destination
+## Unreleased — scope, plan, execute: one skill each
+
+**Upgrading from 1.11.0.** If your project registered the `holdingBay` role, add
+`virtuoso` to its `allowedWriters`. Until you do, the virtuoso skill's `in-flight` record
+is refused, and the skill stops and names this fix. An entry already recorded
+`in-flight` by `write-plan` under 1.11.0 still checks clean, so its close-out runs as
+before.
+
+The ad hoc path is three steps, and only the last one executes.
+
+- **`/storyboard` scopes, and nothing else.** It holds a question-and-answer scoping
+  conversation that ends in an approved **draft stub** (formerly the *skeleton*). It never
+  writes a specification, never edits code, and never starts the work, however small.
+  Run on its own in another chat, it still ends at the draft stub. The step that ends it
+  now hands the draft stub to `/write-plan`, and its red flags name the "it's small, I'll
+  just do it" trap.
+- **`/write-plan` plans, and nothing else.** It writes the full specification and now
+  works out each item's **exact slot in roadmap order**: after which item, before which,
+  and why. The review applies that slot in its C.3 and C.4. `roadmap-review` stays the
+  only roadmap writer. Step 8 is now a hand-off: to the virtuoso skill in this session,
+  to the virtuoso skill in another session through a kickoff prompt, to the review, or a
+  withdrawal. It no longer records `in-flight`, runs the reconciliation recipe, or
+  loads the executor mid-step.
+- **The virtuoso skill is the only skill that executes.** Before the first edit on a
+  written plan, it runs a **conflict check**: upstream prerequisites, in-flight work on
+  the same edit sites, roadmap order, downstream specifications this run will make
+  stale, and drift since the plan was written. For a held plan it runs the
+  **held-plan intake**: it reads the entry's state, records `in-flight` itself, runs the
+  recipe, and returns a stopped run to `planned`.
+- **The holding bay enforces it.** Only `virtuoso` may record `in-flight`, and it may
+  record `planned` only out of `in-flight`. `holding --record` refuses `write-plan`
+  starting a run. The message that names the role to register is now built from the
+  role's defaults, so it cannot fall behind them.
+
 
 **Upgrading from 1.10.2.** The ad hoc path needs the opt-in `holdingBay` role:
 `/storyboard` prints the entry to add, and you choose the directory. Two behaviours change.

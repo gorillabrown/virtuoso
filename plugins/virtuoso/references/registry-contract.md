@@ -84,7 +84,7 @@ project registers each by adding its entry to the manifest when it first needs i
 |---|---|---|---|
 | `overlays` | project additions to shipped skills and agents (see *Project overlays*) | none (read-only) | when the project has something to overlay |
 | `epics` | one directory per epic packet, `<yyyy-mm-dd>-<slug>/` | `epic` | when the project runs its first epic |
-| `holdingBay` | one held plan per piece of ad hoc work, `<yyyy-mm-dd>-<slug>.md` (see *The holding bay*) | `storyboard`, `write-plan`, `pointer-closeout`, `roadmap-review` | when the project storyboards its first piece of ad hoc work |
+| `holdingBay` | one held plan per piece of ad hoc work, `<yyyy-mm-dd>-<slug>.md` (see *The holding bay*) | `storyboard`, `write-plan`, `virtuoso`, `pointer-closeout`, `roadmap-review` | when the project storyboards its first piece of ad hoc work |
 
 A ceremony that needs an opt-in role the project has not registered stops and shows the
 entry to add; it never falls back to a conventional path.
@@ -617,10 +617,12 @@ previous review's lessons-applied, and carries each into the plan.
 
 ## The holding bay
 
-Work that arrives between roadmap reviews enters through `storyboard` (alignment) and
-`write-plan` (a dispatch-ready plan). Neither writes the roadmap or the live register —
-bringing work onto the roadmap is `roadmap-review`'s — so what they produce waits in the
-`holdingBay` role: one Markdown file per piece of work, named `<yyyy-mm-dd>-<slug>.md`,
+Work that arrives between roadmap reviews enters through `storyboard` (scoping, to a
+draft stub) and `write-plan` (the full specification, with its slot in roadmap order),
+and only the `virtuoso` skill executes it. Neither ad hoc ceremony writes the roadmap or
+the live register — bringing work onto the roadmap is `roadmap-review`'s — so what they
+produce waits in the `holdingBay` role: one Markdown file per piece of work, named
+`<yyyy-mm-dd>-<slug>.md`,
 copied from the storyboard skill's `held-plan.template.md` and marked
 `<!-- virtuoso-held-plan v1 -->`. Items inside it carry provisional identifiers,
 `HB-<n>`, never reused; the register assigns their real ones when a review absorbs them.
@@ -632,14 +634,19 @@ and never edited. The last row is the current state.
 | State | Recorded by | The entry must carry | Next |
 |---|---|---|---|
 | `storyboarded` | `storyboard`, `write-plan` | an alignment record whose verdict reads *Aligned* | `storyboarded`, `planned`, `absorbed`, `withdrawn` |
-| `planned` | `write-plan` | a `## Plan` with at least one `HB-<n>` specification; never epic-scale | `storyboarded`, `planned`, `in-flight`, `absorbed`, `withdrawn` |
-| `in-flight` | `write-plan` | as `planned` | `planned`, `executed` |
+| `planned` | `write-plan`; `virtuoso` only out of `in-flight` | a `## Plan` with at least one `HB-<n>` specification; never epic-scale | `storyboarded`, `planned`, `in-flight`, `absorbed`, `withdrawn` |
+| `in-flight` | `virtuoso` | as `planned` | `planned`, `executed` |
 | `executed` | `pointer-closeout` | as `planned`; the note names the close-out and its result | `absorbed` |
 | `absorbed` | `roadmap-review` | a note naming the register item(s) it became | — |
 | `withdrawn` | `storyboard`, `write-plan`, `roadmap-review` | a note giving the reason | — |
 
 `write-plan` may record `storyboarded` over a plan: anything that changes what was agreed
-goes back to the storyboard, and the plan is rewritten after it. An entry that is neither
+goes back to the storyboard, and the plan is rewritten after it. Only the `virtuoso`
+skill executes, so only it records `in-flight`. It may record `planned` only out of
+`in-flight`, to hand back a run that stopped: it never plans. A trail row an earlier
+release allowed stays valid history. In 1.11.0 `write-plan` recorded `in-flight`
+itself, and `holding --check` still reads such a row as legal. A new row is held to the
+table above. An entry that is neither
 `absorbed` nor `withdrawn` is **open**, and the next roadmap review reconciles every open
 entry that is not `in-flight`: it absorbs it into the roadmap or withdraws it. Nothing is
 carried past a review.

@@ -227,15 +227,16 @@ located rather than guessing a path.
 
 | Path | Opens | May start |
 |---|---|---|
-| **Ad hoc** | `/storyboard` → `/write-plan` → the `virtuoso` skill | any time, for work that is not on the roadmap |
+| **Ad hoc** | `/storyboard` (scope) → `/write-plan` (plan) → the `virtuoso` skill (execute) | any time, for work that is not on the roadmap |
 | **Roadmap dispatch** | `/next-pointer` → the `virtuoso` skill | after a roadmap review has placed the item |
 | **Roadmap epic** | `/epic` → the `virtuoso` skill, every session | after a roadmap review has placed the item as `Path: epic` |
 
 Every path delivers the same thing to execution. That means work aligned with you, a
 specification that passes the shared readiness rubric, and awareness of the project and
 codebase around it (verified edit sites, impact on other work, lessons applied). The work
-runs under the `virtuoso` skill and closes through `/pointer-closeout`. The ad hoc path
-never writes the roadmap. Its plans wait in an opt-in `holdingBay` role until the next
+runs under the `virtuoso` skill, the only skill that executes, and closes through
+`/pointer-closeout`. `/storyboard` only scopes, and `/write-plan` only plans. Neither
+starts the work. The ad hoc path never writes the roadmap. Its plans wait in an opt-in `holdingBay` role until the next
 `/roadmap-review` absorbs them onto the master roadmap, whether they ran or not. The contract:
 [`execution-paths.md`](plugins/virtuoso/references/execution-paths.md).
 
@@ -245,9 +246,9 @@ Invoked through the plugin namespace, e.g. `/virtuoso:roadmap-review`.
 
 | Skill | Slash | Purpose |
 |-------|-------|---------|
-| `virtuoso` | — | Multi-step execution discipline |
-| `storyboard` | `/virtuoso:storyboard` | Get aligned on ad hoc work before anything is planned; held for review |
-| `write-plan` | `/virtuoso:write-plan` | Turn an approved storyboard into a dispatch-ready plan; execute now or hold |
+| `virtuoso` | — | Multi-step execution discipline; the only skill that executes |
+| `storyboard` | `/virtuoso:storyboard` | Scope ad hoc work with you to a draft stub; never plans or executes |
+| `write-plan` | `/virtuoso:write-plan` | Turn the draft stub into a full, dispatch-ready plan with its roadmap slot; hand off to Virtuoso or hold |
 | `epic` | `/virtuoso:epic` | Launch materials for an epic-scale roadmap item's multi-session run |
 | `roadmap-review` | `/virtuoso:roadmap-review` | Heavyweight roadmap recalibration |
 | `roadmap-status` | `/virtuoso:roadmap-status` | Read-only status briefing |

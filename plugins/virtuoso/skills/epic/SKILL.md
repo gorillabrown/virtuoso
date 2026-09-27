@@ -196,8 +196,10 @@ than you can now, and stale prescriptions poison later sessions.
 2. Print the walk-away readiness verdict: preflight table status + open assumptions.
 3. Print the kickoff/resume prompt from launch.md in a fenced code block — it is the
    same prompt for the first session and every later one.
-4. If the user is present, offer to begin executing now, under the virtuoso skill.
-   Otherwise, end with the packet path and the code-boxed prompt.
+4. If the user is present, offer to hand off now: the first session starts under the
+   virtuoso skill, the only skill that executes, from the kickoff prompt. This skill
+   executes nothing itself. Otherwise, end with the packet path and the code-boxed
+   prompt.
 
 ## Scaffolding budget
 

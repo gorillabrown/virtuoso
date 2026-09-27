@@ -410,13 +410,15 @@ DEFAULT_ROLES: dict[str, dict] = {
         # Ad hoc plans between `storyboard`/`write-plan` and the next roadmap review:
         # one `<yyyy-mm-dd>-<slug>.md` file per piece of work, its trail moved only
         # through `virtuoso_registry holding --record`. Neither ad hoc ceremony
-        # touches the roadmap or the register; `roadmap-review` absorbs or withdraws
-        # every open entry. Opt-in, like epics: registered on first ad hoc use.
+        # touches the roadmap or the register; `virtuoso`, the only skill that
+        # executes, records the run; `roadmap-review` absorbs or withdraws every
+        # open entry. Opt-in, like epics: registered on first ad hoc use.
         "provider": "directory",
         "authority": "reference",
         "mutability": "read-write",
         "owner": "write-plan",
-        "allowedWriters": ["storyboard", "write-plan", "pointer-closeout", "roadmap-review"],
+        "allowedWriters": ["storyboard", "write-plan", "virtuoso", "pointer-closeout",
+                           "roadmap-review"],
         "validation": "exists",
         "classification": "active",
         "origin": "authored",

@@ -392,6 +392,30 @@ def test_write_plan_always_starts_from_the_storyboard():
     assert "run `/storyboard`" in text
 
 
+def test_only_the_virtuoso_skill_executes():
+    """Storyboard scopes to a draft stub, write-plan writes the full plan, and only the
+    virtuoso skill executes. A storyboard run in a chat of its own must end at its
+    draft stub, and the planner must hand off rather than start the run."""
+    from tools.governance import holding as holding_mod
+    assert holding_mod.RECORDED_BY[holding_mod.IN_FLIGHT] == ("virtuoso",)
+    for name in ("storyboard", "write-plan"):
+        text = skill_text(name)
+        assert "--state in-flight" not in text, name
+        assert "never execut" in " ".join(text.split()).lower(), name
+    storyboard = skill_text("storyboard")
+    assert "## Step 11 — Hand the draft stub to /write-plan" in storyboard
+    assert "Make it directly" not in storyboard
+    plan = skill_text("write-plan")
+    assert "## Step 8 — Hand off to Virtuoso" in plan
+    assert "Execute now" not in plan and "Load the **virtuoso** skill, and hand it" not in plan
+    virtuoso = skill_text("virtuoso")
+    assert ("--actor virtuoso holding --record <entry> --state in-flight" in virtuoso)
+    assert ("--actor virtuoso holding --record <entry> --state planned" in virtuoso)
+    assert "### The conflict check — before the first edit" in virtuoso
+    paths = (ROOT / "references" / "execution-paths.md").read_text(encoding="utf-8")
+    assert "## Only the virtuoso skill executes" in paths
+
+
 def test_the_roadmap_paths_open_only_on_the_master_roadmap():
     epic = skill_text("epic")
     assert "### Step 1 — Pull the item from the master roadmap" in epic

@@ -556,10 +556,12 @@ def cmd_lessons(args) -> int:
     return EXIT_OK
 
 
-_HOLDING_ENTRY = ('"holdingBay": { "path": "<directory>", "provider": "directory", '
-                  '"authority": "reference", "mutability": "read-write", "owner": "write-plan", '
-                  '"allowedWriters": ["storyboard", "write-plan", "pointer-closeout", '
-                  '"roadmap-review"] }')
+#: The manifest entry a project adds to register the holding bay, built from the
+#: role's defaults so the message cannot fall behind them.
+_HOLDING_ENTRY = '"holdingBay": ' + json.dumps(dict(
+    [("path", "<directory>")]
+    + [(key, schema.DEFAULT_ROLES["holdingBay"][key])
+       for key in ("provider", "authority", "mutability", "owner", "allowedWriters")]))
 
 
 def _holding_directory(reg) -> str:

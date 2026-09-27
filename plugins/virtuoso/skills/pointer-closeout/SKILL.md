@@ -143,8 +143,9 @@ close-out adapts in exactly these ways:
 Step 6 verifies the close-out, the lessons gate, and that `holding --check <entry>` reads
 `executed`. It does not verify a terminal record or a register status, because there are
 none yet. The buffer check is skipped, since ad hoc work never drew on the buffer. If an
-item set stops partway, the entry is not `executed`. `/write-plan` returns it to
-`planned`, and the note names which items closed out.
+item set stops partway, the entry is not `executed`. The `virtuoso` skill, which
+recorded it `in-flight`, returns it to `planned`, and the note names which items closed
+out.
 
 **The recording crossing.** When `/roadmap-review` absorbs an `executed` entry (its
 A.4b), it creates each register item and then invokes this ceremony for **Steps 3, 5,

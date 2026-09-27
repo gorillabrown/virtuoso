@@ -154,6 +154,54 @@ def test_only_the_owning_ceremony_records_a_state():
     assert holding_mod.RECORDER_WRONG in codes(entry)
 
 
+def test_only_the_virtuoso_skill_records_a_run():
+    """Storyboard scopes and write-plan plans; neither executes, so neither may record
+    `in-flight`. The virtuoso skill, the one skill that executes, records it."""
+    planned = parsed(with_trail(ALIGNED + PLAN,
+                                ("2026-09-24", "storyboarded", "storyboard", ""),
+                                ("2026-09-24", "planned", "write-plan", "HB-3 passed")))
+    for actor in ("storyboard", "write-plan", "pointer-closeout", "roadmap-review"):
+        problems = holding_mod.record_problems(planned, "in-flight", actor, "", "2026-09-24")
+        assert holding_mod.RECORDER_WRONG in [p["code"] for p in problems], actor
+    assert holding_mod.record_problems(planned, "in-flight", "virtuoso", "executing: hb-3",
+                                       "2026-09-24") == []
+
+
+def test_the_virtuoso_skill_hands_a_stopped_run_back_but_never_plans():
+    storyboarded = parsed(with_trail(ALIGNED + PLAN,
+                                     ("2026-09-24", "storyboarded", "storyboard", "")))
+    refused = holding_mod.record_problems(storyboarded, "planned", "virtuoso", "", "2026-09-24")
+    assert [p["code"] for p in refused] == [holding_mod.RECORDER_WRONG]
+    assert "only to hand back an in-flight run" in refused[0]["message"]
+
+    running = parsed(with_trail(ALIGNED + PLAN,
+                                ("2026-09-24", "storyboarded", "storyboard", ""),
+                                ("2026-09-24", "planned", "write-plan", ""),
+                                ("2026-09-24", "in-flight", "virtuoso", "executing")))
+    assert running.problems == []
+    assert holding_mod.record_problems(running, "planned", "virtuoso",
+                                       "stopped: red base; branch hb-3 kept",
+                                       "2026-09-24") == []
+    # The same rule reads the trail: a `planned` row by virtuoso out of anything but
+    # `in-flight` is a finding on --check too.
+    forged = parsed(with_trail(ALIGNED + PLAN,
+                               ("2026-09-24", "storyboarded", "storyboard", ""),
+                               ("2026-09-24", "planned", "virtuoso", "")))
+    assert holding_mod.RECORDER_WRONG in codes(forged)
+
+
+def test_a_run_write_plan_recorded_under_1_11_stays_valid_history():
+    """1.11.0 let write-plan record `in-flight`. An entry mid-run across the upgrade must
+    still check clean, so its close-out can record it `executed`."""
+    entry = parsed(with_trail(ALIGNED + PLAN,
+                              ("2026-09-24", "storyboarded", "storyboard", ""),
+                              ("2026-09-24", "planned", "write-plan", ""),
+                              ("2026-09-24", "in-flight", "write-plan", "executing here")))
+    assert entry.problems == []
+    assert holding_mod.record_problems(entry, "executed", "pointer-closeout",
+                                       "HB-3: close-out x, complete", "2026-09-25") == []
+
+
 def test_a_storyboard_that_is_not_aligned_is_not_held():
     text = ALIGNED.replace("**Aligned** — 2026-09-24.", "Not aligned — frame 2 open.")
     entry = parsed(with_trail(text, ("2026-09-24", "storyboarded", "storyboard", "")))
@@ -198,7 +246,7 @@ def test_every_recorder_is_a_default_writer_of_the_role():
 def test_the_role_is_opt_in():
     assert "holdingBay" not in schema.CREATE_ROLE_ORDER
     assert schema.DEFAULT_ROLES["holdingBay"]["allowedWriters"] == [
-        "storyboard", "write-plan", "pointer-closeout", "roadmap-review"]
+        "storyboard", "write-plan", "virtuoso", "pointer-closeout", "roadmap-review"]
 
 
 def test_provisional_identifiers_are_never_reused():
@@ -242,6 +290,9 @@ def test_no_role_is_an_answer_that_names_the_fix(workspace):
     completed = run(REGISTRY_CLI, "--root", str(workspace), "holding", "--open")
     assert completed.returncode == 3
     assert "holdingBay" in completed.stderr and "allowedWriters" in completed.stderr
+    # The entry to add names every default writer, the executor included.
+    for writer in schema.DEFAULT_ROLES["holdingBay"]["allowedWriters"]:
+        assert '"%s"' % writer in completed.stderr, writer
 
 
 def test_the_read_side_writes_nothing(workspace):
@@ -263,9 +314,11 @@ def test_the_whole_lifecycle_moves_only_through_its_owners(workspace):
     path = bay / ("%s.md" % ENTRY)
     path.write_text(ALIGNED + PLAN, encoding="utf-8")
 
-    moves = [("storyboarded", "storyboard", "aligned; skeleton approved"),
+    moves = [("storyboarded", "storyboard", "aligned; draft stub approved"),
              ("planned", "write-plan", "HB-3 passed the rubric"),
-             ("in-flight", "write-plan", "executing here under virtuoso"),
+             ("in-flight", "virtuoso", "executing: hb-3"),
+             ("planned", "virtuoso", "stopped: red base; branch hb-3 kept"),
+             ("in-flight", "virtuoso", "executing: hb-3"),
              ("executed", "pointer-closeout", "close-out: Virtuoso/closeouts/HB-3.md; complete"),
              ("absorbed", "roadmap-review", "as ADD-051, completed")]
     for state, actor, note in moves:
@@ -277,6 +330,38 @@ def test_the_whole_lifecycle_moves_only_through_its_owners(workspace):
 
     listing = run(REGISTRY_CLI, "--root", str(workspace), "--json", "holding", "--open")
     assert json.loads(listing.stdout)["entries"] == []
+
+
+def test_the_planner_cannot_start_the_run(workspace):
+    """write-plan hands the plan off; recording the start of the run is refused."""
+    bay = register(workspace)
+    path = bay / ("%s.md" % ENTRY)
+    path.write_text(ALIGNED + PLAN, encoding="utf-8")
+    for state, actor in (("storyboarded", "storyboard"), ("planned", "write-plan")):
+        assert record(workspace, ENTRY, state, actor, "--apply").returncode == 0
+    before = path.read_bytes()
+    refused = record(workspace, ENTRY, "in-flight", "write-plan", "--apply")
+    assert refused.returncode == 3 and "held-recorder-wrong" in refused.stderr
+    assert path.read_bytes() == before
+    started = record(workspace, ENTRY, "in-flight", "virtuoso", "--note", "executing: hb-3",
+                     "--apply")
+    assert started.returncode == 0, started.stderr
+
+
+def test_a_role_registered_without_the_executor_refuses_it(workspace):
+    """A project that registered the role under 1.11.0 lacks `virtuoso`: the write is
+    refused by the role, not recorded under another ceremony's name."""
+    bay = register(workspace, writers=["storyboard", "write-plan", "pointer-closeout",
+                                       "roadmap-review"])
+    path = bay / ("%s.md" % ENTRY)
+    path.write_text(with_trail(ALIGNED + PLAN,
+                               ("2026-09-24", "storyboarded", "storyboard", ""),
+                               ("2026-09-24", "planned", "write-plan", "")), encoding="utf-8")
+    before = path.read_bytes()
+    refused = record(workspace, ENTRY, "in-flight", "virtuoso", "--apply")
+    assert refused.returncode == 3
+    assert "may not write the holdingBay role" in refused.stderr
+    assert path.read_bytes() == before
 
 
 @pytest.mark.parametrize("state, actor, why", [

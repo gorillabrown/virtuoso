@@ -66,7 +66,11 @@
 
 Considered and set aside: [Alternative — why not]. [Alternative — why not].
 
-### Skeleton
+### Draft stub
+
+<!-- What storyboard hands to write-plan: one stub per item, at stub altitude. No task
+     list, no code. Nothing here is started until write-plan has planned it and the
+     virtuoso skill executes it. -->
 
 #### [Item title]
 
@@ -84,11 +88,12 @@ Considered and set aside: [Alternative — why not]. [Alternative — why not].
 Not aligned — [the open assumptions, frames, or questions, by name].
 
 <!-- Replace the line above only when every assumption is resolved, every frame is
-     confirmed, and the user has approved the skeleton:
+     confirmed, and the user has approved the draft stub:
      Aligned — YYYY-MM-DD. The user approved: "[their words]". -->
 
 ## Plan
 
-<!-- Filled by write-plan: readiness, pointer, repository reconciliation, and one
-     specification per skeleton item, each headed `#### HB-<n> — Title`. Empty until
-     then. An epic-scale entry is never planned here. -->
+<!-- Filled by write-plan: readiness, roadmap placement, pointer, repository
+     reconciliation, and one specification per draft-stub item, each headed
+     `#### HB-<n> — Title`. Empty until then. An epic-scale entry is never planned here.
+     Only the virtuoso skill executes the plan, and it records the run in the trail. -->

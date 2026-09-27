@@ -1,17 +1,19 @@
 ---
 name: storyboard
 description: |
-  MANUAL INVOCATION ONLY. The ad hoc way in: the first half of Storyboard, then
-  Write-Plan, then Virtuoso, for work the user wants handled now that is not on the
-  roadmap. Its one job is alignment. It sizes the work out loud, investigates the code,
-  roadmap, register, and holding bay, then asks one bounded question at a time about
-  outcome, placement, touchpoints, externalities, upstream, and downstream impact. It
-  writes back what the user said apart from what it assumed, walks concrete frames of
-  the finished work, and proposes approaches and a skeleton. Only when the user approves
-  does it record an Aligned verdict. It holds the result in the registered holding bay,
-  never the roadmap or the register, and continues into /write-plan. Epic-scale ideas
-  are aligned here and held for roadmap review. Triggered by "/storyboard", "storyboard
-  this", "I want to do X now", or "let's get aligned on X before we plan it".
+  MANUAL INVOCATION ONLY. SCOPING ONLY, never execution. Step one of the ad hoc path:
+  Storyboard scopes, Write-Plan writes the full plan, and only the virtuoso skill
+  executes. For work the user wants handled now that is not on the roadmap, it holds a
+  question-and-answer scoping conversation that ends in a draft stub. It sizes the work
+  out loud, investigates the code, roadmap, register, and holding bay, then asks one
+  bounded question at a time about outcome, placement, touchpoints, externalities,
+  upstream, and downstream impact. It writes back what the user said apart from what it
+  assumed, walks concrete frames of the finished work, and proposes approaches. Only on
+  the user's approval does it record an Aligned verdict and hold the draft stub in the
+  holding bay, never the roadmap or the register, for /write-plan. It never writes a
+  specification, edits code, or starts the work, however small. Triggered by
+  "/storyboard", "storyboard this", "scope this", "I want to do X now", or "let's get
+  aligned on X".
 ---
 
 <!-- virtuoso-shared-contract v2 -->
@@ -41,19 +43,34 @@ same thing — proceed on the shipped file alone.
 
 # Storyboard
 
-The first half of the ad hoc path: **Storyboard → Write-Plan → Virtuoso**
-(`references/execution-paths.md`). Work that arrives between roadmap reviews comes in
-here. The roadmap paths, `/next-pointer` and `/epic`, open only on items a review has
-already placed.
+Step one of the ad hoc path (`references/execution-paths.md`):
+
+| Step | Skill | Produces |
+|---|---|---|
+| **1. Scope** | **`/storyboard` — this skill** | a question-and-answer scoping conversation, ending in an approved **draft stub** |
+| 2. Plan | `/write-plan` | the full specification, ready for implementation, with its slot in roadmap order |
+| 3. Execute | the `virtuoso` skill | the work, checked first against upstream, downstream, and in-flight work |
+
+Work that arrives between roadmap reviews comes in here. The roadmap paths,
+`/next-pointer` and `/epic`, open only on items a review has already placed.
 
 This skill has one job: **make sure the agent and the user want the same thing before a
 plan exists.** An agent that misunderstands the work will build the wrong thing, and do
 it well. Every step below exists to bring a misunderstanding to the surface while it is
-still one sentence long. What this skill produces is an **alignment record** the user
-has approved, held in the registered holding bay. It writes no specification (that is
-`/write-plan`). It does no roadmapping (that is `/roadmap-review`).
+still one sentence long. What this skill produces is an **alignment record and a draft
+stub** the user has approved, held in the registered holding bay.
 
-**Announce at start:** "Using storyboard to get us aligned before anything is planned."
+**Scoping only.** This skill writes no specification (that is `/write-plan`). It does no
+roadmapping (that is `/roadmap-review`). And it **never executes**: it edits no code, no
+configuration, and no document outside its held entry. It creates no branch, commits no
+work, and runs no part of the change, not even a "quick" one. Execution belongs to the
+`virtuoso` skill alone, and that skill starts only from a plan `/write-plan` has written.
+A storyboard that ends with the work started has failed, whether or not the work is
+right. This holds in every session, including one where the storyboard is the only
+thing the user asked for.
+
+**Announce at start:** "Using storyboard to scope this with you. Nothing gets built
+here: the draft stub goes to /write-plan, and only Virtuoso executes."
 
 ## Preflight — read-only registry check (run first)
 
@@ -104,7 +121,7 @@ but Step 10 cannot run until the role exists.
 | The work is already an item on the master roadmap | That item: `/next-pointer` if it is the head, otherwise `/roadmap-review` |
 | The work is already a held entry | Reopen that entry (`/storyboard <entry>`) or plan it (`/write-plan <entry>`); never a second entry for the same work |
 | A question whose answer is information, not shipped work | Answer it directly |
-| A change the project's policy lets you make without an item | Make it directly |
+| A change the project's policy lets you make without an item | Say so and stop. It needs no storyboard, and this skill does not make it: execution is the `virtuoso` skill's |
 | A running dispatch has reached a decision | `/mid-dispatch-decision` |
 | The whole roadmap needs recalibrating | `/roadmap-review` |
 
@@ -129,14 +146,19 @@ but Step 10 cannot run until the role exists.
    say so once, give the reason, and give your recommendation. Then follow their decision
    and record it as theirs.
 8. **Approval is specific.** An approval covers what the user saw. "Sounds right" about
-   the understanding does not approve the skeleton.
+   the understanding does not approve the draft stub, and approving the draft stub
+   approves the scope, not a start of work.
 9. **Sizing is a one-way ratchet.** Announce the size before your first question. If you
    uncover hidden complexity, stop, say so, and move to the heavier size. Nothing gets
    lighter mid-storyboard.
 10. **No roadmapping.** Never write the roadmap, the live register, a specification
     store, or a sequence. The holding bay is the only place this skill writes. Placement
     is recorded as a recommendation for the review to decide.
-11. **Descriptive names first.** Lead every reference to an item with its title; the
+11. **No planning, no execution.** Stay at stub altitude: no task list, no code, no
+    step-by-step plan. Never start the work, even when it looks small enough to just
+    do, and even when the user's first message says "now". "Now" means the storyboard
+    runs now; the work waits for `/write-plan`'s plan and the `virtuoso` skill.
+12. **Descriptive names first.** Lead every reference to an item with its title; the
     identifier comes second.
 
 ---
@@ -153,8 +175,8 @@ Classify the work and **say the classification**, so the user can override it:
 
 | Size | Signal | What happens |
 |---|---|---|
-| **Single item** | One outcome, one change unit, fits one dispatch | Storyboard, then `/write-plan` |
-| **Item set** | Separable outcomes, or one outcome that needs more than one dispatch | Storyboard the set, then `/write-plan`, with explicit prerequisites between the items |
+| **Single item** | One outcome, one change unit, fits one dispatch | Storyboard, then `/write-plan`, then the `virtuoso` skill |
+| **Item set** | Separable outcomes, or one outcome that needs more than one dispatch | Storyboard the set, then `/write-plan`, with explicit prerequisites between the items, then the `virtuoso` skill |
 | **Epic-scale** | Outcome-stated, multi-phase, spans sessions, walk-away | Storyboard it here, because alignment cannot wait. It is then held. The next `/roadmap-review` places it as `Path: epic`, and `/epic` charters it. `/write-plan` never plans it. |
 | **Not an item** | An answer rather than shipped work, or a change policy allows without an item | Route per the table above |
 
@@ -233,6 +255,8 @@ process can do.
 Frames are not decoration. `/write-plan` turns each confirmed frame into a *Done when*
 row or a *Review focus* line.
 
+The frames describe the finished work. They are not a prompt to go and build it.
+
 ## Step 7 — Choose the approach (checkpoint 3)
 
 When more than one reasonable approach exists, present 2–3 of them with their
@@ -240,9 +264,10 @@ trade-offs. Lead with the one you recommend, and say why. Cut any feature the ou
 does not need. When only one approach makes sense, say so in one line and do not invent
 alternatives. Record the user's choice under **Decisions**.
 
-## Step 8 — Draft the skeleton (checkpoint 4)
+## Step 8 — Draft the stub (checkpoint 4)
 
-At item altitude, with no implementation detail and no code, draft each item:
+The draft stub is what this skill hands to `/write-plan`. At stub altitude, with no
+implementation detail, no task list, and no code, draft each item:
 
 - **What**, **Why**, **Out of scope**
 - **Done when (draft)** — taken from the confirmed frames
@@ -251,10 +276,10 @@ At item altitude, with no implementation detail and no code, draft each item:
 - **Effort** — low / medium / high / max
 - **Interfaces** — for an item set only: what each item consumes and produces
 
-Then add a **placement recommendation** for the review, with its reason, and the
-**impact actions**: the downstream items whose specifications this work will make stale.
-You flag them here, and the review acts on them. Neither this skill nor `/write-plan`
-edits another item.
+Then add a **placement recommendation** with its reason, which `/write-plan` sharpens
+into an exact slot in roadmap order for the review, and the **impact actions**: the
+downstream items whose specifications this work will make stale. You flag them here,
+and the review acts on them. Neither this skill nor `/write-plan` edits another item.
 
 ## Step 9 — The alignment verdict (the gate)
 
@@ -264,7 +289,7 @@ The verdict is **Aligned** only when all of these hold:
 - every assumption is confirmed, corrected, or accepted with a guard
 - every frame is confirmed
 - the approach is chosen
-- the skeleton is approved
+- the draft stub is approved
 - no question is open
 
 Show the check before asking:
@@ -273,7 +298,7 @@ Show the check before asking:
 Alignment check — [Title]
 ✓ Understanding confirmed          ✓ [N] frames confirmed
 ✓ [N] assumptions resolved         ✓ Approach: [name] (chosen by you)
-✓ Skeleton approved ([N] item(s))  ✓ No open questions
+✓ Draft stub approved ([N] item(s)) ✓ No open questions
 ```
 
 Then ask one bounded question: **(a)** Approve the storyboard *(recommended when every
@@ -288,8 +313,8 @@ earliest step that affects them.
 
 1. Copy [assets/held-plan.template.md](assets/held-plan.template.md) into the holding
    bay as `<yyyy-mm-dd>-<slug>.md`. Fill in the header, and fill in the `## Storyboard`
-   section: alignment record, frames, approach, skeleton, and verdict. Leave `## Plan`
-   empty.
+   section: alignment record, frames, approach, draft stub, and verdict. Leave `## Plan`
+   empty. It is `/write-plan`'s.
 2. Check it. The only finding you should see is `held-unrecorded`:
 
        "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . holding --check <entry>
@@ -309,14 +334,21 @@ Reopening a held entry (`/storyboard <entry>`) edits that same file and records
 say so, because `/write-plan` must rewrite the plan before the entry can be planned
 again.
 
-## Step 11 — Continue
+## Step 11 — Hand the draft stub to /write-plan
+
+This skill ends here. The only way forward is `/write-plan`: there is no option to start
+the work, because a draft stub is not a plan, and the `virtuoso` skill executes only a
+plan `/write-plan` has written.
 
 - **Single item or item set:** ask whether to continue into `/write-plan` now.
   **(a)** Continue now *(recommended: the context is warm, and the alignment is
   fresh)*. **(b)** Hold the storyboard. The entry stays in the holding bay:
-  `/write-plan <entry>` resumes it any time, and otherwise the next `/roadmap-review`
-  absorbs it as a stub, with this alignment record as its source. **(c)** Withdraw it,
-  giving a reason (`--state withdrawn --note "<reason>"`).
+  `/write-plan <entry>` resumes it any time, in this session or another, and otherwise
+  the next `/roadmap-review` absorbs it as a stub, with this alignment record as its
+  source. **(c)** Withdraw it, giving a reason (`--state withdrawn --note "<reason>"`).
+- **The user asks to just build it:** say that this skill does not build, and offer
+  (a). `/write-plan` is quick for small work, and it hands the plan straight to the
+  `virtuoso` skill when the user chooses.
 - **Epic-scale:** it is held. Tell the user the route: the next `/roadmap-review` places
   it on the master roadmap as `Path: epic`, and `/epic` charters it from there with this
   alignment record as its source. If they want to start soon, offer to run
@@ -337,7 +369,7 @@ again.
 | Frames | [N] confirmed |
 | Assumptions | [N] resolved — [n] confirmed · [n] corrected · [n] accepted with a guard |
 | Approach | [the chosen approach] |
-| Skeleton | [N] item(s) |
+| Draft stub | [N] item(s) |
 | Impact | [n] upstream · [n] downstream · [n] sideways · [n] external |
 | Placement (recommended) | [for the review to decide] |
 | Next | /write-plan now · held for review · epic-scale → review → /epic |
@@ -348,17 +380,22 @@ again.
 | Thought | Reality |
 |---|---|
 | "I already understand what they want" | Then the write-back takes thirty seconds. Show it. |
-| "They said yes to the summary, so the skeleton is approved" | Approvals are specific. The skeleton has its own checkpoint. |
+| "They said yes to the summary, so the draft stub is approved" | Approvals are specific. The draft stub has its own checkpoint. |
 | "This assumption is obviously right" | Then confirming it is cheap. An unconfirmed assumption is how a plan goes wrong without anyone noticing. |
 | "I'll ask all my questions at once to save time" | A wall of questions gets half-answered. Ask one at a time, highest leverage first. |
 | "Frames are overkill for this" | One success frame and one failure frame take a minute, and they catch what a list of requirements hides. |
 | "I'll put it on the roadmap so it isn't lost" | The holding bay is where it isn't lost. The roadmap is `/roadmap-review`'s to write. |
 | "It's epic-scale, so I'll start the charter" | `/epic` starts from the master roadmap, after a review has placed the work. |
-| "They disagreed with my recommendation, so I'll quietly build mine" | Say it once, then build theirs and record it as their decision. |
+| "They disagreed with my recommendation, so I'll quietly scope mine" | Say it once, then scope theirs and record it as their decision. |
+| "It's small, so I'll just do it now" | This skill never executes. The draft stub goes to `/write-plan`, and only the `virtuoso` skill builds, however small the work is. |
+| "The user said *now*, and they approved the storyboard" | Approval covers the scope. "Now" means the next step runs now: `/write-plan`, then the `virtuoso` skill. |
+| "I've read the code, so I'll fix the obvious bit while I'm here" | Investigation is read-only. An edit here is execution without a plan. Record it in the draft stub. |
 
 ## Integration
 
 - `references/execution-paths.md` — the three paths and the one destination they share.
 - `/write-plan` — the continuation. It always starts from the storyboard this skill holds.
+- `virtuoso` — the only skill that executes. It starts from `/write-plan`'s plan, never
+  from a storyboard.
 - `/roadmap-review` — absorbs or withdraws every open held entry at the next review.
-- `adversarial-review` — an optional red-team of the skeleton before approval.
+- `adversarial-review` — an optional red-team of the draft stub before approval.

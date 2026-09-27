@@ -11,11 +11,29 @@ This file is the one home for that contract. The ceremonies that open a path —
 `storyboard`, `write-plan`, `next-pointer`, `epic` — and the one that executes every
 path, `virtuoso`, point here. None of them restates the contract in its own words.
 
+## Only the virtuoso skill executes
+
+Scoping, planning, and execution are separate steps, and each belongs to its own skill.
+On the ad hoc path:
+
+| Step | Skill | Produces | Never |
+|---|---|---|---|
+| 1. Scope | `storyboard` | a question-and-answer scoping conversation, ending in an approved draft stub in the holding bay | writes a specification, edits code, starts the work |
+| 2. Plan | `write-plan` | the full specification, ready for implementation, with its exact slot in roadmap order for the review to apply | records `in-flight`, runs the reconciliation recipe, creates the work branch, edits an edit site |
+| 3. Execute | `virtuoso` | the work, after a conflict check against upstream, downstream, in-flight work, and roadmap order | re-plans; a plan that no longer fits goes back to `write-plan` |
+
+The roadmap paths keep the same split. `roadmap-review` plans, `next-pointer` gates and
+prints a pointer, and `epic` prepares a packet. Each hands off to `virtuoso`, and none
+of them runs the work. A skill that is not `virtuoso` never edits an edit site, creates
+the work branch, runs a reconciliation recipe, or records a run as started. Those are
+the first acts of execution. This holds in every session: a storyboard started by
+itself, in a chat of its own, still ends at its draft stub.
+
 ## The three paths
 
 | Path | Opened by | Draws from | May start | Who specifies it | The gate before execution |
 |---|---|---|---|---|---|
-| **Ad hoc** | `/storyboard`, then `/write-plan` | an idea the user brings now | any time | `storyboard` aligns it; `write-plan` specifies it | `write-plan`'s readiness gate |
+| **Ad hoc** | `/storyboard`, then `/write-plan` | an idea the user brings now | any time | `storyboard` scopes it to a draft stub; `write-plan` specifies it | `write-plan`'s readiness gate, then the `virtuoso` skill's conflict check |
 | **Roadmap dispatch** | `/next-pointer` | the head of the master roadmap | only after a roadmap review has put the item there | `roadmap-review` (section D.3) | `next-pointer`'s readiness gate |
 | **Roadmap epic** | `/epic` | an item on the master roadmap marked `Path: epic` | only after a roadmap review has put the item there | `roadmap-review` places it; `epic` charters it | `epic`'s walk-away preflight |
 
@@ -44,7 +62,7 @@ the columns are how each path meets it.
 | D4 | **Awareness of the project and codebase.** Edit sites verified against the code. Effects on other work named. Live lessons applied. Standing rules honoured. | The impact map, verified edit sites, U9 (`lessons --check`), and standing rules | U2 and U9, the standing rules, and the prerequisites checked through the provider | The charter's *Lessons applied* and constraints; a discovery phase whenever an assumption is unverified |
 | D5 | **Readiness reported as five separate findings.** | Specification, prerequisites, repository, external register, execution environment | The same five | The same five, in the launch file's preflight |
 | D6 | **A repository-reconciliation recipe matched to `policy.git`.** | Filled into the held plan's pointer | Filled into the dispatch pointer | In the launch file's preflight and constraints |
-| D7 | **Execution under the `virtuoso` skill**, with the specification as its dispatch spec. | The held plan's pointer and specification | The dispatch pointer and specification | Every session of the run, with the packet as its dispatch spec |
+| D7 | **Execution under the `virtuoso` skill**, with the specification as its dispatch spec, after its conflict check. | The held plan's pointer and specification, handed off by `write-plan`; `virtuoso` records the entry `in-flight` | The dispatch pointer and specification | Every session of the run, with the packet as its dispatch spec |
 | D8 | **Close-out through `/pointer-closeout`**: evidence verified, a close-out report, and lessons recorded. | Held-plan mode: evidence and lessons now; the register and the ledger at absorption | The full crossing | The full crossing, once `done.md` exists |
 | D9 | **Reconciliation into the master roadmap.** | The next `/roadmap-review` absorbs the held entry, executed or not | The close-out crossing retires the item | The close-out crossing retires the item |
 
@@ -88,7 +106,9 @@ epic-scale item, including when it absorbs an epic-scale held storyboard. When
 |---|---|
 | A new idea, request, or bug the user wants handled now | `/storyboard` |
 | The idea is already an item on the roadmap | That item: `/next-pointer` when it is the head, otherwise `/roadmap-review` |
-| The idea is already a held plan | Resume that entry with `/write-plan <entry>` |
+| The idea is already a held entry, `storyboarded` | Plan it with `/write-plan <entry>` |
+| A held entry is `planned`, and the user wants it run | The `virtuoso` skill, from the entry's pointer |
+| The `virtuoso` skill's conflict check finds the code or the roadmap moved | `/write-plan <entry>` re-verifies the plan and hands it back |
 | The storyboard is epic-scale | Hold it; the next `/roadmap-review` places it as `Path: epic`; then `/epic` |
 | A held plan is not executed now | It stays in the holding bay; the next `/roadmap-review` absorbs it into the roadmap, where `/next-pointer` dispatches it |
 | The head of the belt says `Path: epic` | `/epic` |
