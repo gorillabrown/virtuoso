@@ -102,6 +102,7 @@ but Step 10 cannot run until the role exists.
 | Signal | Route |
 |---|---|
 | The work is already an item on the master roadmap | That item: `/next-pointer` if it is the head, otherwise `/roadmap-review` |
+| The work is several items already on the roadmap, to run together unattended | `/epic <ITEM-ID> <ITEM-ID> …`: it checks whether they combine and charters them. Nothing needs aligning here, because every piece is already placed |
 | The work is already a held entry | Reopen that entry (`/storyboard <entry>`) or plan it (`/write-plan <entry>`); never a second entry for the same work |
 | A question whose answer is information, not shipped work | Answer it directly |
 | A change the project's policy lets you make without an item | Make it directly |

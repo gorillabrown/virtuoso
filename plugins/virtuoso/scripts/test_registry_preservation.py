@@ -24,7 +24,7 @@ PREFLIGHT = str(Path(PLUGIN_ROOT) / "scripts" / "virtuoso_preflight.py")
 
 def run(root, *args):
     return subprocess.run([sys.executable, PREFLIGHT, "--root", str(root), *args],
-                          capture_output=True, text=True, env=dict(os.environ))
+                          capture_output=True, text=True, encoding="utf-8", env=dict(os.environ))
 
 
 def parse(stdout):

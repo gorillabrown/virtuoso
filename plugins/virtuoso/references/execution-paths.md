@@ -17,7 +17,7 @@ path, `virtuoso`, point here. None of them restates the contract in its own word
 |---|---|---|---|---|---|
 | **Ad hoc** | `/storyboard`, then `/write-plan` | an idea the user brings now | any time | `storyboard` aligns it; `write-plan` specifies it | `write-plan`'s readiness gate |
 | **Roadmap dispatch** | `/next-pointer` | the head of the master roadmap | only after a roadmap review has put the item there | `roadmap-review` (section D.3) | `next-pointer`'s readiness gate |
-| **Roadmap epic** | `/epic` | an item on the master roadmap marked `Path: epic` | only after a roadmap review has put the item there | `roadmap-review` places it; `epic` charters it | `epic`'s walk-away preflight |
+| **Roadmap epic** | `/epic` | an item on the master roadmap marked `Path: epic`, or a combination of specified roadmap items run together | only after a roadmap review has put the items there | `roadmap-review` places and specifies the items; `epic` decides what combines and charters it | `epic`'s combination check (`combine`) and walk-away preflight |
 
 **The one asymmetry is timing.** The ad hoc path can open at any moment, because work
 really does arrive between reviews. The two roadmap paths open only on items a roadmap
@@ -30,6 +30,11 @@ review has already placed on the master roadmap. Everything that follows from th
 - An epic-scale idea is storyboarded ad hoc, because alignment cannot wait. It is then
   held, absorbed by the next review as a `Path: epic` item, and chartered by `/epic`.
   `write-plan` never plans it.
+- Several items already on the roadmap, none epic-scale alone, can run as one epic
+  without a storyboard, a `Path` marker, or a holding bay: every piece is already
+  placed. `/epic` decides whether they combine (`virtuoso_registry combine`). Each item
+  is live and specified, each prerequisite is done or in the set, and items that share
+  files run one after another. It then charters them as one run.
 
 ## The destination contract
 
@@ -39,14 +44,14 @@ the columns are how each path meets it.
 | # | The destination requires | Ad hoc (`storyboard` → `write-plan`) | Roadmap dispatch (`next-pointer`) | Roadmap epic (`epic`) |
 |---|---|---|---|---|
 | D1 | **Alignment.** The user and the agent agree on the outcome, the scope, and what done looks like, and that agreement is written down. | The storyboard's alignment record and its *Aligned* verdict | The roadmap review's phase checkpoints; the item's *What*, *Why*, and *Done when* | The charter, sharpened with the user before launch; the absorbed storyboard where there is one |
-| D2 | **A specification in the shared format.** | Roadmap-review's D.5.2 format, one per item, in the held plan | D.5.2, where `policy.roadmap.specStorage` puts it | The five-file epic packet; the charter's Definition of Done rows are verifiable |
-| D3 | **Readiness by the shared rubric.** | `references/readiness-rubric.md`, walked in full | The same rubric, walked in full | Definition-of-Done rows that each name the command or procedure that verifies them, as U4 requires. The route is the executor's, so a discovery phase does the work U2 and U3 do for a dispatch |
+| D2 | **A specification in the shared format.** | Roadmap-review's D.5.2 format, one per item, in the held plan | D.5.2, where `policy.roadmap.specStorage` puts it | The five-file epic packet; the charter's Definition of Done rows are verifiable. A combination builds on its items' own D.5.2 specifications |
+| D3 | **Readiness by the shared rubric.** | `references/readiness-rubric.md`, walked in full | The same rubric, walked in full | Definition-of-Done rows that each name the command or procedure that verifies them, as U4 requires. The route is the executor's, so a discovery phase does the work U2 and U3 do for a dispatch. A combination's items each pass the rubric as a dispatch would |
 | D4 | **Awareness of the project and codebase.** Edit sites verified against the code. Effects on other work named. Live lessons applied. Standing rules honoured. | The impact map, verified edit sites, U9 (`lessons --check`), and standing rules | U2 and U9, the standing rules, and the prerequisites checked through the provider | The charter's *Lessons applied* and constraints; a discovery phase whenever an assumption is unverified |
 | D5 | **Readiness reported as five separate findings.** | Specification, prerequisites, repository, external register, execution environment | The same five | The same five, in the launch file's preflight |
 | D6 | **A repository-reconciliation recipe matched to `policy.git`.** | Filled into the held plan's pointer | Filled into the dispatch pointer | In the launch file's preflight and constraints |
 | D7 | **Execution under the `virtuoso` skill**, with the specification as its dispatch spec. | The held plan's pointer and specification | The dispatch pointer and specification | Every session of the run, with the packet as its dispatch spec |
 | D8 | **Close-out through `/pointer-closeout`**: evidence verified, a close-out report, and lessons recorded. | Held-plan mode: evidence and lessons now; the register and the ledger at absorption | The full crossing | The full crossing, once `done.md` exists |
-| D9 | **Reconciliation into the master roadmap.** | The next `/roadmap-review` absorbs the held entry, executed or not | The close-out crossing retires the item | The close-out crossing retires the item |
+| D9 | **Reconciliation into the master roadmap.** | The next `/roadmap-review` absorbs the held entry, executed or not | The close-out crossing retires the item | The close-out crossing retires the item, or every item of a combination |
 
 A path that cannot meet a row does not start execution. It says which row is missing and
 what closes it.
@@ -60,6 +65,7 @@ close-out know which path they are on:
 Origin: roadmap — [ITEM-ID]
 Origin: held plan — [entry] ([HB-n]), not yet on the roadmap
 Origin: epic packet — [packet directory] ([ITEM-ID])
+Origin: epic packet — [packet directory] ([PACKET-ID]: [ITEM-ID], [ITEM-ID], ...)
 ```
 
 The close-out reads this line. A roadmap origin runs the full crossing against the
@@ -78,9 +84,15 @@ An item on the master roadmap carries its path in its roadmap entry's structural
 ```
 
 A missing field means `dispatch`. `roadmap-review` sets `epic` when it places an
-epic-scale item, including when it absorbs an epic-scale held storyboard. When
-`next-pointer` finds `Path: epic` at the head of the belt, it routes the item to
-`/epic` instead of the dispatch rubric.
+epic-scale item, including when it absorbs an epic-scale held storyboard, and when it
+finds an item already on the roadmap that is epic-scale on its own. Roadmaps written
+before 1.11 carry no `Path` field at all. When `next-pointer` finds `Path: epic` at the
+head of the belt, it routes the item to `/epic` instead of the dispatch rubric.
+
+A combination leaves each item's `Path` as it is. Its items are dispatch-sized, and
+they run together because `/epic` chartered them as a set, not because a marker says
+so. An item a charter names (`item:` or `items:`) is in that run: `next-pointer`
+points to the packet, and `roadmap-review` does not re-specify it.
 
 ## Routing
 
@@ -88,6 +100,7 @@ epic-scale item, including when it absorbs an epic-scale held storyboard. When
 |---|---|
 | A new idea, request, or bug the user wants handled now | `/storyboard` |
 | The idea is already an item on the roadmap | That item: `/next-pointer` when it is the head, otherwise `/roadmap-review` |
+| Several specified roadmap items should run together, unattended | `/epic <ITEM-ID> <ITEM-ID> …`, or `/epic --lane <lane> <from>-<to>` |
 | The idea is already a held plan | Resume that entry with `/write-plan <entry>` |
 | The storyboard is epic-scale | Hold it; the next `/roadmap-review` places it as `Path: epic`; then `/epic` |
 | A held plan is not executed now | It stays in the holding bay; the next `/roadmap-review` absorbs it into the roadmap, where `/next-pointer` dispatches it |

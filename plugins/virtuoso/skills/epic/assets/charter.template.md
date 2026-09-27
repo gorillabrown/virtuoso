@@ -1,7 +1,9 @@
 ---
 epic: [SLUG]
+id: [PACKET-ID]   # the item's id; for a combination, EPIC- plus the slug in capitals
 item: [ITEM-ID]   # the master-roadmap item this epic executes (Path: epic)
-origin: roadmap — [ITEM-ID]
+# items: [ITEM-ID, ITEM-ID, ITEM-ID]   # a combination instead: every item, in serial order
+origin: roadmap — [ITEM-ID]   # a combination: roadmap — [ITEM-ID], [ITEM-ID], ...
 created: [YYYY-MM-DD]
 status: active   # active | complete | aborted — set complete only per launch.md Completion protocol
 ---
@@ -15,7 +17,15 @@ status: active   # active | complete | aborted — set complete only per launch.
 
 [1–3 sentences describing the end state — what will be true, not what will be done.
 Drawn from the item's roadmap entry and, where it was absorbed from a held plan, from its
-storyboard's alignment record.]
+storyboard's alignment record. For a combination: what the items deliver together.]
+
+<!-- A combination only: the items, in the serial order `virtuoso_registry combine`
+     returned, and why each sits where it does. Delete for a single item. -->
+
+| # | Item | Lane | Runs after | Because |
+|---|------|------|------------|---------|
+| 1 | [Title] ([ITEM-ID]) | [lane] | — | [first in sequence] |
+| 2 | [Title] ([ITEM-ID]) | [lane] | [ITEM-ID] | [prerequisite / shared files: path] |
 
 ## Definition of Done — all rows must pass
 
@@ -26,7 +36,9 @@ storyboard's alignment record.]
 
 Rules: the session claiming completion re-runs **every** row fresh and pastes the outputs
 into state.md → Evidence. Any row unverified ⇒ the epic is not done. Rows may be tightened
-by the user, never loosened by the executor.
+by the user, never loosened by the executor. A combination carries every item's *Done
+when* rows, each labelled with its item (`[ITEM-ID] — …`), and one row proving they all
+pass together on the integrated tree.
 
 ## Constraints — hard limits
 

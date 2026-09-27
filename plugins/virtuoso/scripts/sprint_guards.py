@@ -25,6 +25,10 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from tools.governance import textio  # noqa: E402
+
 STAGING_MEMO_RE = re.compile(r"^Memo\..+\.GovernanceStaging\..+\.md$")
 _MACHINE_BLOCK_RE = re.compile(
     r"<!--\s*virtuoso-governance-registry\s*\n(.*?)\n-->", re.DOTALL)
@@ -276,6 +280,7 @@ def cmd_created_files(args):
 
 
 def main(argv=None):
+    textio.utf8_stdio()
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
 

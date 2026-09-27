@@ -13,7 +13,8 @@ This index maps the old section numbers to their new homes.
 - **virtuoso** — multi-step execution discipline (sprints, narration, progress tracking)
 - **roadmap-review / roadmap-status / next-pointer** — plan, pulse-check, and dispatch
 - **storyboard → write-plan** — the ad hoc path: align, then plan; held for roadmap review
-- **epic** — a long-horizon run of an epic-scale roadmap item
+- **epic** — a long-horizon run of an epic-scale roadmap item, or of a combination of
+  specified roadmap items serialized where they share files
 - see `execution-paths.md` — three paths to execution, one destination
 - **pointer-closeout** — close-out report + spec retrospective
 - **mid-dispatch-decision** — decision protocol when a dispatch pauses

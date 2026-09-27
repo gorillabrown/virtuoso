@@ -525,6 +525,15 @@ Then record the absorption. The note names what the entry became, for example
 
 A withdrawn entry records `--state withdrawn --note "<the user's reason>"`.
 
+**Set the path of items already on the roadmap.** `Path` arrived in 1.11, so an older
+roadmap carries none, and a missing field means `dispatch`. Walk the active items. One
+that is epic-scale on its own (outcome-stated, multi-phase, multi-session or walk-away)
+gets `- **Path:** epic — <why it cannot be one dispatch>` in its entry, so
+`/next-pointer` routes it to `/epic`. Dispatch-sized items that belong together keep
+their own path: `/epic` combines them when the user wants them run as one
+(`references/execution-paths.md`). Name each item this review marks, with the reason,
+in the plan.
+
 ### C.4 Sequence the conveyor belt
 Prerequisites → risk → hardest-first. Write the sequence back through the
 provider only if it supports `write-status` on the sequence field; otherwise
@@ -568,7 +577,9 @@ Then take the first *N* active items in sequence order, where *N* is the buffer 
 4. `new specifications = target − already_ready`.
 5. Target the next items in sequence order that are still stubs. Skip an item whose
    entry declares `Path: epic`: `/epic` charters it, and the dispatch rubric is not its
-   gate. It does not count toward the buffer.
+   gate. It does not count toward the buffer. Skip, too, an item an active epic charter
+   names (`item:` or `items:`, in the registered `epics` role): it is in a run, under
+   that packet's order.
 
 Edge cases: fewer than *N* active items → specify all of them. Group boundaries
 are not a stopping condition. A hard blocker mid-buffer → stop there, flag it in
@@ -719,11 +730,11 @@ create. For a local register that is one write. For an external register it is
 the handshake: `mutation-plan --operation create-item`, execute the returned
 instruction with the host's connector, `mutation-confirm --succeeded
 --provider-id <ID> --actual-revision <REVISION>`, then refresh the canonical
-snapshot and verify `recovery` is empty. The plan is refused when the snapshot is
-absent or stale, when the id already exists (terminal items included), or when a
-creation under the same idempotency key was already confirmed; each refusal names
-the fix. If `policy.workRegister.creators` does not name this ceremony, say so and
-stop — creation is separately authorized.
+snapshot (`snapshot --import <rows>`) and verify `recovery` is empty. The plan is
+refused when the snapshot is absent or stale, when the id already exists (terminal
+items included), or when a creation under the same idempotency key was already
+confirmed; each refusal names the fix. If `policy.workRegister.creators` does not
+name this ceremony, say so and stop — creation is separately authorized.
 
 Only write fields the provider reports it can write. Field *names* come from
 `policy.workRegister.fieldMappings`; status *words* come from

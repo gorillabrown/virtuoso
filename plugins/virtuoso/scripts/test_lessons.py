@@ -64,7 +64,7 @@ CATALOG = """# Retrospective — Lessons Learned
 
 def run(script, *args):
     return subprocess.run([sys.executable, script, *args], capture_output=True,
-                          text=True, env=dict(os.environ))
+                          text=True, encoding="utf-8", env=dict(os.environ))
 
 
 # =============================================================================
@@ -453,3 +453,167 @@ def test_the_specification_format_the_review_ships_carries_the_section_u9_reads(
     result = lessons_mod.check(block, LESSONS, "LSN")
     assert result.passed is True
     assert not any(f["code"].startswith("lessons-section") for f in result.findings)
+
+
+# =============================================================================
+# 1.12.0 — a lesson is linked to its item by identifier, link record, or name
+# =============================================================================
+
+#: The heading names the epic in words, and the catalog is append-only, so the
+#: heading can never be corrected.
+BY_NAME = ("### LSN-010 — Batch the follow-ups by file (checkout follow-ups epic, "
+           "2026-09-24)\n**Verdict:** v\n**Evidence:** e\n**Recommendation:** r\n"
+           "**Applies to:** batched epics\n**Status:** Observation\n")
+EPIC = "EPIC-CHECKOUT-FOLLOW-UPS"
+
+
+def lesson_from(text, lesson_id="LSN-010"):
+    return {lesson.id: lesson for lesson in lessons_mod.parse(text, "LSN")}[lesson_id]
+
+
+def test_a_heading_naming_the_item_in_words_links_by_name():
+    assert lesson_from(BY_NAME).link_to(EPIC) == lessons_mod.LINK_NAME
+
+
+def test_the_leading_kind_word_may_be_left_out_of_the_name():
+    text = BY_NAME.replace("checkout follow-ups epic", "Checkout Follow-Ups")
+    assert lesson_from(text).link_to(EPIC) == lessons_mod.LINK_NAME
+
+
+@pytest.mark.parametrize("source, item", [
+    ("ENG-9, 2026-09-12", "ENG-12"),          # a code is never read out of a date
+    ("checkout batch, 2026-09-24", EPIC),     # some words are not all of them
+    ("calibration, 2026-09-24", "CALIBRATION"),   # one word is not a name
+    ("cache warm-up, 2026-09-24", "FU-CACHE"),    # one word left after the kind
+])
+def test_a_near_miss_is_not_a_link(source, item):
+    text = "### LSN-011 — Title (%s)\n**Status:** Observation\n" % source
+    assert lesson_from(text, "LSN-011").link_to(item) == ""
+
+
+def test_the_identifier_in_the_heading_links_exactly():
+    text = BY_NAME.replace("checkout follow-ups epic", EPIC)
+    assert lesson_from(text).link_to(EPIC) == lessons_mod.LINK_IDENTIFIER
+
+
+def test_an_item_field_links_exactly():
+    text = BY_NAME.replace("**Status:**", "**Item:** %s\n**Status:**" % EPIC)
+    lesson = lesson_from(text)
+    assert lesson.items == [EPIC]
+    assert lesson.link_to(EPIC) == lessons_mod.LINK_IDENTIFIER
+
+
+def test_a_link_record_links_without_changing_the_status_or_reusing_the_id():
+    text = BY_NAME + "\n### LSN-010 — link (%s, 2026-09-27)\n**Item:** %s\n" % (EPIC, EPIC)
+    lesson = lesson_from(text)
+    assert lesson.links == [EPIC] and lesson.items == []
+    assert lesson.link_to(EPIC) == lessons_mod.LINK_RECORD
+    assert lesson.status == "Observation" and lesson.live and not lesson.reused
+    assert lesson.title == "Batch the follow-ups by file"
+
+
+def epic_closeout(body):
+    return "# Close-Out — %s\n\n" % EPIC + body
+
+
+def test_a_closeout_passes_on_a_lesson_linked_by_name_and_says_so():
+    result = lessons_mod.check(epic_closeout("## Lessons\n- LSN-010 — Batch by file.\n"),
+                               lessons_mod.parse(CATALOG + "\n" + BY_NAME, "LSN"), "LSN",
+                               item=EPIC, closeout=True)
+    assert result.passed, result.findings
+    [warning] = [f for f in result.findings if f["code"] == lessons_mod.LINKED_BY_NAME]
+    assert warning["severity"] == "warning"
+    assert "--record-link LSN-010 --item %s" % EPIC in warning["message"]
+
+
+def test_a_linked_record_passes_cleanly():
+    catalog = CATALOG + "\n" + BY_NAME + "\n### LSN-010 — link (%s, 2026-09-27)\n**Item:** %s\n" \
+        % (EPIC, EPIC)
+    result = lessons_mod.check(epic_closeout("## Lessons\n- LSN-010 — Batch by file.\n"),
+                               lessons_mod.parse(catalog, "LSN"), "LSN", item=EPIC,
+                               closeout=True)
+    assert result.passed and result.findings == []
+
+
+def test_an_unlinked_lesson_fails_and_names_the_link_record_to_append():
+    result = lessons_mod.check(epic_closeout("## Lessons\n- LSN-002 — Name the base.\n"),
+                               LESSONS, "LSN", item=EPIC, closeout=True)
+    assert not result.passed
+    [failure] = result.findings
+    assert failure["code"] == lessons_mod.SECTION_EMPTY
+    assert "LSN-002 is recorded from 'ARCH-3, 2026-09-12'" in failure["message"]
+    assert "lessons --record-link <ID> --item %s" % EPIC in failure["message"]
+
+
+def test_a_combined_epic_closeout_counts_a_lesson_from_any_item_it_closes():
+    catalog = CATALOG + ("\n### LSN-012 — Pin fixtures (PAY-40, 2026-09-24)\n"
+                         "**Status:** Observation\n")
+    report = epic_closeout("## Lessons\n- LSN-012 — Pin fixtures.\n")
+    closes = "%s,PAY-39,PAY-40" % EPIC
+    assert lessons_mod.check(report, lessons_mod.parse(catalog, "LSN"), "LSN", item=closes,
+                             closeout=True).passed
+    assert not lessons_mod.check(report, lessons_mod.parse(catalog, "LSN"), "LSN",
+                                 item="%s,PAY-39" % EPIC, closeout=True).passed
+
+
+def test_record_link_previews_appends_reads_back_and_is_idempotent(workspace):
+    catalog = CATALOG + "\n" + BY_NAME
+    lessons_file(workspace).write_text(catalog, encoding="utf-8", newline="\n")
+    args = ("--actor", "pointer-closeout", "--record-link", "LSN-010", "--item", EPIC)
+
+    preview = lessons_cli(workspace, *args)
+    assert preview.returncode == 0, preview.stderr
+    assert "preview" in preview.stdout and "**Item:** %s" % EPIC in preview.stdout
+    assert lessons_file(workspace).read_text(encoding="utf-8") == catalog
+
+    applied = lessons_cli(workspace, *args, "--date", "2026-09-27", "--apply")
+    assert applied.returncode == 0, applied.stderr
+    after = lessons_file(workspace).read_text(encoding="utf-8")
+    assert after.startswith(catalog)
+    assert after[len(catalog):] == ("\n### LSN-010 — link (%s, 2026-09-27)\n**Item:** %s\n"
+                                    % (EPIC, EPIC))
+
+    again = lessons_cli(workspace, *args, "--apply")
+    assert again.returncode == 0 and "already linked" in again.stdout
+    assert lessons_file(workspace).read_text(encoding="utf-8") == after
+
+    listed = json.loads(lessons_cli(workspace, "--item", EPIC, "--json").stdout)
+    assert [(l["id"], l["linkedBy"]) for l in listed["lessons"]] == [("LSN-010", "link record")]
+
+
+@pytest.mark.parametrize("args, message", [
+    (("--actor", "pointer-closeout", "--record-link", "LSN-404", "--item", EPIC),
+     "not a recorded lesson"),
+    (("--actor", "next-pointer", "--record-link", "LSN-010", "--item", EPIC),
+     "may not write the lessons role"),
+    (("--record-link", "LSN-010", "--item", EPIC), "needs --actor"),
+    (("--actor", "pointer-closeout", "--record-link", "LSN-010"), "needs --item"),
+    (("--actor", "pointer-closeout", "--record-link", "LSN-010", "--item", "A, B"),
+     "not one identifier"),
+])
+def test_record_link_refusals_write_nothing(workspace, args, message):
+    catalog = CATALOG + "\n" + BY_NAME
+    lessons_file(workspace).write_text(catalog, encoding="utf-8", newline="\n")
+    completed = lessons_cli(workspace, *args, "--apply")
+    assert completed.returncode == 3 and message in completed.stderr
+    assert lessons_file(workspace).read_text(encoding="utf-8") == catalog
+
+
+def test_a_closed_lesson_can_still_be_linked(workspace):
+    lessons_file(workspace).write_text(CATALOG, encoding="utf-8", newline="\n")
+    completed = lessons_cli(workspace, "--actor", "roadmap-review", "--record-link", "LSN-001",
+                            "--item", "ARCH-9", "--apply")
+    assert completed.returncode == 0, completed.stderr
+    [lesson] = [l for l in json.loads(lessons_cli(workspace, "--json").stdout)["lessons"]
+                if l["id"] == "LSN-001"]
+    assert lesson["links"] == ["ARCH-9"] and lesson["live"] is False
+    assert lesson["status"].startswith("Promoted")
+
+
+def test_the_item_filter_shows_how_each_lesson_is_linked(workspace):
+    lessons_file(workspace).write_text(CATALOG + "\n" + BY_NAME, encoding="utf-8",
+                                       newline="\n")
+    listing = lessons_cli(workspace, "--item", EPIC)
+    assert listing.returncode == 0
+    assert "(showing 1 recorded from %s)" % EPIC in listing.stdout
+    assert "linked by: name" in listing.stdout and "LSN-002" not in listing.stdout

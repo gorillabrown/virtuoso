@@ -336,7 +336,7 @@ REGISTER_COLUMNS = ["id", "title", "sequence", "status", "written_status", "prer
 
 def run(script, *args):
     return subprocess.run([sys.executable, script, *args], capture_output=True,
-                          text=True, env=dict(os.environ))
+                          text=True, encoding="utf-8", env=dict(os.environ))
 
 
 def days_ago(n):

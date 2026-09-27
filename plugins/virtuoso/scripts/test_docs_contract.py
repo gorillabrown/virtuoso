@@ -54,7 +54,7 @@ def test_every_documented_preflight_mode_exists():
 def test_every_documented_registry_subcommand_exists():
     completed = subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "virtuoso_registry.py"), "--help"],
-        capture_output=True, text=True)
+        capture_output=True, text=True, encoding="utf-8")
     assert completed.returncode == 0
     implemented = set(re.findall(r"\{([a-z,-]+)\}", completed.stdout)[0].split(","))
 
@@ -75,7 +75,7 @@ def test_documented_cli_flags_are_accepted():
     text = all_doc_text()
     completed = subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "virtuoso_preflight.py"), "--help"],
-        capture_output=True, text=True)
+        capture_output=True, text=True, encoding="utf-8")
     for flag in flags:
         if flag in text:
             assert flag in completed.stdout, "%s is documented but not implemented" % flag
@@ -394,7 +394,9 @@ def test_write_plan_always_starts_from_the_storyboard():
 
 def test_the_roadmap_paths_open_only_on_the_master_roadmap():
     epic = skill_text("epic")
-    assert "### Step 1 — Pull the item from the master roadmap" in epic
+    assert "### Step 1 — Pull the items from the master roadmap" in epic
+    assert "#### Step 1a — One item marked `Path: epic`" in epic
+    assert "#### Step 1b — A combination of roadmap items" in epic
     assert "`/storyboard`" in epic
     pointer = skill_text("next-pointer")
     assert "`Path: epic`" in pointer and "## Edge case: Epic at head" in pointer

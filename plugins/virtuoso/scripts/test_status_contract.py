@@ -26,7 +26,7 @@ def run(root, *args, env_home=None):
         env["VIRTUOSO_HOME"] = str(env_home)
     completed = subprocess.run(
         [sys.executable, PREFLIGHT, "--root", str(root), *args],
-        capture_output=True, text=True, env=env)
+        capture_output=True, text=True, encoding="utf-8", env=env)
     return completed
 
 
