@@ -119,6 +119,33 @@ linked to nothing. The catalog is append-only, so the heading could never be cor
   close-out counts a lesson from the packet or from any item it closes.
   `lessons --item <ITEM-ID>` lists an item's lessons and how each is linked.
 
+### An epic's packet carries its git work, and a goal line follows the kickoff prompt
+
+Row D6 of the execution-paths contract said an epic carries a repository-reconciliation
+recipe, but the epic skill never filled one. The kickoff prompt said only to leave "a
+committed or clearly-journaled checkpoint". So every session of a run worked out its own
+branch, sync, and commit rules, and no session remembered what the last one decided.
+
+- **The git work is filled at scaffold time** from `policy.git` and the detected
+  repository, the way `/next-pointer` fills its recipe. It names the remote (or none),
+  the default branch, the run's branch from `branchNameTemplate`, and the base commit,
+  and it keeps only the steps the policy permits. It stays inside the five files: the
+  recipe in launch.md's kickoff prompt, the branch and commit rules in the charter's
+  Constraints, and the run's branch and base in state.md's Working set.
+- **The recipe covers a multi-session run.** The first session reconciles and creates
+  the branch. Every later session verifies the branch rather than creating it again,
+  compares the tree with the last journal entry's new **Git** line, and reports a moved
+  base. It halts on divergence instead of rebasing. Each checkpoint stages exact paths,
+  and commits or pushes only as the policy allows. The walk-away preflight settles
+  network operations for the whole run, because an unattended session cannot answer an
+  approval prompt.
+- **One paste carries both.** Step 5 prints the kickoff prompt with the git work and the
+  epic's instructions together. It is still the same prompt for every session.
+- **A goal line for `/goal`** follows at once, in its own block, and launch.md records
+  it. It is one line: the charter's outcome, done only when every Definition-of-Done row
+  passes fresh and `done.md` is written. It names the one other clean stop, every front
+  blocked on a recorded BLOCKER(USER), so `/goal` does not keep a blocked run going.
+
 ### Every command writes UTF-8
 
 On Windows, a piped or redirected stream uses the legacy code page. `lessons --open`,

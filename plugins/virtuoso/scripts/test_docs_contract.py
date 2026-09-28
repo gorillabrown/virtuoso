@@ -427,6 +427,42 @@ def test_the_roadmap_paths_open_only_on_the_master_roadmap():
     assert "Origin: roadmap — [ITEM-ID]" in pointer
 
 
+def test_the_epic_packet_carries_its_git_work_and_a_goal_line():
+    """D6 says an epic carries a reconciliation recipe; the skill must fill one into the
+    kickoff prompt, and print a one-line goal for `/goal` straight after it."""
+    epic = " ".join(skill_text("epic").split())
+    assert "**Fill the run's git work**" in epic
+    assert "`policy.git.branchNameTemplate`" in epic and "Leave no placeholders" in epic
+    assert "print the **goal line** from launch.md in its own fenced block" in epic
+    assert "`/goal`" in epic and "BLOCKER(USER)" in epic
+
+    assets = ROOT / "skills" / "epic" / "assets"
+    launch = (assets / "launch.template.md").read_text(encoding="utf-8")
+    kickoff = launch.split("## Kickoff / resume prompt", 1)[1].split("## Goal line", 1)[0]
+    prompt = kickoff.split("```", 2)[1]
+    # One paste carries the epic's instructions and the git work together.
+    assert "RESUME PROTOCOL" in prompt and "GIT WORK" in prompt
+    for step in ("git switch -c [BRANCH]", "git branch --show-current",
+                 "--left-right --count", "git add -- <exact paths>"):
+        assert step in prompt, step
+    assert "never create it again" in prompt and "never rebase" in prompt
+
+    goal = launch.split("## Goal line", 1)[1].split("## Completion protocol", 1)[0]
+    block = goal.split("```", 2)[1].strip("\n")
+    assert "\n" not in block, "the goal line must be one line"
+    assert "done.md" in block and "Definition-of-Done" in block and "BLOCKER(USER)" in block
+
+    charter = (assets / "charter.template.md").read_text(encoding="utf-8")
+    assert "**Git, from `policy.git`" in charter
+    state = (assets / "state.template.md").read_text(encoding="utf-8")
+    assert "| Run branch |" in state and "| Branch created |" in state
+    journal = (assets / "journal.template.md").read_text(encoding="utf-8")
+    assert journal.count("- **Git:**") == 2
+    paths = (ROOT / "references" / "execution-paths.md").read_text(encoding="utf-8")
+    d6 = next(line for line in paths.splitlines() if line.startswith("| D6 |"))
+    assert "GIT WORK" in d6 and "kickoff prompt" in d6
+
+
 def test_the_holding_bay_is_reconciled_at_review_and_closed_out_in_held_plan_mode():
     review = skill_text("roadmap-review")
     assert "holding --open" in review

@@ -229,6 +229,8 @@ def test_the_reference_check_catches_a_ghost():
         "`/virtuoso:next-pointer`", skills, agents) == ["/write-spec", "write-spec", "athena"]
     assert validate.unresolved_references(
         "escalate to the planner; (→ cross-cutting); □ 3. Aristotle: go", skills, agents) == []
+    # A host CLI command resolves to the host; a misspelling of one is still a ghost.
+    assert validate.unresolved_references("`/goal`; `/goals`", skills, agents) == ["/goals"]
 
 
 def test_the_shipped_plugin_names_no_ghost():

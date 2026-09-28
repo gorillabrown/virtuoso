@@ -42,8 +42,13 @@ pass together on the integrated tree.
 
 ## Constraints — hard limits
 
-- [e.g. all work on branch X or a dedicated worktree; never force-push; never
-  publish/deploy; session/time budget ceiling: ~[M] sessions]
+- **Git, from `policy.git` ([POLICY]):** all work on branch `[BRANCH]`, cut from
+  `[DEFAULT]` at `[BASE SHA]`[, in the worktree at [PATH]]. Stage exact paths only, never
+  `git add .` or `-A`. [Commit at every checkpoint / Stage but never commit / Leave
+  changes in the tree and journal their paths — whichever the policy permits.] [Push to
+  `[REMOTE]` after each checkpoint / Never push.] Never force-push, rebase, reset, stash,
+  or clean. Divergence is a BLOCKER(USER). The recipe is launch.md's GIT WORK.
+- [e.g. never publish/deploy; session/time budget ceiling: ~[M] sessions]
 
 ## Non-goals — explicitly out of scope
 

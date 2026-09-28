@@ -247,6 +247,12 @@ otherwise dead-end on unattended:
 - remotes/services in the DoD are reachable
 - the runtime can act unattended — permission mode / allowlist covers the run's tool
   needs, so no approval prompt stalls the run at hour two
+- the repository, detected rather than assumed, as next-pointer's *Repository
+  reconciliation* detects it: the remote (or that there is none), the default branch,
+  the worktrees, the dirty paths, and `policy.git`. Settle network operations now. Under
+  `networkOperations: ask`, the user grants or denies fetch and push for the whole run,
+  recorded as an autonomy grant, because an unattended session cannot answer an approval
+  prompt. With no answer, the run treats network operations as denied.
 
 Record results in state.md's Working set (verified facts) and launch.md's preflight table.
 The table reports the same five readiness findings every path reports: specification (every
@@ -272,13 +278,33 @@ than you can now, and stale prescriptions poison later sessions.
 
 1. Copy the five templates into the epic directory; fill every bracket; delete unused
    optional sections. Seed journal.md with the S0 scaffold entry.
-2. Print the walk-away readiness verdict: preflight table status + open assumptions.
-3. Print the kickoff/resume prompt from launch.md in a fenced code block — it is the
+2. **Fill the run's git work** from `policy.git` and the repository state Step 3
+   detected, the way `/next-pointer` fills its reconciliation recipe: the remote (or
+   none, which drops every network step), the default branch, the run's branch from
+   `policy.git.branchNameTemplate` with the packet's identifier as `{item-id}`, the base
+   commit it starts from, and only the steps the policy permits. Leave no placeholders.
+   The git work stays inside the five files:
+   - **launch.md** — the recipe, inside the kickoff prompt. The first session reconciles
+     and creates the branch. Every later session checks that it is on that branch, that
+     the tree matches the last journal entry, and whether the base has moved, and it
+     halts on divergence instead of rebasing. Each checkpoint stages exact paths, and
+     commits or pushes only as far as the policy allows.
+   - **charter.md** — the branch and commit rules, under Constraints.
+   - **state.md** — the run's branch, base, and remote, in the Working set.
+3. Print the walk-away readiness verdict: preflight table status + open assumptions.
+4. Print the kickoff/resume prompt from launch.md in a fenced code block. It carries the
+   git work and the epic's instructions together, so one paste carries both. It is the
    same prompt for the first session and every later one.
-4. If the user is present, offer to hand off now: the first session starts under the
+5. Straight after it, print the **goal line** from launch.md in its own fenced block,
+   ready for the CLI's `/goal` command. It is one line: what the epic must achieve,
+   from the charter's outcome, and how completion is proven, meaning every
+   Definition-of-Done row in the charter verified fresh and `done.md` written. It also
+   names the one other clean stop, every front blocked on a recorded BLOCKER(USER).
+   Without that, `/goal` would keep a blocked run going.
+6. If the user is present, offer to hand off now: the first session starts under the
    virtuoso skill, the only skill that executes, from the kickoff prompt. This skill
-   executes nothing itself. Otherwise, end with the packet path and the code-boxed
-   prompt.
+   executes nothing itself. Otherwise, end with the packet path, the code-boxed prompt,
+   and the goal line.
 
 ## Scaffolding budget
 

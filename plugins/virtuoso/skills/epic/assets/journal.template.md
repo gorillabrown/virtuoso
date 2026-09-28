@@ -10,6 +10,7 @@
   [launch](launch.md)). No project work performed yet.
 - **Learned:** [assumptions accepted at launch — see charter Assumptions; preflight
   results — see launch.md]
+- **Git:** [DEFAULT] @ [BASE SHA]; run branch [BRANCH] not created yet.
 - **Next:** P1 per plan.md.
 
 <!-- Entry template — copy for each session:
@@ -20,6 +21,7 @@
 - **Learned:** [facts, surprises, dead ends worth not repeating]
 - **Decisions:** [pointers to new Decision-log rows, if any]
 - **Gate/DoD movement:** [status changes + evidence pointer, if any]
+- **Git:** [BRANCH] @ [sha]; uncommitted: [exact paths, or none]
 - **Next:** [where the following session should pick up]
 
 -->
