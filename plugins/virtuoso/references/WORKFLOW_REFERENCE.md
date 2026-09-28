@@ -10,10 +10,14 @@ This index maps the old section numbers to their new homes.
 
 ## Skill map (the virtuoso suite)
 
-- **virtuoso** — multi-step execution discipline (sprints, narration, progress tracking)
+- **virtuoso** — multi-step execution discipline (sprints, narration, progress tracking);
+  the only skill that executes
 - **roadmap-review / roadmap-status / next-pointer** — plan, pulse-check, and dispatch
-- **storyboard → write-plan** — the ad hoc path: align, then plan; held for roadmap review
-- **epic** — a long-horizon run of an epic-scale roadmap item
+- **storyboard → write-plan → virtuoso** — the ad hoc path: scope to a draft stub, write
+  the full plan, then execute; only virtuoso executes, and the entry is held for roadmap
+  review
+- **epic** — a long-horizon run of an epic-scale roadmap item, or of a combination of
+  specified roadmap items serialized where they share files
 - see `execution-paths.md` — three paths to execution, one destination
 - **pointer-closeout** — close-out report + spec retrospective
 - **mid-dispatch-decision** — decision protocol when a dispatch pauses

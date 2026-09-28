@@ -48,6 +48,9 @@ dod:          D1 [unmet] | D2 [unmet] | D3 [unmet]
 | Fact | Value | Verified how / when |
 |------|-------|---------------------|
 | [repo path] | [...] | [command, date] |
+| Run branch | `[BRANCH]` from `[DEFAULT]` @ `[BASE SHA]` | scaffold, [date] |
+| Remote | `[REMOTE]`, or none · network operations [granted / denied] | scaffold, [date] |
+| Branch created | [not yet — the first session creates it / yes, session [N]] | [journal S-number] |
 
 ## Blockers
 

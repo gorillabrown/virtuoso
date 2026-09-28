@@ -13,7 +13,31 @@ from __future__ import annotations
 
 import codecs
 import hashlib
+import io
 import os
+import sys
+
+
+def utf8_stdio() -> None:
+    """Make stdout and stderr write UTF-8, whatever the console's code page.
+
+    Every command-line entry point calls this first. The plugin's output carries
+    em dashes, arrows and whatever a project's titles hold, and on Windows a
+    piped or redirected stream defaults to the legacy code page (cp1252): the
+    first character outside it raised ``UnicodeEncodeError: 'charmap' ...`` and
+    the command died with its answer half printed. UTF-8 is what the documented
+    workaround, ``PYTHONIOENCODING=utf-8``, produced; this makes it the default.
+    ``backslashreplace`` keeps a lone surrogate (an undecodable file name) from
+    crashing the stream too.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:        # a replaced stream (StringIO capture): leave it
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+        except (ValueError, OSError, io.UnsupportedOperation):
+            continue
 
 
 def read_bytes(path: str) -> bytes | None:

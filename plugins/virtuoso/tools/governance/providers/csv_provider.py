@@ -70,44 +70,7 @@ class CsvWorkRegister(base.WorkRegisterProvider):
         )
 
     def _to_item(self, headers: list[str], index: dict, row: dict) -> base.WorkItem:
-        def value(field_name: str) -> str:
-            position = index.get(field_name)
-            if position is None or position >= len(headers):
-                return ""
-            return str(row.get(headers[position], "") or "").strip()
-
-        raw_status = value("status")
-        raw_written = value("written_status")
-        sequence_raw = value("sequence")
-        try:
-            sequence = int(float(sequence_raw)) if sequence_raw else None
-        except ValueError:
-            sequence = None
-        prerequisites = [p.strip() for p in
-                         value("prerequisites").replace(";", ",").split(",") if p.strip()]
-        known = {headers[i] for i in index.values() if i < len(headers)}
-        return base.WorkItem(
-            id=value("id"),
-            title=value("title"),
-            sequence=sequence,
-            status=self.mapping.statuses.to_canonical(raw_status),
-            raw_status=raw_status,
-            written_status=self.mapping.statuses.written_to_canonical(raw_written),
-            raw_written_status=raw_written,
-            prerequisites=prerequisites,
-            effort=value("effort"),
-            lane=value("lane"),
-            group=value("group"),
-            spec_link=value("spec_link"),
-            branch=value("branch"),
-            started=value("started"),
-            completed=value("completed"),
-            evidence=value("evidence"),
-            description=value("description"),
-            notes=value("notes"),
-            revision=_row_revision(row),
-            extra={k: v for k, v in row.items() if k not in known},
-        )
+        return row_to_item(self.mapping, headers, index, row)
 
     # -- mutations -----------------------------------------------------------
 
@@ -252,3 +215,48 @@ class CsvWorkRegister(base.WorkRegisterProvider):
 def _row_revision(row: dict) -> str:
     payload = "\n".join("%s=%s" % (k, row.get(k, "")) for k in sorted(row))
     return textio.sha256_bytes(payload.encode("utf-8"))
+
+
+def row_to_item(mapping, headers: list[str], index: dict, row: dict) -> base.WorkItem:
+    """One row, keyed by the project's own column names, as a canonical item.
+
+    Shared by every row-shaped source: this file, and the rows a host connector
+    reads for ``snapshot --import``, so a row means the same thing in each."""
+    def value(field_name: str) -> str:
+        position = index.get(field_name)
+        if position is None or position >= len(headers):
+            return ""
+        return str(row.get(headers[position], "") or "").strip()
+
+    raw_status = value("status")
+    raw_written = value("written_status")
+    sequence_raw = value("sequence")
+    try:
+        sequence = int(float(sequence_raw)) if sequence_raw else None
+    except ValueError:
+        sequence = None
+    prerequisites = [p.strip() for p in
+                     value("prerequisites").replace(";", ",").split(",") if p.strip()]
+    known = {headers[i] for i in index.values() if i < len(headers)}
+    return base.WorkItem(
+        id=value("id"),
+        title=value("title"),
+        sequence=sequence,
+        status=mapping.statuses.to_canonical(raw_status),
+        raw_status=raw_status,
+        written_status=mapping.statuses.written_to_canonical(raw_written),
+        raw_written_status=raw_written,
+        prerequisites=prerequisites,
+        effort=value("effort"),
+        lane=value("lane"),
+        group=value("group"),
+        spec_link=value("spec_link"),
+        branch=value("branch"),
+        started=value("started"),
+        completed=value("completed"),
+        evidence=value("evidence"),
+        description=value("description"),
+        notes=value("notes"),
+        revision=_row_revision(row),
+        extra={k: v for k, v in row.items() if k not in known},
+    )

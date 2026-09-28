@@ -1,9 +1,10 @@
 """The holding bay: ad hoc plans waiting for the next roadmap review.
 
-Work that arrives between roadmap reviews enters through ``storyboard`` (alignment)
-and ``write-plan`` (a dispatch-ready plan). Neither ceremony touches the roadmap or
-the live work register — that is ``roadmap-review``'s job — so what they produce waits
-in the registered ``holdingBay`` role: one Markdown file per piece of work, named
+Work that arrives between roadmap reviews enters through ``storyboard`` (scoping, to a
+draft stub) and ``write-plan`` (the full specification), and only the ``virtuoso``
+skill executes it. Neither ad hoc ceremony touches the roadmap or the live work
+register — that is ``roadmap-review``'s job — so what they produce waits in the
+registered ``holdingBay`` role: one Markdown file per piece of work, named
 ``<yyyy-mm-dd>-<slug>.md``.
 
     # Held Plan — Retry failed exports
@@ -15,7 +16,7 @@ in the registered ``holdingBay`` role: one Markdown file per piece of work, name
     ## Trail
     | Date | State | By | Note |
     |---|---|---|---|
-    | 2026-09-24 | storyboarded | storyboard | aligned; skeleton approved |
+    | 2026-09-24 | storyboarded | storyboard | aligned; draft stub approved |
     | 2026-09-24 | planned | write-plan | HB-3 passed the rubric |
 
     ## Storyboard
@@ -76,14 +77,24 @@ TRANSITIONS = {
 
 #: Which ceremony records which state. ``write-plan`` may re-open alignment
 #: (``storyboarded``) because anything that changes what was agreed goes back there.
+#: Only the ``virtuoso`` skill executes, so only it records ``in-flight``.
 RECORDED_BY = {
     STORYBOARDED: ("storyboard", "write-plan"),
-    PLANNED: ("write-plan",),
-    IN_FLIGHT: ("write-plan",),
+    PLANNED: ("write-plan", "virtuoso"),
+    IN_FLIGHT: ("virtuoso",),
     EXECUTED: ("pointer-closeout",),
     ABSORBED: ("roadmap-review",),
     WITHDRAWN: ("storyboard", "write-plan", "roadmap-review"),
 }
+
+#: A recorder allowed a state only as a return out of one other state. The
+#: ``virtuoso`` skill hands a run that stopped back to ``planned``; it never plans.
+RETURN_ONLY = {(PLANNED, "virtuoso"): IN_FLIGHT}
+
+#: Recorders an earlier release allowed. A trail row one of them wrote stays valid
+#: history; a new row is held to RECORDED_BY. In 1.11.0 ``write-plan`` recorded
+#: ``in-flight`` itself, before execution moved wholly to the ``virtuoso`` skill.
+FORMERLY_RECORDED_BY = {IN_FLIGHT: ("write-plan",)}
 
 #: States whose trail row must say something: where the evidence is, what the
 #: review turned the entry into, or why it was dropped.
@@ -310,16 +321,30 @@ def validate(entry: Entry) -> list[dict]:
         if previous in TRANSITIONS and row.state not in TRANSITIONS[previous]:
             problems.append(_problem(TRANSITION_ILLEGAL, "%s -> %s is not a legal move"
                                                          % (previous, row.state)))
-        if row.by not in RECORDED_BY[row.state]:
+        if row.by not in RECORDED_BY[row.state] + FORMERLY_RECORDED_BY.get(row.state, ()):
             problems.append(_problem(RECORDER_WRONG, "%s was recorded by %r; only %s may record it"
                                                      % (row.state, row.by,
                                                         " or ".join(RECORDED_BY[row.state]))))
+        else:
+            misuse = _return_only_problem(row.state, row.by, previous)
+            if misuse:
+                problems.append(misuse)
         if row.state in NOTE_REQUIRED and not row.note:
             problems.append(_problem(NOTE_MISSING, "the %s row carries no note" % row.state))
         previous = row.state
 
     problems.extend(content_problems(entry, entry.state))
     return problems
+
+
+def _return_only_problem(state: str, by: str, previous: str) -> dict | None:
+    """The finding when ``by`` records ``state`` out of anything but the one state
+    RETURN_ONLY lets it return from; ``None`` when the move is its to make."""
+    required = RETURN_ONLY.get((state, by))
+    if required is None or previous == required:
+        return None
+    return _problem(RECORDER_WRONG, "%s may record %s only to hand back an %s run, not from %s"
+                                    % (by, state, required, previous))
 
 
 def content_problems(entry: Entry, state: str) -> list[dict]:
@@ -390,6 +415,10 @@ def record_problems(entry: Entry, state: str, actor: str, note: str, date: str) 
     if actor not in RECORDED_BY[state]:
         problems.append(_problem(RECORDER_WRONG, "%s may not record %s; only %s may"
                                                  % (actor, state, " or ".join(RECORDED_BY[state]))))
+    else:
+        misuse = _return_only_problem(state, actor, entry.state)
+        if misuse:
+            problems.append(misuse)
     if state in NOTE_REQUIRED and not note.strip():
         problems.append(_problem(NOTE_MISSING, "recording %s needs --note" % state))
     if not _DATE_RE.match(date):

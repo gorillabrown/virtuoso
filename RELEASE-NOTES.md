@@ -1,5 +1,159 @@
 # Virtuoso Release Notes
 
+## v1.12.0 (2026-09-28) — one skill executes, and an epic combines what the roadmap holds
+
+**Upgrading from 1.11.0.** One change, and only if your project registered the
+`holdingBay` role: add `virtuoso` to its `allowedWriters`. Until you do, the virtuoso
+skill's `in-flight` record is refused, and the skill stops and names this fix. An entry
+already recorded `in-flight` by `write-plan` under 1.11.0 still checks clean, so its
+close-out runs as before. No schema version, policy default, or rubric changed.
+`/epic` can now charter a set of roadmap items as one run, with no `Path` marker and no
+holding bay. A roadmap written before 1.11 has no `Path` fields, and the next
+`/roadmap-review` adds them. Every command now writes UTF-8.
+
+### Scope, plan, execute: one skill each
+
+The ad hoc path is three steps, and only the last one executes.
+
+- **`/storyboard` scopes, and nothing else.** It holds a question-and-answer scoping
+  conversation that ends in an approved **draft stub** (formerly the *skeleton*). It never
+  writes a specification, never edits code, and never starts the work, however small.
+  Run on its own in another chat, it still ends at the draft stub. The step that ends it
+  now hands the draft stub to `/write-plan`, and its red flags name the "it's small, I'll
+  just do it" trap.
+- **`/write-plan` plans, and nothing else.** It writes the full specification and now
+  works out each item's **exact slot in roadmap order**: after which item, before which,
+  and why. The review applies that slot in its C.3 and C.4. `roadmap-review` stays the
+  only roadmap writer. Step 8 is now a hand-off: to the virtuoso skill in this session,
+  to the virtuoso skill in another session through a kickoff prompt, to the review, or a
+  withdrawal. It no longer records `in-flight`, runs the reconciliation recipe, or
+  loads the executor mid-step.
+- **The virtuoso skill is the only skill that executes.** Before the first edit on a
+  written plan, it runs a **conflict check**: upstream prerequisites, in-flight work on
+  the same edit sites, roadmap order, downstream specifications this run will make
+  stale, and drift since the plan was written. For a held plan it runs the
+  **held-plan intake**: it reads the entry's state, records `in-flight` itself, runs the
+  recipe, and returns a stopped run to `planned`.
+- **The holding bay enforces it.** Only `virtuoso` may record `in-flight`, and it may
+  record `planned` only out of `in-flight`. `holding --record` refuses `write-plan`
+  starting a run. The message that names the role to register is now built from the
+  role's defaults, so it cannot fall behind them.
+
+### Epics combine items already on the roadmap
+
+1.11 let `/epic` charter only an item a review had marked `Path: epic`. That closed the
+route a real run had taken. The run combined several items that were already specified
+and placed, and ran them together unattended: serialized where they edited the same file,
+under one Definition of Done. None of those items was epic-scale on its own, so no review
+would ever mark one of them. The combination was not a new idea, so it did not need a
+storyboard either. 1.11 had nowhere to put that combining judgement.
+
+- **`/epic <ITEM-ID> <ITEM-ID> …`**, or **`/epic --lane <lane> <from>-<to>`**, charters a
+  combination (the epic skill's new Step 1b). A single item marked `Path: epic` is still
+  Step 1a, unchanged.
+- **`virtuoso_registry combine`** does the mechanical half of the decision, read-only. It
+  checks that each item is in the register, not terminal, blocked or in flight, has a
+  written specification, is not an epic on its own, and is not already in a charter. It
+  checks that each prerequisite is done or in the set, and that the snapshot is fresh.
+  It reads the files each specification's *Edit sites* and *Staging plan* name. It then
+  returns the serial order, the lanes that can run side by side, every ordering edge with
+  its reason ("shared files: src/checkout/gateway.py"), and the effort in points. An item
+  whose files cannot be read runs serially with everything, because an unknown overlap
+  is not a known absence. Exit 0 means combinable, and 1 means a blocking finding stands.
+- The epic skill makes the judgement the command cannot. It re-runs each item's
+  readiness, looks for overlap that does not share a file (one interface changed through
+  two files), and checks that the items make one outcome. The charter lists the items
+  under `items:`, in serial order. It carries each item's *Done when* rows and one row
+  proving that they pass together. The packet is named `EPIC-<SLUG>`, and each session's
+  sprint identifier is `[PACKET-ID]-S<n>`.
+- **An item in a combined run is left to that run.** `next` reports `inEpicPacket` when
+  an active charter names the head item, and `/next-pointer` stops there.
+  `/roadmap-review` does not re-specify the item. `/pointer-closeout`'s new section
+  *Combined epics* closes the run in one crossing: one report, then one terminal record
+  and one register close per item, in serial order.
+- **`/roadmap-review` adds `Path` to items already on the roadmap.** It marks an item
+  that is epic-scale on its own `Path: epic`, which closes the gap 1.11 left in roadmaps
+  that predate the field. Dispatch-sized items keep their path, and `/epic` combines them.
+
+### A board's snapshot is built by the plugin, and never names a subitem as the head
+
+A register kept on a board or tracker is read through a snapshot the host builds, and
+hand-built snapshots went wrong in two ways. They aged past their window and were read
+anyway. They also flattened a card's subitems, such as an owner decision, into the work
+list, so `next` named a decision row as the head card.
+
+- **`snapshot --import <rows>`** builds the snapshot. The host reads the register with its
+  connector and writes the rows, keyed by the register's own column names. The import
+  maps them through `fieldMappings` and `statusMappings`, exactly as a CSV row is read,
+  and stamps the read time (`--taken-at`, the file's `takenAt`, or now). It writes only
+  the snapshot role `policy.workRegister.snapshot` names, or `--out`.
+- **A subitem is never a card.** A row whose parent column holds a value (`Parent`,
+  `Parent Item`, `parent_id`, or `--parent-column`) is kept out of the list and reported.
+  The snapshot reader skips an item carrying `parent`, whoever built the snapshot. Rows
+  without an identifier are skipped, two rows under one identifier are refused, and a
+  status outside the vocabulary is named.
+- **A stale snapshot is refreshed before it is acted on.** `next` prints `[STALE]` with the
+  refresh command. `/next-pointer` refreshes the snapshot before it names the head, and
+  otherwise reports the external-register finding as a gap. `combine` refuses a stale
+  snapshot.
+
+### A lesson is linked to its item by more than an identifier in its heading
+
+The close-out gate knew which item taught a lesson only from the identifier in the
+lesson's heading, `(ITEM-ID, date)`. A heading that described the item in words, such
+as "checkout follow-ups epic" in place of `EPIC-CHECKOUT-FOLLOW-UPS`, left the lesson
+linked to nothing. The catalog is append-only, so the heading could never be corrected.
+
+- **`lessons --record-link <ID> --item <ITEM-ID>`** appends a link record under the
+  lesson's identifier. The record carries no status, so the lesson's status is
+  unchanged. It previews first, refuses an actor the role does not allow, does nothing
+  when the lesson is already linked, and reads the record back. An `**Item:**` field in
+  a new entry links it too.
+- **A heading that names the item in words still links, by name**, when every word of
+  a word-built identifier appears in it, with or without the leading kind word (`EPIC`,
+  `FU`). The gate passes with a `lesson-linked-by-name` warning that names the link
+  record to append. An identifier with a digit in it is a code, and never matches by
+  name.
+- A close-out that names only lessons from other items now fails with a message naming
+  where each was recorded. `--item` accepts several identifiers, so a combined epic's
+  close-out counts a lesson from the packet or from any item it closes.
+  `lessons --item <ITEM-ID>` lists an item's lessons and how each is linked.
+
+### An epic's packet carries its git work, and a goal line follows the kickoff prompt
+
+Row D6 of the execution-paths contract said an epic carries a repository-reconciliation
+recipe, but the epic skill never filled one. The kickoff prompt said only to leave "a
+committed or clearly-journaled checkpoint". So every session of a run worked out its own
+branch, sync, and commit rules, and no session remembered what the last one decided.
+
+- **The git work is filled at scaffold time** from `policy.git` and the detected
+  repository, the way `/next-pointer` fills its recipe. It names the remote (or none),
+  the default branch, the run's branch from `branchNameTemplate`, and the base commit,
+  and it keeps only the steps the policy permits. It stays inside the five files: the
+  recipe in launch.md's kickoff prompt, the branch and commit rules in the charter's
+  Constraints, and the run's branch and base in state.md's Working set.
+- **The recipe covers a multi-session run.** The first session reconciles and creates
+  the branch. Every later session verifies the branch rather than creating it again,
+  compares the tree with the last journal entry's new **Git** line, and reports a moved
+  base. It halts on divergence instead of rebasing. Each checkpoint stages exact paths,
+  and commits or pushes only as the policy allows. The walk-away preflight settles
+  network operations for the whole run, because an unattended session cannot answer an
+  approval prompt.
+- **One paste carries both.** Step 5 prints the kickoff prompt with the git work and the
+  epic's instructions together. It is still the same prompt for every session.
+- **A goal line for `/goal`** follows at once, in its own block, and launch.md records
+  it. It is one line: the charter's outcome, done only when every Definition-of-Done row
+  passes fresh and `done.md` is written. It names the one other clean stop, every front
+  blocked on a recorded BLOCKER(USER), so `/goal` does not keep a blocked run going.
+
+### Every command writes UTF-8
+
+On Windows, a piped or redirected stream uses the legacy code page. `lessons --open`,
+`protected --json`, and any output holding an arrow or a non-Latin file name died with
+`UnicodeEncodeError: 'charmap' …` unless `PYTHONIOENCODING=utf-8` was set. Every entry
+point now sets UTF-8 on stdout and stderr itself: the preflight, the registry helper,
+the sprint guards, the report builder, and the cockpit.
+
 ## v1.11.0 (2026-09-24) — three paths to execution, one destination
 
 **Upgrading from 1.10.2.** The ad hoc path needs the opt-in `holdingBay` role:

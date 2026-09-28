@@ -12,6 +12,8 @@
 | Credentials live | [e.g. `gh auth status`] | [...] |
 | Remotes/services in the DoD reachable | [...] | [...] |
 | Runtime can act unattended | permission mode / allowlist covers the run's tool needs — no approval prompt will stall it | [...] |
+| Repository detected | remote, default branch, worktrees, dirty paths; `policy.git` read | [PASS — remote [REMOTE or none], default [DEFAULT], policy [POLICY]] |
+| Network operations settled | under `networkOperations: ask`, fetch and push granted or denied for the whole run | [granted / denied / not applicable — no remote] |
 | Launch-blocking questions answered | Q&A list below | [...] |
 
 ### Launch-blocking questions — answers recorded here
@@ -26,7 +28,17 @@
 
 ## Kickoff / resume prompt
 
-Paste into any session — first or fiftieth; it self-orients either way:
+Paste into any session — first or fiftieth; it self-orients either way. It carries the
+run's git work, so one paste carries both the git work and the epic's instructions.
+
+<!-- Fill the GIT WORK block at scaffold time from policy.git and the detected repository,
+     as /next-pointer fills its reconciliation recipe. Keep only the lines the policy
+     permits (read-only: no add, commit, or branch creation, so the operator creates the
+     branch before launch and the first session only verifies it; prepare-no-stage: no
+     add; explicit-path-stage: add, no commit; explicit-path-commit: commit, no push;
+     push: commit and push). With no remote, drop every fetch, merge-from-remote and push
+     line. With network operations denied, drop them too. No placeholder survives into
+     the packet. -->
 
 ```
 You are executing the epic at [ABSOLUTE PATH TO THIS DIRECTORY].
@@ -46,12 +58,49 @@ Keep durable files distilled: conclusions and evidence pointers, never raw logs.
 noisy exploration into subagents when your runtime offers them.
 
 Before ending any work burst: update state.md, append a journal.md entry, leave the
-working tree at a committed or clearly-journaled checkpoint. Disk handoff-ready,
-always.
+working tree at a checkpoint as GIT WORK below defines it. Disk handoff-ready, always.
+
+GIT WORK — before the first edit of every session. Filled from policy.git at scaffold.
+Repository [ABSOLUTE REPO PATH] | remote [REMOTE, or "none"] | default branch [DEFAULT]
+Run branch [BRANCH] from [DEFAULT] @ [BASE SHA] | policy [POLICY] | network [granted/denied]
+Read-only git runs lock-free: GIT_OPTIONAL_LOCKS=0 git --no-optional-locks ...
+
+First session (state.md's Working set says the branch is not created yet):
+  git status --porcelain            # dirty paths outside this run: report them, touch nothing
+  git fetch [REMOTE] --prune
+  git switch [DEFAULT]
+  git merge --ff-only [REMOTE]/[DEFAULT]   # diverged -> STOP, BLOCKER(USER); no force, no reset
+  git switch -c [BRANCH] [DEFAULT]  # then record "branch created, session 1" in state.md
+Every later session (verify the branch; never create it again):
+  git branch --show-current         # must print [BRANCH]; anything else -> STOP, BLOCKER(USER)
+  git log -1 --format=%H            # compare with the Git line of the last journal entry,
+  git status --porcelain            # and with its uncommitted paths. A mismatch: believe
+                                    # the repo, journal the difference, then work
+  git fetch [REMOTE] --prune
+  git rev-list --left-right --count [BRANCH]...[REMOTE]/[BRANCH]   # once the branch is
+                                    # pushed. Both sides > 0 is divergence -> STOP,
+                                    # BLOCKER(USER); never rebase. Behind only: merge --ff-only
+  git rev-list --count [BASE SHA]..[REMOTE]/[DEFAULT]   # the base moved: journal it and
+                                    # keep working; never rebase or merge to catch up
+Every checkpoint:
+  git add -- <exact paths>          # never `git add .` or `-A`; unrelated paths stay out
+  git commit -m "[PACKET-ID]-S<n>: <what this burst did>"
+  git push [REMOTE] [BRANCH]
+  record the Git line in the journal entry: [BRANCH] @ <sha>; uncommitted: <paths or none>
+Never: force-push, rebase, reset --hard, stash, clean, or delete a lock file.
 
 Run this session under the virtuoso skill when it is available: this packet is your
-dispatch spec, and your sprint identifier is [ITEM-ID]-S<n>, where n is the next session
+dispatch spec, and your sprint identifier is [PACKET-ID]-S<n>, where n is the next session
 number in journal.md.
+```
+
+## Goal line — for `/goal`
+
+Printed straight after the kickoff prompt, in its own block. One line: what the epic must
+achieve, and how completion is proven.
+
+```
+[THE CHARTER'S OUTCOME, ONE SENTENCE] — done only when every Definition-of-Done row in [ABSOLUTE PATH TO THIS DIRECTORY]/charter.md passes with fresh evidence in one session and [ABSOLUTE PATH TO THIS DIRECTORY]/done.md is written; the only other clean stop is every front blocked on a BLOCKER(USER) recorded in state.md.
 ```
 
 ## Completion protocol — the only way this epic ends as "complete"
@@ -65,8 +114,9 @@ number in journal.md.
 4. Final journal entry, then stop. **`done.md` existing is the stop signal** for any
    loop or scheduler driving sessions: check it before launching another session. Never
    create it under any other circumstances.
-5. Close the epic through `/pointer-closeout [ITEM-ID]`, with journal.md and done.md as
-   its evidence. That ceremony records what the epic taught in the registered `lessons`
+5. Close the epic through `/pointer-closeout [PACKET-ID]`, with journal.md and done.md as
+   its evidence. A combination's close-out retires every item the charter's `items:`
+   names. That ceremony records what the epic taught in the registered `lessons`
    role — where the next charter reads it — or says why it taught nothing. An epic
    that ends without it leaves its lessons in a journal no future run consults.
 

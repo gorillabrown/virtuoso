@@ -8,7 +8,10 @@ description: >
   Trigger on: "execute this plan", "run this sprint", "implement these changes", any dispatch
   prompt with multiple steps, or any task where completion quality depends on maintaining focus
   across many tool calls. When in doubt, use this skill — the overhead is minimal and the
-  discipline prevents regressions.
+  discipline prevents regressions. It is the only skill in the plugin that executes:
+  storyboard scopes, write-plan and roadmap-review plan, next-pointer and epic prepare,
+  and all of them hand off here. Before the first edit on a written plan it checks for
+  upstream, downstream, in-flight, and roadmap-order conflicts.
 ---
 
 <!-- virtuoso-shared-contract v2 -->
@@ -44,6 +47,13 @@ rules read at session start get deprioritized under context pressure after 10+ t
 This skill stays in active context because you reference it at every step boundary.
 
 **Announce at start:** "Using the Virtuoso skill to maintain execution discipline."
+
+**The only skill that executes.** Every path to execution ends here
+(`references/execution-paths.md`). `/storyboard` scopes work to a draft stub.
+`/write-plan` and `/roadmap-review` write the full plan. `/next-pointer` gates it, and
+`/epic` prepares a packet. None of them edits an edit site, creates the work branch, or
+runs the change. This skill does, and only from a written plan: a draft stub or an idea
+goes back to `/storyboard` and `/write-plan` first.
 
 ## Sprint Record Naming
 
@@ -137,8 +147,9 @@ Before touching any file or running any command:
 1. **Read the full task specification.** If the task references external docs, read those too.
    When the task is a governed dispatch, read its **origin line** as well
    (`references/execution-paths.md`). The spec may be a roadmap item from `/next-pointer`, a
-   held plan from `/write-plan`, or an epic packet from `/epic`. All three arrive meeting
-   the same destination contract. The origin tells Phase 6 how the close-out runs.
+   held plan handed off by `/write-plan`, or an epic packet from `/epic`. All three arrive
+   meeting the same destination contract. The origin tells the intake below which checks
+   to run, and tells Phase 6 how the close-out runs.
 2. **Read the behavioral reference** — the bundled [`references/zeus.md`](references/zeus.md)
    (Virtuoso's orchestration protocol: routing decision tree, agent hierarchy, escalation
    rules), or the project's own lead-agent definition if it overrides — to load the routing
@@ -150,6 +161,81 @@ Before touching any file or running any command:
 5. **Declare the lane and its surface manifest** when the project runs lane-based
    concurrency. Read the lane assignment from the dispatch spec; if the spec does not
    name one, ask before touching a file.
+6. **Run the conflict check** (below) for a governed dispatch, and the **held-plan
+   intake** when the origin is a held plan. Both come before the first edit and before
+   the work branch exists.
+
+### The conflict check — before the first edit
+
+A written plan was safe to run when it was written. This check makes sure it is still
+safe now, against the roadmap and the work around it. It is read-only: lock-free git
+(`GIT_OPTIONAL_LOCKS=0 git --no-optional-locks …`) and the registry helper's read side
+(`items --all --json`, `holding --open`, `lessons --open`).
+
+| Direction | What to check | A conflict looks like |
+|---|---|---|
+| **Upstream** | Every prerequisite is terminal through the provider. A prerequisite in a held entry reads `executed` (`holding --check`). | A prerequisite that is still queued, in flight, or blocked |
+| **In flight** | Nothing else in flight touches these edit sites: in-flight register items, in-flight held entries, and other open branches and worktrees (`git worktree list`, then `git log --oneline <default>..<branch> -- <edit sites>` for each) | Another run changing the same files now |
+| **Roadmap order** | Where the plan sits against the current order: its pointer's *Placement* line, or its sequence. Any item ahead of it that is not terminal and touches the same edit sites, or that it depends on. | Landing underneath work the roadmap put first, or jumping ahead of the head without a recorded reason |
+| **Downstream** | The items the plan's impact map and placement name as downstream, and any dispatch-ready specification that cites a location this plan moves (search the specification store for the edit sites' anchors) | A specification this run will make stale |
+| **Drift** | Commits at the edit sites since the base the pointer names (`git log --oneline <pointer's sha>..<default branch> -- <edit sites>`), and live lessons recorded since the plan was written | Code that moved under the plan |
+
+Straight from the ceremony that just gated the plan, in this session, the check is quick:
+it confirms what that ceremony read. From another session, or on a later day, it is the
+check that matters. For an epic packet, run it at the first session against the
+charter's scope. The packet's resume protocol covers the sessions after that.
+
+What a conflict does:
+
+- **Upstream pending, or in-flight work on the same edit sites** → stop before the first
+  edit. Render the issue (Phase 5) and route it to `/mid-dispatch-decision`. Two runs
+  never change the same edit sites at once.
+- **Roadmap order** → ask one bounded question: wait for the earlier item, run now with
+  the user's reason recorded in the plan, or send it back to be planned again.
+- **Drift, or a plan that no longer matches the code** → stop. A held plan goes back to
+  `/write-plan <entry>`, and a roadmap item to `/next-pointer`. Never re-plan here.
+- **Downstream staleness** → not a stop. Name each affected item in Task #1's notes and
+  in the close-out, so the review acts on it. Another item's specification is not this
+  run's to edit.
+
+Print the result as one line under Task #1:
+`Conflict check: upstream ✓ · in flight ✓ · roadmap order ✓ · downstream [n flagged] · drift ✓`.
+
+### The held-plan intake
+
+A held plan (`Origin: held plan — <entry> (HB-<n>)`) comes straight from `/write-plan`'s
+hand-off, in this session or another. `/storyboard` scoped it and `/write-plan` specified
+it. Neither executed anything. As part of Task #1:
+
+1. **Read its state:** `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . holding --check <entry>`.
+   - `planned` → continue.
+   - `in-flight` → another run holds it. Stop and ask. Never run it twice.
+   - `storyboarded` → there is only a draft stub, and no plan. Route to `/write-plan <entry>`.
+   - `absorbed` → it is a roadmap item now. Route to `/next-pointer`.
+   - `executed` or `withdrawn` → there is nothing to run. Say so and stop.
+2. **Run the conflict check** above, against the entry's pointer, placement, and impact map.
+3. **Record the start of execution.** Preview first, then run it with `--apply`:
+
+       "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso holding --record <entry> --state in-flight --note "executing: <branch>" --apply
+
+   If the command refuses because `virtuoso` may not write the `holdingBay` role, the
+   project registered the role before this skill recorded there. Show the user the fix,
+   which is adding `virtuoso` to the role's `allowedWriters`, and stop until they make
+   it. Never record under another ceremony's name.
+4. **Run the pointer's repository-reconciliation recipe first**, before the first edit.
+   Halt on any STOP it contains, and report the git output.
+5. The sprint identifier is the `HB-<n>`. An item set runs every item, in prerequisite
+   order, in this one run.
+
+**If the run ends without completing**, and will not resume from `/mid-dispatch-decision`
+in this run, hand the entry back to the bay:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso holding --record <entry> --state planned --note "stopped: <why>; <what is preserved, where>" --apply
+
+Name any item of a set that did close out, so the review absorbs it as completed. The
+holding bay lets this skill record `planned` only out of `in-flight`: it hands a run
+back, and it never plans. A finished run goes to `/pointer-closeout`, which records the
+entry `executed`.
 
 <!-- rule:lane-declaration (lane-concurrency) -->
 **Lane discipline.** Under lane-based concurrency the sprint declares, at Phase 1 and
@@ -316,7 +402,9 @@ Every task line follows this format: `□ N. owner-label: Task description [tier
   2. Built the numbered task plan (Phase 2)
   3. Assigned parent-owned tasks and child-worker candidates (Phase 3)
   4. Recorded the repository starting point when the spec requires one
-  5. Printed the final assignment table
+  5. For a governed dispatch, printed the conflict check, and for a held plan, recorded
+     the entry `in-flight`
+  6. Printed the final assignment table
   Task #1 is the parent thread's setup work. Everything after Task #1 is either
   executed by the parent or delegated to child workers under this same sprint plan.
 - Every subsequent task starts with `unassigned:` as a placeholder — Phase 3 replaces

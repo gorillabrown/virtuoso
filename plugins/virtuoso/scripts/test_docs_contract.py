@@ -54,7 +54,7 @@ def test_every_documented_preflight_mode_exists():
 def test_every_documented_registry_subcommand_exists():
     completed = subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "virtuoso_registry.py"), "--help"],
-        capture_output=True, text=True)
+        capture_output=True, text=True, encoding="utf-8")
     assert completed.returncode == 0
     implemented = set(re.findall(r"\{([a-z,-]+)\}", completed.stdout)[0].split(","))
 
@@ -75,7 +75,7 @@ def test_documented_cli_flags_are_accepted():
     text = all_doc_text()
     completed = subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "virtuoso_preflight.py"), "--help"],
-        capture_output=True, text=True)
+        capture_output=True, text=True, encoding="utf-8")
     for flag in flags:
         if flag in text:
             assert flag in completed.stdout, "%s is documented but not implemented" % flag
@@ -392,13 +392,75 @@ def test_write_plan_always_starts_from_the_storyboard():
     assert "run `/storyboard`" in text
 
 
+def test_only_the_virtuoso_skill_executes():
+    """Storyboard scopes to a draft stub, write-plan writes the full plan, and only the
+    virtuoso skill executes. A storyboard run in a chat of its own must end at its
+    draft stub, and the planner must hand off rather than start the run."""
+    from tools.governance import holding as holding_mod
+    assert holding_mod.RECORDED_BY[holding_mod.IN_FLIGHT] == ("virtuoso",)
+    for name in ("storyboard", "write-plan"):
+        text = skill_text(name)
+        assert "--state in-flight" not in text, name
+        assert "never execut" in " ".join(text.split()).lower(), name
+    storyboard = skill_text("storyboard")
+    assert "## Step 11 — Hand the draft stub to /write-plan" in storyboard
+    assert "Make it directly" not in storyboard
+    plan = skill_text("write-plan")
+    assert "## Step 8 — Hand off to Virtuoso" in plan
+    assert "Execute now" not in plan and "Load the **virtuoso** skill, and hand it" not in plan
+    virtuoso = skill_text("virtuoso")
+    assert ("--actor virtuoso holding --record <entry> --state in-flight" in virtuoso)
+    assert ("--actor virtuoso holding --record <entry> --state planned" in virtuoso)
+    assert "### The conflict check — before the first edit" in virtuoso
+    paths = (ROOT / "references" / "execution-paths.md").read_text(encoding="utf-8")
+    assert "## Only the virtuoso skill executes" in paths
+
+
 def test_the_roadmap_paths_open_only_on_the_master_roadmap():
     epic = skill_text("epic")
-    assert "### Step 1 — Pull the item from the master roadmap" in epic
+    assert "### Step 1 — Pull the items from the master roadmap" in epic
+    assert "#### Step 1a — One item marked `Path: epic`" in epic
+    assert "#### Step 1b — A combination of roadmap items" in epic
     assert "`/storyboard`" in epic
     pointer = skill_text("next-pointer")
     assert "`Path: epic`" in pointer and "## Edge case: Epic at head" in pointer
     assert "Origin: roadmap — [ITEM-ID]" in pointer
+
+
+def test_the_epic_packet_carries_its_git_work_and_a_goal_line():
+    """D6 says an epic carries a reconciliation recipe; the skill must fill one into the
+    kickoff prompt, and print a one-line goal for `/goal` straight after it."""
+    epic = " ".join(skill_text("epic").split())
+    assert "**Fill the run's git work**" in epic
+    assert "`policy.git.branchNameTemplate`" in epic and "Leave no placeholders" in epic
+    assert "print the **goal line** from launch.md in its own fenced block" in epic
+    assert "`/goal`" in epic and "BLOCKER(USER)" in epic
+
+    assets = ROOT / "skills" / "epic" / "assets"
+    launch = (assets / "launch.template.md").read_text(encoding="utf-8")
+    kickoff = launch.split("## Kickoff / resume prompt", 1)[1].split("## Goal line", 1)[0]
+    prompt = kickoff.split("```", 2)[1]
+    # One paste carries the epic's instructions and the git work together.
+    assert "RESUME PROTOCOL" in prompt and "GIT WORK" in prompt
+    for step in ("git switch -c [BRANCH]", "git branch --show-current",
+                 "--left-right --count", "git add -- <exact paths>"):
+        assert step in prompt, step
+    assert "never create it again" in prompt and "never rebase" in prompt
+
+    goal = launch.split("## Goal line", 1)[1].split("## Completion protocol", 1)[0]
+    block = goal.split("```", 2)[1].strip("\n")
+    assert "\n" not in block, "the goal line must be one line"
+    assert "done.md" in block and "Definition-of-Done" in block and "BLOCKER(USER)" in block
+
+    charter = (assets / "charter.template.md").read_text(encoding="utf-8")
+    assert "**Git, from `policy.git`" in charter
+    state = (assets / "state.template.md").read_text(encoding="utf-8")
+    assert "| Run branch |" in state and "| Branch created |" in state
+    journal = (assets / "journal.template.md").read_text(encoding="utf-8")
+    assert journal.count("- **Git:**") == 2
+    paths = (ROOT / "references" / "execution-paths.md").read_text(encoding="utf-8")
+    d6 = next(line for line in paths.splitlines() if line.startswith("| D6 |"))
+    assert "GIT WORK" in d6 and "kickoff prompt" in d6
 
 
 def test_the_holding_bay_is_reconciled_at_review_and_closed_out_in_held_plan_mode():

@@ -143,8 +143,9 @@ close-out adapts in exactly these ways:
 Step 6 verifies the close-out, the lessons gate, and that `holding --check <entry>` reads
 `executed`. It does not verify a terminal record or a register status, because there are
 none yet. The buffer check is skipped, since ad hoc work never drew on the buffer. If an
-item set stops partway, the entry is not `executed`. `/write-plan` returns it to
-`planned`, and the note names which items closed out.
+item set stops partway, the entry is not `executed`. The `virtuoso` skill, which
+recorded it `in-flight`, returns it to `planned`, and the note names which items closed
+out.
 
 **The recording crossing.** When `/roadmap-review` absorbs an `executed` entry (its
 A.4b), it creates each register item and then invokes this ceremony for **Steps 3, 5,
@@ -156,6 +157,28 @@ The values come from the entry's `executed` row. The evidence was verified, and 
 lessons were recorded, when the work ran. Nothing is re-verified, and nothing is taught
 twice. The item never stood on the conveyor belt, so Step 5 retires it and elevates
 nothing.
+
+## Combined epics — one run, several items
+
+An epic packet whose charter names `items:` ran several roadmap items as one run
+(`/epic`, Step 1b). Its origin line reads
+`Origin: epic packet — <directory> (<PACKET-ID>: <ITEM-ID>, <ITEM-ID>, ...)`. It closes
+once, as one crossing, and the crossing retires each item:
+
+| Step | For a combined epic |
+|---|---|
+| Wave 1 | One brief and one findings table for the run. The register and roadmap changes name every item. |
+| Step 1 — evidence | Every charter DoD row, fresh: each item's own *Done when* rows, and the row that proves they pass together. An item is complete only when all of its rows pass. |
+| Step 2 — artifact | One report, keyed by the packet: `closeout --item "<PACKET-ID>"`. |
+| Step 3 — terminal record | One record per item, in the charter's serial order, each naming the one report as its evidence. |
+| Step 4 — persist | Lessons and the report once. A lesson's heading names the item that taught it, or the packet when the run as a whole taught it. |
+| Step 5 — register | Each item closed, in serial order: `record-completion --item <ITEM-ID>` for a local register, the mutation handshake for an external one. |
+| Step 6 — verify | Every item terminal in the register, one record each in the ledger, and the lessons gate run for the whole run: `lessons --check "<report>" --closeout --item "<PACKET-ID>,<ITEM-ID>,<ITEM-ID>"`. |
+
+A run that stopped before `done.md` is not a completion. When the user closes it anyway,
+retire only the items whose rows all pass, with their evidence. Return the rest to the
+belt, say why for each in the report, and set the charter's `status: aborted`. A charter
+left active keeps its items out of `/next-pointer`'s reach.
 
 ## Retirement records routed here
 
@@ -248,7 +271,12 @@ apply. Every close-out produces one of two things:
   the identifier `closeout` resolved (`nextLessonId`), in the standard shape:
   [assets/SpecRetro.entry.template.md](assets/SpecRetro.entry.template.md).
   `Applies to` is the field the next author matches against new work — say *when*
-  the lesson bears, not only what happened.
+  the lesson bears, not only what happened. Its heading names this item **by
+  identifier**, `(<ITEM-ID>, <date>)`: that is how the gate knows this dispatch
+  recorded it. A heading that describes the item in words links only by name, with a
+  `lesson-linked-by-name` warning; a lesson already appended that way is linked with
+  `lessons --record-link <prefix>-NNN --item <ITEM-ID> --actor pointer-closeout
+  --apply`, never by editing it (see `references/spec-retro-format.md`).
 - Or the line **`No new lesson — <reason>`** in the report's Lessons section. The
   reason is evidence, and it names what was examined by identifier: "followed
   <prefix>-NNN exactly", "both risks were covered by <prefix>-NNN and standing rule
@@ -544,6 +572,9 @@ Re-read each thing you wrote, from its source:
   now in the registered role, or it says "No new lesson" with a reason:
 
       "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --check "<close-out path>" --closeout --item "<ITEM-ID>"
+
+  A combined epic's close-out names the packet and every item it closes:
+  `--item "<PACKET-ID>,<ITEM-ID>,<ITEM-ID>"`.
 
 - the item's status in the live register, re-read through the provider, is terminal;
 - the next item is now at the head;

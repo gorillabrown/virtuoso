@@ -63,6 +63,25 @@ One entry per lesson, in this shape — these fields are what `lessons` reads ba
 `Applies to` is the field a future author matches against a new item. Write *when*
 it bears — "any item that adds a gate", "continuations on a red base" — not a category.
 
+**Name the item by its identifier.** The heading's `(ITEM-ID, YYYY-MM-DD)` is how the
+close-out gate knows this dispatch recorded the lesson. Write the identifier, not a
+description of the item: `(EPIC-CHECKOUT-FOLLOW-UPS, 2026-09-24)`, not
+`(checkout follow-ups epic, 2026-09-24)`. A heading that names a word-built
+identifier in words still links, by name, and the gate warns
+(`lesson-linked-by-name`). An `**Item:** <ITEM-ID>` line in the entry links it too.
+
+**Link records, never edits.** A lesson already appended under the wrong item, or
+under a description, is linked by appending a record under its identifier. The
+record carries no status, so the lesson's status is unchanged:
+
+    ### <prefix>-NNN — link (ITEM-ID, YYYY-MM-DD)
+    **Item:** ITEM-ID
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --record-link <prefix>-NNN --item <ITEM-ID> --actor pointer-closeout --apply
+
+Link a lesson only to the item that taught it. Linking an older lesson to make a
+close-out's gate pass hides the fact that this dispatch recorded nothing new.
+
 **Status records, never edits.** The role is append-only. To promote, retire, or
 supersede a lesson, append a new entry under the same identifier whose field is its
 status; the latest status recorded is the current one, and the history shows why:

@@ -511,12 +511,15 @@ bounded-question protocol. Nothing is carried past the review.
 | Held as | Absorbed as |
 |---|---|
 | `planned` | Each `HB-<n>` becomes an item. Its specification moves into `policy.roadmap.specStorage`, with the provisional id replaced by the register's id. It is re-audited in D.3/D.4.5 before it counts as dispatch-ready, because code moves between planning and review. |
-| `storyboarded`, dispatch-sized | A stub per skeleton item, with the entry's alignment record and frames cited as its source |
+| `storyboarded`, dispatch-sized | A stub per item in its draft stub, with the entry's alignment record and frames cited as its source |
 | `storyboarded`, epic-scale | One item whose structural fields carry `Path: epic`, with the entry cited as the source its charter is built from. `/next-pointer` routes it to `/epic` when it reaches the head. |
 
 Create each item through `create-item`, with `notes` reading
 `origin: held plan <entry> (HB-<n>)`. Add the entry's downstream flags to the
-non-blocking follow-up queue, and read the entry's placement recommendation into C.4.
+non-blocking follow-up queue, and read the entry's placement into C.4: the exact slot
+`/write-plan` recorded for a `planned` entry (its *Roadmap placement*), or the storyboard's
+recommendation for a `storyboarded` one. Apply the slot unless the review's own
+sequencing shows it is wrong, and say why when it does.
 Then record the absorption. The note names what the entry became, for example
 `as ADD-052 (queued, full-spec)`, `as ADD-053, ADD-054 (queued, stubs)`, or
 `as ADD-055 (Path: epic)`. A note is one line, and it cannot contain `|`:
@@ -524,6 +527,15 @@ Then record the absorption. The note names what the entry became, for example
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor roadmap-review holding --record <entry> --state absorbed --note "as <ITEM-ID> (queued, full-spec)" --apply
 
 A withdrawn entry records `--state withdrawn --note "<the user's reason>"`.
+
+**Set the path of items already on the roadmap.** `Path` arrived in 1.11, so an older
+roadmap carries none, and a missing field means `dispatch`. Walk the active items. One
+that is epic-scale on its own (outcome-stated, multi-phase, multi-session or walk-away)
+gets `- **Path:** epic — <why it cannot be one dispatch>` in its entry, so
+`/next-pointer` routes it to `/epic`. Dispatch-sized items that belong together keep
+their own path: `/epic` combines them when the user wants them run as one
+(`references/execution-paths.md`). Name each item this review marks, with the reason,
+in the plan.
 
 ### C.4 Sequence the conveyor belt
 Prerequisites → risk → hardest-first. Write the sequence back through the
@@ -568,7 +580,9 @@ Then take the first *N* active items in sequence order, where *N* is the buffer 
 4. `new specifications = target − already_ready`.
 5. Target the next items in sequence order that are still stubs. Skip an item whose
    entry declares `Path: epic`: `/epic` charters it, and the dispatch rubric is not its
-   gate. It does not count toward the buffer.
+   gate. It does not count toward the buffer. Skip, too, an item an active epic charter
+   names (`item:` or `items:`, in the registered `epics` role): it is in a run, under
+   that packet's order.
 
 Edge cases: fewer than *N* active items → specify all of them. Group boundaries
 are not a stopping condition. A hard blocker mid-buffer → stop there, flag it in
@@ -719,11 +733,11 @@ create. For a local register that is one write. For an external register it is
 the handshake: `mutation-plan --operation create-item`, execute the returned
 instruction with the host's connector, `mutation-confirm --succeeded
 --provider-id <ID> --actual-revision <REVISION>`, then refresh the canonical
-snapshot and verify `recovery` is empty. The plan is refused when the snapshot is
-absent or stale, when the id already exists (terminal items included), or when a
-creation under the same idempotency key was already confirmed; each refusal names
-the fix. If `policy.workRegister.creators` does not name this ceremony, say so and
-stop — creation is separately authorized.
+snapshot (`snapshot --import <rows>`) and verify `recovery` is empty. The plan is
+refused when the snapshot is absent or stale, when the id already exists (terminal
+items included), or when a creation under the same idempotency key was already
+confirmed; each refusal names the fix. If `policy.workRegister.creators` does not
+name this ceremony, say so and stop — creation is separately authorized.
 
 Only write fields the provider reports it can write. Field *names* come from
 `policy.workRegister.fieldMappings`; status *words* come from
