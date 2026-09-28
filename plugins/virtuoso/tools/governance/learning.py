@@ -13,8 +13,9 @@ catalog alone cannot:
 * **metrics** — six figures that say whether the loop is improving, each computed
   with provenance or *not computable* with its missing inputs named.
 
-Everything here is read-only. The one write the loop needs — a status record —
-is :func:`status_record`, appended by the ``lessons --record-status`` command.
+Everything here is read-only. The loop's two writes are appended records, never
+edits: a status record (:func:`status_record`, ``lessons --record-status``) and a
+link record (:func:`link_record`, ``lessons --record-link``).
 """
 from __future__ import annotations
 
@@ -238,6 +239,25 @@ def status_problem(lessons: list[lessons_mod.Lesson], lesson_id: str, status: st
 def status_record(lesson_id: str, status: str, item: str, date: str) -> str:
     """The markdown appended to record ``status`` — a new entry under the same id."""
     return "### %s — status (%s, %s)\n**Status:** %s\n" % (lesson_id, item, date, status.strip())
+
+
+def link_problem(lessons: list[lessons_mod.Lesson], lesson_id: str, item: str) -> str:
+    """Why ``lesson_id`` cannot be linked to ``item``, or ``""``. A link is not a
+    status, so a closed lesson can still be linked to the item it came from."""
+    item = (item or "").strip()
+    if not any(lesson.id == lesson_id for lesson in lessons):
+        return "%s is not a recorded lesson; a link record needs an entry to follow" % lesson_id
+    if not item:
+        return "--record-link needs --item: the item the lesson was recorded from"
+    if not re.fullmatch(r"[^\s,;|()]+", item):
+        return "%r is not one identifier (no spaces, commas, semicolons, bars or brackets)" % item
+    return ""
+
+
+def link_record(lesson_id: str, item: str, date: str) -> str:
+    """The markdown appended to link ``lesson_id`` to ``item`` — a new entry under the
+    same id, carrying no status, so the lesson's status is unchanged."""
+    return "### %s — link (%s, %s)\n**Item:** %s\n" % (lesson_id, item, date, item)
 
 
 # --- effort calibration ----------------------------------------------------------------------

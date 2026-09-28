@@ -16,7 +16,8 @@ This index maps the old section numbers to their new homes.
 - **storyboard → write-plan → virtuoso** — the ad hoc path: scope to a draft stub, write
   the full plan, then execute; only virtuoso executes, and the entry is held for roadmap
   review
-- **epic** — a long-horizon run of an epic-scale roadmap item
+- **epic** — a long-horizon run of an epic-scale roadmap item, or of a combination of
+  specified roadmap items serialized where they share files
 - see `execution-paths.md` — three paths to execution, one destination
 - **pointer-closeout** — close-out report + spec retrospective
 - **mid-dispatch-decision** — decision protocol when a dispatch pauses

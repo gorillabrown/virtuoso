@@ -332,12 +332,12 @@ def default_workspace(tmp_path):
     root = tmp_path / "default"
     root.mkdir()
     made = subprocess.run([sys.executable, PREFLIGHT, "--root", str(root), "--mode", "create",
-                           "--authorize"], capture_output=True, text=True)
+                           "--authorize"], capture_output=True, text=True, encoding="utf-8")
     assert made.returncode == 0, made.stdout + made.stderr
     created = subprocess.run([sys.executable, REGISTRY_CLI, "--root", str(root), "--actor",
                               "roadmap-review", "create-item", "--item", "ITEM-1",
                               "--fields-json", '{"title": "First thing"}'],
-                             capture_output=True, text=True)
+                             capture_output=True, text=True, encoding="utf-8")
     assert created.returncode == 0, created.stdout + created.stderr
     return root
 

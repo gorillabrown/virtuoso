@@ -417,6 +417,7 @@ def emit(outcome: result_mod.Result, *, quiet: bool, as_json: bool) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    textio.utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--root", default=os.getcwd())
     parser.add_argument("--mode", choices=list(result_mod.MODES), default="check")

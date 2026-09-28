@@ -16,6 +16,10 @@ Subcommands:
   provider [--role R]       describe the provider serving a role, and its capabilities
   items [--all]             list work items from the work register
   next                      the next eligible work item
+  combine --items ID ...    whether roadmap items combine into one epic run: each
+          --lane L [--from N] [--to M]   live and specified, prerequisites done or
+                            in the set, shared files serialized; the serial order,
+                            the lanes, the effort (read-only)
   kpis                      derived metrics, each with its provenance, and pace
                             against every declared deadline
   closeout --item ID --date D   resolve close-out artifact paths (read-only)
@@ -25,6 +29,8 @@ Subcommands:
           --hygiene         what to merge, retire, tidy or repair (governance-sweep)
           --candidates      lessons that have earned promotion or revision
           --record-status ID --status S   append a status record (--apply writes)
+          --record-link ID --item ITEM    append a link record (--apply writes)
+          --item ITEM       only the lessons recorded from ITEM, and how each is linked
   holding [--open]          the held ad hoc plans awaiting roadmap review (read-only)
           --check PATH      check one held plan's structure and trail
           --next-id         the next provisional item identifier (HB-<n>)
@@ -33,6 +39,8 @@ Subcommands:
   deps                      check the project's declared runtime dependencies
   protected                 hash every protected file (immutable-hash verification)
   snapshot --out PATH       capture a timestamped snapshot of the work register
+           --import ROWS    build the snapshot from rows a host connector read: the
+                            project's mappings applied, subitems kept out, stamped
   recovery                  list unresolved partial-failure recovery records
   record-completion         append the terminal record and close the item in a LOCAL
                             register, in order, then verify (preview; --apply writes)
@@ -56,7 +64,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.governance import (  # noqa: E402
-    backup as backup_mod, holding as holding_mod, learning as learning_mod,
+    backup as backup_mod, combine as combine_mod, holding as holding_mod,
+    learning as learning_mod,
     lessons as lessons_mod, overlays as overlays_mod,
     policy as policy_mod, providers,
     registry as registry_mod, repair as repair_mod, schema, textio,
@@ -64,7 +73,8 @@ from tools.governance import (  # noqa: E402
 from tools.governance.errors import CapabilityError, GovernanceError, RoleNotRegistered  # noqa: E402
 from tools.governance import dependencies, integrity, repostate  # noqa: E402
 from tools.governance.providers import (  # noqa: E402
-    base as provider_base, kpi, ledger as ledger_mod, recovery, snapshot_provider,
+    base as provider_base, kpi, ledger as ledger_mod, mapping as provider_mapping, recovery,
+    snapshot_provider,
 )
 
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -226,6 +236,17 @@ def cmd_items(args) -> int:
     return EXIT_OK
 
 
+def _active_charters(reg) -> tuple[dict, str]:
+    """``({item id: packet}, where)`` for the active epic charters in the registered
+    ``epics`` role; no role means no packet can claim an item."""
+    try:
+        epics = reg.resolve("epics")
+    except RoleNotRegistered:
+        return {}, "no epics role is registered; no packet can claim an item"
+    return (combine_mod.active_charters(epics),
+            os.path.relpath(epics, reg.root).replace(os.sep, "/"))
+
+
 def cmd_next(args) -> int:
     reg = _load(args.root)
     selection = providers.work_register(reg, actor=args.actor)
@@ -233,17 +254,27 @@ def cmd_next(args) -> int:
     snap = selection.provider.snapshot()
     payload = {"item": item.as_dict() if item else None, "provenance": snap.provenance(),
                "selection": selection.as_dict()}
+    packet = _active_charters(reg)[0].get(item.id, "") if item else ""
+    if packet:
+        payload["inEpicPacket"] = packet
     if args.as_json:
         return _emit(payload, True)
     if item is None:
         print("no eligible item: every active item is blocked or waiting on a prerequisite")
         return EXIT_OK
     print("%s — %s" % (item.title or "(untitled)", item.id))
+    if packet:
+        print("  in epic run:   %s — an active charter names this item; resume the run "
+              "from its launch file, never dispatch the item on its own" % packet)
     print("  sequence:      %s" % (item.sequence if item.sequence is not None else "unsequenced"))
     print("  status:        %s (%s)" % (item.status, item.raw_status or "—"))
     print("  specification: %s" % (item.written_status or "unknown"))
     print("  prerequisites: %s" % (", ".join(item.prerequisites) or "none"))
     print("  effort:        %s" % (item.effort or "unrecorded"))
+    if snap.stale:
+        print("\n[STALE] %s. Refresh the snapshot before naming this the head: read the "
+              "register with the host's connector, then `snapshot --import <rows>`."
+              % snap.stale_reason)
     print("\nsource: %s via %s, snapshot %s" % (snap.source, snap.provider, snap.taken_at))
     return EXIT_OK
 
@@ -431,6 +462,18 @@ def _record_lesson_status(args, reg, path, source, recorded, text) -> int:
     if not args.apply:
         print("preview — append to %s (run again with --apply):\n\n%s" % (source, record))
         return EXIT_OK
+    after = _append_lesson_record(reg, path, source, record)
+    recorded_now = after.get(args.record_status)
+    if recorded_now is None or recorded_now.status != args.status.strip():
+        raise GovernanceError("the record was appended but does not read back as the "
+                              "current status of %s; inspect %s" % (args.record_status, source))
+    print("recorded %s: %s (%s)" % (args.record_status, recorded_now.status, source))
+    return EXIT_OK
+
+
+def _append_lesson_record(reg, path, source, record) -> dict:
+    """Append ``record`` to the lessons document in its own line ending and return
+    the catalog read back, by id. Never rewrites a byte already there."""
     raw = textio.read_bytes(path) or b""
     try:
         raw.decode("utf-8")
@@ -440,13 +483,40 @@ def _record_lesson_status(args, reg, path, source, recorded, text) -> int:
     lead = "" if not raw or raw.endswith(b"\n") else eol
     with open(path, "ab") as handle:
         handle.write((lead + eol + record.replace("\n", eol)).encode("utf-8"))
-    after = {l.id: l for l in lessons_mod.parse(textio.read_text(path) or "",
-                                                policy_mod.load(reg.policy).lesson_prefix)}
-    recorded_now = after.get(args.record_status)
-    if recorded_now is None or recorded_now.status != args.status.strip():
-        raise GovernanceError("the record was appended but does not read back as the "
-                              "current status of %s; inspect %s" % (args.record_status, source))
-    print("recorded %s: %s (%s)" % (args.record_status, recorded_now.status, source))
+    return {l.id: l for l in lessons_mod.parse(textio.read_text(path) or "",
+                                               policy_mod.load(reg.policy).lesson_prefix)}
+
+
+def _record_lesson_link(args, reg, path, source, recorded) -> int:
+    """Append one link record: the lesson came from ``--item``, though its heading does
+    not name it by identifier. Previews unless ``--apply``; a lesson already linked to
+    the item by identifier or link record is a no-op that writes nothing."""
+    actor = getattr(args, "actor", "") or ""
+    if not actor:
+        raise GovernanceError("--record-link needs --actor: the ceremony recording it")
+    if not reg.writable("lessons", actor):
+        raise GovernanceError("%s may not write the lessons role (allowedWriters in %s)"
+                              % (actor, schema.MANIFEST_RELPATH))
+    problem = learning_mod.link_problem(recorded, args.record_link, args.item)
+    if problem:
+        raise GovernanceError(problem)
+    item = args.item.strip()
+    lesson = next(l for l in recorded if l.id == args.record_link)
+    already = lesson.link_to(item)
+    if already in (lessons_mod.LINK_IDENTIFIER, lessons_mod.LINK_RECORD):
+        print("%s is already linked to %s (by %s); nothing to append" % (lesson.id, item, already))
+        return EXIT_OK
+    record = learning_mod.link_record(lesson.id, item, args.date or _today().isoformat())
+    if not args.apply:
+        print("preview — append to %s (run again with --apply):\n\n%s" % (source, record))
+        return EXIT_OK
+    after = _append_lesson_record(reg, path, source, record)
+    linked = after.get(lesson.id)
+    if linked is None or linked.link_to(item) != lessons_mod.LINK_RECORD \
+            or linked.status != lesson.status:
+        raise GovernanceError("the link record was appended but does not read back as a link "
+                              "from %s to %s; inspect %s" % (lesson.id, item, source))
+    print("linked %s to %s (%s)" % (lesson.id, item, source))
     return EXIT_OK
 
 
@@ -454,8 +524,9 @@ def cmd_lessons(args) -> int:
     """The learning loop's read side. Lists the registered lessons with their current
     status, or checks a specification (rubric U9) or a close-out against them.
 
-    Read-only. Exit 0 when the listing or the check passes, 1 when a check fails,
-    3 when there is no lessons role to read.
+    Read-only, except ``--record-status`` and ``--record-link`` with ``--apply``, which
+    append one record. Exit 0 when the listing or the check passes, 1 when a check
+    fails, 3 when there is no lessons role to read.
     """
     reg = _load(args.root)
     project_policy = policy_mod.load(reg.policy)
@@ -501,6 +572,8 @@ def cmd_lessons(args) -> int:
 
     if args.record_status:
         return _record_lesson_status(args, reg, path, source, recorded, text)
+    if args.record_link:
+        return _record_lesson_link(args, reg, path, source, recorded)
     if args.hygiene or args.candidates:
         outcomes, closeouts = _lesson_outcomes(reg, prefix)
         if args.hygiene:
@@ -537,16 +610,29 @@ def cmd_lessons(args) -> int:
         return EXIT_OK
 
     shown = [lesson for lesson in recorded if lesson.live or not args.open]
+    if args.item:
+        shown = [lesson for lesson in shown if lesson.link_to(args.item)]
     live = sum(1 for lesson in recorded if lesson.live)
-    payload = {"lessons": [lesson.as_dict() for lesson in shown], "source": source,
+    rows = []
+    for lesson in shown:
+        row = lesson.as_dict()
+        if args.item:
+            row["linkedBy"] = lesson.link_to(args.item)
+        rows.append(row)
+    payload = {"lessons": rows, "source": source,
                "prefix": prefix, "live": live, "closed": len(recorded) - live, "notes": notes}
+    if args.item:
+        payload["item"] = args.item
     if args.as_json:
         return _emit(payload, True)
-    print("%d lesson(s) in %s: %d live, %d closed%s"
+    print("%d lesson(s) in %s: %d live, %d closed%s%s"
           % (len(recorded), source, live, len(recorded) - live,
-             " (showing live only)" if args.open else ""))
+             " (showing live only)" if args.open else "",
+             " (showing %d recorded from %s)" % (len(shown), args.item) if args.item else ""))
     for lesson in shown:
         print("  %-9s %-6s %s" % (lesson.id, "live" if lesson.live else "closed", lesson.title))
+        if args.item:
+            print("            linked by: %s" % lesson.link_to(args.item))
         if lesson.applies_to:
             print("            applies to: %s" % lesson.applies_to)
         if not lesson.live or lesson.status != lessons_mod.DEFAULT_STATUS:
@@ -705,14 +791,179 @@ def cmd_holding(args) -> int:
     return EXIT_OK
 
 
+def cmd_combine(args) -> int:
+    """Whether a set of roadmap items combines into one epic run. Read-only.
+
+    Exit 0 when the combination is combinable, 1 when a blocking finding stands, 3 when
+    the question cannot be answered (no register, a malformed selection).
+    """
+    items = [i for chunk in (args.items or []) for i in re.split(r"[,\s]+", chunk) if i]
+    if bool(items) == bool(args.lane):
+        raise GovernanceError("combine takes --items ID [ID ...] or --lane LANE "
+                              "[--from SEQ] [--to SEQ], not both and not neither")
+    if (args.first is not None or args.last is not None) and not args.lane:
+        raise GovernanceError("--from and --to bound a --lane selection")
+    reg = _load(args.root)
+    project_policy = policy_mod.load(reg.policy)
+    selection = providers.work_register(reg, actor=args.actor)
+    snap = selection.provider.snapshot()
+    chosen, unknown, notes = combine_mod.select(snap, items=items, lane=args.lane,
+                                                first=args.first, last=args.last)
+    roadmap_text, roadmap_label = None, "the roadmap"
+    try:
+        roadmap_path = reg.resolve("roadmap")
+        roadmap_label = os.path.relpath(roadmap_path, args.root).replace(os.sep, "/")
+        roadmap_text = textio.read_text(roadmap_path)
+    except RoleNotRegistered:
+        pass
+    charters, charters_note = _active_charters(reg)
+    selected = ({"items": items} if items else
+                {"lane": args.lane, "from": args.first, "to": args.last})
+    combo = combine_mod.check(
+        snap, chosen, unknown=unknown, selection=selected, notes=notes,
+        read=lambda item: combine_mod.read_spec(reg, project_policy, item, roadmap_text,
+                                                roadmap_label),
+        charters=charters, effort_scale=project_policy.get("roadmap.effortScale"))
+    payload = dict(combo.as_dict(), charters=charters_note, selectionSource=selection.as_dict())
+    if args.as_json:
+        _emit(payload, True)
+        return EXIT_OK if combo.combinable else EXIT_CHECK_FAILED
+    by_id = {m.item.id: m for m in combo.members}
+    errors = [f for f in combo.findings if f["severity"] == "error"]
+    print("combination: %s (%d item(s), %d lane(s))"
+          % ("COMBINABLE" if combo.combinable
+             else "NOT COMBINABLE — %d blocking finding(s)" % len(errors),
+             len(combo.members), len(combo.lanes)))
+    if combo.order:
+        print("  serial order:")
+        for number, item_id in enumerate(combo.order, start=1):
+            member = by_id[item_id]
+            item = member.item
+            print("    %d. %s (%s)  seq %s · lane %s · effort %s · %s"
+                  % (number, item.title or "untitled", item.id,
+                     item.sequence if item.sequence is not None else "-", item.lane or "-",
+                     item.effort or "-",
+                     "%d file(s)" % len(member.spec.files) if member.files_known
+                     else "files unknown"))
+    if len(combo.lanes) > 1:
+        print("  lanes that may run side by side:")
+        for lane in combo.lanes:
+            print("    " + " -> ".join(lane))
+    for edge in combo.edges:
+        print("  %s before %s — %s" % (edge["before"], edge["after"], edge["why"]))
+    effort = combo.effort
+    if effort.get("computable"):
+        print("  effort: %g points (%s)" % (effort["points"], effort["scale"]))
+    else:
+        print("  effort: not computable — %s" % "; ".join(effort.get("missingInputs", [])))
+    for finding in combo.findings:
+        print("  [%s] %s: %s" % (finding["severity"], finding["code"], finding["message"]))
+    print("  charters: %s" % charters_note)
+    print("  source: %s via %s, snapshot %s%s"
+          % (snap.source, snap.provider, snap.taken_at, " (STALE)" if snap.stale else ""))
+    return EXIT_OK if combo.combinable else EXIT_CHECK_FAILED
+
+
+DEFAULT_SNAPSHOT_OUT = "Virtuoso/work-register.snapshot.json"
+
+
 def cmd_snapshot(args) -> int:
+    if args.import_rows:
+        return _import_snapshot(args)
     reg = _load(args.root)
     selection = providers.work_register(reg, actor=args.actor)
     snap = selection.provider.snapshot()
-    target = args.out if os.path.isabs(args.out) else os.path.join(args.root, args.out)
+    out = args.out or DEFAULT_SNAPSHOT_OUT
+    target = out if os.path.isabs(out) else os.path.join(args.root, out)
     snapshot_provider.write_snapshot(target, snap)
     print("snapshot written: %s (%d item(s), taken %s)"
           % (target, len(snap.items), snap.taken_at))
+    return EXIT_OK
+
+
+#: A snapshot import never writes over these: the live register, the record of
+#: finished work, evidence, or an archive.
+_SNAPSHOT_REFUSED_AUTHORITIES = ("live", "terminal", "evidence", "archive")
+
+
+def _snapshot_target(reg, args) -> tuple[str, str]:
+    """``(absolute path, label)`` the import writes: ``--out``, else the snapshot role
+    ``policy.workRegister.snapshot`` names. Refuses a role that is not a snapshot."""
+    if args.out:
+        target = args.out if os.path.isabs(args.out) else os.path.join(args.root, args.out)
+        return target, os.path.relpath(target, args.root).replace(os.sep, "/")
+    name = str(policy_mod.load(reg.policy).get("workRegister.snapshot", "") or "")
+    if not name:
+        raise GovernanceError(
+            "no snapshot role is named in policy.workRegister.snapshot, so there is nowhere "
+            "registered to write the import. Pass --out <path>, or register a role with "
+            "provider \"snapshot\" and name it in policy.workRegister.snapshot.")
+    spec = reg.role(name)
+    if spec is None or spec.is_external:
+        raise GovernanceError("policy.workRegister.snapshot names %r, which is not a registered "
+                              "local role" % name)
+    if (spec.provider != "snapshot" or spec.authority in _SNAPSHOT_REFUSED_AUTHORITIES
+            or spec.mutability in ("immutable", "append-only")):
+        raise GovernanceError(
+            "role %r (provider %s, authority %s, mutability %s) is not a snapshot the import "
+            "may replace; its provider must be \"snapshot\", and it must not be live, "
+            "terminal, evidence, archive, immutable or append-only"
+            % (name, spec.provider, spec.authority, spec.mutability))
+    return reg.resolve(name), spec.path
+
+
+def _import_snapshot(args) -> int:
+    """Build the canonical snapshot from the rows a host connector read. A write."""
+    reg = _load(args.root)
+    project_policy = policy_mod.load(reg.policy)
+    rows_path = (args.import_rows if os.path.isabs(args.import_rows)
+                 else os.path.join(args.root, args.import_rows))
+    text = textio.read_text(rows_path)
+    if text is None:
+        raise GovernanceError("%s cannot be read as text" % args.import_rows)
+    try:
+        rows, read_at = snapshot_provider.parse_rows(text)
+        taken_at = snapshot_provider.parse_taken_at(args.taken_at or read_at) \
+            if (args.taken_at or read_at) else provider_base.utc_now()
+    except ValueError as exc:
+        raise GovernanceError("%s: %s" % (args.import_rows, exc))
+    spec = reg.role(providers.WORK_REGISTER_ROLE)
+    source = (spec.external if spec is not None and spec.is_external
+              else os.path.relpath(rows_path, args.root).replace(os.sep, "/"))
+    mapping = provider_mapping.Mapping.from_policy(project_policy.section("workRegister"))
+    try:
+        snap, report = snapshot_provider.from_rows(rows, mapping, source=source,
+                                                   taken_at=taken_at,
+                                                   parent_column=args.parent_column)
+    except ValueError as exc:
+        raise GovernanceError("%s: %s" % (args.import_rows, exc))
+    target, label = _snapshot_target(reg, args)
+    snapshot_provider.write_snapshot(target, snap)
+    payload = dict(report.as_dict(), snapshot=label, source=source, takenAt=taken_at)
+    if args.as_json:
+        return _emit(payload, True)
+    print("snapshot imported: %s (%d item(s) from %d row(s), taken %s)"
+          % (label, report.items, report.rows, taken_at))
+    print("  source: %s" % source)
+    if report.subitems:
+        print("  %d subitem(s) kept out of the work list (parent column %r): %s"
+              % (len(report.subitems), report.parent_column,
+                 ", ".join("%s under %s" % (s["id"] or s["title"], s["parent"])
+                           for s in report.subitems[:8])
+                 + ("…" if len(report.subitems) > 8 else "")))
+    elif not report.parent_column:
+        print("  no parent column in the rows: if the register has subitems, include "
+              "their parent reference or leave them out (--parent-column names it)")
+    if report.without_id:
+        print("  %d row(s) without an identifier skipped" % report.without_id)
+    if report.unknown_status:
+        print("  %d item(s) with a status outside the project's vocabulary — no ceremony "
+              "can read them: %s"
+              % (len(report.unknown_status),
+                 ", ".join("%s (%r)" % (u["id"], u["status"]) for u in report.unknown_status)))
+    if report.unmapped_fields:
+        print("  no column feeds: %s (policy.workRegister.fieldMappings)"
+              % ", ".join(report.unmapped_fields))
     return EXIT_OK
 
 
@@ -1149,6 +1400,16 @@ def build_parser() -> argparse.ArgumentParser:
     items.set_defaults(func=cmd_items)
 
     sub.add_parser("next", parents=[common]).set_defaults(func=cmd_next)
+
+    combine = sub.add_parser("combine", parents=[common])
+    combine.add_argument("--items", nargs="+", default=[], metavar="ID",
+                         help="the roadmap items to combine (space- or comma-separated)")
+    combine.add_argument("--lane", default="", help="combine the active items of one lane")
+    combine.add_argument("--from", dest="first", type=int, default=None, metavar="SEQ",
+                         help="with --lane: the first sequence number to include")
+    combine.add_argument("--to", dest="last", type=int, default=None, metavar="SEQ",
+                         help="with --lane: the last sequence number to include")
+    combine.set_defaults(func=cmd_combine)
     sub.add_parser("kpis", parents=[common]).set_defaults(func=cmd_kpis)
 
     closeout = sub.add_parser("closeout", parents=[common])
@@ -1166,8 +1427,10 @@ def build_parser() -> argparse.ArgumentParser:
                          help="check a specification (rubric U9) or, with --closeout, a "
                               "close-out report")
     lessons.add_argument("--item", default="",
-                         help="the item: locates an inline specification, or names the "
-                              "item a close-out closes")
+                         help="the item: locates an inline specification, names the item(s) "
+                              "a close-out closes (comma-separated for a combined epic), "
+                              "names the item a link record points to, or filters the "
+                              "listing to the lessons recorded from it")
     lessons.add_argument("--closeout", action="store_true",
                          help="check a close-out's Lessons section instead of a "
                               "specification's Lessons applied")
@@ -1177,12 +1440,15 @@ def build_parser() -> argparse.ArgumentParser:
                          help="lessons that have earned promotion or revision (roadmap-review)")
     lessons.add_argument("--record-status", default="", metavar="ID",
                          help="append a status record for ID (with --status, --actor)")
+    lessons.add_argument("--record-link", default="", metavar="ID",
+                         help="append a link record: ID was recorded from --item (with --actor)")
     lessons.add_argument("--status", default="",
                          help="the status to record: Promoted -> <rule> / Retired — <why> / "
                               "Superseded -> <ID> / Observation")
     lessons.add_argument("--date", default="", help="the record's date (default: today)")
     lessons.add_argument("--apply", action="store_true",
-                         help="append the record (without it, --record-status previews)")
+                         help="append the record (without it, --record-status and "
+                              "--record-link preview)")
     lessons.set_defaults(func=cmd_lessons)
 
     holding = sub.add_parser("holding", parents=[common])
@@ -1218,7 +1484,19 @@ def build_parser() -> argparse.ArgumentParser:
     completion.set_defaults(func=cmd_record_completion)
 
     snapshot = sub.add_parser("snapshot", parents=[common])
-    snapshot.add_argument("--out", default="Virtuoso/work-register.snapshot.json")
+    snapshot.add_argument("--out", default="",
+                          help="where to write (default %s; with --import, the snapshot "
+                               "role policy.workRegister.snapshot names)" % DEFAULT_SNAPSHOT_OUT)
+    snapshot.add_argument("--import", dest="import_rows", default="", metavar="ROWS",
+                          help="build the snapshot from rows a host connector read: a JSON "
+                               "list of row objects keyed by the register's own columns, or "
+                               "{\"takenAt\": ..., \"rows\": [...]}")
+    snapshot.add_argument("--taken-at", default="",
+                          help="when the connector read the rows (ISO 8601 with an offset; "
+                               "default: the rows file's takenAt, else now)")
+    snapshot.add_argument("--parent-column", default="",
+                          help="the column holding a subitem's parent (default: Parent, "
+                               "Parent Item, parent_id and similar)")
     snapshot.set_defaults(func=cmd_snapshot)
 
     repo = sub.add_parser("repo", parents=[common])
@@ -1265,6 +1543,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    textio.utf8_stdio()
     args = build_parser().parse_args(argv)
     # SUPPRESS leaves the attribute absent when the flag was not given anywhere.
     args.root = os.path.abspath(getattr(args, "root", None) or os.getcwd())

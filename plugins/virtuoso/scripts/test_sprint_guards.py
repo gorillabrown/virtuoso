@@ -9,7 +9,7 @@ _spec.loader.exec_module(sg)
 
 def _run(*args):
     proc = subprocess.run([sys.executable, SCRIPT, *args],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8")
     return proc.returncode, proc.stdout + proc.stderr
 
 

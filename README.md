@@ -218,10 +218,13 @@ located rather than guessing a path.
 | Script | Purpose |
 |---|---|
 | `virtuoso_preflight.py` | check / adopt / create / repair, plus `--check-document` |
-| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `overlays` (incl. `--scaffold`), `provider`, `items`, `next`, `kpis`, `closeout`, `holding`, `repo`, `recovery`; and the explicit writers `snapshot`, `closeout --prepare`, `holding --record`, `create-item`, `mutation-plan`, `mutation-confirm` |
+| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `overlays` (incl. `--scaffold`), `provider`, `items`, `next`, `combine`, `kpis`, `closeout`, `lessons`, `holding`, `repo`, `recovery`; and the explicit writers `snapshot` (incl. `--import`), `closeout --prepare`, `lessons --record-status` / `--record-link`, `holding --record`, `create-item`, `mutation-plan`, `mutation-confirm` |
 | `generate_cockpit.py` | the planning cockpit, read from the configured provider |
 | `build_register_report.py` | the generated spreadsheet report (declared generated roles only) |
 | `validate.py` | structural validation of the plugin itself |
+
+Every command writes UTF-8 to stdout and stderr, whatever the console's code page, so a
+Windows shell that pipes or redirects the output needs no `PYTHONIOENCODING`.
 
 ## Three paths to execution, one destination
 
@@ -229,7 +232,7 @@ located rather than guessing a path.
 |---|---|---|
 | **Ad hoc** | `/storyboard` (scope) → `/write-plan` (plan) → the `virtuoso` skill (execute) | any time, for work that is not on the roadmap |
 | **Roadmap dispatch** | `/next-pointer` → the `virtuoso` skill | after a roadmap review has placed the item |
-| **Roadmap epic** | `/epic` → the `virtuoso` skill, every session | after a roadmap review has placed the item as `Path: epic` |
+| **Roadmap epic** | `/epic` → the `virtuoso` skill, every session | after a roadmap review has placed the item as `Path: epic`, or on a combination of specified roadmap items that `/epic` checks and charters as one run |
 
 Every path delivers the same thing to execution. That means work aligned with you, a
 specification that passes the shared readiness rubric, and awareness of the project and
@@ -249,7 +252,7 @@ Invoked through the plugin namespace, e.g. `/virtuoso:roadmap-review`.
 | `virtuoso` | — | Multi-step execution discipline; the only skill that executes |
 | `storyboard` | `/virtuoso:storyboard` | Scope ad hoc work with you to a draft stub; never plans or executes |
 | `write-plan` | `/virtuoso:write-plan` | Turn the draft stub into a full, dispatch-ready plan with its roadmap slot; hand off to Virtuoso or hold |
-| `epic` | `/virtuoso:epic` | Launch materials for an epic-scale roadmap item's multi-session run |
+| `epic` | `/virtuoso:epic` | Launch materials for a multi-session run: an epic-scale roadmap item, or a combination of roadmap items serialized where they share files |
 | `roadmap-review` | `/virtuoso:roadmap-review` | Heavyweight roadmap recalibration |
 | `roadmap-status` | `/virtuoso:roadmap-status` | Read-only status briefing |
 | `next-pointer` | `/virtuoso:next-pointer` | Finalize and dispatch the next item |

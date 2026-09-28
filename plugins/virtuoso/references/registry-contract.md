@@ -136,6 +136,7 @@ Never open a work register file directly. Ask the provider layer:
 python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> provider
 python <plugin>/scripts/virtuoso_registry.py --root . items
 python <plugin>/scripts/virtuoso_registry.py --root . next
+python <plugin>/scripts/virtuoso_registry.py --root . combine --items <ID> <ID> ...
 python <plugin>/scripts/virtuoso_registry.py --root . kpis
 python <plugin>/scripts/virtuoso_registry.py --root . repo --expect <paths>
 python <plugin>/scripts/virtuoso_registry.py --root . deps
@@ -184,6 +185,46 @@ requirements.
   missing inputs named. It is never approximated (item 30).
 - A snapshot read offline is labelled with its age and flagged stale past the
   configured window (item 31).
+
+### Refreshing a connector-backed register's snapshot
+
+A board, tracker, or database register is read through the snapshot role
+`policy.workRegister.snapshot` names, stale after `policy.workRegister.staleAfterHours`
+(24 by default). The host refreshes it; the plugin builds it. Read the register with
+the host's connector and write the rows to a file, keyed by the register's **own**
+column names, then import them:
+
+```sh
+python <plugin>/scripts/virtuoso_registry.py --root . snapshot --import <rows.json> \
+  [--taken-at <ISO time of the read>] [--parent-column <column>] [--json]
+```
+
+The rows file is a JSON list of row objects, or `{"takenAt": "<ISO time>", "rows": [...]}`.
+A cell may be text, a number, a list (prerequisites), or an object with a `text`,
+`name`, `id`, or `value` field. The import:
+
+- maps each row through `policy.workRegister.fieldMappings` and `statusMappings`,
+  exactly as a local CSV row is read;
+- keeps **subitems** out of the work list. A row whose parent column holds a value
+  (`Parent`, `Parent Item`, `parent_id` and similar, or `--parent-column`) is part of
+  its parent card, such as an owner decision, and is never a card of its own. Include
+  subitems only with their parent reference, or leave them out;
+- skips a row with no identifier, refuses two rows under one identifier, and names
+  every status outside the project's vocabulary, because no ceremony can read one;
+- stamps the read time: `--taken-at`, else the file's `takenAt`, else now. A time
+  must carry a UTC offset;
+- writes the snapshot role, and nothing else. It refuses a role whose provider is not
+  `snapshot`, or that is live, terminal, evidence, archive, immutable, or append-only.
+  Without a snapshot role, `--out <path>` names the file.
+
+A snapshot's reader applies the same subitem rule to a snapshot another builder
+wrote: an item carrying `parent` is not a card.
+
+**A stale snapshot is refreshed before it is acted on.** `next` and `items` print
+`[STALE]` with the age; a ceremony that is about to name the head of the belt, or
+check a combination for an epic, refreshes the snapshot first. When it cannot, it
+reports the external-register finding as a gap, with the age, and does not treat
+what it read as the current state.
 
 ### Mutations
 
@@ -245,7 +286,8 @@ registered operation; a connector's raw "create" is never called outside it.
   the superseded record is resolved with a pointer to its replacement.
 - **The crossing ends with a readable item.** Confirm with the identifier and
   revision the external system assigned (`--provider-id`, `--actual-revision`),
-  then refresh the canonical snapshot and check that `recovery` is empty.
+  then refresh the canonical snapshot (`snapshot --import`, below) and check that
+  `recovery` is empty.
 
 A local register creates directly — this is a write:
 
@@ -495,6 +537,32 @@ new entry under the same identifier whose field is its `**Status:**`, and the la
 recorded is current. A lesson is **live** until a status beginning `Promoted`, `Retired`,
 or `Superseded` is appended. `virtuoso_registry lessons [--open]` lists them.
 
+**Which item a lesson came from.** The heading's `(ITEM-ID, date)` names it, and so may an
+`**Item:** <ITEM-ID>` field in the entry. Those link it **by identifier**. A heading that
+described the item in words instead cannot be corrected in an append-only catalog, so two
+more links count, in this order:
+
+- a **link record**, appended under the lesson's identifier; it carries no status, so
+  the lesson's status is unchanged:
+
+  ```
+  ### <prefix>-NNN — link (ITEM-ID, YYYY-MM-DD)
+  **Item:** ITEM-ID
+  ```
+
+  `lessons --record-link <prefix>-NNN --item <ITEM-ID> --actor <ceremony> [--apply]`
+  appends it: previewed without `--apply`, refused for an actor the role's
+  `allowedWriters` does not name, an unknown lesson, or an item that is not one
+  identifier, a no-op when the lesson is already linked, and read back after;
+- a link **by name**: every word of a word-built identifier appears in the heading's
+  source, in any order and case (`checkout follow-ups epic` for
+  `EPIC-CHECKOUT-FOLLOW-UPS`), or every word after its leading one when at least two
+  remain. An identifier with a digit in it is a code, never a name. A link by name counts,
+  and the check that relies on it warns (`lesson-linked-by-name`) and names the link
+  record that makes it exact.
+
+`lessons --item <ITEM-ID>` lists the lessons recorded from an item, and how each is linked.
+
 **Three links, each checked.**
 
 1. **Close-out records.** `pointer-closeout` appends what the dispatch taught — or its
@@ -526,6 +594,11 @@ or `Superseded` is appended. `virtuoso_registry lessons [--open]` lists them.
 | `lessons-not-cited` | live lessons the specification does not cite, listed for the author to confirm (info) |
 | `lessons-item-section-missing` | `--item` names an item the document has no section for |
 | `lesson-reason-unanchored` | a close-out's "No new lesson" reason names nothing it examined — no lesson, standing rule or item identifier — while the catalog or `policy.standingRules.ids` holds something to examine |
+| `lesson-linked-by-name` | a close-out names a lesson whose heading names the item in words, not by identifier; it counts, and the message names the link record that makes it exact (warning) |
+
+A close-out's `--item` may name several items, comma-separated: a combined epic's
+close-out names its packet and every item it closes, and a lesson recorded from any of
+them counts.
 
 A lesson the close-out recorded and no specification applied was learned once and paid
 for twice. That is the failure this loop exists to make visible.
@@ -614,6 +687,65 @@ Writers by default: `governance-sweep`, `adversarial-review`, `virtuoso` (for th
 dispatches), `pointer-closeout`, `roadmap-review`, `3rd-party-audit`. **Reader:**
 `roadmap-review` B.3 reads every finding whose latest disposition is `open`, with the
 previous review's lessons-applied, and carries each into the plan.
+
+## Combining roadmap items into one epic
+
+An epic is one epic-scale item marked `Path: epic`, or a **combination**: several items a
+roadmap review already specified and placed, none epic-scale alone, run together as one
+unattended run (`references/execution-paths.md`). Whether a set combines is checked, not
+assumed:
+
+```sh
+python <plugin>/scripts/virtuoso_registry.py --root . combine --items <ID> <ID> ... [--json]
+python <plugin>/scripts/virtuoso_registry.py --root . combine --lane <lane> [--from <seq>] [--to <seq>] [--json]
+```
+
+It is read-only. It reads the register through its provider and each item's
+specification where `policy.roadmap.specStorage` keeps it: inline under the roadmap
+heading naming the item, or at the item's `spec_link` for `files`. The files an item
+touches are the paths its *Edit sites* and *Staging plan* fields name: backticked
+tokens with a slash or a file extension, and bare tokens with a slash. A bare file name
+matches the longer path it ends, and a directory matches the files beneath it. It
+returns:
+
+- the **serial order**: every prerequisite in the set first, then, for two items that
+  share a file, the one earlier in the register's sequence. Ties go to sequence, then to
+  the order the items were named;
+- the **lanes**: groups with no prerequisite and no shared file between them, which may
+  run side by side;
+- every ordering **edge** with its reason, the **effort** in points (or *not computable*,
+  naming the missing effort or scale entries), and the snapshot's provenance.
+
+Exit 0 means combinable, 1 means a blocking finding stands, and 3 means the question
+cannot be answered.
+
+| finding | severity | meaning |
+|---|---|---|
+| `combine-item-unknown` | error | the identifier is not in the register |
+| `combine-item-terminal` | error | the item is already completed, dissolved or superseded |
+| `combine-item-blocked` | error | the item is blocked |
+| `combine-item-in-flight` | error | the item is already being dispatched |
+| `combine-item-stub` | error | the item's specification is not written (`full-spec`) |
+| `combine-item-epic` | error | the item's entry declares `Path: epic`; it is chartered on its own |
+| `combine-item-chartered` | error | an active charter in the `epics` role names the item (`item:` or `items:`) |
+| `combine-prerequisite-outside` | error | a prerequisite is neither done nor in the set |
+| `combine-cycle` | error | the prerequisites within the set form a cycle |
+| `combine-single` | error | one item is not a combination |
+| `combine-selection-empty` | error | the selection names no active item |
+| `combine-snapshot-stale` | error | the register snapshot is stale; refresh it first |
+| `combine-spec-unlocated` | warning | the specification could not be read; the item runs serially with every other |
+| `combine-files-unlisted` | warning | the specification names no file; the item runs serially with every other |
+| `combine-lane-unmapped` | warning | a lane selection, and the register serves no lane field |
+
+An item whose files are unknown is never assumed to touch nothing: an unknown overlap is
+not a known absence. The judgement the command cannot make, such as two items changing
+one interface through different files, is `epic`'s, and it records every ordering it
+adds, with the reason, in the packet's plan.
+
+A combination's charter lists its items under `items:`, in serial order, and its packet
+identifier is `EPIC-` plus the slug in capitals. While the charter is active,
+`next-pointer` does not dispatch those items separately and `roadmap-review` does not
+re-specify them. The close-out retires each one (`pointer-closeout`, *Combined epics*).
 
 ## The holding bay
 

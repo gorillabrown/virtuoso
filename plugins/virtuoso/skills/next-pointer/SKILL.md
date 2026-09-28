@@ -127,8 +127,14 @@ If the register is served through the **compatibility adapter** (a legacy
 `sprintCatalog` with no `workRegister` role), say so in the output: reads work,
 writes do not, and registering a `workRegister` role is the fix.
 
-If the snapshot is **stale**, print its age and say plainly that the pipeline
-figures may not reflect current state.
+If the snapshot is **stale**, refresh it before naming the head. `next` prints
+`[STALE]` with its age. For a connector-backed register, read the register with the
+host's connector and import the rows: `virtuoso_registry snapshot --import <rows>`
+(`references/registry-contract.md`, *Refreshing a connector-backed register's
+snapshot*). The import keeps a card's subitems, such as owner decisions, out of the
+work list, so none is named as the head card. Then run `next` again. When the snapshot
+cannot be refreshed, print its age. External-register readiness is then a GAP, and the
+verdict is "Not ready" until the head is confirmed against the live register.
 
 ## When to use
 
@@ -141,6 +147,8 @@ figures may not reflect current state.
 - A full status briefing — use `/roadmap-status`
 - Replanning, re-sequencing, or authoring new items — use `/roadmap-review`
 - Planning new work that is not on the roadmap — use `/storyboard`, then `/write-plan`
+- Running several specified items together as one unattended run — use
+  `/epic <ITEM-ID> <ITEM-ID> …`, which checks whether they combine
 - Dispatching when the head item is still a stub — this skill refuses
 
 ## Invocation
@@ -350,6 +358,12 @@ If there are no active items → **Queue empty** edge case.
 If the head item's roadmap entry declares `Path: epic` → STOP and branch to the
 **Epic at head** edge case. An epic is chartered, not dispatched, and the rubric
 below is not its gate.
+
+If an active charter in the registered `epics` role names the head item, in its
+`item:` or its `items:`, the item is already part of an epic run → STOP. `next`
+reports it: `inEpicPacket` in the JSON, and an `in epic run:` line in the text. Name the
+packet and point to its launch file's resume prompt. A combined epic runs its items
+itself, in its own order, and a separate dispatch of one of them would collide with it.
 
 If the head item's specification state is not `full-spec` → STOP and branch to
 the **Stub at head** edge case.
@@ -704,7 +718,7 @@ and from the storyboard it was absorbed from, if there is one.
 ```
 
 If a packet for this item already exists in the registered `epics` role (a charter
-whose `item:` names it), the run is under way. Do not route it to `/epic` again. Name
+whose `item:` or `items:` names it), the run is under way. Do not route it to `/epic` again. Name
 the packet, and point to its launch file's resume prompt.
 
 ---

@@ -50,7 +50,7 @@ working tree at a committed or clearly-journaled checkpoint. Disk handoff-ready,
 always.
 
 Run this session under the virtuoso skill when it is available: this packet is your
-dispatch spec, and your sprint identifier is [ITEM-ID]-S<n>, where n is the next session
+dispatch spec, and your sprint identifier is [PACKET-ID]-S<n>, where n is the next session
 number in journal.md.
 ```
 
@@ -65,8 +65,9 @@ number in journal.md.
 4. Final journal entry, then stop. **`done.md` existing is the stop signal** for any
    loop or scheduler driving sessions: check it before launching another session. Never
    create it under any other circumstances.
-5. Close the epic through `/pointer-closeout [ITEM-ID]`, with journal.md and done.md as
-   its evidence. That ceremony records what the epic taught in the registered `lessons`
+5. Close the epic through `/pointer-closeout [PACKET-ID]`, with journal.md and done.md as
+   its evidence. A combination's close-out retires every item the charter's `items:`
+   names. That ceremony records what the epic taught in the registered `lessons`
    role — where the next charter reads it — or says why it taught nothing. An epic
    that ends without it leaves its lessons in a journal no future run consults.
 

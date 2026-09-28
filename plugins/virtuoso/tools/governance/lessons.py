@@ -15,6 +15,16 @@ and the latest ``**Status:**`` recorded for an id is its current status. A lesso
 is **live** until it is promoted (it lives on as the rule it became), retired, or
 superseded.
 
+A lesson belongs to the item it was recorded from. The heading's ``(ITEM-ID, date)``
+says which, and so does an ``**Item:**`` field. When a heading named the item in
+words instead ("checkout follow-ups epic" for ``EPIC-CHECKOUT-FOLLOW-UPS``),
+the entry cannot be edited, so a **link record** is appended under the same id:
+
+    ### SRL-NNN — link (ITEM-ID, 2026-09-27)
+    **Item:** ITEM-ID
+
+Until then the words still link it, and the check says so (:func:`link_to`).
+
 Three ceremonies close the loop, and this module is what they check against:
 
 * ``pointer-closeout`` appends the lessons a dispatch taught — or says, with a
@@ -42,6 +52,12 @@ _SOURCE_RE = re.compile(r"^(?P<title>.*?)[ \t]*\((?P<source>[^()]*)\)[ \t]*$")
 _DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 #: The fields a complete lesson carries besides its status.
 LESSON_FIELDS = ("verdict", "evidence", "recommendation", "applies to")
+#: How a lesson is linked to an item (:func:`link_to`).
+LINK_IDENTIFIER = "identifier"
+LINK_RECORD = "link record"
+LINK_NAME = "name"
+_WORD_RE = re.compile(r"[a-z0-9]+")
+
 #: Something a reason can name to show what was examined: an item, lesson or rule
 #: identifier (``ADD-042``, ``<prefix>-014``, ``SR-7``).
 _IDENTIFIER_RE = re.compile(r"(?<![\w-])[A-Z][A-Z0-9_]*(?:-[A-Z0-9]+)*-\d+(?![\w-])")
@@ -55,8 +71,9 @@ CLOSED_CITED = "lesson-closed-cited"
 NOT_CITED = "lessons-not-cited"
 ITEM_MISSING = "lessons-item-section-missing"
 REASON_UNANCHORED = "lesson-reason-unanchored"
+LINKED_BY_NAME = "lesson-linked-by-name"
 FINDING_CODES = (SECTION_MISSING, SECTION_EMPTY, UNKNOWN, NOT_APPENDED, CLOSED_CITED,
-                 NOT_CITED, ITEM_MISSING, REASON_UNANCHORED)
+                 NOT_CITED, ITEM_MISSING, REASON_UNANCHORED, LINKED_BY_NAME)
 
 
 @dataclass
@@ -66,6 +83,10 @@ class Lesson:
     source: str = ""
     fields: dict = field(default_factory=dict)
     history: list = field(default_factory=list)      # every status recorded, in order
+    #: Items the entry's own ``**Item:**`` field names.
+    items: list = field(default_factory=list)
+    #: Items named by link records appended later under the same id.
+    links: list = field(default_factory=list)
     #: A later entry under this id carried lesson fields, not only a status: the id
     #: was reused for a second lesson, which the catalog can no longer tell apart.
     reused: bool = False
@@ -93,11 +114,55 @@ class Lesson:
         except ValueError:
             return None
 
+    def link_to(self, item: str) -> str:
+        """How this lesson is linked to ``item``: see :func:`link_to`."""
+        return link_to(self, item)
+
     def as_dict(self) -> dict:
         return {"id": self.id, "title": self.title, "source": self.source,
                 "status": self.status, "live": self.live, "appliesTo": self.applies_to,
                 "recommendation": self.fields.get("recommendation", ""),
+                "items": list(self.items), "links": list(self.links),
                 "history": list(self.history)}
+
+
+def _words(text: str) -> list[str]:
+    return _WORD_RE.findall((text or "").lower())
+
+
+def link_to(lesson: Lesson, item: str) -> str:
+    """How ``lesson`` is linked to ``item``, strongest first, or ``""``.
+
+    * ``identifier`` — the heading's ``(ITEM-ID, date)`` names it, or the entry's
+      own ``**Item:**`` field does;
+    * ``link record`` — a later entry under the lesson's id carries ``**Item:**``;
+    * ``name`` — the heading names the item in words: every word of a word-built
+      identifier (``EPIC-CHECKOUT-FOLLOW-UPS``) appears in the heading's source,
+      in any order and case, or every word after its leading one (``EPIC``, ``FU``),
+      when at least two remain. An identifier with a number in it is a code, never a
+      name, so ``ENG-12`` is never read out of ``(ENG-9, 2026-09-12)``.
+
+    A link by name passes a gate, and the gate says so, because an append-only
+    catalog cannot correct the heading: a link record makes it exact.
+    """
+    item = (item or "").strip()
+    if not item:
+        return ""
+    exact = re.compile(r"(?<![\w-])%s(?![\w-])" % re.escape(item))
+    if exact.search(lesson.source or "") or item in lesson.items:
+        return LINK_IDENTIFIER
+    if item in lesson.links:
+        return LINK_RECORD
+    tokens = _words(item)
+    if len(tokens) < 2 or any(not t.isalpha() for t in tokens):
+        return ""
+    heard = set(_words(_DATE_RE.sub(" ", lesson.source or "")))
+    if set(tokens) <= heard:
+        return LINK_NAME
+    core = tokens[1:]
+    if len(core) >= 2 and set(core) <= heard:
+        return LINK_NAME
+    return ""
 
 
 def id_pattern(prefix: str) -> re.Pattern:
@@ -147,6 +212,9 @@ def parse(text: str, prefix: str) -> list[Lesson]:
         value = field_match.group("value").strip()
         if name == "status":
             current.history.append(value or DEFAULT_STATUS)
+        elif name == "item":
+            into = current.items if first_entry else current.links
+            into.extend(v for v in re.split(r"[,;\s]+", value) if v and v not in into)
         elif first_entry and name not in current.fields:
             current.fields[name] = value
         elif not first_entry and name in LESSON_FIELDS:
@@ -227,11 +295,14 @@ def check(text: str, lessons: list[Lesson], prefix: str, *, item: str = "",
     specification: the section whose heading names it.
 
     A **close-out** carries a *Lessons* section. It names the lessons the dispatch
-    added — recorded with ``item`` as their source, and already in the registered
-    role, which is how the check proves the append happened — or says
+    added — recorded from ``item`` (:func:`link_to`: by identifier, by a link record,
+    or by name, which is a warning), and already in the registered role, which is
+    how the check proves the append happened — or says
     "No new lesson — <reason>". Naming only older lessons (the ones the
     specification applied) is not enough: a close-out answers what *this* dispatch
-    taught. ``item`` is the item being closed.
+    taught. ``item`` is the item being closed; a combined epic's close-out names the
+    packet and every item it closes, comma-separated, and a lesson recorded from any
+    of them counts.
 
     A "No new lesson" reason names what was examined — a lesson, a standing rule, or
     an item, by identifier — whenever the catalog or ``standing_rules`` holds
@@ -282,13 +353,38 @@ def check(text: str, lessons: list[Lesson], prefix: str, *, item: str = "",
         # A reason must be words, not a template's "[reason]" placeholder.
         says_none = re.search(r"no new lesson[ \t]*[—–:-]+[ \t]*[^\s\[<(]", text_body,
                               re.IGNORECASE)
-        item_re = re.compile(r"(?<![\w-])%s(?![\w-])" % re.escape(item)) if item else None
-        added = [i for i in cited if i in by_id
-                 and (item_re is None or item_re.search(by_id[i].source or ""))]
+        # A combined epic closes several items at once: a lesson recorded from any of
+        # them (or from the packet) is one this close-out added.
+        items = [i for i in re.split(r"[,\s]+", item or "") if i]
+        added, by_name = [], []
+        for lesson_id in cited:
+            lesson = by_id.get(lesson_id)
+            if lesson is None:
+                continue
+            links = [(i, lesson.link_to(i)) for i in items]
+            linked = [(i, how) for i, how in links if how]
+            if items and not linked:
+                continue
+            added.append(lesson_id)
+            if linked and all(how == LINK_NAME for _, how in linked):
+                by_name.append((lesson_id, linked[0][0]))
+        for lesson_id, linked_item in by_name:
+            result.note(LINKED_BY_NAME, "warning",
+                        "%s names %s in words (%r), not by identifier; the entry cannot be "
+                        "edited, so append a link record: lessons --record-link %s --item %s"
+                        % (lesson_id, linked_item, by_id[lesson_id].source, lesson_id,
+                           linked_item))
         if not added and not says_none:
+            unlinked = [i for i in cited if i in by_id]
             result.fail(SECTION_EMPTY, "the Lessons section names no lesson recorded from %s "
-                        "and does not say \"No new lesson — <reason>\""
-                        % (item or "this dispatch"))
+                        "and does not say \"No new lesson — <reason>\"%s"
+                        % (item or "this dispatch",
+                           "; %s %s recorded from %s — if this dispatch taught %s, append a "
+                           "link record (lessons --record-link <ID> --item %s)"
+                           % (", ".join(unlinked), "is" if len(unlinked) == 1 else "are",
+                              ", ".join(repr(by_id[i].source or "no item") for i in unlinked),
+                              "it" if len(unlinked) == 1 else "them", items[0])
+                           if unlinked and items else ""))
         elif not added and (lessons or standing_rules):
             reason = text_body[says_none.start():].split("\n", 1)[0]
             rules = [r for r in standing_rules if r and re.search(

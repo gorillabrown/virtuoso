@@ -1,16 +1,16 @@
 ---
 name: epic
 description: >
-  Produce the launch materials for a long-horizon autonomous run of an epic-scale item on the
-  master roadmap: a multi-phase epic spanning hours or days of Claude working alone, across
-  context loss and multiple sessions, until a completion condition is verifiably met. Epics
-  start only from the roadmap, after a roadmap review has placed the item with Path: epic;
-  next-pointer routes such an item here, or name it with "/epic ITEM-ID". An outcome stated
-  ad hoc ("here's the goal, keep working until it's done", "run this overnight", "walk away")
-  goes to /storyboard first, which aligns it and holds it for that review. Every session of
-  the run executes under the virtuoso skill, and the run closes through /pointer-closeout.
-  Trigger on: "epic", "/epic", "run the epic", "long-running goal", "autonomous run", "keep
-  going until done", "completion condition". NOT for dispatch-sized items (next-pointer),
+  Produce the launch materials for a long-horizon autonomous run from the master roadmap: a
+  multi-phase epic spanning hours or days of Claude working alone, across context loss and
+  sessions, until a completion condition is verifiably met. Epics start only from the
+  roadmap: one item a review placed with Path: epic ("/epic ITEM-ID", or routed here by
+  next-pointer), or a combination of dispatch-ready roadmap items run together, serialized
+  where they share files ("/epic ID ID ID", "/epic --lane checkout 11-15"). An outcome stated
+  ad hoc ("keep working until it's done", "run this overnight") goes to /storyboard first.
+  Every session runs under the virtuoso skill, and the run closes through /pointer-closeout.
+  Trigger on: "epic", "/epic", "run the epic", "batch these items", "long-running goal",
+  "autonomous run", "keep going until done". NOT for one dispatch-sized item (next-pointer),
   single-session tasks (virtuoso skill), or interval jobs (loop/schedule).
 ---
 
@@ -41,13 +41,23 @@ same thing — proceed on the shipped file alone.
 
 # Epic
 
-Turn an epic-scale item on the master roadmap into an **epic packet**: five files that let
+Turn epic-scale work on the master roadmap into an **epic packet**: five files that let
 any future Claude session — with zero memory of this conversation — execute the goal
 autonomously for hours or days, survive every context loss, and stop only when completion
 is *proven* or a human decision is genuinely required.
 
+The work is one of two shapes, and both are already on the roadmap:
+
+- **One epic-scale item**, which a roadmap review placed with `Path: epic`.
+- **A combination** of roadmap items a review already specified and placed, none of them
+  epic-scale alone, run together unattended. This skill decides whether they combine:
+  what order they run in, which of them share files and so run one after another, which
+  lanes can run side by side, and the one Definition of Done across all of them. That
+  judgement is the valuable part, and no other ceremony makes it. A combination needs no
+  `Path` marker and no holding bay, because every piece is already placed.
+
 **One of three paths, one destination.** This is the roadmap-epic path. Like
-`/next-pointer`, it opens only on an item a roadmap review has placed on the master
+`/next-pointer`, it opens only on items a roadmap review has placed on the master
 roadmap. The ad hoc path, `/storyboard` then `/write-plan`, is the only one that may
 start from an idea. All three deliver the same thing to execution, under the contract in
 `references/execution-paths.md`: aligned, verifiable, aware of the project, executed
@@ -63,19 +73,24 @@ the files are the memory. You are producing the materials, not executing the goa
 | Signal | Route |
 |--------|-------|
 | An outcome that is not on the master roadmap yet | `/virtuoso:storyboard`: it aligns the idea and holds it, and the next roadmap review places it as `Path: epic` |
-| A dispatch-sized item on the roadmap | `/virtuoso:next-pointer` |
+| One dispatch-sized item on the roadmap | `/virtuoso:next-pointer` |
 | Fits in one sitting | Just do it (virtuoso skill if 3+ tool calls) |
 | Recurring job on an interval ("check every 5 minutes") | loop / schedule tooling |
-| An epic-scale item on the master roadmap (`Path: epic`) | **This skill** |
+| An epic-scale item on the master roadmap (`Path: epic`) | **This skill**, Step 1a |
+| Several roadmap items to run together, unattended, as one run | **This skill**, Step 1b |
 
-When the item turns out not to be epic-scale, say so in one sentence and route it to
-`/roadmap-review`, which owns its path. This skill does not edit the roadmap. Do not
-scaffold a packet for an afternoon task.
+When the work turns out not to be epic-scale, say so in one sentence. Route a single item
+to `/next-pointer`, or to `/roadmap-review` when it needs a path or a specification, and
+route a combination that is really one sitting to `/next-pointer`, one item at a time.
+This skill does not edit the roadmap. Do not scaffold a packet for an afternoon task.
 
 ## The packet
 
 All five files live in one directory, `<yyyy-mm-dd>-<slug>/`, inside the project's
-registered `epics` role:
+registered `epics` role. The packet's identifier names the run in the sprint identifier,
+the close-out, and the lessons it records: the item's own identifier for a `Path: epic`
+item, and `EPIC-` plus the slug in capitals for a combination
+(`EPIC-CHECKOUT-FOLLOW-UPS`). A combination's identifier is not a register item.
 
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . resolve epics
 
@@ -113,12 +128,22 @@ other epic, so the user, the resume prompt, and downstream tooling always know w
 
 ## Workflow
 
-### Step 1 — Pull the item from the master roadmap
+### Step 1 — Pull the items from the master roadmap
 
-An epic starts from an item a roadmap review has placed, never from a stated outcome:
-`/epic <ITEM-ID>`, or the head item `/next-pointer` routed here.
+An epic starts from items a roadmap review has placed, never from a stated outcome. Read
+the register first. If it is served from a snapshot, the snapshot must be fresh: refresh a
+stale one before going further (`references/registry-contract.md`, *Refreshing a
+connector-backed register's snapshot*).
 
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor epic items --json
+
+One item names Step 1a. Several items, or a lane, name Step 1b. When the user names one
+item that is not marked `Path: epic` but belongs with others ("run the retry worker
+overnight, and the two cards it waits on"), it is Step 1b with those items.
+
+#### Step 1a — One item marked `Path: epic`
+
+`/epic <ITEM-ID>`, or the head item `/next-pointer` routed here.
 
 - The item is in the live register and not terminal. Every prerequisite is terminal,
   resolved through the provider. Its roadmap entry declares `Path: epic`.
@@ -126,20 +151,70 @@ An epic starts from an item a roadmap review has placed, never from a stated out
   storyboard too: `holding --check <entry>`, then the file itself. Its alignment record,
   frames, and decisions are the charter's first draft, and a question they already
   answer is not asked again.
-- No such item: route the user to `/storyboard`. `Path` is dispatch, or absent: route to
-  `/next-pointer`. A prerequisite is pending: name it and stop.
-- A charter whose `item:` already names this item means the run exists. Point to its
-  launch file, and do not scaffold a second packet.
+- No such item: route the user to `/storyboard`. `Path` is dispatch, or absent: the item
+  is one dispatch, so route it to `/next-pointer`, or run it in a combination (Step 1b)
+  with the items it belongs with. A prerequisite is pending: name it and stop.
+- A charter whose `item:` or `items:` already names this item means the run exists. Point
+  to its launch file, and do not scaffold a second packet.
+
+#### Step 1b — A combination of roadmap items
+
+`/epic <ITEM-ID> <ITEM-ID> …`, or a lane and a range: `/epic --lane <lane> <from>-<to>`.
+The mechanical half of the decision is one read-only command:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor epic combine --items <ITEM-ID> <ITEM-ID> ... --json
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor epic combine --lane <lane> --from <seq> --to <seq> --json
+
+It reads the register and each item's specification, and reports:
+
+| Check | Combinable when | Finding when not |
+|---|---|---|
+| Each item is on the roadmap and ready to run | in the register, not terminal, blocked, or in flight; its specification written (`full-spec`) | `combine-item-unknown`, `-terminal`, `-blocked`, `-in-flight`, `-stub` |
+| Each item runs only here | no active charter's `item:` or `items:` names it, and its entry does not declare `Path: epic` | `combine-item-chartered`, `combine-item-epic` |
+| Each prerequisite is met | done already, or another item in the set | `combine-prerequisite-outside`, `combine-cycle` |
+| Shared files are serialized | two items whose *Edit sites* or *Staging plan* name the same file run one after the other; items with nothing between them may run in separate lanes | an item whose files cannot be read runs serially with everything (`combine-spec-unlocated`, `combine-files-unlisted`, warnings) |
+| It is more than one item | two or more items | `combine-single` |
+| The register is current | a fresh snapshot | `combine-snapshot-stale` |
+
+The command also returns the **serial order** (prerequisites first, then shared files,
+ties broken by register sequence), the **lanes**, every ordering edge with its reason
+("shared files: src/checkout/gateway.py"), and the effort in points. Exit 0 means
+combinable, and exit 1 means a blocking finding stands. Every error is a reason not to
+charter. Say which one, and route it: a stub or a missing prerequisite to
+`/roadmap-review`, an item in flight to its own close-out, and a stale snapshot to a
+refresh.
+
+Then make the judgement the command cannot:
+
+- **Readiness.** Each item's specification already passed the rubric when a review made
+  it dispatch-ready. Re-run its mechanical half now, because lessons may have been
+  recorded since: `lessons --check <spec> --item <ITEM-ID>` for each. Walk the rest of
+  `references/readiness-rubric.md` against each specification as `/next-pointer` would.
+  A structural gap stops the combination, just as it stops a dispatch.
+- **Hidden overlap.** The files come from the specifications. Read each item's edit
+  sites against the code. Two items that change the same interface, schema, or fixture
+  through different files still serialize. Record every ordering you add, and its
+  reason, in the plan.
+- **One outcome.** A combination is chartered because its items together make one
+  outcome worth an unattended run. Items that merely share a lane do not make one: say
+  so and chart only the set that does.
+
+Present the combination to the user before Step 2, as one table in serial order: item by
+title then identifier, lane, what it waits on, and the files it shares. Then state the
+sizing verdict. A combination the user trims is re-checked with `combine`.
 
 Epic scale = outcome-stated **and** multi-phase **and** multi-session-or-walk-away. State
 the sizing verdict in one line (e.g. "Epic-scale: ~2 days, 4 phases, unattended
-overnight").
+overnight", or "Epic-scale combination: 5 items, 1 lane, ~14 points, overnight").
 
 ### Step 2 — Sharpen the charter (Definition of Done first)
 
 Convert the item's outcome, from its roadmap entry and, where it has one, from the
 storyboard's confirmed frames, into DoD rows: **condition | verify by | expected
-evidence**.
+evidence**. For a combination, the outcome is what the items deliver together. Its DoD
+carries every item's *Done when* rows, each labelled with its item, and adds a row for
+what only the whole proves: every item's rows pass together on one integrated tree, in
+one session.
 Every row must be checkable by a command or a concrete procedure — a row that cannot be
 verified is a wish, not a condition; tighten it or move it to non-goals.
 
@@ -185,8 +260,12 @@ never by omission. **Never defer a five-second question into the unattended run.
 
 3–7 phases in plan.md, each: intent, verifiable exit gate, rough size. Phase 1 is
 discovery whenever any charter assumption is unverified — confirm reality before building
-on it. Plan at phase altitude: no step lists, no pre-generated task backlogs, no code.
-Steps belong to the run; a capable executor plans them better with the repo in front of it
+on it. For a combination, the phases follow `combine`'s serial order and lanes: a phase
+takes one item, or several consecutive items of one lane, and its exit gate is those
+items' *Done when* rows. Record in plan.md why each item sits where it does, the
+prerequisites and shared files the order honours, so the executor keeps to the order
+when it replans. Plan at phase altitude: no step lists, no pre-generated task backlogs,
+no code. Steps belong to the run; a capable executor plans them better with the repo in front of it
 than you can now, and stale prescriptions poison later sessions.
 
 ### Step 5 — Scaffold and hand off
@@ -250,14 +329,14 @@ read anyway — the packet works even for an executor that has never seen this p
 
 Every session of the run executes under the **virtuoso** skill, with the packet as its
 dispatch spec. The charter is the contract, plan.md is the route, state.md is the working
-set, and the sprint identifier is `[ITEM-ID]-S<n>`. That is what brings an epic to the
+set, and the sprint identifier is `[PACKET-ID]-S<n>`. That is what brings an epic to the
 same place as a roadmap dispatch and an ad hoc plan (`references/execution-paths.md`).
 The packet still embeds its own run rules, so a session on a host without this plugin
 keeps them anyway.
 
-The run ends through `/pointer-closeout [ITEM-ID]` once `done.md` exists, as launch.md's
-completion protocol says. That crossing retires the item on the master roadmap and
-records what the epic taught.
+The run ends through `/pointer-closeout [PACKET-ID]` once `done.md` exists, as launch.md's
+completion protocol says. That crossing retires the item on the master roadmap, or every
+item of a combination, and records what the epic taught.
 
 - `mid-dispatch-decision` — process a BLOCKER(USER) when the user returns to one.
 - `adversarial-review` — red-team the charter before committing days to it.
@@ -266,6 +345,10 @@ records what the epic taught.
 
 - Chartering an outcome that is not on the master roadmap: storyboard it, and let the
   review place it
+- Marking dispatch-sized items `Path: epic` so they can run together: combine them
+  instead (Step 1b), and let each keep its own path
+- A combination whose shared files were not serialized, or whose order was chosen by
+  hand when `combine` reported another: record the reason for every ordering
 - Pre-baked task backlogs or starter code for a project nobody has inspected yet
 - A 9-or-22-file bespoke kit instead of the five-file contract
 - Deferring "where is the repo?" / "is gh authenticated?" into the unattended run
