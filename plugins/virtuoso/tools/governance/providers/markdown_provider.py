@@ -104,7 +104,8 @@ class MarkdownWorkRegister(base.WorkRegisterProvider):
             items = self._heading_items(text)
             fields = ["id", "title", "sequence"]
         return base.Snapshot(items=[i for i in items if i.id], provider=self.name,
-                             source=self.source, taken_at=base.utc_now(), fields=fields)
+                             source=self.source, taken_at=base.utc_now(), fields=fields,
+                             headers=base.header_map(headers, index))
 
     def _row_item(self, headers, index, cells) -> base.WorkItem:
         def value(name: str) -> str:
@@ -114,11 +115,7 @@ class MarkdownWorkRegister(base.WorkRegisterProvider):
             return cells[position].strip().strip("`")
 
         raw_status = value("status")
-        sequence_raw = value("sequence")
-        try:
-            sequence = int(float(sequence_raw)) if sequence_raw else None
-        except ValueError:
-            sequence = None
+        sequence = base.parse_sequence(value("sequence"))
         return base.WorkItem(
             id=value("id"),
             title=value("title"),

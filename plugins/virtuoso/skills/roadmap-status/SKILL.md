@@ -199,7 +199,9 @@ this project understand the news from this line alone? If not, rewrite.
         "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . kpis --json
 
 4. The terminal ledger — for what is already final.
-5. The registered reviews directory — for the previous briefing and the pace read.
+5. The registered reviews directory — for the previous briefing and the pace read. The
+   previous review is the one `virtuoso_registry --root . review` names as
+   `previousComplete`.
 6. The registered close-outs directory — for completion evidence.
 
 Never open a register file directly, and never read a generated report to obtain a

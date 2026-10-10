@@ -1,5 +1,186 @@
 # Virtuoso Release Notes
 
+## v1.13.0 (2026-10-10) — a roadmap board, priced task lists, and close-outs that record themselves
+
+The first release since 1.12.0. It carries the work noted earlier as 1.13.0 and 1.13.1,
+which were never published.
+
+**Upgrading from 1.12.0.** Specifications, effort levels and T-shirt sizes are unchanged,
+and a dispatch with no time log closes out as before. Five things may need a moment:
+
+- Session start may report `warning` instead of `ready` until `.gitignore` carries the
+  lines the warning lists (*Git keeps what it should*, below).
+- Run `governance-sweep` once: check 21 proposes a status record for every lesson whose
+  prose says it closed (VIR-012).
+- Add the *Effort* header and separator cell to an existing ledger's table to record
+  effort points; without it, points read as before (VIR-013).
+- A project whose `fieldMappings` declares only the columns it renames must now declare
+  every column it writes; a board change to an unmapped field is refused at planning
+  (VIR-010).
+- Governance dates are the UTC calendar date, so a session near midnight may record the
+  next day (VIR-009).
+
+The planning cockpit is still written, with a banner pointing to the new board, and
+retires in a later release.
+
+### The board, the ceremonies, and the tooling behind them
+
+- **Every project gets an interactive roadmap board.** One self-contained page,
+  `roadmap-board.html` in the project root, registered as the `board` role: a Dashboard
+  (KPI tiles with provenance, inline-SVG charts, slicers built from the data that
+  cross-filter and live in the URL), a Roadmap tab laid out like a monday.com board (live
+  work grouped In Flight → Conveyor → Blocked / Gated, every register column under its own
+  header, a comment box and a copy button on every row — Shift-copy adds the spec and
+  branch) and a Completed tab joining the register with the terminal ledger (mismatches
+  marked *unreconciled*, corrections shown, Est. → Actual as durations). `/roadmap-review`
+  D.7 runs `generate_board --create`: it registers the `board` and `boardComments` roles,
+  creates the page and adds it to `.gitignore` once; `record-completion`,
+  `/pointer-closeout`, `/next-pointer` (when the head changes) and `generate_cockpit`
+  regenerate it. Row comments live in the browser and in `roadmap-board.comments.json`
+  (sorted keys, one entry per item — commit it), which the generator embeds and B.3 reads
+  through `board_comments`. Preflight prints a `board:` line (`current`, `stale`,
+  `missing`, `not registered`) from file times alone — advice, never a block. The planning
+  cockpit is still written, with a banner pointing to the board, and retires in a later
+  release. Registers read `Impl Status`, `Written` and `Repo Spec` without
+  `fieldMappings`, keep each column's own header, and read a Seq of `1,000` as 1000.
+  (ROADMAP-BOARD)
+- **The time log records what it can never backfill.** Rows carry `class`, `model`, `host`,
+  `specRevision` and `group`; frontier rows a `timebox` priced as `timeboxed`; every wait a
+  reason; an end the host's `tokens`; and `--split N` splits a row. Logs written before
+  read unchanged, with the new fields `not recorded`. (VIR-020)
+- **Every specification carries a priced task list.** `references/task-rows.md` defines
+  the `##### Task list` table and its total line, chain and sum labelled apart, timeboxes
+  kept out of both. `timing --rows-from-spec <spec> --item <ID>` prices it or exits 1
+  naming what is missing; `timing --open --from-spec` opens the log from it, keeping its
+  numbers and its written price (`writtenPredicted`, `writtenBasis`). The readiness rubric
+  is v1.2: U10, *Task list*, a closable gap that never blocks a dispatch, and
+  `dispatch-buffer-ready` still judges U9 alone. (VIR-021)
+- **The board-change handshake records what really happened.** One plan per connector
+  call, read back before every confirm. `mutation-confirm --partial --written <fields>`
+  keeps the record outstanding until a plan for the rest supersedes it;
+  `mutation-abandon --reason` closes a plan that will not be executed, and a resolved
+  record says `succeeded` or `abandoned` (older records read as `succeeded`). Confirm needs
+  only `--recovery-id`; `mutation-plan --fields-file` takes UTF-8 JSON from a file. A field
+  the declared `fieldMappings` has no column for is refused at planning — a project that
+  declares only the columns it renames must now declare every column it writes. `--json` output
+  is ASCII-escaped, so Windows consoles never mangle it, and under Windows PowerShell 5.x
+  the launcher quotes each argument itself, so JSON, paths with spaces and empty
+  arguments reach Python intact. (VIR-010)
+- **A second roadmap review on one date never overwrites the first.**
+  `virtuoso_registry review --date <YYYY-MM-DD>` names the prefix a review writes under
+  (`DATE`, then `DATE-2`…), an interrupted review to resume, and the previous review —
+  latest by date, then run; a stray file is listed and skipped. Every governance date is
+  now the UTC calendar date (`## Dates` in the registry contract). **Upgrading:** a
+  session near midnight may now record the next calendar day. (VIR-009)
+- **The reconciliation recipe prints ready to run.** `/next-pointer` (and `/write-plan`,
+  which fills the same recipe) prints it in the host's shell, PowerShell on Windows and
+  `sh` elsewhere. Every STOP is a check that halts the script, every expectation is
+  asserted, and a fetch runs only behind a switch that is off by default.
+- **`next` never names in-flight work as next.** It returns the first eligible item that is
+  not in flight, lists the in-flight items apart (an `in flight:` line each), and names
+  every prerequisite an active item cites that the register does not hold (a `missing
+  prerequisite:` line each). `--json` carries `inFlight` and `missingPrerequisites` beside
+  `item`. Eligibility is unchanged: a missing prerequisite still blocks until the terminal
+  ledger says otherwise. (VIR-011)
+- **A lesson status written as a list item counts.** `- **Status:** Promoted -> SR-12`
+  (or `*`, `+`) reads exactly as the plain field line, for every lesson field, and
+  `lessons --hygiene` gains **record**: a live lesson whose prose says it was promoted,
+  retired or superseded with no status record saying so, with the `--record-status`
+  command that records it. **Upgrading:** run `governance-sweep` once; check 21 proposes a
+  status record for every lesson whose prose says it closed. (VIR-012)
+- **The terminal ledger records effort points.** An optional `effort` field (markdown
+  header *Effort*; CSV/JSONL `effort`, or the column `fieldMappings.effort` names) holds
+  the item's size word as the register held it at close-out. `record-completion` writes
+  it and reports `effortRecorded`; pace reads trailing points from the ledger first and the
+  register second, so a board that archives finished cards can still compute points pace.
+  New ledgers seed the column. **Upgrading:** add the *Effort* header and separator cell to
+  an existing ledger's table (record rows stay as they are); without it, points read as
+  before. (VIR-013)
+- **Numbered Lessons headings pass, and two ceremony rules say what they meant.** The
+  lessons gate and the outcome reader accept `## 7. Lessons` and `##### 4. Lessons applied`
+  (a close-out's `## 7. Lessons applied` is still not its Lessons section). The staging
+  catch-all (virtuoso, Worktree Governance Staging, Rule 1) now names agent files, their
+  overlays and project agent briefs. roadmap-review B.3 defines forward, sideways and
+  backward, and scores delivered work only; added scope is listed, not scored. (VIR-014)
+- **A connector's raw page imports as the snapshot in one step.**
+  `snapshot --import <page> --columns <columns>` reads an items page keyed by column id
+  (`items[].column_values`, one page or a list of them) with the board's column list, so
+  nobody hand-builds rows. It refuses a partial read (`has_more` on the last page), a page
+  from another board, and a raw page without `--columns`, and reports column drift on every
+  import: one `[DRIFT]` line per declared column the board lacks or board column nothing
+  maps. A *Depends On* placeholder (`None`, `-`, `—`, `n/a`) means no prerequisite. The
+  skills refresh before `create-item`, at roadmap review and at close-out. (VIR-003)
+- **The POSIX launcher runs a Python that actually runs.** It tries `python3`, then
+  `python`, by running each (`-c 'import sys'`), so a `python3` that resolves but cannot
+  run — the Windows Store alias under Git Bash — is skipped and `python` is used. When
+  neither runs it exits 1: `virtuoso: no Python that runs: tried python3, python.` (F-003;
+  VIR-026)
+- **An external register's close-out appends its ledger record with one command.**
+  `record-completion --ledger-only` appends the terminal record — next `TR-NNN`, date,
+  result, evidence, estimate, actual and the register snapshot's Effort — and reads it
+  back, without writing the register; the mutation handshake closes the item as before.
+  It previews without `--apply`, a second run is a no-op, a local register refuses it, and
+  it opens a recovery record only when the record does not read back. Without the flag, the
+  refusal for an external register names it. `/pointer-closeout` Step 3 runs it where it
+  used to append the row by hand. (VIR-027)
+- **An epic's completion record reaches the default branch.** The launch template's
+  completion protocol commits done.md, charter.md, state.md and journal.md as one
+  docs-only commit after the code merge, and, when the run merged its own code, merges it
+  with `--no-ff` and checks that the merge touches only the packet directory (GIT WORK →
+  *Completion only*). `/pointer-closeout` Step 1 checks that done.md is on the default
+  branch with `sprint_guards artifacts-exist` before it crosses. (VIR-028)
+- **A superseded recovery record says so.** A record a later plan replaced — a partial
+  write finished by a follow-up plan, or a failed creation replaced by its retry — resolves
+  with outcome `superseded` (beside `succeeded` and `abandoned`), its reason naming the
+  replacing plan. Records written earlier that carry `supersededBy` read as `superseded`;
+  none is rewritten. The README's `virtuoso_registry.py` row lists `mutation-abandon`.
+  (VIR-030)
+- **`delayed-start` blocks only the deferred task.** It starts a wait that leaves the
+  session free — the host's scheduler, a scheduled wake-up or a background timer,
+  whichever the host offers — carries on with other work, shows the task blocked until its
+  time on the task plan, and pauses everything only when asked. (VIR-015)
+
+### Every task row predicts its time, and learns from what it took
+
+- **A time log per dispatch.** When the virtuoso skill first lists a dispatch's tasks, it
+  opens `Timing.<sprint-id>.jsonl` in the `closeOuts` role with
+  `virtuoso_registry timing --open`. Each row's start, waits on the owner, and end are
+  stamped by the machine clock. No flag accepts a typed time. A row's working time is
+  end − start − waits. Waiting on the owner never counts, and a row the clock could not
+  measure says `not measured`.
+- **Each row is priced when it is listed.** A row is priced from the measured rows of
+  past dispatches: its kind's median over at least 3 runs (`@merge-slot`, `@fix-round`),
+  else its tier and effort's, else its own estimate, labelled `estimated`.
+  `timing --kinds` lists the kind names in use. A step added mid-run takes the next
+  number and shows as `+N`.
+- **The header replaces the status bar.** `timing --status` prints
+  `[D/N rows done = P%] Remaining M (sequential rows …; row p parallel, excluded) →
+  est. finish HH:MM local (±HH:MM) · HH:MM UTC. Now: …`, so the lead never sums
+  minutes.
+- **The close-out, the ledger and `kpis` read the log.** `timing --summary` gives the
+  close-out's `## Time` table and its `runtime:`. With `--json` it gives the ledger's
+  Estimate (the first listing's total) and Actual (the measured total), which gives
+  `effort-calibration` its first real inputs. A row over 3× its prediction is flagged as
+  a possible unseen wait until the owner confirms it (`--confirm N`). `kpis` adds
+  `row-error`, `total-error` and `added-share`.
+
+### Git keeps what it should
+
+- **Recovery records are no longer mistaken for faults.** `sprint_guards created-files`
+  marks an untracked file under `Virtuoso/.recovery/` as `commit: a recovery record, never
+  remove or ignore`. `pointer-closeout` explains why: a confirmed write marks its record
+  resolved and keeps it, and that trail is what stops an external write from repeating.
+  Only `virtuoso_registry recovery` says whether anything is outstanding.
+- **New workspaces ignore machine-local state.** `--mode create` adds
+  `/Virtuoso/.backups/`, the sweep quarantine (`/Virtuoso/.quarantine/` by default) and
+  the `temp` role (`/Project Documentation/3 temp/` by default) to `.gitignore`. It adds
+  only the lines that are missing. `adopt` still writes no `.gitignore`.
+- **Preflight checks what git ignores.** `check`, `adopt` and `create` ask git, read-only,
+  how it treats those paths. `local-state-not-ignored` lists the missing ignore lines;
+  `recovery-records-ignored` flags a `.recovery` folder that is ignored and must be
+  committed. Nothing is reported outside a git repository.
+- **Documented.** `registry-contract.md` has a new *What git versions* table.
+
 ## v1.12.0 (2026-09-28) — one skill executes, and an epic combines what the roadmap holds
 
 **Upgrading from 1.11.0.** One change, and only if your project registered the

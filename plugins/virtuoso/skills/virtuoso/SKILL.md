@@ -388,7 +388,7 @@ Use these markers consistently throughout:
 
 ### Task format
 
-Every task line follows this format: `□ N. owner-label: Task description [tier] {effort}`
+Every task line follows this format: `□ N. owner-label: Task description [tier] {effort} @kind  M min (basis)`
 
 - **Task tier** in square brackets: `[mechanical]`, `[bounded]`, or `[cross-cutting]`.
   The tier describes the *task*, not the capability of whoever runs it; a host maps a tier
@@ -396,6 +396,18 @@ Every task line follows this format: `□ N. owner-label: Task description [tier
 - **Effort level** in curly braces: `{low}`, `{medium}`, `{high}`, or `{max}`.
   Effort is optional when it matches the tier default (mechanical→low, bounded→medium,
   cross-cutting→high). Only annotate effort when overriding the default.
+- **Kind** after an `@`, optional: a name for a row that recurs across dispatches
+  (`@merge-slot`, `@fix-round`, `@gate-3-calibration`). A recurring row is priced from its
+  kind's own history, so reuse a name `timing --kinds` already lists rather than coin a
+  near-duplicate. Names are normalized to lowercase words joined by hyphens.
+- **Prediction** last: the row's predicted working minutes and their basis, `38 min (median
+  of 6 runs)` or `90 min (estimated)`. `timing --open` prices every row when the task list
+  is first listed. It uses the median of at least 3 measured rows of the same kind, else
+  of the same tier and effort, else the row's own `estimate`, labelled `estimated`. Only
+  rows that ran to `done` count. A prediction is fixed once its row is listed, so the
+  first listing's total never moves. A run's own finished rows price the rows added
+  after them, and every later dispatch. Never type a prediction in yourself, and never
+  label a guess as measured.
 - **Task #1 is always `Zeus: Load spec, build plan, assign owners [cross-cutting]`.** Non-negotiable.
   This represents Phases 1–3 combined. Task #1 is marked ✓ only after the lead has:
   1. Read and understood the full dispatch spec (Phase 1)
@@ -451,10 +463,10 @@ and cheap to redo. Three cases where it is not:
 
 ```
 ## Task Plan — Effort: Medium | Override: tasks #6, #8 → High
-□ 1. Zeus: Load spec, build plan, assign owners                [cross-cutting]
-□ 2. unassigned: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [bounded]
-□ 3. unassigned: Update constants.toml default                          [mechanical]
-□ 4. unassigned: Run fast test suite — all shards pass                  [mechanical]
+□ 1. Zeus: Load spec, build plan, assign owners                [cross-cutting]  20 min (median of 5 runs)
+□ 2. unassigned: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [bounded]  25 min (estimated)
+□ 3. unassigned: Update constants.toml default                          [mechanical]  6 min (median of 9 runs)
+□ 4. unassigned: Run fast test suite — all shards pass                  [mechanical] @fast-suite  14 min (median of 4 runs)
 □ 5. unassigned: Run the full verification sweep                           [mechanical]
 □ 6. unassigned: Interpret cal results + decide if tuning needed        [cross-cutting] {max}
 □ 7. unassigned: Generate profiler snapshot with pathway metrics        [mechanical]
@@ -462,6 +474,8 @@ and cheap to redo. Three cases where it is not:
 □ 9. unassigned: Update CLAUDE.md with constants and cal results        [bounded]
 □ 10. unassigned: Commit, merge to main, push                          [mechanical]
 ```
+
+(Rows 5–10 carry their predictions the same way; they are elided here.)
 
 Note: Tasks #6 and #8 override to `{max}` because interpreting calibration results
 and analyzing profiler output across subsystems are genuinely hard analytical problems
@@ -482,7 +496,8 @@ human readability; TodoWrite is for persistent tracking.
 
 ### Rules
 
-- Task #1 is always parent-thread setup work (Phases 1–3). No exceptions.
+- Task #1 is always parent-thread setup work (Phases 1–3). No exceptions — except a plan
+  opened from a specification's task list, whose numbers stand (the setup row is added).
 - One task per logical deliverable. Don't bundle "edit file AND run tests" into one line.
 - **No collapsing tasks into batches or waves.** Every task from Phase 1 stays its own
   numbered line item in the plan. If you need to batch dispatches for practical reasons
@@ -491,7 +506,51 @@ human readability; TodoWrite is for persistent tracking.
   "implement tasks 1-6 + write tests" into a single line. Each task is executed or
   delegated, tracked, and reported on independently.
 - If the spec says to do it, it gets a line. Don't silently absorb steps.
-- If you discover a new required step during execution, ADD it to the plan and reprint.
+- If you discover a new required step during execution, ADD it to the plan with
+  `timing --kinds`, then `timing --sprint <SPRINT-ID> --add --rows-file <row.json>`, and reprint. It takes the next number and shows as
+  `+N`, the mark of a row the first listing missed. Plan review and fix rounds as rows
+  from the start (they are priced from history), so they are not the ones added later.
+
+### Open the time log
+
+As the task list is first listed, open the dispatch's time log. The log prices every
+row and records its working time from the machine clock. First list the kind names
+already in use, so a recurring row reuses one:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . timing --kinds
+
+Then write the rows to a scratch JSON file, one object
+per row: `id`, `title`, `owner`, `tier`, `effort`, `item` (the item the row belongs to,
+for a combined epic), `parallel`, an optional `kind`, and an `estimate` in minutes for
+any row history cannot price. Record what the log can never backfill: `class`
+(`calculable`, `repeat` or `frontier`), `specRevision` (the specification's commit),
+and `group` (the parallel group's id). A frontier row is never estimated: it carries a
+`timebox` in minutes and `onTimebox`, the action when the budget runs out, and is
+priced at its timebox (`timeboxed`). Then run:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing --sprint <SPRINT-ID> --open --rows-file <rows.json>
+
+When the specification carries a `##### Task list` (`references/task-rows.md`), open
+from it instead, so its rows keep their numbers and the specification's price stays
+beside the launch-time one:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing --sprint <SPRINT-ID> --open --from-spec <spec> --item <ITEM-ID>
+
+The specification's numbers are the plan's numbers. Rows it does not list, Task #1's
+setup row among them, go in with `--add`, take the next numbers, and are measured like
+any other row.
+
+The log is `Timing.<SPRINT-ID>.jsonl` in the registry's `closeOuts` role. The row
+numbers it holds are the plan's numbers from here through close-out. `--open` refuses a
+row it cannot price, naming it. Give that row an `estimate` and open again. Print the
+plan with the predictions `timing --status` shows, so they are not retyped. No flag takes a
+time or a duration: every stamp comes from the clock, so never write the log by hand.
+The `closeOuts` directory must exist. In a project with no close-out yet, create it
+first with `closeout --item <SPRINT-ID> --date <YYYY-MM-DD> --prepare`. A step
+discovered mid-run is registered before its first `--start` with
+`timing --sprint <SPRINT-ID> --add --rows-file <row.json>`. It takes the next number.
+If `timing` refuses (no `closeOuts` role, no open log, an unknown row), stop and report
+the message.
 
 ---
 
@@ -659,15 +718,36 @@ For each task, the parent:
 1. Takes the next task from the plan
 2. **Set effort level** — if this task has an effort override (e.g., `{max}`),
    note the override before starting and pass it through to any worker prompt.
-3. Decides whether to execute locally or launch a child worker.
-4. If launching a worker, gives it a bounded task, explicit file/module ownership,
+3. **Starts the row's clock:** `timing --sprint <SPRINT-ID> --start N --model <model id>
+   --host <host>`, naming the model and host that run the row.
+4. Decides whether to execute locally or launch a child worker.
+5. If launching a worker, gives it a bounded task, explicit file/module ownership,
    success criteria, and instructions not to revert others' edits.
-5. Verifies the result meets the task spec — mechanically, per the rule below.
-6. If the result includes information needed by downstream tasks, records the relevant
+6. Verifies the result meets the task spec — mechanically, per the rule below.
+7. If the result includes information needed by downstream tasks, records the relevant
    summary for later steps.
-7. Marks the task ✓ or ✗.
-8. Reprints the plan.
-9. Moves to the next task.
+8. **Ends the row's clock:** `timing --sprint <SPRINT-ID> --end N` (add
+   `--result blocked` or `--result cancelled` when it did not complete, and
+   `--tokens <count>` when the host reported the row's token usage), and marks the
+   task ✓ or ✗.
+9. Reprints the plan.
+10. Moves to the next task.
+
+Every `timing` call runs as `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root .
+--actor virtuoso timing …`. **A question to the owner is a wait, not work.** Run
+`timing --sprint <SPRINT-ID> --wait N --reason owner` when you ask, and `--resume N`
+when the answer arrives. Every wait names its reason: `owner` (a question or decision),
+`approval` (a host permission prompt), `blocked` (an external dependency), or
+`session-ended` (the session stopped mid-row). A wait without one is refused. The wait
+shows on the row and stays out of its working time. A resume under another model names
+it (`--resume N --model <model id>`); the row keeps the model it started with.
+
+A frontier row that works its timebox stops: run `timing --timebox-reached N` (refused
+until the clock reaches the budget), then take its `onTimebox` action. A row that turns
+out to be two pieces of work is split, not stretched: `timing --split N --rows-file
+<parts.json>` ends it as `split` and adds the parts, each carrying `splitFrom: N`.
+`--status` reads back every row's state and measured minutes, so after a context
+compaction, read it back rather than reconstructing times.
 
 <!-- rule:worker-output-validation (evidence-not-assertion) -->
 **A "completed" message is not evidence that work happened.** The evidence is the
@@ -866,10 +946,18 @@ you reprint, you are reprinting THE plan — the same one, updated in place.
 If the human sees two plans on screen with different completion states, one
 of them is wrong.
 
-**Status bar format:** `[X% complete] One sentence on current state.`
+**Status bar format:** the header `timing --sprint <SPRINT-ID> --status` prints, then one
+sentence on the current state. Reprint its output. Never sum the minutes yourself:
+
+`[D/N rows done = P%] Remaining M (sequential rows a, b, c; row p parallel, excluded) → est. finish HH:MM local (±HH:MM) · HH:MM UTC. Now: row r running.`
+
+Remaining is the predicted minutes left over the unfinished rows that run one after
+another. A running row counts only what is left of its prediction, and parallel rows are
+named and left out. Finish is now plus remaining. While a row waits on the owner, the
+header says so, and the finish time moves later with the clock.
 
 ```
-## Task Plan — [30% complete] Fast tests running, code changes landed.
+## Task Plan — [3/10 rows done = 30%] Remaining 112 min (sequential rows 4, 5, 6, 8, 9, 10; row 7 parallel, excluded) → est. finish 16:40 local (-05:00) · 21:40 UTC. Now: row 4 running.
 ✓ 1. Zeus: Load spec, build plan, assign owners                [cross-cutting]
 ✓ 2. hercules: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [bounded]
 ✓ 3. hermes: Update constants.toml default                              [mechanical]
@@ -994,8 +1082,8 @@ outcome was success, partial, or pivot stop. If the work was empirically falsifi
 or a gate triggered early stop, say so directly.
 ---
 Task Plan — SPRINT-NAME | [X% of authorized scope] Outcome summary.
-✓ 1.   Zeus:   Load spec, build plan, assign owners                  [cross-cutting]
-✓ 2.   hercules:       Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0 [bounded]
+✓ 1.   Zeus:   Load spec, build plan, assign owners                  [cross-cutting] — 20 → 24 min
+✓ 2.   hercules:       Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0 [bounded] — 25 → 31 min
 ...
 ✗ 9.   socrates:       Full verification sweep — CANCELLED (pivot stop)          [bounded]
 ---
@@ -1057,6 +1145,13 @@ what was learned]
      ```
      Removing the worktree before this check passes destroys the evidence that would
      have caught the gap.
+
+     Name the dispatch's time log among those paths: `<closeOuts>/Timing.<SPRINT-ID>.jsonl`.
+     Before close-out, end every row that never ran with `timing --end N --result
+     cancelled`: a log with a row still open never counts as closed in `kpis`.
+     A log left behind in a worktree never becomes history, so no later dispatch can
+     price from it. The close-out's Task Plan shows each row's predicted → actual
+     minutes, as `timing --status` prints them.
 
 - **For a held plan, the ledger row waits on purpose.** `/pointer-closeout` records the
   held entry `executed`, and the `/roadmap-review` that absorbs it runs the recording
@@ -1189,6 +1284,11 @@ CLAUDE.md, the prohibition still applies to any document that:
 - Spans multiple sprints (roadmaps, sprint queues, constitutions)
 - Is edited by the planner between sprints (SRL catalogs, debt logs, technical references)
 - Contains the dispatch spec for the currently-running sprint (the inline full spec)
+- Defines how agents work: the plugin's agent files (`agents/<Agent>.md`), their
+  registered overlays (`<overlays>/agents/<Agent>.md`), and project copies of agent
+  briefs (`.claude/agents/`), unless the dispatch's own specification
+  names the file as an edit site. A correction found mid-sprint is a staging fold-in
+  (Rule 2), which the planner applies between sprints.
 
 If a task in the task plan would edit a main governance document, virtuoso rewrites
 that task to write to the staging file instead (see Rule 2).

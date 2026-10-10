@@ -5,8 +5,9 @@ reads the catalog *together with every close-out* and answers the questions a
 catalog alone cannot:
 
 * **hygiene** — which live lessons duplicate one another (merge them), have gone
-  stale without ever being applied (retire them), are incomplete (tidy them), or
-  reuse an identifier (repair them). ``governance-sweep`` acts on it.
+  stale without ever being applied (retire them), are incomplete (tidy them), claim
+  in prose a status no record carries (record it), or reuse an identifier (repair
+  them). ``governance-sweep`` acts on it.
 * **candidates** — which lessons have earned promotion to a standing rule: a
   pattern that recurred, or a lesson applied and held in two close-outs.
   ``roadmap-review`` acts on it.
@@ -168,8 +169,9 @@ def duplicate_groups(lessons: list[lessons_mod.Lesson]) -> list[dict]:
 
 def hygiene(lessons: list[lessons_mod.Lesson], outcomes: Outcomes, *,
             today: _dt.date, stale_after_days: int) -> dict:
-    """What ``governance-sweep`` should tidy, merge and retire. Proposals only."""
-    stale, incomplete, malformed = [], [], []
+    """What ``governance-sweep`` should tidy, merge, retire, record and repair.
+    Proposals only."""
+    stale, incomplete, malformed, unrecorded = [], [], [], []
     for lesson in lessons:
         if lesson.reused:
             malformed.append({"id": lesson.id, "why": "a later entry under this id records a "
@@ -177,6 +179,8 @@ def hygiene(lessons: list[lessons_mod.Lesson], outcomes: Outcomes, *,
                               "retire the reuse with a status record"})
         if not lesson.live:
             continue
+        if lesson.claims:
+            unrecorded.append(_record_proposal(lessons, lesson))
         missing = [f for f in lessons_mod.LESSON_FIELDS if not lesson.fields.get(f)]
         if missing:
             incomplete.append({"id": lesson.id, "missing": missing})
@@ -187,8 +191,29 @@ def hygiene(lessons: list[lessons_mod.Lesson], outcomes: Outcomes, *,
             stale.append({"id": lesson.id, "recorded": when.isoformat(),
                           "ageDays": (today - when).days})
     return {"duplicates": duplicate_groups(lessons), "stale": stale,
-            "incomplete": incomplete, "malformed": malformed,
+            "incomplete": incomplete, "malformed": malformed, "unrecorded": unrecorded,
             "staleAfterDays": stale_after_days}
+
+
+def _record_proposal(lessons: list[lessons_mod.Lesson], lesson: lessons_mod.Lesson) -> dict:
+    """The status record a live lesson's prose claims (its first claim), and the
+    command that records it, or the reason it cannot be recorded as written."""
+    claim = lesson.claims[0]
+    match = lessons_mod._CLAIM_RE.search(claim)
+    word = match.group("word").capitalize()
+    if match.group("target"):
+        status = "%s -> %s" % (word, match.group("target"))
+    else:
+        # Markup stripped, and anything a shell would read inside "…" (the command
+        # below is run as printed).
+        text = re.sub(r'^[-*+][ \t]+|[*`"$\\]|(?<!\w)_+|_+(?!\w)', "", claim)
+        status = "%s — %s" % (word, text.strip()[:80])
+    problem = status_problem(lessons, lesson.id, status)
+    command = ("" if problem else
+               'lessons --record-status %s --status "%s" --actor governance-sweep --item sweep'
+               % (lesson.id, status))
+    return {"id": lesson.id, "claims": claim, "status": status, "command": command,
+            "problem": problem}
 
 
 def candidates(lessons: list[lessons_mod.Lesson], outcomes: Outcomes) -> list[dict]:

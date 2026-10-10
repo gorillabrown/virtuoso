@@ -38,7 +38,10 @@ run's git work, so one paste carries both the git work and the epic's instructio
      add; explicit-path-stage: add, no commit; explicit-path-commit: commit, no push;
      push: commit and push). With no remote, drop every fetch, merge-from-remote and push
      line. With network operations denied, drop them too. No placeholder survives into
-     the packet. -->
+     the packet. Keep the Completion only lines only when the charter has the run merge
+     its own code into [DEFAULT] and the policy commits (explicit-path-commit, push);
+     otherwise drop them, and the merge someone else makes after done.md carries the
+     record. [PACKET DIR] is this directory, repo-relative. -->
 
 ```
 You are executing the epic at [ABSOLUTE PATH TO THIS DIRECTORY].
@@ -87,6 +90,13 @@ Every checkpoint:
   git commit -m "[PACKET-ID]-S<n>: <what this burst did>"
   git push [REMOTE] [BRANCH]
   record the Git line in the journal entry: [BRANCH] @ <sha>; uncommitted: <paths or none>
+Completion only — after the code merge, once done.md is written:
+  git add -- [PACKET DIR]/done.md [PACKET DIR]/charter.md [PACKET DIR]/state.md [PACKET DIR]/journal.md
+  git commit -m "[PACKET-ID]: completion record" -- [PACKET DIR]
+  git switch [DEFAULT]              # in the checkout the code merge used
+  git merge --no-ff [BRANCH] -m "merge: [PACKET-ID] completion record"
+  git diff --name-only HEAD^1 HEAD -- . ":(exclude)[PACKET DIR]"   # must print
+                                    # nothing; any path -> STOP, BLOCKER(USER)
 Never: force-push, rebase, reset --hard, stash, clean, or delete a lock file.
 
 Run this session under the virtuoso skill when it is available: this packet is your
@@ -111,10 +121,18 @@ achieve, and how completion is proven.
 3. All rows pass ⇒ write `done.md` in this directory — completion date, the DoD table
    with per-row evidence pointers, caveats and loose ends, recommended follow-ups — and
    set charter.md frontmatter `status: complete`.
-4. Final journal entry, then stop. **`done.md` existing is the stop signal** for any
-   loop or scheduler driving sessions: check it before launching another session. Never
-   create it under any other circumstances.
-5. Close the epic through `/pointer-closeout [PACKET-ID]`, with journal.md and done.md as
+4. Write the final journal entry, then carry the record to `[DEFAULT]`: where `policy.git`
+   commits, commit done.md, charter.md, state.md and journal.md on the run branch as one
+   docs-only commit — after the code merge, never folded into it, so `[DEFAULT]`'s tree
+   at the code merge stays the tree the DoD rows tested. When the run merged its code
+   into `[DEFAULT]`, merge this commit too, with `--no-ff`, and check that the merge
+   touches only this directory (GIT WORK → Completion only). When someone else merges,
+   the record rides on that merge. `/pointer-closeout` checks that done.md is on
+   `[DEFAULT]` before it crosses.
+5. Stop. **`done.md` existing is the stop signal** for any loop or scheduler driving
+   sessions: check it before launching another session. Never create it under any other
+   circumstances.
+6. Close the epic through `/pointer-closeout [PACKET-ID]`, with journal.md and done.md as
    its evidence. A combination's close-out retires every item the charter's `items:`
    names. That ceremony records what the epic taught in the registered `lessons`
    role — where the next charter reads it — or says why it taught nothing. An epic

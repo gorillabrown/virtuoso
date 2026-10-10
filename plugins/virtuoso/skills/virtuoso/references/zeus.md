@@ -222,18 +222,25 @@ Proceeding to PLAN phase.
 - Identify sequential dependencies vs. parallelizable tasks
 - Read the dispatch header's Effort field and any per-task overrides
 - Set the default effort level via `/effort-levels [low|medium|high|max]` (see the `effort-levels` skill)
-- Print the full task plan
+- Open the time log, which prices every row (see the virtuoso skill, *Open the time log*):
+  `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . timing --kinds` to reuse the kind
+  names in use, then
+  `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing --sprint <sprint-id> --open --rows-file <rows.json>`.
+  Each row carries its `class` (`calculable`, `repeat`, `frontier`), `specRevision` and
+  `group`; a frontier row carries a `timebox` (minutes) and `onTimebox` instead of an estimate.
+- Print the full task plan with the predictions `timing --sprint <sprint-id> --status` shows
 
 **Gate output:**
 ```
 ===== PHASE 2: PLAN COMPLETE =====
 
 TASK PLAN (<sprint-id>):
-  Task 0: [Hermes/mechanical] Prepare the isolated workspace (if the project's Git Workflow uses one)
-  Task 1: [<Agent>/<tier>] <description>
+  Task 0: [Hermes/mechanical] Prepare the isolated workspace (if the project's Git Workflow uses one)  <M> min (<basis>)
+  Task 1: [<Agent>/<tier>] <description> @<kind>  <M> min (median of <N> runs | estimated)
   ...
-  Task N: [Hermes/mechanical] Persist per the project's Git Workflow
+  Task N: [Hermes/mechanical] Persist per the project's Git Workflow  <M> min (<basis>)
 
+Predicted: <total> over sequential rows (parallel rows <ids> excluded), from `timing --status`
 Dependencies: <list>
 Effort level (default): <level>
 Estimated agent spawns: <N>
@@ -248,14 +255,26 @@ Estimated agent spawns: <N>
 - Task 0 (if the project's Git Workflow uses isolated workspaces): create the per-sprint
   workspace (e.g., a git worktree or feature branch) per that workflow. If the project
   works directly on a branch, skip Task 0.
+- Every `timing` call below runs as
+  `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing …`.
 - For each subsequent task sequentially:
-  a. Check for an effort override on this task
+  a. Check for an effort override on this task, then `timing --sprint <sprint-id> --start N
+     --model <model id> --host <host>`
   b. Spawn the assigned agent: `Agent("<name>", prompt=<self-contained task spec>)`
   c. Await return (COMPLETE / BLOCKED / FAILED)
   d. Extract results needed for downstream tasks
   e. Verify output matches the task spec
-  f. Mark task status
+  f. Mark task status, and `timing --sprint <sprint-id> --end N` (with `--result blocked`
+     or `--result cancelled` when it did not complete, and `--tokens <count>` when the
+     host reported the row's usage)
   g. Reprint the task plan with updated checkmarks
+- A question to the owner is a wait: `timing --wait N --reason owner` when you ask, and
+  `timing --resume N` when the answer arrives. Every wait names its reason (`owner`,
+  `approval`, `blocked`, `session-ended`), and stays out of the row's working time.
+- A frontier row that works its timebox: `timing --timebox-reached N`, then its
+  `onTimebox` action. A row that proves to be two: `timing --split N --rows-file <parts.json>`.
+- A task added mid-run is registered before it starts: `timing --kinds`, then
+  `timing --sprint <sprint-id> --add --rows-file <row.json>`. It takes the next number.
 
 **On BLOCKED/FAILED:** do not improvise. Render the blocker as a structured issue (the
 7-field format) and route it to **`/mid-dispatch-decision`** — see *Blocker Handling* below.
@@ -591,6 +610,9 @@ AGENT UTILIZATION:
 BLOCKERS: [none / list]
 STATUS: COMPLETE / BLOCKED / PARTIAL
 ```
+
+Duration is the measured working time of the agent's rows, from `timing --summary`. It is
+never typed.
 
 ---
 

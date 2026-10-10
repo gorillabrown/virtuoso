@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -329,6 +330,47 @@ def test_created_files_refuses_an_unknown_base(dispatch):
     assert completed.returncode == 2 and "does not resolve" in completed.stdout
 
 
+def test_created_files_names_a_recovery_record_as_one_to_commit(dispatch):
+    (dispatch / "Virtuoso" / ".recovery").mkdir()
+    (dispatch / "Virtuoso" / ".recovery" / "r.json").write_text("{}")
+    (dispatch / "report.md").write_text("a deliverable")
+    out = created(dispatch).stdout
+    assert "Virtuoso/.recovery/r.json  (commit: a recovery record, never remove or ignore)" in out
+    assert "report.md  (commit, ignore, or decide)" in out
+
+
+# --- plugin state git must ignore, and the one kind it must not ---------------------------
+
+def test_create_ignores_local_state_and_check_is_clean(tmp_path):
+    git(tmp_path, "init", "-q")
+    (tmp_path / ".gitignore").write_text("node_modules/")         # the project's own line
+    assert run(PREFLIGHT, "--root", str(tmp_path), "--mode", "create",
+               "--authorize").returncode == 0
+    lines = (tmp_path / ".gitignore").read_text().splitlines()
+    assert lines[0] == "node_modules/"
+    assert {"/Virtuoso/.backups/", "/Virtuoso/.quarantine/",
+            "/Project Documentation/3 temp/"} <= set(lines)
+    completed = run(PREFLIGHT, "--root", str(tmp_path), "--mode", "check")
+    assert "virtuoso-status: ready" in completed.stdout, completed.stdout
+
+
+def test_check_warns_when_local_state_is_tracked_or_recovery_is_ignored(tmp_path):
+    git(tmp_path, "init", "-q")
+    run(PREFLIGHT, "--root", str(tmp_path), "--mode", "create", "--authorize")
+    (tmp_path / ".gitignore").write_text("/Virtuoso/.recovery/\n")
+    completed = run(PREFLIGHT, "--root", str(tmp_path), "--mode", "check", "--json")
+    codes = {f["code"] for f in json.loads(completed.stdout[completed.stdout.index("{"):])
+             ["findings"]}
+    assert {"local-state-not-ignored", "recovery-records-ignored"} <= codes
+
+
+def test_check_says_nothing_about_ignores_outside_a_repository(tmp_path):
+    run(PREFLIGHT, "--root", str(tmp_path), "--mode", "create", "--authorize")
+    (tmp_path / ".gitignore").unlink()
+    completed = run(PREFLIGHT, "--root", str(tmp_path), "--mode", "check")
+    assert "virtuoso-status: ready" in completed.stdout, completed.stdout
+
+
 def test_the_close_out_runs_the_review_and_records_it():
     skill = (ROOT / "skills" / "pointer-closeout" / "SKILL.md").read_text(encoding="utf-8")
     assert skill.count("sprint_guards created-files") >= 1 and "created-files" in skill
@@ -561,6 +603,74 @@ def test_the_ceremonies_run_hygiene_and_candidates():
     assert "lessons --hygiene" in sweep and "--actor governance-sweep" in sweep
     review = (ROOT / "skills" / "roadmap-review" / "SKILL.md").read_text(encoding="utf-8")
     assert "lessons --candidates" in review and "--record-status" in review
+
+
+#: A lesson copied verbatim from a real catalog, never text written to match the parser.
+SRL_006 = ("### SRL-006 — Verify characterizations against the archived artifact at claim time (REG-FIX-01, 2026-07-18)\n"  # validate-ok: the default lesson prefix, verbatim
+           """**Verdict:** Both the close-out and its adversarial review made claims about the same archived diff without reading it; the artifact settled both in minutes.
+**Evidence:** The close-out relayed a worker's "reorder-only" label unread (label happened to be correct); the review attributed the damage to the verified runs without consulting the diff (attribution was incorrect — the diff proves the damage postdates the verify window).
+**Recommendation:** Any claim backed by an archived artifact must cite the artifact's content, not a summary of it — at claim time, not post-hoc.
+**Applies to:** All close-outs and reviews with archived evidence.
+**Status:** Observation
+""")
+
+
+def test_hygiene_proposes_the_status_record_prose_claims():
+    claimed = SRL_006 + "Promoted to SR-12 at the 2026-09-24 review.\n"
+    outcomes = learning_mod.read_outcomes([], "SRL")
+    report = learning_mod.hygiene(lessons_mod.parse(claimed, "SRL"), outcomes, today=TODAY,
+                                  stale_after_days=0)
+    assert report["unrecorded"] == [{
+        "id": "SRL-006", "claims": "Promoted to SR-12 at the 2026-09-24 review.",  # validate-ok: the default lesson prefix
+        "status": "Promoted -> SR-12",
+        "command": 'lessons --record-status SRL-006 --status "Promoted -> SR-12" '  # validate-ok: the default lesson prefix
+                   '--actor governance-sweep --item sweep',
+        "problem": ""}]
+    recorded = (claimed + "\n### SRL-006 — status (VIR-012, 2026-10-09)\n"  # validate-ok: the default lesson prefix
+                "- **Status:** Promoted -> SR-12\n")
+    assert learning_mod.hygiene(lessons_mod.parse(recorded, "SRL"), outcomes, today=TODAY,
+                                stale_after_days=0)["unrecorded"] == []
+
+
+def test_a_numbered_lessons_heading_counts_in_outcomes():
+    outcomes = learning_mod.read_outcomes([("C.md", "## 3. Lessons\n- LSN-001 held.\n")], "LSN")
+    assert outcomes.held == {"LSN-001": 1}
+
+
+def test_a_proposed_command_runs_as_printed():
+    claimed = ('### LSN-007 — Quoted (ARCH-12, 2026-09-01)\n**Verdict:** x\n'
+               'Retired: the "old" rule, $(touch pwned) and `the_gate` with \\n.\n')
+    [proposal] = learning_mod.hygiene(lessons_mod.parse(claimed, "LSN"),
+                                      learning_mod.read_outcomes([], "LSN"), today=TODAY,
+                                      stale_after_days=0)["unrecorded"]
+    assert proposal["status"] == "Retired — Retired: the old rule, (touch pwned) and the_gate with n."
+    assert proposal["command"].count('"') == 2 and "$" not in proposal["command"]
+    assert shlex.split(proposal["command"])[4] == proposal["status"]
+
+
+def test_one_hygiene_pass_migrates_a_prose_only_promotion(catalog):
+    with open(role_path(catalog, "lessons"), "a", encoding="utf-8", newline="\n") as handle:
+        handle.write("\n### LSN-006 — Prose-only (ARCH-12, 2026-09-01)\n**Verdict:** x\n"
+                     "Promoted to SR-12.\n")
+    live_before = json.loads(lessons_cli(catalog, "--open", "--json").stdout)["live"]
+    text = lessons_cli(catalog, "--hygiene").stdout
+    assert "record   LSN-006" in text
+    assert '--record-status LSN-006 --status "Promoted -> SR-12"' in text
+    [proposal] = json.loads(lessons_cli(catalog, "--hygiene", "--json").stdout)["unrecorded"]
+    assert proposal["id"] == "LSN-006"
+    applied = run(REGISTRY_CLI, "--root", str(catalog), *shlex.split(proposal["command"]),
+                  "--apply")
+    assert applied.returncode == 0, applied.stdout + applied.stderr
+    after = json.loads(lessons_cli(catalog, "--hygiene", "--json").stdout)["unrecorded"]
+    assert "LSN-006" not in [entry["id"] for entry in after]
+    assert json.loads(lessons_cli(catalog, "--open", "--json").stdout)["live"] == live_before - 1
+
+
+def test_the_sweep_and_contract_name_the_record_proposal():
+    sweep = (ROOT / "skills" / "governance-sweep" / "SKILL.md").read_text(encoding="utf-8")
+    assert "**record**" in sweep and "lessons --hygiene" in sweep
+    contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
+    assert "**record**" in contract and "list item" in contract
 
 
 def test_the_stale_threshold_is_a_documented_policy_value():

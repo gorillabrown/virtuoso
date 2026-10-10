@@ -218,7 +218,7 @@ located rather than guessing a path.
 | Script | Purpose |
 |---|---|
 | `virtuoso_preflight.py` | check / adopt / create / repair, plus `--check-document` |
-| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `overlays` (incl. `--scaffold`), `provider`, `items`, `next`, `combine`, `kpis`, `closeout`, `lessons`, `holding`, `repo`, `recovery`; and the explicit writers `snapshot` (incl. `--import`), `closeout --prepare`, `lessons --record-status` / `--record-link`, `holding --record`, `create-item`, `mutation-plan`, `mutation-confirm` |
+| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `overlays` (incl. `--scaffold`), `provider`, `items`, `next`, `combine`, `kpis`, `closeout`, `lessons`, `holding`, `repo`, `recovery`; and the explicit writers `snapshot` (incl. `--import`), `closeout --prepare`, `lessons --record-status` / `--record-link`, `holding --record`, `create-item`, `mutation-plan`, `mutation-confirm`, `mutation-abandon` |
 | `generate_cockpit.py` | the planning cockpit, read from the configured provider |
 | `build_register_report.py` | the generated spreadsheet report (declared generated roles only) |
 | `validate.py` | structural validation of the plugin itself |

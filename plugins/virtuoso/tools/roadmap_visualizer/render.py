@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import html
 import json
 
 from .model import PlanningModel, to_jsonable
 
 
-def render_html(model: PlanningModel) -> str:
+def render_html(model: PlanningModel, *, board=None) -> str:
     payload = json.dumps(to_jsonable(model), ensure_ascii=True).replace("</", "<\\/")
+    # The board succeeds the cockpit: this release still writes the cockpit, with a
+    # banner pointing to its successor; a later release retires it.
+    where = html.escape(str(board)) if board else ("not created yet: run "
+                                                    "<code>generate_board --create</code>")
+    banner = ('<p class="summary banner" id="board-banner"><strong>This cockpit is being '
+              'retired.</strong> The roadmap board replaces it: %s</p>' % where)
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -39,6 +46,7 @@ def render_html(model: PlanningModel) -> str:
     }}
     h1 {{ margin: 0 0 8px; font-size: clamp(26px, 4vw, 40px); }}
     .summary {{ margin: 0; color: var(--muted); max-width: 900px; }}
+    .banner {{ margin-top: 8px; color: var(--warn); }}
     .tabs {{
       display: flex;
       gap: 8px;
@@ -102,6 +110,7 @@ def render_html(model: PlanningModel) -> str:
     <h1>Planning Health Cockpit</h1>
     <p class="summary">Work-register status, conveyor flow, and dependency alignment in one self-contained report. Every figure below cites the provider and snapshot it came from.</p>
     <p class="summary" id="provenance"></p>
+    {banner}
   </header>
   <nav class="tabs" aria-label="Planning views">
     <button type="button" data-view="cockpit" aria-selected="true">Cockpit</button>

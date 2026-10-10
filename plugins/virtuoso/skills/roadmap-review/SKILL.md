@@ -263,7 +263,16 @@ execution-environment). Never blend them into one verdict.
 
 ## Outputs
 
-Written into the registered `roadmapReviews` directory:
+Written into the registered `roadmapReviews` directory, under the prefix the resolver
+names (`--date` defaults to today's UTC date, which it prints as `date`):
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . review --date <YYYY-MM-DD>
+
+Write under its `prefix` — the date, or `DATE-2`, `DATE-3`… for a second review that
+day — or under `resume` when it names an interrupted review of the same date, which you
+then finish. An earlier review's records are never overwritten. Run it once, at the
+start, and keep that `date` for every later call in this review, so a review that runs
+past midnight UTC keeps one prefix. `YYYY-MM-DD` below stands for that prefix:
 - `YYYY-MM-DD-audit.md` — Phase A diff
 - `YYYY-MM-DD-assessment.md` — Phase B opinion
 - `YYYY-MM-DD-plan.md` — Phase C decomposition
@@ -324,6 +333,12 @@ section, append its terminal record, and reconcile the register.
 ### A.1 Read everything
 Inventory every item and its claimed status, from the register and the roadmap
 separately. Record where they disagree; do not silently pick a winner.
+
+A connector-backed register is read fresh first: read every page and the board's column
+list with the host's connector, save both as they came, and import them with
+`virtuoso_registry --root . snapshot --import <page> --columns <columns>`
+(`references/registry-contract.md`, *Refreshing a connector-backed register's
+snapshot*). Report each `[DRIFT]` line as a finding.
 
 Read the holding bay too:
 
@@ -472,17 +487,53 @@ reads it from the policy, and a copy is a second authority that drifts.
 Forward / sideways / backward deltas since the previous review. Score =
 forward / (forward + sideways + backward).
 
-Count the held entries this review absorbs (A.4b and C.3) as deltas like any other,
-and name each one by title and entry. Ad hoc entry is legitimate. Ad hoc entry that
-nobody reviews is how scope drifts unseen. Name each withdrawn entry with its reason.
+Count items that reached a terminal status since the previous review, and work shipped
+with no register entry, which is named as such. Each counts once:
+
+- **Forward** — counts toward the finish line: named in a declared deadline's `scope`
+  (`policy.roadmap.deadlines.<id>.scope`), or, with none declared, in the roadmap's
+  finish-line section.
+- **Sideways** — delivered, but not toward the finish line: hardening, measurement,
+  tooling, an ad hoc stream, a held plan that already ran (A.4b).
+- **Backward** — undoes delivered work: a revert or rollback, a terminal item reopened,
+  a release withdrawn.
+
+Scope added to the backlog, including held entries absorbed in C.3, is listed with the
+class it would take, and is not scored. Where a call is a judgement, say so, and keep the
+previous review's call for the same item.
+
+Name each held entry this review absorbs by title and entry: one absorbed in A.4b counts
+as a delivered delta, one absorbed in C.3 is listed as added scope. Ad hoc entry is
+legitimate. Ad hoc entry that nobody reviews is how scope drifts unseen. Name each
+withdrawn entry with its reason.
 
 Then read what the previous cycle left for this one: the previous review's
-`YYYY-MM-DD-lessons-applied.md` in the registered reviews directory (the lessons it
-applied, the candidates it left undecided — decide them in D.4), and every entry in
+`YYYY-MM-DD-lessons-applied.md` (the lessons it applied, the candidates it left
+undecided — decide them in D.4). The resolver names it:
+`"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . review --date <YYYY-MM-DD>`
+gives `previous`, latest by date, then run. When that set was interrupted and has no
+lessons-applied, read `previousComplete`'s, and name the interrupted review in the
+assessment. Read too every entry in
 the registered `findings` role whose latest **Disposition** is still `open`. Each open
 finding is carried into the plan: fixed by a planned item, accepted with a reason,
 or turned into a lesson — recorded by appending a disposition under its id. A finding
 left open across two reviews is named in the assessment.
+
+Beside the open findings, read the open **board comments** — the notes people left on
+the roadmap board's rows, saved or exported into the registered `boardComments` file:
+
+    "$HOME/.virtuoso/bin/virtuoso" board_comments --root .
+
+Address, adopt or answer each one. A comment on live work is input to that item's plan
+or specification; a comment on finished work (the Completed tab) is a follow-up
+candidate, proposed as a new item, never a change to the closed one. Mark each answered
+comment resolved, which greys it out on the page:
+
+    "$HOME/.virtuoso/bin/virtuoso" board_comments --root . --actor roadmap-review --resolve <ID> --answer "<what the review did>" --apply
+
+The board never edits the register or the roadmap; its comments reach them only through
+this review. Resolving changes the comments file, so preflight reads `board: stale`
+until D.7 regenerates the page later in this review.
 
 ### B.4 Render the assessment
 Write `YYYY-MM-DD-assessment.md` into the registered reviews directory, with the
@@ -681,7 +732,8 @@ what this step exists to catch.
 
 **D.4.6 Render** `YYYY-MM-DD-lessons-applied.md`: the live lessons; which
 specification applied which; the promotions and retirements recorded; the candidates
-left undecided; the `learning` figures from `kpis` beside the previous review's; and
+left undecided; the `learning` figures from `kpis` beside the previous review's (the
+resolver's `previous`, or `previousComplete` when `previous` has no lessons-applied); and
 the close-outs since the last review that recorded no lesson and gave no reason.
 
 ### D.5 Integrate
@@ -689,7 +741,8 @@ the close-outs since the last review that recorded no lesson and gave no reason.
 **D.5.1** Place specifications per `policy.roadmap.specStorage`.
 
 **D.5.2** Specification format (structural fields first, then implementation
-detail, then the lessons applied under the heading U9 reads). Grouping headings
+detail, then the task list U10 reads, in the row format of `references/task-rows.md`,
+then the lessons applied under the heading U9 reads). Grouping headings
 appear only if `policy.roadmap.hierarchy` declares them:
 
 ```
@@ -715,6 +768,13 @@ appear only if `policy.roadmap.hierarchy` declares them:
 - **Failure handling:** if X, do Y; rollback: …
 - **Project extensions:** … (only those policy.rubric.extensions declares)
 
+##### Task list
+| # | Task | Class | Kind | Tier | Effort | Estimate | Timebox | Group |
+|---|---|---|---|---|---|---|---|---|
+| 1 | … (an outcome, never a code step) | repeat | … | bounded | medium | 35m (median of 9 runs) | — | — |
+
+**Total:** the line `timing --rows-from-spec <spec> --item ITEM-ID` prints
+
 ##### Lessons applied
 - <prefix>-NNN — what it changed here: a *Done when* row, a constraint, a test
 - (or) No live lesson applies — N read
@@ -724,17 +784,28 @@ Mid-dispatch amendments append as `##### Mid-Dispatch Amendment — YYYY-MM-DD`.
 
 **D.5.3 Update the live work register.** Through the provider, for each newly
 specified item: sequence, title, group, lane, effort, prerequisites, status, the
-specification state, branch, description. Pass the `revision` you read.
+specification state, branch, description — each only where the register has a
+column for it (a declared `policy.workRegister.fieldMappings` names it; a plan naming any
+other is refused). Pass the `revision` you read.
+
+For an external register, every change is its own plan and its own connector call
+(the external handshake in `references/registry-contract.md`). Read the item back
+before every `mutation-confirm`. When only some fields landed, confirm `--partial
+--written <fields>`, then plan the rest. Close a plan you will not execute with
+`mutation-abandon --recovery-id <ID> --reason <why>`.
 
 An item that is **not yet in the register** — a specification this review authored
 or approved that has no row — is brought into existence through `create-item`,
 never by writing a row into a file by hand and never by calling a connector's raw
 create. For a local register that is one write. For an external register it is
-the handshake: `mutation-plan --operation create-item`, execute the returned
-instruction with the host's connector, `mutation-confirm --succeeded
---provider-id <ID> --actual-revision <REVISION>`, then refresh the canonical
-snapshot (`snapshot --import <rows>`) and verify `recovery` is empty. The plan is
-refused when the snapshot is absent or stale, when the id already exists (terminal
+the handshake: refresh the snapshot first (`snapshot --import <page> --columns
+<columns>`; a `[DRIFT]` line naming a field you are about to write is fixed in
+`fieldMappings` before planning), then `mutation-plan --operation create-item`, execute
+the returned instruction with the host's connector, read the item back,
+`mutation-confirm --recovery-id <RECOVERY-ID> --succeeded --provider-id <ID>
+--actual-revision <REVISION>`, then refresh the canonical snapshot the same way
+(`snapshot --import <page> --columns <columns>`) and verify `recovery` is empty. The
+plan is refused when the snapshot is absent or stale, when the id already exists (terminal
 items included), or when a creation under the same idempotency key was already
 confirmed; each refusal names the fix. If `policy.workRegister.creators` does not
 name this ceremony, say so and stop — creation is separately authorized.
@@ -773,14 +844,29 @@ completed summary carries one line each; standing rules reflect the checklist.
   checks that blocked them
 - **Provenance** — provider, source, snapshot time for every figure
 
-### D.7 Regenerate the planning cockpit
+### D.7 Regenerate the board and the planning cockpit
 
+    "$HOME/.virtuoso/bin/virtuoso" generate_board --root . --create
     "$HOME/.virtuoso/bin/virtuoso" generate_cockpit --root .
+
+The **roadmap board** is the project's one interactive page: a Dashboard (KPI tiles,
+charts, slicers built from the data), a Roadmap tab (live work as a board, grouped by
+pipeline state, with a comment box and a copy button on every row) and a Completed
+tab (the register's terminal items joined with the terminal ledger, mismatches marked
+*unreconciled*). `--create` makes this the first review's step that brings it into
+being: it registers the `board` and `boardComments` roles when they are missing
+(default paths `roadmap-board.html` and `roadmap-board.comments.json` in the project
+root), generates a missing page and reports `board created`, and adds the page's path
+to `.gitignore` once — skipped when it is already ignored or the project is not a git
+repository. The page is a build output: never commit it. The comments file is written
+by people: commit it. A later review regenerates the page and reports `board
+regenerated`.
 
 The cockpit reads the **configured authoritative work register** through its
 provider and the roadmap through its registered role, and writes
-`Virtuoso/reports/planning-cockpit.html`. It never modifies a source document; it
-surfaces drift instead. Every figure it shows carries its provenance, and a
+`Virtuoso/reports/planning-cockpit.html` with a banner pointing to the board, its
+successor; this release still writes it. Neither page modifies a source document;
+both surface drift instead. Every figure carries its provenance, and a
 snapshot-backed read is labelled with its age.
 
 ### D.8 Final summary
@@ -793,6 +879,8 @@ snapshot-backed read is labelled with its age.
 - Holding bay: N absorbed (by title, and what each became), N withdrawn (with the
   reasons), N still in flight
 - Lessons applied
+- Board: `created` or `regenerated`, its path, and what `.gitignore` got; board
+  comments resolved (by item) and adopted as new items
 - Cockpit path
 - Any outstanding recovery records
 

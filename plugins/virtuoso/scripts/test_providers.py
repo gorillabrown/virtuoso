@@ -16,7 +16,7 @@ import pytest
 
 from tools.governance import policy as policy_mod, providers, registry as registry_mod
 from tools.governance.errors import (CapabilityError, ConcurrencyError, DuplicateItemError,
-                                     ProviderError)
+                                     GovernanceError, ProviderError)
 from tools.governance.providers import base, kpi, ledger, mapping as mapping_mod
 from tools.governance.providers import recovery, snapshot_provider
 from tools.governance.providers.csv_provider import CsvWorkRegister
@@ -117,6 +117,32 @@ def test_every_provider_lists_only_active_work(any_provider):
 def test_every_provider_finds_the_same_next_eligible_item(any_provider):
     item = any_provider.next_eligible()
     assert item is not None and item.id == "ITEM-2"
+
+
+def _snapshot_register(tmp_path, items):
+    target = tmp_path / "snap.json"
+    target.write_text(json.dumps({"takenAt": "2099-01-01T00:00:00Z", "items": items}),
+                      encoding="utf-8")
+    return snapshot_provider.SnapshotWorkRegister(source=str(target))
+
+
+def test_next_eligible_skips_an_in_flight_item(tmp_path):
+    provider = _snapshot_register(tmp_path, [
+        {"id": "A", "status": "in-flight", "sequence": 1},
+        {"id": "B", "status": "queued", "sequence": 2},
+    ])
+    assert provider.next_eligible().id == "B"
+    assert [i.id for i in provider.in_flight()] == ["A"]
+
+
+def test_a_prerequisite_missing_from_the_register_is_named(tmp_path):
+    provider = _snapshot_register(tmp_path, [
+        {"id": "A", "status": "completed", "sequence": 1},
+        {"id": "B", "status": "queued", "sequence": 2, "prerequisites": ["GONE-1"]},
+        {"id": "C", "status": "queued", "sequence": 3, "prerequisites": ["A"]},
+    ])
+    assert provider.missing_prerequisites() == {"B": ["GONE-1"]}
+    assert provider.next_eligible().id == "C"
 
 
 def test_every_provider_reports_provenance(any_provider):
@@ -881,6 +907,7 @@ def test_a_failed_creation_can_be_retried_with_a_verify_first_precondition(tmp_p
     assert [r["id"] for r in recovery.outstanding(str(tmp_path))] == [retry.recovery_id]
     old = recovery.get_record(str(tmp_path), first.recovery_id)
     assert old["resolved"] and old["detail"]["supersededBy"] == retry.recovery_id
+    assert old["outcome"] == "superseded"
     provider.confirm(retry, succeeded=True, provider_item_id="43")
     assert recovery.outstanding(str(tmp_path)) == []
 
@@ -910,3 +937,125 @@ def test_an_external_creation_is_withdrawn_for_an_unauthorized_creator(project):
     assert recovery.outstanding(str(project)) == []
     planner = providers.work_register(reg, actor="roadmap-review").provider
     assert planner.plan_mutation("create-item", "NEW-1", {"title": "New"}).expected_absent
+
+
+# --- VIR-010: partial success, abandon, fields the register cannot hold --------------------
+
+def _board(tmp_path, declared=None):
+    from tools.governance.providers.external_provider import ExternalWorkRegister
+    return ExternalWorkRegister(source="monday:board/1234567890", provider_kind="connector",
+                                recovery_root=str(tmp_path), declared_fields=declared)
+
+
+def test_a_partial_confirmation_names_written_and_unwritten_fields(tmp_path):
+    provider = _board(tmp_path)
+    plan = provider.plan_mutation("set-status", "123", {"sequence": 4, "status": "In Flight"})
+    result = provider.confirm(plan, outcome="partial", written=["sequence"])
+    assert result["outcome"] == "partial" and result["succeeded"] is False
+    pending = recovery.outstanding(str(tmp_path))
+    assert [r["id"] for r in pending] == [plan.recovery_id]
+    assert pending[0]["detail"]["partial"] == {"written": ["sequence"], "unwritten": ["status"]}
+    for written in ([], ["sequence", "status"], ["title"]):
+        with pytest.raises(CapabilityError, match="some, not all"):
+            provider.confirm(plan, outcome="partial", written=written)
+
+
+def test_a_follow_up_plan_supersedes_a_partial_record(tmp_path):
+    provider = _board(tmp_path)
+    first = provider.plan_mutation("set-status", "123", {"sequence": 4, "status": "In Flight"})
+    provider.confirm(first, outcome="partial", written=["sequence"])
+    other = provider.plan_mutation("set-status", "456", {"status": "Done"})
+    assert recovery.get_record(str(tmp_path), first.recovery_id)["resolved"] == ""
+    second = provider.plan_mutation("set-status", "123", {"status": "In Flight"})
+    old = recovery.get_record(str(tmp_path), first.recovery_id)
+    assert old["resolved"] and old["detail"]["supersededBy"] == second.recovery_id
+    assert old["outcome"] == "superseded" and old["reason"] == "superseded by %s" % second.recovery_id
+    assert [r["id"] for r in recovery.outstanding(str(tmp_path))] == sorted(
+        [other.recovery_id, second.recovery_id])
+
+
+def test_an_abandoned_plan_resolves_with_its_reason(tmp_path):
+    provider = _board(tmp_path)
+    plan = provider.plan_mutation("set-status", "123", {"status": "In Flight"})
+    provider.abandon(plan.recovery_id, "planned against a stale snapshot")
+    record = recovery.get_record(str(tmp_path), plan.recovery_id)
+    assert record["resolved"] and record["outcome"] == "abandoned"
+    assert record["reason"] == "planned against a stale snapshot"
+    assert recovery.outstanding(str(tmp_path)) == []
+    with pytest.raises(CapabilityError, match="already resolved"):
+        provider.abandon(plan.recovery_id, "again")
+    old = {"id": "r-old", "resolved": "2026-09-01T00:00:00Z"}     # written before outcomes
+    assert recovery.outcome_of(old) == "succeeded"
+
+
+def test_a_record_superseded_before_the_outcome_word_reads_superseded(tmp_path):
+    resolved = "2026-09-01T00:00:00Z"
+    assert recovery.outcome_of({"resolved": resolved, "outcome": "succeeded",
+                                "detail": {"supersededBy": "r-2"}}) == "superseded"
+    assert recovery.outcome_of({"resolved": resolved,
+                                "detail": {"supersededBy": "r-2"}}) == "superseded"
+    assert recovery.outcome_of({"resolved": resolved, "outcome": "abandoned",
+                                "detail": {"supersededBy": "r-2"}}) == "abandoned"
+    assert recovery.outcome_of({"resolved": resolved, "detail": "damaged"}) == "succeeded"
+
+    # The reader path: a failed creation superseded by its retry, stored the way records
+    # were written before the outcome word, must not block a third plan.
+    provider = _external_with_snapshot(tmp_path)
+    first = provider.plan_mutation("create-item", "NEW-1", {"title": "A new thing"})
+    provider.confirm(first, succeeded=False, detail={"error": "connector timeout"})
+    retry = provider.plan_mutation("create-item", "NEW-1", {"title": "A new thing"})
+    path = recovery.path_for(str(tmp_path), first.recovery_id)
+    with open(path, encoding="utf-8") as handle:
+        stored = json.load(handle)
+    stored["outcome"] = "succeeded"
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(stored, handle, indent=2)
+    provider.confirm(retry, succeeded=False, detail={"error": "connector timeout"})
+    assert provider.plan_mutation("create-item", "NEW-1", {"title": "A new thing"})
+
+
+def test_a_field_the_register_cannot_hold_is_refused(tmp_path):
+    provider = _board(tmp_path, declared=["id", "title", "status", "sequence"])
+    with pytest.raises(GovernanceError, match="has no column for 'notes'"):
+        provider.plan_mutation("create-item", "124", {"title": "New", "notes": "x"})
+    with pytest.raises(GovernanceError, match="has no column for 'evidence'"):
+        provider.plan_mutation("set-status", "123", {"status": "Done", "evidence": "abc"})
+    assert recovery.outstanding(str(tmp_path)) == []
+    provider.plan_mutation("set-status", "123", {"status": "Done", "Board column": "x"})
+    undeclared = _board(tmp_path / "other")
+    undeclared.plan_mutation("set-status", "123", {"status": "Done", "evidence": "abc"})
+
+
+def test_an_abandoned_creation_can_be_planned_again(tmp_path):
+    from tools.governance.providers.external_provider import ExternalWorkRegister
+
+    class Fresh:                                    # a fresh snapshot without item 124
+        def snapshot(self):
+            return base.Snapshot(items=[], provider="snapshot", source="snap",
+                                 taken_at="2099-01-01T00:00:00Z", fields=["id"])
+
+        def get(self, item_id):
+            return None
+
+    provider = ExternalWorkRegister(source="monday:board/1234567890",
+                                    provider_kind="connector", recovery_root=str(tmp_path),
+                                    snapshot_provider=Fresh())
+    first = provider.plan_mutation("create-item", "124", {"title": "New"})
+    provider.abandon(first.recovery_id, "planned against a stale snapshot")
+    again = provider.plan_mutation("create-item", "124", {"title": "New"})
+    assert again.recovery_id != first.recovery_id
+
+
+def test_a_resolved_record_is_not_confirmed_again(tmp_path):
+    provider = _board(tmp_path)
+    plan = provider.plan_mutation("set-status", "123", {"status": "In Flight"})
+    provider.abandon(plan.recovery_id, "no longer wanted")
+    with pytest.raises(CapabilityError, match="already resolved \\(abandoned\\)"):
+        provider.confirm(plan, succeeded=True)
+    second = provider.plan_mutation("set-status", "123", {"status": "Done"})
+    from tools.governance.providers.external_provider import ExternalWorkRegister
+    viewer = ExternalWorkRegister(source="monday:board/1234567890", provider_kind="connector",
+                                  recovery_root=str(tmp_path), read_only=True)
+    with pytest.raises(CapabilityError):
+        viewer.abandon(second.recovery_id, "not mine to abandon")
+    assert recovery.get_record(str(tmp_path), second.recovery_id)["resolved"] == ""

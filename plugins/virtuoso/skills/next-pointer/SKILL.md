@@ -128,11 +128,13 @@ If the register is served through the **compatibility adapter** (a legacy
 writes do not, and registering a `workRegister` role is the fix.
 
 If the snapshot is **stale**, refresh it before naming the head. `next` prints
-`[STALE]` with its age. For a connector-backed register, read the register with the
-host's connector and import the rows: `virtuoso_registry snapshot --import <rows>`
+`[STALE]` with its age. For a connector-backed register, read every page of the
+register and its column list with the host's connector, save both as they came, and
+import them: `virtuoso_registry snapshot --import <page> --columns <columns>`
 (`references/registry-contract.md`, *Refreshing a connector-backed register's
-snapshot*). The import keeps a card's subitems, such as owner decisions, out of the
-work list, so none is named as the head card. Then run `next` again. When the snapshot
+snapshot*). Report each `[DRIFT]` line as a finding. The import keeps a card's
+subitems, such as owner decisions, out of the work list, so none is named as the head
+card. Then run `next` again. When the snapshot
 cannot be refreshed, print its age. External-register readiness is then a GAP, and the
 verdict is "Not ready" until the head is confirmed against the live register.
 
@@ -220,7 +222,7 @@ Never collapse these into a single verdict:
 
 | Finding | What it covers |
 |---|---|
-| **Specification readiness** | U1–U4, U6, U7, U9 plus declared project extensions |
+| **Specification readiness** | U1–U4, U6, U7, U9, U10 plus declared project extensions |
 | **Prerequisite readiness** | U5, resolved against the live register through the provider |
 | **Repository readiness** | U8 plus the repository's actual current state, under `policy.git` |
 | **External-register readiness** | can the register be read; is the snapshot fresh; does the provider support the mutations this dispatch needs |
@@ -236,8 +238,8 @@ is ready only when all five pass.
 1. The registry — the authority for every path and permission.
 2. The live work register, through its provider.
 3. The roadmap or specification store, resolved through its registered role.
-4. The most recent review artifacts in the registered reviews directory — for the
-   "last review" timestamp and the pace read.
+4. The most recent review in the registered reviews directory — the `previous` that
+   `virtuoso_registry review` names — for the "last review" timestamp and the pace read.
 5. The standing rules, at `policy.standingRules.source`.
 6. The terminal ledger — for what is already final.
 7. The project codebase — for rubric verification.
@@ -325,6 +327,60 @@ git branch --show-current                    # → <branch-name>
 git rev-list --count <default>..<remote>/<default>   # → 0  (skip if no remote)
 ```
 
+### Print it ready to run, in the host's shell
+
+The printed recipe is a script the owner pastes as-is, not notes to translate. Write it
+for the shell the session runs in: **Windows → PowerShell** (a `powershell` fence),
+anything else → POSIX `sh` (a `bash` fence). The owner may ask for the other.
+In either shell:
+
+- Every STOP is a real check that halts the script with the reason, not a comment.
+- Every expectation the recipe states (an empty tree, the branch name, the
+  specification on `HEAD`) is asserted, and a failed assertion halts with what was
+  found.
+- A network step runs only behind a switch at the top that is off by default, when
+  `policy.git.networkOperations` is `ask`. With no remote, the step is left out.
+- No tool the shell lacks: in PowerShell, `Select-String` and `Test-Path`, never
+  `grep` or `2>/dev/null`. Paths with spaces are double-quoted.
+
+The PowerShell form of the template:
+
+```powershell
+# Detected <date>: remote <remote> (<url>); default branch <default>; <worktrees>.
+# policy.git: <policy, or "not declared -> defaults ...">.
+$ErrorActionPreference = 'Stop'
+$AllowNetwork = $false   # policy.git.networkOperations: ask. Set $true to fetch.
+function Stop-Dispatch($why) { throw "STOP: $why" }
+function Invoke-Git { git @args; if ($LASTEXITCODE) { Stop-Dispatch "git $args exited $LASTEXITCODE" } }
+
+# 0a. Scope the working tree. Expected dirty set: <set, or "none">.
+if (Test-Path .git/index.lock) { Stop-Dispatch ".git/index.lock exists. Check for a running git process; never delete it." }
+$dirty = git status --porcelain
+if ($dirty) { $dirty; Stop-Dispatch "unexpected dirty paths above. Report them; never stash, reset or clean." }
+
+# 0b. Sync <default>.
+if ($AllowNetwork) { Invoke-Git fetch <remote> --prune }
+Invoke-Git switch <default>
+git merge --ff-only <remote>/<default>
+if ($LASTEXITCODE) { Stop-Dispatch "<default> diverged from <remote>/<default>. No force, no reset --hard." }
+
+# 0c. Create the work branch.
+if (git branch --list <branch-name>) {
+    git merge-base --is-ancestor <spec-sha> <branch-name>
+    if ($LASTEXITCODE) { Stop-Dispatch "<branch-name> exists but lacks <spec-sha>." }
+    Invoke-Git switch <branch-name>
+} else { Invoke-Git switch -c <branch-name> <default> }
+
+# 0d. Verify.
+if (git status --porcelain) { Stop-Dispatch "tree not clean after branching." }
+if ((git branch --show-current) -ne '<branch-name>') { Stop-Dispatch "not on <branch-name>." }
+if (-not (git show "HEAD:<spec path>" | Select-String -SimpleMatch '<distinctive token>')) { Stop-Dispatch "specification missing from HEAD." }
+"Reconciled: on <branch-name> at $(git rev-parse --short HEAD)."
+```
+
+Keep the sanctioned fallback from the recipe as a commented alternative under 0b. It is
+never run silently.
+
 **Branch cleanup is maintenance, not a prerequisite** (item 68). Report stale or
 `[gone]` branches and unpruned worktrees as housekeeping. Do not gate this
 dispatch on removing them, and never use `git branch -D` or `git worktree remove
@@ -347,9 +403,12 @@ failed prerequisite — never improvised around.
 
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor next-pointer next --json
 
-The provider returns the next item whose prerequisites are all terminal, in
-sequence order, together with its provenance. If the provider lacks
+The provider returns the next item that is not in flight and whose prerequisites are
+all terminal, in sequence order, together with its provenance. If the provider lacks
 `next-eligible`, fall back to `items` and compute it the same way.
+
+`next` skips in-flight items and lists them in `inFlight` (an `in flight:` line each).
+Name each one in the pointer's *What's next* as in flight, never as the head.
 
 If there are no active items → **Queue empty** edge case.
 
@@ -388,7 +447,8 @@ Buffer health compares the count of dispatch-ready active items against
 `policy.roadmap.dispatchBuffer`. If the buffer is 0, report "eager specification
 disabled" rather than a ratio.
 
-"Last review" is the newest artifact in the registered reviews directory. Pace
+"Last review" is the date of the review `virtuoso_registry --root . review` names as
+`previousComplete` (latest by date, then run; an interrupted review does not count). Pace
 comes from the `pace` block of the same `kpis --json` call — computed live against
 each date in `policy.roadmap.deadlines`, never read from an assessment. With no
 deadline declared, the Pace row says so.
@@ -437,8 +497,8 @@ gap.
 For each prerequisite, resolve its state **through the provider**:
 - terminal (`completed`, `dissolved`, `superseded`) → met
 - `queued` / `in-flight` / `blocked` → pending
-- not present in the register → unknown; check the terminal ledger before
-  concluding, and report "unknown" if it is in neither
+- not present in the register → unknown; `next` names it in `missingPrerequisites`.
+  Check the terminal ledger before concluding, and report "unknown" if it is in neither
 
 Any pending or unknown prerequisite makes prerequisite readiness fail. Still
 produce the full output, with the verdict "Not ready" and the reason named, and
@@ -482,6 +542,7 @@ structure and formatting.
 | Missing project-extension detail | Consult the project's own precedent, not another project's. |
 | Missing reconciliation recipe | Fill the template above from `policy.git` and detected repository state. Pure text; no git mutation. |
 | Missing lessons applied | From 1.6: name each live lesson that bears on the item and the change it makes here, or state that none applies; re-run `lessons --check`. |
+| Missing task list | Write the `##### Task list` per `references/task-rows.md`: one row per outcome-level task with its class, and an estimate or a frontier timebox. Price it and take the total line from `timing --rows-from-spec <spec> --item <ITEM-ID>`, then re-run it until it exits 0. Always closable, never structural. |
 
 ### 3.1 Re-audit
 Walk the rubric again. Two passes maximum. Still failing → ask, or escalate to
@@ -492,6 +553,16 @@ If the head item's status in the register is behind reality, correct **that one
 item** through the provider, passing the `revision` you read. If the provider is
 read-only, or `allowedWriters` does not name `next-pointer`, do not attempt the
 write: report the discrepancy and hand it to the user.
+
+### 3.3 Regenerate the roadmap board (only when the head changed)
+If 3.2 wrote to the register, the head of the belt changed: regenerate a registered
+board so it shows the same head.
+
+    "$HOME/.virtuoso/bin/virtuoso" generate_board --root .
+
+Skip it when nothing was written, or when the project registers no `board` role
+(creating the board is `/roadmap-review` D.7's job). A failure is reported, never a
+reason to stop the gate.
 
 ---
 
@@ -630,9 +701,9 @@ Readiness: specification ✓ · prerequisites ✓ · repository ✓ · register 
 
 ## Repository reconciliation — run this FIRST
 
-\```
-[the filled recipe: detected remote and default branch, no placeholders,
- only steps this project's git policy permits]
+\```powershell   (or bash off Windows — see "Print it ready to run")
+[the filled recipe as a ready-to-run script: detected remote and default
+ branch, no placeholders, only steps this project's git policy permits]
 \```
 
 Halt on any STOP and report the git output — a halt is a dispatch blocker, not

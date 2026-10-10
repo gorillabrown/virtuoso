@@ -109,6 +109,9 @@ class Snapshot:
     fields: list[str] = field(default_factory=list)
     stale: bool = False
     stale_reason: str = ""
+    #: Canonical field -> the register's own column name it was read from, where the
+    #: provider knows it. Presentation only: a page labels a column as the register does.
+    headers: dict = field(default_factory=dict)
 
     def provenance(self) -> dict:
         data = {
@@ -123,8 +126,28 @@ class Snapshot:
         return data
 
 
+def parse_sequence(raw) -> int | None:
+    """A register's Seq cell as a number: ``20``, ``20.0``, ``1,000``; ``None`` if blank
+    or not a number. A thousands separator is how a spreadsheet shows a backlog tier."""
+    text = str(raw if raw is not None else "").strip().replace(",", "").replace("_", "")
+    try:
+        return int(float(text)) if text else None
+    except (ValueError, OverflowError):
+        return None
+
+
+def header_map(headers: list, index: dict) -> dict:
+    """``{canonical field: register header}`` from a ``resolve_index`` result."""
+    return {name: str(headers[i]) for name, i in index.items() if i < len(headers)}
+
+
 def utc_now() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _in_sequence(items) -> list["WorkItem"]:
+    """Sequence order; unsequenced items last, ties by id."""
+    return sorted(items, key=lambda i: (i.sequence is None, i.sequence or 0, i.id))
 
 
 # --- creation ------------------------------------------------------------------
@@ -338,20 +361,40 @@ class WorkRegisterProvider:
         return None
 
     def next_eligible(self) -> WorkItem | None:
-        """The next item whose prerequisites are all terminal, in sequence order.
+        """The next item, not in flight, whose prerequisites are all terminal, in
+        sequence order.
 
         Default implementation works for any provider that can list and sequence;
-        providers with a server-side notion of "next" override it.
+        providers with a server-side notion of "next" override it, and must skip
+        in-flight items too.
         """
         self.require(NEXT_ELIGIBLE)
         snap = self.snapshot()
         terminal = {i.id for i in snap.items if i.is_terminal}
-        active = [i for i in snap.items if not i.is_terminal and i.status != BLOCKED]
-        active.sort(key=lambda i: (i.sequence is None, i.sequence or 0, i.id))
+        active = _in_sequence(i for i in snap.items
+                              if not i.is_terminal and i.status not in (BLOCKED, IN_FLIGHT))
         for item in active:
             if all(p in terminal for p in item.prerequisites if p):
                 return item
         return None
+
+    def in_flight(self) -> list[WorkItem]:
+        """Active items already in flight, in sequence order: never the next item."""
+        self.require(NEXT_ELIGIBLE)
+        return _in_sequence(i for i in self.snapshot().items
+                            if not i.is_terminal and i.status == IN_FLIGHT)
+
+    def missing_prerequisites(self) -> dict[str, list[str]]:
+        """For each active item, the prerequisite ids no item in the register carries."""
+        self.require(NEXT_ELIGIBLE)
+        snap = self.snapshot()
+        known = {i.id for i in snap.items}
+        missing = {}
+        for item in _in_sequence(i for i in snap.items if not i.is_terminal):
+            gone = [p for p in item.prerequisites if p and p not in known]
+            if gone:
+                missing[item.id] = gone
+        return missing
 
     # -- mutations -----------------------------------------------------------
 

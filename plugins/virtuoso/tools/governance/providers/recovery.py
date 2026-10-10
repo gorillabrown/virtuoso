@@ -98,7 +98,24 @@ def note(root: str, record_id: str, detail: dict) -> bool:
         target, json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
 
 
-def resolve(root: str, record_id: str) -> bool:
+#: How a resolved record ended. A record written before outcomes existed has none, and
+#: reads as ``succeeded``: resolving was then only ever done on success. A record carrying
+#: ``detail.supersededBy`` was replaced by a later plan, unless it says ``abandoned``.
+OUTCOMES = ("succeeded", "abandoned", "superseded")
+
+
+def outcome_of(record: dict) -> str:
+    stored = str(record.get("outcome") or "succeeded")
+    detail = record.get("detail")
+    if stored == "succeeded" and isinstance(detail, dict) and detail.get("supersededBy"):
+        return "superseded"
+    return stored
+
+
+def resolve(root: str, record_id: str, outcome: str = "succeeded", reason: str = "") -> bool:
+    if outcome not in OUTCOMES:
+        raise ValueError("a recovery record resolves as one of %s, not %r"
+                         % (", ".join(OUTCOMES), outcome))
     target = path_for(root, record_id)
     text = textio.read_text(target)
     if text is None:
@@ -107,6 +124,9 @@ def resolve(root: str, record_id: str) -> bool:
     if payload.get("resolved"):
         return False
     payload["resolved"] = base.utc_now()
+    payload["outcome"] = outcome
+    if reason:
+        payload["reason"] = reason
     return textio.write_if_changed(target, json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
 
 

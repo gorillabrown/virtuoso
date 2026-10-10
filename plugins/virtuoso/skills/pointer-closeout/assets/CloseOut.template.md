@@ -1,7 +1,7 @@
 ---
 sprint: [SPRINT-ID]
 date: YYYY-MM-DD
-runtime: [Xm Ys]
+runtime: [Actual from timing --summary --sprint <SPRINT-ID>, or "not measured (no time log)"]
 tokens: [~NNNk]
 status: [all-pass | has-regressions | has-discoveries]
 ---
@@ -15,6 +15,12 @@ status: [all-pass | has-regressions | has-discoveries]
 **Learned:** [<prefix>-NNN — title. Or: No new lesson — reason.]
 **Recommend:** [Recommended next direction.]
 **Bottom line:** [One-sentence takeaway.]
+
+## Time
+
+<!-- Pasted as printed by `timing --sprint <SPRINT-ID> --summary`: every row's predicted,
+     actual and waited minutes, its kind, whether it was added, and any flag. Leave the
+     section out when the dispatch kept no time log. -->
 
 ## Findings
 

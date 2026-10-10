@@ -11,9 +11,9 @@ A lesson lives in the registered ``lessons`` role, which is append-only. One ent
 
 The prefix (``SRL``) is ``policy.lessons.idPrefix``. A status never changes in
 place: promoting or retiring a lesson appends another entry under the same id,
-and the latest ``**Status:**`` recorded for an id is its current status. A lesson
-is **live** until it is promoted (it lives on as the rule it became), retired, or
-superseded.
+and the latest ``**Status:**`` (plain or as a list item) recorded for an id is its
+current status. A lesson is **live** until it is promoted (it lives on as the rule it
+became), retired, or superseded.
 
 A lesson belongs to the item it was recorded from. The heading's ``(ITEM-ID, date)``
 says which, and so does an ``**Item:**`` field. When a heading named the item in
@@ -46,8 +46,14 @@ from . import overlays as overlays_mod
 CLOSED_STATUSES = ("promoted", "retired", "superseded")
 DEFAULT_STATUS = "Observation"
 
-_FIELD_RE = re.compile(r"^\*\*(?P<name>[^*]+?):\*\*[ \t]*(?P<value>.*)$")
+_FIELD_RE = re.compile(r"^(?:[-*+][ \t]+)?\*\*(?P<name>[^*]+?):\*\*[ \t]*(?P<value>.*)$")
+#: Prose saying a lesson closed ("Promoted to SR-12"), which only a status record makes so.
+_CLAIM_RE = re.compile(r"(?<!not )(?<!never )\b(?P<word>promoted|retired|superseded)\b"
+                       r"(?:[ \t]*(?:->|→)|[ \t]+(?:to|by|into|as)\b)?[ \t]*"
+                       r"(?P<target>[A-Za-z][\w]*-\d+)?", re.IGNORECASE)
 _HEADING_RE = re.compile(r"^(?P<hashes>#{1,6})[ \t]+(?P<text>.+?)[ \t]*$")
+#: A heading's leading section number (``7.``, ``4.2)``), which never decides its kind.
+_NUMBER_RE = re.compile(r"^\d+(?:\.\d+)*[.)]?[ \t]+")
 _SOURCE_RE = re.compile(r"^(?P<title>.*?)[ \t]*\((?P<source>[^()]*)\)[ \t]*$")
 _DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 #: The fields a complete lesson carries besides its status.
@@ -90,6 +96,8 @@ class Lesson:
     #: A later entry under this id carried lesson fields, not only a status: the id
     #: was reused for a second lesson, which the catalog can no longer tell apart.
     reused: bool = False
+    #: Prose lines under any entry for this id that claim a closing status.
+    claims: list = field(default_factory=list)
 
     @property
     def status(self) -> str:
@@ -206,6 +214,9 @@ def parse(text: str, prefix: str) -> list[Lesson]:
         if current is None:
             continue
         field_match = _FIELD_RE.match(line.strip())
+        is_status = bool(field_match) and field_match.group("name").strip().lower() == "status"
+        if not is_status and _CLAIM_RE.search(line):
+            current.claims.append(line.strip())
         if not field_match:
             continue
         name = field_match.group("name").strip().lower()
@@ -276,7 +287,7 @@ def item_section(text: str, item: str) -> list[str] | None:
 
 def _find_section(lines: list[str], wanted, refuse=()) -> list[str] | None:
     for index, depth, heading in _headings(lines):
-        low = heading.strip().lower()
+        low = _NUMBER_RE.sub("", heading.strip().lower(), count=1)
         if low.startswith(wanted) and not low.startswith(tuple(refuse)):
             return _section(lines, index, depth)
     return None

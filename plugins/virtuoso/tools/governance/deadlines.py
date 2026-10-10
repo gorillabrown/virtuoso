@@ -156,10 +156,15 @@ def _roadmap_text(reg, raw=UNREAD) -> tuple[str | None, str]:
 # --- the session-start line ---------------------------------------------------
 
 
+def _now() -> _dt.datetime:
+    return _dt.datetime.now(_dt.timezone.utc)
+
+
 def today() -> _dt.date:
-    """The local date the session line counts from. One function, so tests can
-    pin it; the pace engine never calls it — pace is as of its snapshot."""
-    return _dt.date.today()
+    """The UTC calendar date the session line counts from — every governance date is
+    UTC (references/registry-contract.md, Dates). One function, so tests can pin it; the
+    pace engine never calls it — pace is as of its snapshot."""
+    return _now().astimezone(_dt.timezone.utc).date()
 
 
 def until(date: _dt.date, on: _dt.date) -> str:

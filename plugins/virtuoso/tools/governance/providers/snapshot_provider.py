@@ -71,6 +71,7 @@ class SnapshotWorkRegister(base.WorkRegisterProvider):
             taken_at=taken_at or "unknown",
             fields=list(payload.get("fields") or []),
             stale=stale, stale_reason=reason,
+            headers={str(k): str(v) for k, v in (payload.get("headers") or {}).items()},
         )
 
     def _staleness(self, taken_at: str) -> tuple[bool, str]:
@@ -110,12 +111,18 @@ class ImportReport:
     without_id: int = 0
     unknown_status: list = field(default_factory=list)  # {"id", "status"}
     unmapped_fields: list = field(default_factory=list)  # canonical fields no column fed
+    #: Column drift, for a raw page only: declared mappings the board has no column for
+    #: ({"field", "column"}), and board columns nothing maps ({"id", "title"}).
+    missing_columns: list = field(default_factory=list)
+    unmapped_columns: list = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return {"rows": self.rows, "items": self.items, "parentColumn": self.parent_column,
                 "subitemsExcluded": list(self.subitems), "withoutId": self.without_id,
                 "unknownStatus": list(self.unknown_status),
-                "unmappedFields": list(self.unmapped_fields)}
+                "unmappedFields": list(self.unmapped_fields),
+                "missingColumns": list(self.missing_columns),
+                "unmappedColumns": list(self.unmapped_columns)}
 
 
 def _cell(value) -> str:
@@ -134,10 +141,36 @@ def _cell(value) -> str:
     return str(value)
 
 
-def parse_rows(text: str) -> tuple[list[dict], str]:
-    """``(rows, takenAt)`` from what the host wrote: a list of row objects, or an
-    object carrying ``rows`` and optionally the ``takenAt`` of the read."""
+#: Keys a row built from a raw page carries besides its columns.
+PAGE_EXTRAS = ("providerId", "revision", "url")
+
+
+def _raw_pages(payload) -> list[dict] | None:
+    """The pages, when ``payload`` is a connector's raw items page (or a list of them):
+    objects whose ``items`` entries carry ``column_values``."""
+    def is_page(p):
+        return (isinstance(p, dict) and isinstance(p.get("items"), list)
+                and all(isinstance(i, dict) and "column_values" in i for i in p["items"]))
+
+    pages = payload if isinstance(payload, list) else [payload]
+    found = [is_page(p) for p in pages]
+    if pages and all(found):
+        return pages
+    if any(found):
+        raise ValueError("the file mixes raw items pages with other objects; import the "
+                         "pages on their own")
+    return None
+
+
+def parse_rows(text: str) -> tuple[list[dict], str, bool]:
+    """``(rows, takenAt, False)`` from what the host wrote: a list of row objects, or an
+    object carrying ``rows`` and optionally the ``takenAt`` of the read. A connector's
+    raw items page is recognized and returned as ``(pages, "", True)``; it becomes rows
+    only with the board's columns (:func:`page_to_rows`)."""
     payload = json.loads(text)
+    pages = _raw_pages(payload)
+    if pages is not None:
+        return pages, "", True
     taken_at = ""
     if isinstance(payload, dict):
         taken_at = str(payload.get("takenAt") or "")
@@ -145,7 +178,72 @@ def parse_rows(text: str) -> tuple[list[dict], str]:
     if not isinstance(payload, list) or not all(isinstance(r, dict) for r in payload):
         raise ValueError("the rows file must hold a JSON list of row objects, or an object "
                          "whose `rows` is one")
-    return payload, taken_at
+    return payload, taken_at, False
+
+
+def board_columns(payload) -> list[dict]:
+    """The column list from a list of ``{id, title, …}``, or an object whose ``columns``
+    or ``board.columns`` is that list (a ``get_board_info`` response)."""
+    columns = payload
+    if isinstance(payload, dict):
+        columns = payload.get("columns")
+        if columns is None and isinstance(payload.get("board"), dict):
+            columns = payload["board"].get("columns")
+    if not isinstance(columns, list) or not all(
+            isinstance(c, dict) and c.get("id") and c.get("title") for c in columns):
+        raise ValueError("the columns file must hold a list of {id, title} objects, or an "
+                         "object whose `columns` or `board.columns` is one")
+    return columns
+
+
+def page_to_rows(pages: list[dict], columns, mapping,
+                 declared: dict) -> tuple[list[dict], dict]:
+    """``(rows, drift)`` from raw items pages and the board's column list.
+
+    Each cell is keyed by its column's title, the item's ``name`` fills the title
+    column and its ``group.title`` the group column, and ``providerId``, ``revision``
+    (``updated_at``) and ``url`` ride along. A board column nothing maps is left out
+    and named in ``drift["unmappedColumns"]``; a declared mapping no board column title
+    matches is named in ``drift["missingColumns"]`` (``title`` and ``group`` come from
+    the item itself, so they are never missing). A page set whose last page says
+    ``has_more`` is a partial read, and refused.
+    """
+    if (pages[-1].get("pagination") or {}).get("has_more"):
+        raise ValueError("the last page says pagination.has_more: true — this is a partial "
+                         "read; fetch every page and import them together")
+    columns = board_columns(columns)
+    titles = {str(c["id"]): str(c["title"]) for c in columns}
+    title_list = list(titles.values())
+    mapped = {title_list[i] for i in mapping.fields.resolve_index(title_list).values()}
+    reused = sorted({t for t in mapped if [x.lower() for x in title_list].count(t.lower()) > 1}
+                    | {t for t in mapped if t in PAGE_EXTRAS})
+    if reused:
+        raise ValueError("board column title(s) %s are ambiguous (two columns, or a key the "
+                         "import adds: %s); rename the column on the board"
+                         % (", ".join(reused), ", ".join(PAGE_EXTRAS)))
+    lowered = {t.strip().lower() for t in title_list}
+    drift = {
+        "missingColumns": [{"field": name, "column": column}
+                           for name, column in (declared or {}).items()
+                           if name not in ("title", "group")
+                           and str(column).strip().lower() not in lowered],
+        "unmappedColumns": [{"id": cid, "title": title} for cid, title in titles.items()
+                            if cid != "name" and title not in mapped],
+    }
+    rows = []
+    for page in pages:
+        for entry in page["items"]:
+            values = entry.get("column_values") or {}
+            if isinstance(values, list):         # the GraphQL form: [{id, text, …}]
+                values = {str(v.get("id")): v for v in values if isinstance(v, dict)}
+            row = {titles[cid]: value for cid, value in values.items()
+                   if titles.get(cid) in mapped}
+            row[mapping.fields.column_for("title")] = entry.get("name", "")
+            row[mapping.fields.column_for("group")] = (entry.get("group") or {}).get("title", "")
+            row.update(zip(PAGE_EXTRAS, (entry.get("id", ""), entry.get("updated_at", ""),
+                                         entry.get("url", ""))))
+            rows.append(row)
+    return rows, drift
 
 
 def from_rows(rows: list[dict], mapping, *, source: str, taken_at: str,
@@ -203,7 +301,8 @@ def from_rows(rows: list[dict], mapping, *, source: str, taken_at: str,
                          % ", ".join(duplicates))
     report.items = len(items)
     snap = base.Snapshot(items=items, provider="snapshot", source=source,
-                         taken_at=taken_at, fields=sorted(index))
+                         taken_at=taken_at, fields=sorted(index),
+                         headers=base.header_map(headers, index))
     return snap, report
 
 
@@ -231,4 +330,6 @@ def write_snapshot(path: str, snap: base.Snapshot) -> None:
         "fields": list(snap.fields),
         "items": [item.as_dict() for item in snap.items],
     }
+    if snap.headers:
+        payload["headers"] = dict(snap.headers)
     textio.write_if_changed(path, json.dumps(payload, indent=2, ensure_ascii=False) + "\n")

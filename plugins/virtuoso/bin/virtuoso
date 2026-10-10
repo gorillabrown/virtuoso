@@ -15,8 +15,17 @@ if [ "$#" -lt 1 ]; then
   exit 2
 fi
 
-PY=python3
-command -v python3 >/dev/null 2>&1 || PY=python
+PY=
+for candidate in python3 python; do
+  if "$candidate" -c 'import sys' >/dev/null 2>&1; then
+    PY=$candidate
+    break
+  fi
+done
+if [ -z "$PY" ]; then
+  echo "virtuoso: no Python that runs: tried python3, python." >&2
+  exit 1
+fi
 
 VIRTUOSO_ROOT=$("$PY" - <<'PY'
 import json, os, sys

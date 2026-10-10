@@ -106,6 +106,8 @@ class Result:
     deadlines_detail: dict | None = None
     #: The one-line roadmap integrity state, on the same terms again.
     roadmap_integrity: str = "not registered"
+    #: The roadmap board's freshness (``current``, ``stale``, ``missing`` ...).
+    board: str = "not registered"
 
     def __post_init__(self) -> None:
         if self.status not in STATUSES:
@@ -160,6 +162,7 @@ class Result:
         data["deadlines"] = self.deadlines_detail if self.deadlines_detail is not None \
             else {"state": self.deadlines or "not registered"}
         data["roadmapIntegrity"] = {"state": self.roadmap_integrity or "not registered"}
+        data["board"] = {"state": self.board or "not registered"}
         if self.error is not None:
             data["error"] = self.error
         return data
@@ -185,3 +188,9 @@ class Result:
         """The roadmap integrity line, printed after the deadline line in every mode
         and never suppressed by ``--quiet``. Always non-empty."""
         return "roadmap-integrity: %s" % (self.roadmap_integrity or "not registered")
+
+    def board_line(self) -> str:
+        """The roadmap board's freshness, printed after the roadmap-integrity line in
+        every mode and never suppressed by ``--quiet``. Advisory: it never changes
+        the status. Always non-empty."""
+        return "board: %s" % (self.board or "not registered")

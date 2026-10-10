@@ -1,0 +1,20 @@
+{"event": "open", "rows": [{"id": 1, "title": "Load spec", "owner": "Zeus", "tier": "cross-cutting", "kind": "spec-load", "estimate": 20, "item": "OLD-1", "predicted": 20, "basis": "estimated"}, {"id": 2, "title": "Edit one", "owner": "hercules", "tier": "bounded", "kind": "edit", "estimate": 30, "item": "OLD-1", "predicted": 30, "basis": "estimated"}, {"id": 3, "title": "Edit two", "owner": "hercules", "tier": "bounded", "effort": "high", "kind": "edit", "estimate": 30, "item": "OLD-1", "predicted": 30, "basis": "estimated"}, {"id": 4, "title": "Edit three", "owner": "hercules", "tier": "bounded", "kind": "Edit", "estimate": 30, "item": "OLD-1", "predicted": 30, "basis": "estimated"}, {"id": 5, "title": "Parallel review", "owner": "plato", "tier": "mechanical", "parallel": true, "estimate": 15, "item": "OLD-1", "predicted": 15, "basis": "estimated"}, {"id": 6, "title": "Never run", "tier": "mechanical", "estimate": 10, "item": "OLD-1", "predicted": 10, "basis": "estimated"}, {"id": 7, "title": "Blocked step", "tier": "bounded", "estimate": 10, "item": "OLD-1", "predicted": 10, "basis": "estimated"}], "at": "2026-10-01T09:00:00Z"}
+{"event": "start", "row": 1, "at": "2026-10-01T09:01:00Z"}
+{"event": "end", "row": 1, "result": "done", "at": "2026-10-01T09:19:00Z"}
+{"event": "start", "row": 2, "at": "2026-10-01T09:19:00Z"}
+{"event": "wait", "row": 2, "at": "2026-10-01T09:29:00Z"}
+{"event": "resume", "row": 2, "at": "2026-10-01T10:14:00Z"}
+{"event": "end", "row": 2, "result": "done", "at": "2026-10-01T10:30:00Z"}
+{"event": "start", "row": 3, "at": "2026-10-01T10:30:00Z"}
+{"event": "start", "row": 5, "at": "2026-10-01T10:30:00Z"}
+{"event": "end", "row": 3, "result": "done", "at": "2026-10-01T10:52:00Z"}
+{"event": "start", "row": 4, "at": "2026-10-01T10:52:00Z"}
+{"event": "end", "row": 5, "result": "done", "at": "2026-10-01T11:06:00Z"}
+{"event": "end", "row": 4, "result": "done", "at": "2026-10-01T11:19:00Z"}
+{"event": "end", "row": 6, "result": "cancelled", "at": "2026-10-01T11:19:00Z"}
+{"event": "start", "row": 7, "at": "2026-10-01T11:19:00Z"}
+{"event": "end", "row": 7, "result": "blocked", "at": "2026-10-01T11:23:00Z"}
+{"event": "add", "rows": [{"title": "Fix round", "tier": "bounded", "estimate": 5, "item": "OLD-1", "id": 8, "predicted": 5, "basis": "estimated"}], "at": "2026-10-01T11:23:00Z"}
+{"event": "start", "row": 8, "at": "2026-10-01T11:23:00Z"}
+{"event": "end", "row": 8, "result": "done", "at": "2026-10-01T11:43:00Z"}
+{"event": "confirm", "row": 8, "at": "2026-10-01T11:43:00Z"}

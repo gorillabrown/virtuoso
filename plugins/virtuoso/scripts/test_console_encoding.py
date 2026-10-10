@@ -75,9 +75,9 @@ def test_registry_commands_write_utf8_to_a_cp1252_stream(workspace, args):
     completed = run_cp1252(REGISTRY_CLI, "--root", str(workspace), *args)
     assert completed.returncode == 0, completed.stderr.decode("utf-8", "replace")
     text = completed.stdout.decode("utf-8")
-    assert ARROW in text
-    if "--json" in args:
-        json.loads(text)
+    # JSON output is ASCII-escaped (VIR-010): the arrow survives the round trip.
+    assert ARROW in (json.dumps(json.loads(text), ensure_ascii=False) if "--json" in args
+                     else text)
 
 
 def test_an_error_message_reaches_a_cp1252_stderr(workspace):
@@ -109,3 +109,17 @@ def test_every_user_facing_entry_point_asks_for_utf8(script):
 def test_the_cockpit_entry_point_asks_for_utf8():
     text = (ROOT / "tools" / "roadmap_visualizer" / "generate.py").read_text(encoding="utf-8")
     assert "textio.utf8_stdio()" in text.split("def main(", 1)[1].split("\n", 3)[1]
+
+
+def test_json_output_is_ascii_safe(project):
+    from test_tooling import build_external_workspace
+    build_external_workspace(project)
+    snapshot = project / "Virtuoso" / "work-register.snapshot.json"
+    data = json.loads(snapshot.read_text(encoding="utf-8"))
+    data["items"][0]["title"] = "Board change — one per call"
+    snapshot.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    completed = run_cp1252(REGISTRY_CLI, "--root", str(project), "items", "--json")
+    assert completed.returncode == 0, completed.stderr.decode("utf-8", "replace")
+    assert completed.stdout and all(byte < 0x80 for byte in completed.stdout)
+    titles = [item["title"] for item in json.loads(completed.stdout)["items"]]
+    assert titles == ["Board change — one per call"]

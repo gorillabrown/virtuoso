@@ -8,8 +8,11 @@ desktop.ini
 skills.zip
 
 # The Virtuoso workspace for this repository: the registry, the work-register snapshot
-# and recovery records under Virtuoso/ are versioned; repair backups stay local.
+# and recovery records under Virtuoso/ are versioned; repair backups, the sweep's
+# quarantine and the temp role stay local.
 /Virtuoso/.backups/
+/Virtuoso/.quarantine/
+/Project Documentation/3 temp/
 # Anchored on purpose. A dev clone's repository-root .codex-plugin/ is local WIP and
 # stays out of the repo; plugins/virtuoso/.codex-plugin/ is the shipped alternate-host
 # manifest and must not match. An unanchored `.codex-plugin/` ignores both, and
@@ -18,3 +21,10 @@ skills.zip
 /.codex-plugin/
 .superpowers/
 .claude/
+
+# JetBrains IDE project files are per machine. /Virtuoso/.gitignore is the IDE's
+# boilerplate dropped into the workspace folder, not a Virtuoso file.
+.idea/
+*.iml
+/Virtuoso/.gitignore
+/roadmap-board.html

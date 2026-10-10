@@ -87,7 +87,7 @@ class ExternalWorkRegister(base.WorkRegisterProvider):
     def __init__(self, *, source: str, mapping=None, snapshot_provider=None,
                  provider_kind: str = "external", read_only: bool = False,
                  recovery_root: str = "", may_create: bool = True,
-                 create_denied_reason: str = "") -> None:
+                 create_denied_reason: str = "", declared_fields=None) -> None:
         super().__init__(source=source, mapping=mapping or mapping_mod.Mapping(),
                          read_only=read_only, may_create=may_create,
                          create_denied_reason=create_denied_reason)
@@ -95,6 +95,9 @@ class ExternalWorkRegister(base.WorkRegisterProvider):
         self.provider_kind = provider_kind
         self._snapshot_provider = snapshot_provider
         self._recovery_root = recovery_root
+        # The canonical fields policy.workRegister.fieldMappings names, when the project
+        # declares one: the register has a column for those and no others.
+        self._declared = frozenset(declared_fields) if declared_fields else None
 
     @property
     def capabilities(self) -> frozenset[str]:
@@ -136,7 +139,8 @@ class ExternalWorkRegister(base.WorkRegisterProvider):
         # The snapshot's *source* is the external register, not the cache file.
         return base.Snapshot(items=snap.items, provider="%s+snapshot" % self.provider_kind,
                              source=self.source, taken_at=snap.taken_at, fields=snap.fields,
-                             stale=snap.stale, stale_reason=snap.stale_reason)
+                             stale=snap.stale, stale_reason=snap.stale_reason,
+                             headers=snap.headers)
 
     # -- planned mutations ---------------------------------------------------
 
@@ -173,6 +177,7 @@ class ExternalWorkRegister(base.WorkRegisterProvider):
         if not isinstance(fields, dict):
             raise base.CapabilityError("external mutation fields must be a dictionary")
 
+        self._refuse_unmapped(fields)
         if operation == CREATE_OPERATION:
             return self._plan_creation(item_id, fields, revision=revision,
                                        idempotency_key=idempotency_key)
@@ -203,7 +208,58 @@ class ExternalWorkRegister(base.WorkRegisterProvider):
                 },
             )
             plan.recovery_id = record.id
+            self._supersede_partial(item_id, fields, record.id)
         return plan
+
+    def _refuse_unmapped(self, fields: dict) -> None:
+        """A canonical field the declared mapping does not name has no column to land in:
+        the write would fail on the board, or vanish. ``id`` is always the key."""
+        if self._declared is None:
+            return
+        for key in fields:
+            if key != "id" and key in mapping_mod.DEFAULT_FIELDS and key not in self._declared:
+                raise base.CapabilityError(
+                    "work register %s has no column for %r; configure "
+                    "policy.workRegister.fieldMappings.%s, add the column, or omit "
+                    "the field" % (self.source, key, key),
+                    detail={"register": self.source, "field": key})
+
+    def _supersede_partial(self, item_id: str, fields: dict, new_id: str) -> None:
+        """A plan covering only what a partial write left unwritten replaces it: the
+        partial record is resolved, pointing at the plan that finishes its work."""
+        for record in recovery.outstanding(self._recovery_root):
+            detail = record.get("detail") if isinstance(record.get("detail"), dict) else {}
+            partial = detail.get("partial")
+            if (record.get("item_id") != item_id or record.get("id") == new_id
+                    or not isinstance(partial, dict)):
+                continue
+            if set(fields) <= set(partial.get("unwritten") or ()):
+                recovery.note(self._recovery_root, record["id"], {"supersededBy": new_id})
+                recovery.resolve(self._recovery_root, record["id"], outcome="superseded",
+                                 reason="superseded by %s" % new_id)
+
+    def abandon(self, recovery_id: str, reason: str) -> dict:
+        """Resolve a plan that will not be executed, with why. Nothing is sent."""
+        reason = str(reason or "").strip()
+        if not reason:
+            raise base.CapabilityError("an abandoned plan says why (--reason)")
+        record = (recovery.get_record(self._recovery_root, recovery_id)
+                  if self._recovery_root else None)
+        if record is None:
+            raise base.CapabilityError("recovery record %r is missing or unsafe" % recovery_id)
+        detail = record.get("detail") if isinstance(record.get("detail"), dict) else {}
+        if detail.get("register") != self.source:
+            raise base.CapabilityError("recovery record %s belongs to %s, not %s"
+                                       % (recovery_id, detail.get("register"), self.source))
+        if record.get("resolved"):
+            raise base.CapabilityError("recovery record %s is already resolved (%s)"
+                                       % (recovery_id, recovery.outcome_of(record)))
+        capability = _OPERATION_CAPABILITIES.get(str(detail.get("operation")))
+        if capability:
+            self.require(capability)            # a read-only actor abandons nothing
+        recovery.resolve(self._recovery_root, recovery_id, outcome="abandoned", reason=reason)
+        return {"recoveryId": recovery_id, "outcome": "abandoned", "reason": reason,
+                "operation": detail.get("operation"), "itemId": record.get("item_id")}
 
     # -- creation ------------------------------------------------------------
 
@@ -280,8 +336,8 @@ class ExternalWorkRegister(base.WorkRegisterProvider):
                 detail_blob = record.get("detail") if isinstance(record.get("detail"), dict) else {}
                 last = detail_blob.get("lastConfirmation") or {}
                 if record.get("resolved"):
-                    if detail_blob.get("supersededBy"):
-                        continue                    # a failed attempt, already replaced
+                    if recovery.outcome_of(record) in ("abandoned", "superseded"):
+                        continue                    # never executed, or replaced
                     raise DuplicateItemError(
                         "a creation of %r in %s was already confirmed under idempotency key %r "
                         "(recovery record %s, provider item %s); it is not repeated. Refresh the "
@@ -330,7 +386,8 @@ class ExternalWorkRegister(base.WorkRegisterProvider):
             plan.recovery_id = record.id
             for old_id in superseded:
                 recovery.note(self._recovery_root, old_id, {"supersededBy": record.id})
-                recovery.resolve(self._recovery_root, old_id)
+                recovery.resolve(self._recovery_root, old_id, outcome="superseded",
+                                 reason="superseded by %s" % record.id)
         return plan
 
     def _project_fields(self, prepared: dict) -> dict:
@@ -343,10 +400,22 @@ class ExternalWorkRegister(base.WorkRegisterProvider):
             out[column] = value if isinstance(value, int) else base.cell_text(key, value)
         return out
 
-    def confirm(self, plan: PendingMutation, *, succeeded: bool,
+    def confirm(self, plan: PendingMutation, *, succeeded: bool | None = None,
                 actual_revision: str = "", detail: dict | None = None,
-                provider_item_id: str = "") -> dict:
-        """Record the host connector's result and resolve recovery only on success."""
+                provider_item_id: str = "", outcome: str = "",
+                written: list | None = None) -> dict:
+        """Record the host connector's result and resolve recovery only on success.
+
+        ``outcome`` is ``succeeded``, ``failed`` or ``partial`` (else ``succeeded`` says
+        which). A ``partial`` write names the fields that landed in ``written``; the record
+        notes ``partial: {written, unwritten}`` and stays outstanding until a plan for the
+        unwritten fields supersedes it."""
+        outcome = outcome or ("succeeded" if succeeded else "failed")
+        if outcome not in ("succeeded", "failed", "partial"):
+            raise base.CapabilityError("a confirmation is succeeded, failed or partial, not %r"
+                                       % outcome)
+        succeeded = outcome == "succeeded"
+        detail_blob = {}
         if plan.register != self.source:
             raise base.CapabilityError(
                 "mutation plan targets %s, not this external register %s"
@@ -370,10 +439,35 @@ class ExternalWorkRegister(base.WorkRegisterProvider):
                 "item": record.get("item_id"),
                 "idempotency": detail_blob.get("idempotencyKey"),
             }
+            if record.get("resolved"):
+                raise base.CapabilityError(
+                    "recovery record %s is already resolved (%s); there is nothing to confirm"
+                    % (plan.recovery_id, recovery.outcome_of(record)))
+            capability = _OPERATION_CAPABILITIES.get(plan.operation)
+            if capability:
+                self.require(capability)        # a read-only actor confirms nothing
             if actual != expected:
-                raise base.CapabilityError("external mutation confirmation does not match recovery record")
-        outcome = {
+                raise base.CapabilityError(
+                    "external mutation confirmation does not match recovery record %s: %s"
+                    % (plan.recovery_id, "; ".join(
+                        "%s %r, the record says %r" % (name, expected[name], actual[name])
+                        for name in expected if expected[name] != actual[name])))
+        partial = None
+        if outcome == "partial":
+            planned = list(detail_blob.get("fields") or {})
+            written = [str(name) for name in written or []]
+            stray = [name for name in written if name not in planned]
+            if not written or stray or set(written) >= set(planned):
+                raise base.CapabilityError(
+                    "a partial confirmation names some, not all, of the planned fields %s "
+                    "(--written %s)%s" % (", ".join(planned) or "(none recorded)",
+                                          ",".join(written) or "(none)",
+                                          "; not planned: %s" % ", ".join(stray) if stray else ""))
+            partial = {"written": written,
+                       "unwritten": [name for name in planned if name not in written]}
+        confirmation = {
             "succeeded": bool(succeeded),
+            "outcome": outcome,
             "operation": plan.operation,
             "itemId": plan.item_id,
             "idempotencyKey": plan.idempotency_key,
@@ -381,14 +475,17 @@ class ExternalWorkRegister(base.WorkRegisterProvider):
             "recoveryId": plan.recovery_id,
             "detail": dict(detail or {}),
         }
+        if partial:
+            confirmation["partial"] = partial
         if provider_item_id or plan.operation == CREATE_OPERATION:
-            outcome["providerItemId"] = provider_item_id
+            confirmation["providerItemId"] = provider_item_id
         if plan.operation == CREATE_OPERATION and succeeded:
-            outcome["nextStep"] = ("refresh the canonical snapshot so the new item is "
-                                   "readable through the provider")
+            confirmation["nextStep"] = ("refresh the canonical snapshot so the new item is "
+                                        "readable through the provider")
         if plan.recovery_id and self._recovery_root:
             recovery.note(self._recovery_root, plan.recovery_id,
-                          {"lastConfirmation": outcome})
+                          dict({"lastConfirmation": confirmation},
+                               **({"partial": partial} if partial else {})))
             if succeeded:
                 recovery.resolve(self._recovery_root, plan.recovery_id)
-        return outcome
+        return confirmation

@@ -87,7 +87,8 @@ class XlsxWorkRegister(base.WorkRegisterProvider):
             if item.id:
                 items.append(item)
         return base.Snapshot(items=items, provider=self.name, source=self.source,
-                             taken_at=base.utc_now(), fields=sorted(index))
+                             taken_at=base.utc_now(), fields=sorted(index),
+                             headers=base.header_map(headers, index))
 
     def _to_item(self, row, index) -> base.WorkItem:
         def value(name: str) -> str:
@@ -101,11 +102,7 @@ class XlsxWorkRegister(base.WorkRegisterProvider):
                 return cell.isoformat()[:10]
             return str(cell).strip()
 
-        sequence_raw = value("sequence")
-        try:
-            sequence = int(float(sequence_raw)) if sequence_raw else None
-        except ValueError:
-            sequence = None
+        sequence = base.parse_sequence(value("sequence"))
         raw_status = value("status")
         return base.WorkItem(
             id=value("id"), title=value("title"), sequence=sequence,

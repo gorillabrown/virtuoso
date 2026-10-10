@@ -1,4 +1,4 @@
-# Dispatch Readiness Rubric — v1.1
+# Dispatch Readiness Rubric — v1.2
 
 **One rubric, one version, one home.** Every ceremony that assesses readiness
 reads *this* file. No skill restates the checks in its own words, and no skill
@@ -7,9 +7,10 @@ carries its own count of them. If you change a check, change it here and bump
 version that project expects. A ceremony always applies the current version; when a
 project pins an earlier one, it names the checks added since before assessing, so no
 project meets a new check by surprise. **v1.1** added U9, *Lessons applied*.
+**v1.2** added U10, *Task list*.
 
-    version: 1.1
-    universal-checks: 9
+    version: 1.2
+    universal-checks: 10
     extension-checks: project-defined (policy.rubric.extensions)
 
 A specification is **dispatch-ready** when every universal check passes and every
@@ -20,7 +21,7 @@ host (redesign item 75).
 
 ---
 
-## Universal checks (U1–U9)
+## Universal checks (U1–U10)
 
 These apply to every project.
 
@@ -88,6 +89,20 @@ These apply to every project.
 
 This is where a project's own history reaches its next piece of work. A lesson the
 close-out recorded and no specification applied was learned once and paid for twice.
+
+### U10 — Task list
+- The specification carries a `##### Task list` in the row format of
+  `references/task-rows.md`: each task at outcome level with its class, and an
+  `Estimate` or, for a frontier task, a `Timebox` with its action — never both.
+- Its total line labels the chain and the sum apart and keeps timeboxes out of both.
+- Verify it mechanically — exit 0 passes and prints the priced rows, exit 1 names what
+  is missing:
+
+      "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . timing --rows-from-spec <spec> --item <ITEM-ID>
+
+A missing or broken task list is always a **closable gap**, never a structural one: the
+ceremony that meets it closes it by writing the table. It never blocks a dispatch, and
+`dispatch-buffer-ready` does not count it.
 
 ---
 
@@ -161,7 +176,7 @@ To generate the skeleton (it writes nothing; redirect it yourself):
 Report readiness as separate findings, never as one blended verdict
 (redesign item 39):
 
-1. **Specification readiness** — U1–U4, U6, U7, U9 plus declared extensions.
+1. **Specification readiness** — U1–U4, U6, U7, U9, U10 plus declared extensions.
 2. **Prerequisite readiness** — U5, resolved against the live work register.
 3. **Repository readiness** — U8 plus the repository's actual current state.
 4. **External-register readiness** — whether the register can be read, whether

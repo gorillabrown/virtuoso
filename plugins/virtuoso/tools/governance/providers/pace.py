@@ -20,6 +20,7 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 from .. import policy as policy_mod
 from ..deadlines import Deadline
@@ -56,6 +57,7 @@ class Completion:
     result: str              # as recorded
     canonical: str           # through the project's status vocabulary
     record: str = ""         # the ledger record id, or the item id for a register
+    effort: str = ""         # the size word recorded with it (ledger Effort column)
 
 
 @dataclass
@@ -87,26 +89,29 @@ def from_ledger(records, statuses) -> list[Completion]:
         if key not in effective:
             order.append(key)
         effective[key] = {"item": record.item_id, "completed": record.completed,
-                          "result": record.result}
+                          "result": record.result, "effort": record.effort}
     out = []
     for key in order:
         entry = effective[key]
         out.append(Completion(item_id=entry["item"], date=record_date(entry["completed"]),
                               raw_date=entry["completed"], result=entry["result"],
-                              canonical=statuses.to_canonical(entry["result"]), record=key))
+                              canonical=statuses.to_canonical(entry["result"]), record=key,
+                              effort=entry["effort"]))
     return out
 
 
 def _corrected(original: dict, correction) -> dict:
     return {"item": correction.item_id or original["item"],
             "completed": correction.completed or original["completed"],
-            "result": correction.result or original["result"]}
+            "result": correction.result or original["result"],
+            "effort": correction.effort or original["effort"]}
 
 
 def from_register(items) -> list[Completion]:
     """Completions from a register that keeps finished items and their dates."""
     return [Completion(item_id=i.id, date=record_date(i.completed), raw_date=i.completed,
-                       result=i.raw_status or i.status, canonical=i.status, record=i.id)
+                       result=i.raw_status or i.status, canonical=i.status, record=i.id,
+                       effort=i.effort)
             for i in items if i.is_terminal]
 
 
@@ -471,15 +476,19 @@ def _trailing(report: PaceReport, source: CompletionSource, snapshot, scale, wee
                             "trailing rate may understate delivery from before it"
                             % min(dated).isoformat())
 
+    # Each completion's effort is its own (the ledger's Effort column) first, the
+    # register item's second; only a completion sized by neither is missing.
     by_id = {i.id: i for i in snapshot.items}
-    absent = [item for item in counted if item not in by_id]
+    own = [SimpleNamespace(id=item, effort=c.effort) for item, c in counted.items() if c.effort]
+    from_register = [item for item, c in counted.items() if not c.effort]
+    absent = [item for item in from_register if item not in by_id]
     if absent:
         report.missing["trailing.points"] = [
-            "effort for %d completed item(s) absent from the register: %s"
-            % (len(absent), _some(absent))]
+            "effort for %d completed item(s) absent from the register and blank in the "
+            "terminal ledger's Effort column: %s" % (len(absent), _some(absent))]
         return
-    points, missing = _points([by_id[item] for item in counted], scale,
-                              "effort" in snapshot.fields)
+    points, missing = _points(own + [by_id[item] for item in from_register], scale,
+                              "effort" in snapshot.fields or bool(own and not from_register))
     if missing:
         report.missing["trailing.points"] = missing
         return

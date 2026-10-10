@@ -496,3 +496,11 @@ def test_a_hand_edited_invalid_deadline_is_reported_and_never_fails_preflight(wo
     assert completed.returncode == 0
     assert "virtuoso-status: ready" in completed.stdout
     assert "deadlines: invalid (policy.roadmap.deadlines.g.date" in completed.stdout
+
+
+def test_today_is_the_utc_date(monkeypatch):
+    import datetime as dt
+    from tools.governance import deadlines
+    evening = dt.datetime(2026, 10, 8, 23, 30, tzinfo=dt.timezone(dt.timedelta(hours=-5)))
+    monkeypatch.setattr(deadlines, "_now", lambda: evening)
+    assert deadlines.today() == dt.date(2026, 10, 9)

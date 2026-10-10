@@ -28,6 +28,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.governance import textio  # noqa: E402
+from tools.governance.providers.recovery import RECOVERY_DIR  # noqa: E402
 
 STAGING_MEMO_RE = re.compile(r"^Memo\..+\.GovernanceStaging\..+\.md$")
 _MACHINE_BLOCK_RE = re.compile(
@@ -254,6 +255,9 @@ def created_files(root, base):
     }
 
 
+RECOVERY_VERDICT = "commit: a recovery record, never remove or ignore"
+
+
 def cmd_created_files(args):
     try:
         found = created_files(args.root, args.base)
@@ -267,10 +271,15 @@ def cmd_created_files(args):
     print("created-files: since %s — %d committed, %d temporary, %d untracked, "
           "%d uncommitted." % (args.base, len(found["committed"]), len(found["temporary"]),
                                len(found["untracked"]), len(found["uncommitted"])))
+    recovery = RECOVERY_DIR.replace(os.sep, "/") + "/"
     for label, verdict in (("temporary", "remove"), ("untracked", "commit, ignore, or decide"),
                            ("uncommitted", "commit or revert")):
         for rel in found[label]:
-            print("  ! %-11s %s  (%s)" % (label, rel, verdict))
+            # A recovery record is not a fault: it is the trail that keeps an
+            # external write from repeating.
+            print("  ! %-11s %s  (%s)" % (label, rel, RECOVERY_VERDICT
+                                          if label == "untracked" and rel.startswith(recovery)
+                                          else verdict))
     if open_count == 0:
         print("created-files: clean - every created file is committed; nothing temporary.")
         return 0

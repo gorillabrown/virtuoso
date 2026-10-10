@@ -44,6 +44,8 @@ evidence, execute launch.md → Completion protocol.]
 
 <!-- Owned by the executor. Regenerate when a phase opens; keep it short-horizon.
      One item in progress at a time; done items get a one-line evidence note, then move
-     the detail to journal.md. Items for future phases do not belong here. -->
+     the detail to journal.md. Items for future phases do not belong here.
+     The open phase's tasks take their rows from each item's specification task list
+     (references/task-rows.md), keeping its numbers; phases not yet open keep no backlog. -->
 
 - [ ] [item]

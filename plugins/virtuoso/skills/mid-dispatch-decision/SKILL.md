@@ -841,6 +841,11 @@ If the decision changes what the implementation agent executes next (Types 3, 3a
 execution discipline applies to the revised plan. The instruction block should flag
 this: "Virtuoso task-plan reprint required after this change."
 
+**The pause is a wait on the owner.** The paused row's clock waits with the reason
+`owner` (`timing --sprint <sprint-id> --wait N --reason owner`), so the time the
+decision takes stays out of its working time. The instruction block opens with
+`timing --sprint <sprint-id> --resume N` before the first action it directs.
+
 **Governance Staging integration:** For worktree-resident sprints, virtuoso's
 Worktree Governance Staging rules (§Rule 5) mandate that mid-dispatch amendments
 go to the sprint's staging file — not to the inline spec. This skill's Step 6b

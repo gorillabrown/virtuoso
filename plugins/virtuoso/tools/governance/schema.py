@@ -424,6 +424,37 @@ DEFAULT_ROLES: dict[str, dict] = {
         "origin": "authored",
         "label": "Holding bay — ad hoc plans awaiting roadmap review (directory)",
     },
+    "board": {
+        # The interactive roadmap board: one self-contained page (Dashboard, Roadmap,
+        # Completed) regenerated from the register, the ledger and the roadmap by every
+        # ceremony that changes them. A build output, never a source. Opt-in: the first
+        # roadmap review registers it (`generate_board --create`).
+        "provider": "none",
+        "authority": "report",
+        "mutability": "generated",
+        "owner": "roadmap-review",
+        "allowedWriters": ["roadmap-review", "pointer-closeout", "next-pointer"],
+        "validation": "exists",
+        "classification": "active",
+        "origin": "generated",
+        "generatedFrom": "workRegister",
+        "generatedBy": "generate_board",
+        "label": "Roadmap board (generated page)",
+    },
+    "boardComments": {
+        # Row comments people leave on the board, saved or exported from the page: the
+        # durable copy the generator embeds and roadmap-review B.3 reads. Written by
+        # people and impossible to rebuild, so it is committed.
+        "provider": "json",
+        "authority": "reference",
+        "mutability": "read-write",
+        "owner": "roadmap-review",
+        "allowedWriters": ["roadmap-review"],
+        "validation": "exists",
+        "classification": "active",
+        "origin": "authored",
+        "label": "Roadmap board comments",
+    },
     "governance": {
         "provider": "directory",
         "authority": "reference",
@@ -492,7 +523,8 @@ DEFAULT_ROLES: dict[str, dict] = {
 
 #: Roles created by ``create`` on a brand-new workspace, in readme order.
 #:
-#: ``overlays``, ``epics`` and ``holdingBay`` are deliberately not here. Each is opt-in: a
+#: ``overlays``, ``epics``, ``holdingBay``, ``board`` and ``boardComments`` are deliberately
+#: not here. Each is opt-in: a
 #: project registers it when it first has something to put there, and until then `create`
 #: lays down no empty directory for it. Leaving a role out of this tuple is how the plugin says
 #: "supported, not assumed".

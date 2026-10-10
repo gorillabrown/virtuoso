@@ -191,6 +191,59 @@ def test_the_posix_launcher_honours_the_environment_override(isolated_home, proj
     assert "virtuoso-status: " in completed.stdout
 
 
+# --- the POSIX launcher's Python choice, run through any POSIX sh ---------------
+
+
+def _posix_shell():
+    found = shutil.which("sh")
+    if found:
+        return found
+    git = shutil.which("git")
+    if git:
+        # Git for Windows: <Git>\cmd\git.exe -> <Git>\bin\sh.exe
+        candidate = Path(git).resolve().parent.parent / "bin" / "sh.exe"
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+def _fake_pythons(directory, python_runs):
+    directory.mkdir(parents=True, exist_ok=True)
+    broken = "#!/bin/sh\nexit 126\n"
+    real = '#!/bin/sh\nexec "%s" "$@"\n' % Path(sys.executable).as_posix()
+    for name, body in (("python3", broken), ("python", real if python_runs else broken)):
+        path = directory / name
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(body)
+        path.chmod(0o755)
+
+
+def _run_the_posix_launcher(tmp_path, python_runs):
+    sh = _posix_shell()
+    if sh is None:
+        pytest.skip("no POSIX sh: none on PATH and no Git for Windows")
+    directory = tmp_path / "bin"
+    _fake_pythons(directory, python_runs)
+    env = dict(os.environ, PATH=str(directory) + os.pathsep + os.environ["PATH"],
+               VIRTUOSO_PLUGIN_ROOT=PLUGIN_ROOT, VIRTUOSO_HOME=str(tmp_path / "home"))
+    return subprocess.run([sh, os.path.join(PLUGIN_ROOT, "bin", "virtuoso"),
+                           "virtuoso_registry", "--help"],
+                          capture_output=True, text=True, env=env)
+
+
+def test_the_posix_launcher_skips_a_python_that_cannot_run(tmp_path):
+    completed = _run_the_posix_launcher(tmp_path, python_runs=True)
+    assert completed.returncode == 0, completed.stderr
+    assert "usage: virtuoso_registry.py" in completed.stdout
+
+
+def test_the_posix_launcher_reports_when_no_python_runs(tmp_path):
+    completed = _run_the_posix_launcher(tmp_path, python_runs=False)
+    assert completed.returncode == 1, completed.stderr
+    assert "no Python that runs" in completed.stderr
+    assert completed.stdout == ""
+
+
 # --- the PowerShell launcher, when pwsh is present -----------------------------
 
 
@@ -235,3 +288,34 @@ def test_every_launcher_invocation_in_the_docs_shows_both_shells():
         if "virtuoso_preflight --root . --mode check" not in body:
             continue
         assert "virtuoso.ps1" in body, "%s shows only a Unix launcher form" % skill.name
+
+
+def test_the_powershell_launcher_escapes_quotes_for_windows_powershell(project):
+    """Windows PowerShell 5.x splits an argument holding quotes and spaces, so the
+    launcher builds the command line itself there: compact JSON, embedded quotes, a
+    path with a space and a trailing backslash, and an empty argument all arrive intact."""
+    for text in (install.POWERSHELL_LAUNCHER,
+                 (Path(PLUGIN_ROOT) / "bin" / "virtuoso.ps1").read_text(encoding="utf-8")):
+        assert "if ($PSVersionTable.PSVersion.Major -lt 6) {" in text
+        assert "System.Diagnostics.ProcessStartInfo" in text
+        assert r"""-replace '(\\*)"', '$1$1\"'""" in text
+        assert r"""-replace '(\\+)$', '$1$1'""" in text
+    windows_powershell = shutil.which("powershell.exe")
+    if windows_powershell is None:
+        pytest.skip("Windows PowerShell 5.x is not installed")
+    from test_tooling import build_external_workspace
+    board = project / "a board"
+    board.mkdir()
+    build_external_workspace(board)
+    title = 'say "two words" \\'
+    fields = json.dumps({"status": "In Flight", "title": title}, separators=(",", ":"))
+    completed = subprocess.run(
+        [windows_powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+         str(Path(PLUGIN_ROOT) / "bin" / "virtuoso.ps1"), "virtuoso_registry",
+         "--root", str(board) + "\\", "--actor", "roadmap-review", "mutation-plan",
+         "--operation", "set-status", "--item", "123", "--fields-json", fields,
+         "--idempotency-key", "", "--revision", "rev-1", "--json"],
+        capture_output=True, text=True, encoding="utf-8",
+        env=dict(os.environ, VIRTUOSO_PLUGIN_ROOT=str(PLUGIN_ROOT)))
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert json.loads(completed.stdout)["fields"] == {"status": "In Flight", "title": title}

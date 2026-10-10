@@ -288,7 +288,10 @@ than you can now, and stale prescriptions poison later sessions.
      and creates the branch. Every later session checks that it is on that branch, that
      the tree matches the last journal entry, and whether the base has moved, and it
      halts on divergence instead of rebasing. Each checkpoint stages exact paths, and
-     commits or pushes only as far as the policy allows.
+     commits or pushes only as far as the policy allows. At completion its Completion
+     only lines commit the record after the code merge and merge it into the default
+     branch as a docs-only `--no-ff` merge; they are kept only where the run merges its
+     own code and the policy commits.
    - **charter.md** — the branch and commit rules, under Constraints.
    - **state.md** — the run's branch, base, and remote, in the Working set.
 3. Print the walk-away readiness verdict: preflight table status + open assumptions.
@@ -345,6 +348,8 @@ read anyway — the packet works even for an executor that has never seen this p
   BLOCKER(USER) with the exact question, clean journal exit.
 - **Fresh evidence:** completion claims re-run every DoD verification in the claiming
   session; `done.md` is written once, by that session, and is the loop's stop signal.
+  It reaches the default branch in a docs-only merge after the code merge, never inside
+  it.
 - **Re-anchor at gates:** every phase gate re-reads the charter before the next phase
   opens — goal drift compounds silently across compaction and session boundaries.
 - **Context hygiene:** raw tool output stays out of durable files and out of the
@@ -360,9 +365,9 @@ same place as a roadmap dispatch and an ad hoc plan (`references/execution-paths
 The packet still embeds its own run rules, so a session on a host without this plugin
 keeps them anyway.
 
-The run ends through `/pointer-closeout [PACKET-ID]` once `done.md` exists, as launch.md's
-completion protocol says. That crossing retires the item on the master roadmap, or every
-item of a combination, and records what the epic taught.
+The run ends through `/pointer-closeout [PACKET-ID]` once `done.md` exists on the default
+branch, as launch.md's completion protocol says. That crossing retires the item on the
+master roadmap, or every item of a combination, and records what the epic taught.
 
 - `mid-dispatch-decision` — process a BLOCKER(USER) when the user returns to one.
 - `adversarial-review` — red-team the charter before committing days to it.

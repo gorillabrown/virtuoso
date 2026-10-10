@@ -224,11 +224,18 @@ Write one specification per draft-stub item, in prerequisite order, in roadmap-r
   you checked and found nothing.
 - **Interfaces** (item sets only): what each item consumes from an earlier one and
   produces for a later one, by exact name.
+- **Task list**, under the heading U10 reads, in the row format of
+  `references/task-rows.md`, priced and totalled by
+  `timing --rows-from-spec <spec> --item HB-<n>`.
 - **Lessons applied**, under the heading U9 reads.
 
-Plan at item altitude. The task-by-task plan is built at execution time, in the
-virtuoso skill's Phase 2, with the repository in front of it. Pre-written code steps go
-stale, and the rubric does not require them.
+Plan tasks at outcome altitude. Each specification carries its task list: the outcomes
+the work delivers, each with its class and a price, and the total line. Never code steps:
+those are built at execution time, in the virtuoso skill's Phase 2, with the repository
+in front of it, and pre-written code steps go stale. This reverses the 2026-09-28
+decision "When the virtuoso skill first lists the task list; specifications stay at item
+level": the overnight fill forecast needs totals for queued items before they launch,
+and launch-time pricing covers only the item in flight (2026-10-03).
 
 ## Step 3 — Walk the shared rubric
 

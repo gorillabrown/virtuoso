@@ -18,12 +18,15 @@ Every invocation prints the machine-readable status lines, quiet or not:
     overlays: <state>
     deadlines: <state>
     roadmap-integrity: <state>
+    board: <state>
 
 The overlay line always states a result — `not registered` when the project never
 declared the role — so silence can never be read as "overlays are in force". The
 deadline line does the same (`none declared`), and carries each declared deadline's
 date and days remaining, never pace: pace needs the work register, which may be
-external, and session start never reads it.
+external, and session start never reads it. The board line compares the roadmap
+board's embedded source times with the files' times now — `stale` or `missing` is
+advice to regenerate it, and it too never reads the register.
 
 `--json` additionally emits the full structured result (item 11): status, mode,
 writes, files written, findings, and the resolved role table. The complete list
@@ -176,13 +179,36 @@ def _attach_roadmap(outcome: result_mod.Result, root: str) -> result_mod.Result:
     return outcome
 
 
+def _attach_board(outcome: result_mod.Result, root: str) -> result_mod.Result:
+    """The roadmap board's freshness: an advisory line, total like the others. It
+    reads file times and the page, never the work register, and never changes the
+    status."""
+    outcome.board = "not registered"
+    if not _is_registered(root):
+        return outcome
+    try:
+        from tools.roadmap_visualizer import freshness
+        outcome.board = freshness.board_status(root)
+    except Exception as exc:  # noqa: BLE001 - a side observation must not fail preflight
+        outcome.board = "unreadable (%s)" % exc
+    return outcome
+
+
 # --- modes -------------------------------------------------------------------
+
+
+def _load(root: str) -> registry_mod.Registry:
+    """The registry, plus the findings that need git: which plugin state the project
+    ignores. Kept out of every-load validation so only preflight pays for git."""
+    reg = registry_mod.load(root, plugin_version=plugin_version())
+    reg.findings.extend(workspace.ignore_findings(reg))
+    return reg
 
 
 def run_check(root: str, mode: str = "check") -> result_mod.Result:
     """Read-only. Performs discovery and validation with zero project writes."""
     if _is_registered(root):
-        reg = registry_mod.load(root, plugin_version=plugin_version())
+        reg = _load(root)
         status = _status_for(reg)
         message = {
             result_mod.READY: "registry is valid; nothing to do.",
@@ -233,7 +259,7 @@ def run_adopt(root: str) -> result_mod.Result:
     reg, notes = workspace.adopt_registry(root)
     written = _write_marker(root)
     written += repair_mod.write_registry(reg)
-    reloaded = registry_mod.load(root, plugin_version=plugin_version())
+    reloaded = _load(root)
     return result_mod.Result(
         status=result_mod.ADOPTED, mode="adopt", root=root,
         message="adopted in place. Nothing was moved, duplicated, or rewritten.\n  "
@@ -274,8 +300,9 @@ def run_create(root: str, *, authorized: bool, layout: str = "plugin-only") -> r
             written.append(relative)
     written += _write_marker(root)
     written += repair_mod.write_registry(reg)
+    written += _write_gitignore(root, reg)
 
-    reloaded = registry_mod.load(root, plugin_version=plugin_version())
+    reloaded = _load(root)
     return result_mod.Result(
         status=result_mod.CREATED, mode="create", root=root,
         message="initialized a new workspace with %d file(s)." % len(written),
@@ -316,6 +343,26 @@ def run_repair(root: str, *, apply: bool) -> result_mod.Result:
         plan=plan.as_dict(), backup=backup_set.as_dict(),
         findings=_findings_payload(reloaded), roles=_roles_payload(reloaded),
         schema_version=reloaded.schema_version, plugin_version=plugin_version())
+
+
+def _write_gitignore(root: str, reg: registry_mod.Registry) -> list[str]:
+    """Append the local-only lines a new workspace's ``.gitignore`` lacks. Additive:
+    a project's own lines are never reordered or removed."""
+    target = os.path.join(root, ".gitignore")
+    current = textio.read_text(target)
+    if current is None:
+        if os.path.exists(target):
+            return []                      # not text we can read: never overwrite it
+        current = ""
+    have = {line.strip() for line in current.splitlines()}
+    missing = [line for line in workspace.gitignore_lines(reg) if line not in have]
+    if not missing:
+        return []
+    if current and not current.endswith("\n"):
+        current += "\n"
+    block = "\n".join([workspace.LOCAL_ONLY_HEADER] + missing) + "\n"
+    textio.write_if_changed(target, current + ("\n" if current else "") + block)
+    return [".gitignore"]
 
 
 def _write_marker(root: str) -> list[str]:
@@ -389,6 +436,7 @@ def preflight(root: str, mode: str = "check", *, quiet: bool = False,
             error=exc.as_dict(), plugin_version=plugin_version())
     _attach_overlays(outcome, root)
     _attach_roadmap(outcome, root)
+    _attach_board(outcome, root)
     outcome.assert_contract()
     return outcome
 
@@ -402,6 +450,7 @@ def emit(outcome: result_mod.Result, *, quiet: bool, as_json: bool) -> None:
     print(outcome.overlay_line())
     print(outcome.deadline_line())
     print(outcome.roadmap_integrity_line())
+    print(outcome.board_line())
     if as_json:
         print(outcome.to_json())
         return

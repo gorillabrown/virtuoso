@@ -89,7 +89,7 @@ DEFAULTS: dict = {
     },
     # --- readiness rubric (items 52, 53) -------------------------------------
     "rubric": {
-        "version": "1.1",               # 1.1 added U9, Lessons applied
+        "version": "1.2",               # 1.1 added U9, Lessons applied; 1.2 U10, Task list
         "extensions": [],               # project-specific check ids
     },
     # --- standing rules / escalation (items 48b, 49b) -------------------------
@@ -150,7 +150,7 @@ DEFAULTS: dict = {
 
 #: The terminal ledger's fields, in the order the documented format lays them out.
 TERMINAL_LEDGER_FIELDS = ("recordId", "itemId", "completed", "result", "evidence", "corrects",
-                          "effortEstimate", "effortActual")
+                          "effortEstimate", "effortActual", "effort")
 
 
 def ledger_mapping_problems(mappings) -> list[str]:
@@ -170,6 +170,13 @@ def ledger_mapping_problems(mappings) -> list[str]:
         if key in TERMINAL_LEDGER_FIELDS and (not isinstance(column, str) or not column.strip()):
             problems.append("policy.terminalLedger.fieldMappings.%s must name a column header"
                             % key)
+    effort = mappings.get("effort")
+    if isinstance(effort, str) and effort.strip():
+        durations = {"estimate", "actual", "effortestimate", "effortactual"} | {
+            str(mappings.get(k) or "").strip().lower() for k in ("effortEstimate", "effortActual")}
+        if effort.strip().lower() in durations:
+            problems.append("policy.terminalLedger.fieldMappings.effort names %r, a duration "
+                            "column; Effort is the size word and needs its own column" % effort)
     return problems
 
 

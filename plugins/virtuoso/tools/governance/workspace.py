@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import os
 
-from . import discovery, policy as policy_mod, registry as registry_mod, schema
+from . import (backup as backup_mod, discovery, policy as policy_mod, registry as registry_mod,
+               repostate, schema)
+from .providers import recovery as recovery_mod
 
 DOC_SUBDIRS = {
     "governance": "1 governance",
@@ -195,6 +197,61 @@ def adopt_registry(root: str) -> tuple[registry_mod.Registry, list[str]]:
     return reg, notes
 
 
+#: A file name no project keeps, used to ask git whether a directory's contents are
+#: ignored without the directory having to exist.
+_IGNORE_PROBE = ".virtuoso-ignore-probe"
+
+LOCAL_ONLY_HEADER = "# Virtuoso: machine-local state (repair backups, sweep quarantine, temp)"
+
+
+def local_only_paths(reg: registry_mod.Registry) -> list[str]:
+    """Directories whose contents stay on this machine: repair backups, the sweep's
+    quarantine, and the registered ``temp`` role. Recovery records are the opposite:
+    they are the idempotency trail for external writes and are versioned, so a fresh
+    clone or a cloud session never repeats a write that already happened."""
+    quarantine = policy_mod.load(reg.policy).get("sweep.quarantineDirectory",
+                                                 "Virtuoso/.quarantine")
+    paths = [_posix(*backup_mod.BACKUP_DIRNAME.split(os.sep)), quarantine]
+    temp = reg.roles.get("temp")
+    if temp and temp.path and not temp.is_external and temp.path.strip("/") not in ("", "."):
+        paths.append(temp.path)
+    return [p.replace("\\", "/").strip("/") for p in paths]
+
+
+def gitignore_lines(reg: registry_mod.Registry) -> list[str]:
+    return ["/%s/" % path for path in local_only_paths(reg)]
+
+
+def ignore_findings(reg: registry_mod.Registry) -> list[registry_mod.Finding]:
+    """Warnings for plugin state git treats the wrong way. Read-only; outside a git
+    repository, or without git, there is nothing to say."""
+    local = local_only_paths(reg)
+    recovery_dir = _posix(*recovery_mod.RECOVERY_DIR.split(os.sep))
+    probes = ["%s/%s" % (path, _IGNORE_PROBE) for path in local + [recovery_dir]]
+    code, out = repostate._run(reg.root, "-c", "core.quotePath=false", "check-ignore",
+                               *probes)
+    if code not in (0, 1):
+        return []
+    ignored = set(out.splitlines())
+    findings = []
+    missing = ["/%s/" % path for path, probe in zip(local, probes) if probe not in ignored]
+    if missing:
+        findings.append(registry_mod.Finding(
+            code="local-state-not-ignored", severity="warning",
+            message="machine-local state is not git-ignored (%s), so every close-out "
+                    "reports its contents. Add to .gitignore:\n"
+                    "    %s\n    %s" % (", ".join(missing), LOCAL_ONLY_HEADER,
+                                        "\n    ".join(missing))))
+    if probes[-1] in ignored:
+        findings.append(registry_mod.Finding(
+            code="recovery-records-ignored", severity="warning",
+            message="git ignores %s/, but recovery records are the idempotency trail "
+                    "for external writes: a clone without them can repeat a write that "
+                    "already happened. Remove the ignore rule and commit them."
+                    % recovery_dir))
+    return findings
+
+
 def scaffold_paths(reg: registry_mod.Registry) -> list[str]:
     """Directories a ``create`` run lays down, in registry order."""
     out = []
@@ -261,10 +318,12 @@ Append-only. Every record is final: corrections are appended as new records that
 reference the record they correct. Nothing here is reordered, rewritten, or deleted.
 
 Estimate and Actual are the effort the item was estimated at and what it took, as
-durations (90m, 1.5h); effort calibration in `kpis` learns from them.
+durations (90m, 1.5h); effort calibration in `kpis` learns from them. Effort is the
+item's size word on the effort scale (xs … xl), not a duration; pace reads trailing
+points from it.
 
-| Record | Item | Completed | Result | Evidence | Corrects | Estimate | Actual |
-|--------|------|-----------|--------|----------|----------|----------|--------|
+| Record | Item | Completed | Result | Evidence | Corrects | Estimate | Actual | Effort |
+|--------|------|-----------|--------|----------|----------|----------|--------|--------|
 """
 
 LESSONS_SEED = """# Retrospective — Lessons Learned

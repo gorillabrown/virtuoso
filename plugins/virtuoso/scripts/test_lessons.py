@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -267,6 +268,31 @@ def test_a_closeouts_lessons_applied_heading_is_not_its_lessons_section():
     result = lessons_mod.check(closeout("## Lessons applied\n- LSN-002\n"), LESSONS, "LSN",
                                item="ARCH-4", closeout=True)
     assert result.findings[0]["code"] == "lessons-section-missing"
+
+
+def test_a_numbered_lessons_heading_is_the_closeouts_lessons_section():
+    text = closeout("## 7. Lessons\nNo new lesson — the dispatch followed LSN-002 exactly.\n")
+    assert lessons_mod.check(text, LESSONS, "LSN", item="ARCH-4", closeout=True).passed is True
+
+
+def test_a_numbered_lessons_applied_heading_is_still_refused_in_a_closeout():
+    result = lessons_mod.check(closeout("## 7. Lessons applied\n- LSN-002\n"), LESSONS, "LSN",
+                               item="ARCH-4", closeout=True)
+    assert result.findings[0]["code"] == "lessons-section-missing"
+
+
+def test_a_numbered_lessons_applied_heading_satisfies_a_specification():
+    result = lessons_mod.check(spec("##### 4. Lessons applied\n- LSN-002: recorded in step 1.\n"),
+                               LESSONS, "LSN")
+    assert "lessons-section-missing" not in [f["code"] for f in result.findings]
+
+
+def test_a_numbered_subsection_heading_is_matched():
+    body = "\nNo new lesson — the dispatch followed LSN-002 exactly.\n"
+    for heading in ("## 7.2) Lessons", "## Lessons"):
+        assert lessons_mod.check(closeout(heading + body), LESSONS, "LSN", item="ARCH-4",
+                                 closeout=True).passed is True
+    assert lessons_mod._NUMBER_RE.sub("", "lessons7", count=1) == "lessons7"
 
 
 # =============================================================================
@@ -617,3 +643,50 @@ def test_the_item_filter_shows_how_each_lesson_is_linked(workspace):
     assert listing.returncode == 0
     assert "(showing 1 recorded from %s)" % EPIC in listing.stdout
     assert "linked by: name" in listing.stdout and "LSN-002" not in listing.stdout
+
+
+# --- a field written as a list item; prose claiming a status (VIR-012) ----------------
+
+#: Two lessons copied verbatim from a real catalog (never text written to match the
+#: parser), plus a status record for the first. One consumer-project name in the
+#: first's Evidence is redacted; the parser never reads that line's words.
+SRL_003 = ("### SRL-003 — Ground byte-identity fixtures in real artifacts (REG-FIX-01, 2026-07-18)\n"  # validate-ok: the default lesson prefix, verbatim
+           """**Verdict:** A convergence test written to match the code's own template was circular; grounding against live data inverted the fix.
+**Evidence:** The shortened readme template "converged" against a fixture authored from itself; the consumer's live readme was byte-identical to the ORIGINAL template, so the correct fix was restoration, not shortening.
+**Recommendation:** Fixtures asserting byte-identity must be sourced from real curated files, never authored to match the implementation.
+**Applies to:** All sprints with byte-identity or round-trip acceptance criteria.
+**Status:** Observation
+""")
+SRL_006 = ("### SRL-006 — Verify characterizations against the archived artifact at claim time (REG-FIX-01, 2026-07-18)\n"  # validate-ok: the default lesson prefix, verbatim
+           """**Verdict:** Both the close-out and its adversarial review made claims about the same archived diff without reading it; the artifact settled both in minutes.
+**Evidence:** The close-out relayed a worker's "reorder-only" label unread (label happened to be correct); the review attributed the damage to the verified runs without consulting the diff (attribution was incorrect — the diff proves the damage postdates the verify window).
+**Recommendation:** Any claim backed by an archived artifact must cite the artifact's content, not a summary of it — at claim time, not post-hoc.
+**Applies to:** All close-outs and reviews with archived evidence.
+**Status:** Observation
+""")
+REAL = (SRL_003 + "\n" + SRL_006 + "\n### SRL-003 — status (VIR-012, 2026-10-09)\n"  # validate-ok: the default lesson prefix
+        "**Status:** Promoted -> SR-12\n")
+
+
+def _seen(lessons):
+    return [(l.id, l.status, l.live, l.fields) for l in lessons]
+
+
+@pytest.mark.parametrize("marker", ["-", "*", "+"])
+def test_a_list_item_status_reads_like_a_field_line(marker):
+    listed = re.sub(r"(?m)^\*\*", marker + " **", REAL)
+    assert listed != REAL
+    plain, as_items = lessons_mod.parse(REAL, "SRL"), lessons_mod.parse(listed, "SRL")
+    assert _seen(as_items) == _seen(plain)
+    assert sum(l.live for l in plain) == 1 and sum(l.live for l in as_items) == 1
+    assert as_items[0].status == "Promoted -> SR-12"
+
+
+def test_prose_claiming_a_status_is_captured_not_recorded():
+    claimed = SRL_006 + "Promoted to SR-12 at the 2026-09-24 review.\n"
+    [lesson] = lessons_mod.parse(claimed, "SRL")
+    assert lesson.live is True and lesson.status == "Observation"
+    assert lesson.claims == ["Promoted to SR-12 at the 2026-09-24 review."]
+    [denied] = lessons_mod.parse(SRL_006 + "It was not promoted.\n", "SRL")
+    assert denied.claims == []
+    assert all(l.claims == [] for l in lessons_mod.parse(SRL_003 + "\n" + SRL_006, "SRL"))

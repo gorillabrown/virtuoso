@@ -67,6 +67,7 @@ class CsvWorkRegister(base.WorkRegisterProvider):
             source=self.source,
             taken_at=base.utc_now(),
             fields=sorted(index),
+            headers=base.header_map(headers, index),
         )
 
     def _to_item(self, headers: list[str], index: dict, row: dict) -> base.WorkItem:
@@ -212,6 +213,10 @@ class CsvWorkRegister(base.WorkRegisterProvider):
         return created
 
 
+#: A *Depends On* cell that says "no prerequisite" in words (any case).
+PREREQUISITE_PLACEHOLDERS = ("none", "-", "—", "–", "n/a", "na")
+
+
 def _row_revision(row: dict) -> str:
     payload = "\n".join("%s=%s" % (k, row.get(k, "")) for k in sorted(row))
     return textio.sha256_bytes(payload.encode("utf-8"))
@@ -230,13 +235,9 @@ def row_to_item(mapping, headers: list[str], index: dict, row: dict) -> base.Wor
 
     raw_status = value("status")
     raw_written = value("written_status")
-    sequence_raw = value("sequence")
-    try:
-        sequence = int(float(sequence_raw)) if sequence_raw else None
-    except ValueError:
-        sequence = None
-    prerequisites = [p.strip() for p in
-                     value("prerequisites").replace(";", ",").split(",") if p.strip()]
+    sequence = base.parse_sequence(value("sequence"))
+    prerequisites = [p.strip() for p in value("prerequisites").replace(";", ",").split(",")
+                     if p.strip() and p.strip().lower() not in PREREQUISITE_PLACEHOLDERS]
     known = {headers[i] for i in index.values() if i < len(headers)}
     return base.WorkItem(
         id=value("id"),

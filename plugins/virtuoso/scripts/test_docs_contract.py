@@ -62,7 +62,7 @@ def test_every_documented_registry_subcommand_exists():
     pattern = re.compile(r"virtuoso_registry[^\n]*?(?:--json\s+|--actor \S+\s+|--root \S+\s+)*"
                          r"\b(roles|resolve|provider|items|next|kpis|closeout|snapshot|"
                          r"recovery|repo|deps|protected|overlays|create-item|"
-                         r"mutation-plan|mutation-confirm|policy-set|lessons)\b")
+                         r"mutation-plan|mutation-confirm|policy-set|lessons|timing)\b")
     for path in DOCS:
         documented.update(pattern.findall(path.read_text(encoding="utf-8")))
     assert documented, "no registry subcommands are documented at all"
@@ -228,6 +228,56 @@ def test_the_specification_finding_matches_the_rubric():
     assert "| **Specification readiness** | %s plus" % wanted in pointer
 
 
+def added_since(rubric: str, pinned: str) -> dict:
+    """``{check: name}`` for every check the rubric says a version after ``pinned`` added."""
+    def key(version):
+        return tuple(int(part) for part in version.split("."))
+    return {check: name for version, check, name in
+            re.findall(r"\*\*v(\d+(?:\.\d+)*)\*\* added (U\d+), \*([^*]+)\*", rubric)
+            if key(version) > key(pinned)}
+
+
+def test_a_pinned_project_sees_u10():
+    rubric = (ROOT / "references" / "readiness-rubric.md").read_text(encoding="utf-8")
+    assert "names the checks added since before assessing" in rubric
+    assert added_since(rubric, "1.1") == {"U10": "Task list"}
+    assert added_since(rubric, "1.0") == {"U9": "Lessons applied", "U10": "Task list"}
+    assert re.search(r"(?m)^###\s+U10\s+—\s+Task list$", rubric)
+
+
+EFFORT_DURATION = re.compile(r"\d+\s*(m|min|h)\b")
+
+
+def effort_durations(text: str) -> list[str]:
+    """Lines whose ``Effort:`` field, or whose task-list ``Effort`` column, holds a
+    duration. Effort is a level; durations live in ``Estimate`` and ``Timebox``."""
+    found, column = [], None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if "Effort:" in line and EFFORT_DURATION.search(line.split("Effort:", 1)[1]):
+            found.append(stripped)
+        if not stripped.startswith("|"):
+            column = None
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if "Effort" in cells:
+            column = cells.index("Effort")
+        elif column is not None and column < len(cells) and EFFORT_DURATION.search(cells[column]):
+            found.append(stripped)
+    return found
+
+
+def test_a_duration_in_an_effort_field_is_rejected():
+    assert effort_durations("- **Effort:** 2h\n") == ["- **Effort:** 2h"]
+    assert effort_durations("| # | Effort | Estimate |\n|---|---|---|\n| 1 | 45 min | 45m |\n"
+                            ) == ["| 1 | 45 min | 45m |"]
+    assert effort_durations("- **Effort:** high\n| # | Effort | Estimate |\n|---|---|---|\n"
+                            "| 1 | medium | 45m |\n") == []
+    templates = sorted((ROOT / "skills").glob("*/assets/*.md"))
+    for path in DOCS + templates:
+        assert effort_durations(path.read_text(encoding="utf-8")) == [], path
+
+
 def test_the_rubric_reports_five_separate_findings():
     """Item 39: readiness is five findings, never one blended verdict."""
     text = (ROOT / "references" / "readiness-rubric.md").read_text(encoding="utf-8")
@@ -263,7 +313,8 @@ def test_the_machine_lines_and_their_json_keys_are_documented():
     payload = outcome.as_dict()
     for line, key in ((outcome.overlay_line(), "overlays"),
                       (outcome.deadline_line(), "deadlines"),
-                      (outcome.roadmap_integrity_line(), "roadmapIntegrity")):
+                      (outcome.roadmap_integrity_line(), "roadmapIntegrity"),
+                      (outcome.board_line(), "board")):
         token = line.split(":")[0] + ":"
         assert token in contract, "%s is undocumented" % token
         assert key in payload and "`%s`" % key in contract, "JSON key %s" % key
@@ -353,7 +404,8 @@ def test_the_preflight_docstring_lists_every_machine_line():
     spec.loader.exec_module(module)
     outcome = result_mod.Result(status=result_mod.READY, mode="check", root="/tmp")
     for line in outcome.contract_lines() + [outcome.overlay_line(), outcome.deadline_line(),
-                                            outcome.roadmap_integrity_line()]:
+                                            outcome.roadmap_integrity_line(),
+                                            outcome.board_line()]:
         token = line.split(":")[0] + ":"
         assert token in module.__doc__, "%s is not in the preflight's docstring" % token
 
@@ -446,6 +498,10 @@ def test_the_epic_packet_carries_its_git_work_and_a_goal_line():
                  "--left-right --count", "git add -- <exact paths>"):
         assert step in prompt, step
     assert "never create it again" in prompt and "never rebase" in prompt
+    completion = prompt.split("Completion only", 1)[1].split("Never:", 1)[0]
+    assert "git merge --no-ff [BRANCH]" in completion
+    assert ':(exclude)[PACKET DIR]' in completion
+    assert completion.index("git commit") < completion.index("git merge --no-ff")
 
     goal = launch.split("## Goal line", 1)[1].split("## Completion protocol", 1)[0]
     block = goal.split("```", 2)[1].strip("\n")
@@ -495,3 +551,69 @@ def test_retirement_records_are_gated_on_writers_and_routed_to_the_close_out():
     assert "## Retirement records routed here" in skill_text("pointer-closeout")
     contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
     assert "**Who may append what.**" in contract
+
+
+def _between(text: str, start: str, end: str) -> str:
+    return text[text.index(start):text.index(end, text.index(start))]
+
+
+def test_the_staging_catch_all_names_agent_files_overlays_and_briefs():
+    rule = _between(skill_text("virtuoso"), "### Rule 1", "### Rule 2")
+    for fragment in ("`agents/<Agent>.md`", "`<overlays>/agents/<Agent>.md`",
+                     "`.claude/agents/`", "names the file as an edit site"):
+        assert fragment in rule, fragment
+
+
+def test_scope_discipline_defines_each_delta():
+    section = _between(skill_text("roadmap-review"), "### B.3", "### B.4")
+    for fragment in ("**Forward**", "**Sideways**", "**Backward**",
+                     "policy.roadmap.deadlines.<id>.scope", "is not scored"):
+        assert fragment in section, fragment
+    assert "as deltas like any other" not in section
+
+
+def test_an_epics_completion_record_reaches_the_default_branch():
+    """The record lands on the default branch in a docs-only merge after the code merge,
+    and the close-out checks it is there before it crosses."""
+    flat = lambda t: " ".join(t.split())  # noqa: E731
+    launch = (ROOT / "skills" / "epic" / "assets" / "launch.template.md").read_text(
+        encoding="utf-8")
+    protocol = flat(_between(launch, "## Completion protocol", "## Monitoring"))
+    for fragment in ("docs-only commit", "after the code merge, never folded into it",
+                     "`--no-ff`", "touches only this directory"):
+        assert fragment in protocol, fragment
+    assert protocol.index("docs-only commit") < protocol.index("is the stop signal")
+
+    epic = flat(skill_text("epic"))
+    assert "once `done.md` exists on the default branch" in epic
+    assert "docs-only merge after the code merge" in epic
+    assert "Completion only lines commit the record after the code merge" in epic
+
+    closeout = skill_text("pointer-closeout")
+    step1 = flat(_between(closeout, "### Step 1 — Verify completion evidence",
+                          "### Acceptance and evidence reconciliation"))
+    assert ("sprint_guards artifacts-exist --ref <default branch> <packet directory>/done.md"
+            in step1)
+    assert "docs-only completion commit" in step1
+    [row] = [line for line in closeout.splitlines() if line.startswith("| Step 1 — evidence |")
+             and "charter DoD" in line]
+    assert "on the default branch (Step 1)" in row
+
+
+def test_delayed_start_blocks_only_the_deferred_task():
+    flat = " ".join(skill_text("delayed-start").split())
+    for gone in ("The sleep is blocking", "hold the terminal", "time.sleep(",
+                 "sleeps until the target"):
+        assert gone not in flat, gone
+    for fragment in ("blocks only the deferred task", "other work carries on",
+                     "hold everything", "the host's scheduler", "a background agent's report"):
+        assert fragment in flat, fragment
+
+
+def test_delayed_start_shows_the_deferred_task_blocked_on_the_plan():
+    text = skill_text("delayed-start")
+    flat = " ".join(text.split())
+    for fragment in ("deferred until <time> <zone>", "waits on #N", "raises no issue document",
+                     "Meanwhile:", "with the zone"):
+        assert fragment in flat, fragment
+    assert "sleeps" not in text.split("---", 2)[1]

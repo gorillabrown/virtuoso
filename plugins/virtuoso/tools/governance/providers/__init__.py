@@ -87,6 +87,13 @@ def _creation_permission(policy, actor: str, writable: bool) -> tuple[bool, str]
                    % (actor, ", ".join(names) or "nobody"))
 
 
+def _declared_fields(policy) -> list | None:
+    """The canonical fields the project's fieldMappings names, or None when it declares
+    none (the default ``{}``): only a declared mapping says which columns exist."""
+    declared = policy.get("workRegister.fieldMappings", {})
+    return list(declared) if isinstance(declared, dict) and declared else None
+
+
 def _snapshot_for(reg, policy) -> SnapshotWorkRegister | None:
     name = policy.get("workRegister.snapshot", "")
     if not name:
@@ -132,7 +139,8 @@ def for_role(reg, role_name: str, *, actor: str = "") -> Selection:
         provider = ExternalWorkRegister(
             source=spec.external, mapping=mapping, provider_kind=spec.provider,
             snapshot_provider=_snapshot_for(reg, policy), read_only=not writable,
-            recovery_root=reg.root, may_create=may_create, create_denied_reason=denied)
+            recovery_root=reg.root, may_create=may_create, create_denied_reason=denied,
+            declared_fields=_declared_fields(policy))
     else:
         provider = _make_local(spec, _resolve_path(reg, spec), mapping, not writable,
                                may_create=may_create, create_denied_reason=denied)

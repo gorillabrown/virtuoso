@@ -54,6 +54,11 @@ def workspace(project):
 @pytest.fixture
 def external_workspace(project):
     """A connector-backed register with an exact-revision canonical snapshot."""
+    return build_external_workspace(project)
+
+
+def build_external_workspace(project):
+    """The ``external_workspace`` fixture project, for tests in other files."""
     (project / "Virtuoso").mkdir()
     snapshot = project / "Virtuoso" / "work-register.snapshot.json"
     snapshot.write_text(json.dumps({
@@ -508,3 +513,178 @@ def test_the_create_item_command_points_an_external_register_at_the_handshake(ex
     assert completed.returncode == 3
     assert "mutation-plan --operation create-item" in completed.stderr
     assert not (external_workspace / "Virtuoso" / ".recovery").exists()
+
+
+# --- VIR-010: fields from a file, confirmation by recovery id ------------------------------
+
+def _plan_cli(root, *fields_args):
+    return run(REGISTRY_CLI, "--root", str(root), "--actor", "roadmap-review",
+               "mutation-plan", "--operation", "set-status", "--item", "123",
+               *fields_args, "--revision", "rev-1", "--json")
+
+
+def test_mutation_plan_reads_fields_from_a_file(external_workspace):
+    fields = external_workspace / "fields.json"
+    fields.write_text(json.dumps({"title": "Board change — one per call"}, ensure_ascii=False),
+                      encoding="utf-8")
+    planned = _plan_cli(external_workspace, "--fields-file", str(fields))
+    assert planned.returncode == 0, planned.stderr
+    assert json.loads(planned.stdout)["fields"]["title"] == "Board change — one per call"
+    both = _plan_cli(external_workspace, "--fields-file", str(fields), "--fields-json", "{}")
+    assert both.returncode == 2
+
+
+def test_mutation_confirm_needs_only_the_recovery_id(external_workspace):
+    plan = json.loads(_plan_cli(external_workspace, "--fields-json",
+                                json.dumps({"status": "In Flight"})).stdout)
+    confirm = (REGISTRY_CLI, "--root", str(external_workspace), "--actor", "roadmap-review",
+               "mutation-confirm", "--recovery-id", plan["recoveryId"])
+    mismatch = run(*confirm, "--item", "999", "--succeeded")
+    assert mismatch.returncode != 0
+    assert "item '999', the record says '123'" in mismatch.stderr
+    confirmed = run(*confirm, "--succeeded", "--json")
+    assert confirmed.returncode == 0, confirmed.stderr
+    assert json.loads(confirmed.stdout)["outcome"] == "succeeded"
+    pending = run(REGISTRY_CLI, "--root", str(external_workspace), "recovery", "--json")
+    assert json.loads(pending.stdout)["outstanding"] == []
+
+
+def test_the_cli_refuses_a_field_the_declared_mapping_lacks(external_workspace):
+    layout = external_workspace / "Virtuoso" / "workspace-layout.json"
+    data = json.loads(layout.read_text(encoding="utf-8"))
+    data["policy"]["workRegister"]["fieldMappings"] = {"id": "Item ID", "status": "Status"}
+    layout.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    refused = _plan_cli(external_workspace, "--fields-json",
+                        json.dumps({"status": "Done", "evidence": "abc"}))
+    assert refused.returncode == 3 and "has no column for 'evidence'" in refused.stderr
+    assert not (external_workspace / "Virtuoso" / ".recovery").exists()
+
+
+def test_mutation_abandon_resolves_with_a_reason(external_workspace):
+    plan = json.loads(_plan_cli(external_workspace, "--fields-json",
+                                json.dumps({"status": "In Flight"})).stdout)
+    abandoned = run(REGISTRY_CLI, "--root", str(external_workspace), "--actor",
+                    "roadmap-review", "mutation-abandon", "--recovery-id", plan["recoveryId"],
+                    "--reason", "planned against a stale snapshot", "--json")
+    assert abandoned.returncode == 0, abandoned.stderr
+    assert json.loads(abandoned.stdout)["outcome"] == "abandoned"
+    pending = run(REGISTRY_CLI, "--root", str(external_workspace), "recovery", "--json")
+    assert json.loads(pending.stdout)["outstanding"] == []
+
+
+# --- VIR-009: same-day review records, the previous review ---------------------------------
+
+def _reviews(workspace, *names):
+    directory = Path(registry_mod.load(str(workspace)).resolve("roadmapReviews"))
+    directory.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        (directory / name).write_text("x\n", encoding="utf-8")
+    return directory
+
+
+def _review(workspace, date):
+    completed = run(REGISTRY_CLI, "--root", str(workspace), "review", "--date", date, "--json")
+    assert completed.returncode == 0, completed.stderr
+    return json.loads(completed.stdout)
+
+
+FIVE = ("audit", "assessment", "plan", "lessons-applied", "phase-brief")
+
+
+def test_review_prefix_is_the_date_when_none_exist(workspace):
+    _reviews(workspace)
+    found = _review(workspace, "2026-10-08")
+    assert (found["prefix"], found["resume"], found["previous"]) == ("2026-10-08", "", {})
+
+
+def test_a_second_review_on_a_date_takes_run_two(workspace):
+    _reviews(workspace, *("2026-10-08-%s.md" % kind for kind in FIVE))
+    found = _review(workspace, "2026-10-08")
+    assert found["prefix"] == "2026-10-08-2" and found["resume"] == ""
+    assert found["previous"]["prefix"] == "2026-10-08"
+    assert len(found["previous"]["files"]) == 5
+
+
+def test_an_interrupted_review_is_resumed(workspace):
+    # Grounded in a real interrupted review: a directory holding 2026-10-04-audit.md alone.
+    _reviews(workspace, "2026-10-04-audit.md")
+    assert _review(workspace, "2026-10-04")["resume"] == "2026-10-04"
+    later = _review(workspace, "2026-10-08")
+    assert later["prefix"] == "2026-10-08" and later["previous"]["prefix"] == "2026-10-04"
+    assert later["previousComplete"] == {}
+
+
+def test_previous_complete_skips_an_interrupted_review(workspace):
+    _reviews(workspace, *(["2026-09-23-%s.md" % kind for kind in FIVE]
+                          + ["2026-10-04-audit.md"]))
+    found = _review(workspace, "2026-10-08")
+    assert found["previous"]["prefix"] == "2026-10-04"
+    assert found["previousComplete"]["prefix"] == "2026-09-23"
+    assert "2026-09-23-lessons-applied.md" in found["previousComplete"]["files"]
+
+
+@pytest.mark.parametrize("names, prefix, resume, previous", [
+    (["2026-10-08-2-audit.md"], "2026-10-08-3", "2026-10-08-2", ""),
+    (["2026-10-08-%s.md" % k for k in FIVE] + ["2026-10-08-3-audit.md"],
+     "2026-10-08-4", "2026-10-08-3", "2026-10-08"),
+    (["2026-10-08-audit.md"] + ["2026-10-08-2-%s.md" % k for k in FIVE],
+     "2026-10-08-3", "", "2026-10-08-2"),
+])
+def test_runs_with_gaps_and_a_replaced_interruption(workspace, names, prefix, resume, previous):
+    _reviews(workspace, *names)
+    found = _review(workspace, "2026-10-08")
+    assert (found["prefix"], found["resume"], found["previous"].get("prefix", "")) == (
+        prefix, resume, previous)
+
+
+def test_names_that_are_not_records_are_skipped_and_listed(workspace):
+    directory = _reviews(workspace, "2026-10-08-1-audit.md", "2026-10-08-02-audit.md",
+                         "2026-10-08-status.md")
+    (directory / "checkins").mkdir()
+    found = _review(workspace, "2026-10-08")
+    assert found["skipped"] == ["2026-10-08-02-audit.md", "2026-10-08-1-audit.md",
+                                "2026-10-08-status.md", "checkins/"]
+    assert (found["prefix"], found["resume"]) == ("2026-10-08", "")
+
+
+def test_review_prints_its_answer_and_refuses_a_bad_date(workspace):
+    _reviews(workspace, *("2026-10-08-%s.md" % kind for kind in FIVE))
+    text = run(REGISTRY_CLI, "--root", str(workspace), "review", "--date", "2026-10-08")
+    assert text.returncode == 0
+    assert "prefix=2026-10-08-2" in text.stdout and "previous=2026-10-08" in text.stdout
+    for bad in ("2026-13-01", "08-10-2026"):
+        refused = run(REGISTRY_CLI, "--root", str(workspace), "review", "--date", bad)
+        assert refused.returncode == 3, bad
+    layout = workspace / "Virtuoso" / "workspace-layout.json"
+    data = json.loads(layout.read_text(encoding="utf-8"))
+    del data["roles"]["roadmapReviews"]
+    layout.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    unregistered = run(REGISTRY_CLI, "--root", str(workspace), "review", "--date", "2026-10-08")
+    assert unregistered.returncode == 3
+
+
+def test_review_and_the_registry_default_to_the_utc_date(workspace, monkeypatch):
+    import datetime as dt
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("registry_cli_utc", REGISTRY_CLI)
+    registry_cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(registry_cli)
+    monkeypatch.setattr(registry_cli.ledger_mod, "utc_today", lambda: "2001-02-03")
+    assert registry_cli._today() == dt.date(2001, 2, 3)      # never the local date
+    found = _review(workspace, "")                            # --date omitted
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", found["date"])
+
+
+def test_previous_review_orders_by_date_then_run(workspace):
+    _reviews(workspace, *(["2026-09-23-%s.md" % kind for kind in FIVE]
+                          + ["2026-10-08-%s.md" % kind for kind in FIVE]
+                          + ["2026-10-08-2-%s.md" % kind for kind in FIVE] + ["notes.md"]))
+    found = _review(workspace, "2026-10-09")
+    assert found["previous"]["prefix"] == "2026-10-08-2"
+    assert found["skipped"] == ["notes.md"]
+    assert _review(workspace, "2026-10-08")["previous"]["prefix"] == "2026-10-08-2"
+
+
+def test_review_refuses_without_a_registry(project):
+    completed = run(REGISTRY_CLI, "--root", str(project), "review", "--date", "2026-10-08")
+    assert completed.returncode == 3 and "no governance registry" in completed.stderr

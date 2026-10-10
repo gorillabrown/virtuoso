@@ -249,6 +249,9 @@ definition** and the mirror is out of date (item 57).
       relevance you cannot judge to the user instead of retiring it.
     - **tidy** — a live lesson missing a field: append a complete restatement under the
       next free identifier and supersede the incomplete entry by it.
+    - **record** — a live lesson whose prose claims it closed ("Promoted to SR-12") with
+      no status record saying so: carry the proposal with its command. A proposal with a
+      `problem` and no command goes to the user.
     - **repair** — an identifier reused for a second lesson: give the second its own
       identifier by restatement, and record the reuse.
     Also flag entries referencing changed names, paths or items (propose the reference
@@ -437,13 +440,13 @@ Run the approved groups A → G, one action at a time.
   quarantine directory.
 - **Permanent deletion** — only under an explicit policy or an explicit instruction,
   and only after every other group has verified.
-- **Lesson records** — for each approved merge, retirement or tidy, append the status
-  record (and any restatement first), one at a time, and read it back:
+- **Lesson records** — for each approved merge, retirement, tidy or **record**, append
+  the status record (and any restatement first), one at a time, and read it back:
 
       "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --record-status <ID> --status "<status>" --actor governance-sweep --item sweep --apply
 
   Never edit or delete an existing entry. Re-run `lessons --hygiene` afterwards; the
-  approved proposals must be gone from it.
+  approved proposals, approved `unrecorded` entries included, must be gone from it.
 
 ### Step 2 — Verify after each group
 

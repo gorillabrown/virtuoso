@@ -140,6 +140,12 @@ close-out adapts in exactly these ways:
 
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout holding --record <entry> --state executed --note "HB-<n>: <close-out path>, <result>, <YYYY-MM-DD>, estimate <e>, actual <a>" --apply
 
+Take `<e>` and `<a>` from `timing --summary --json --sprint <SPRINT-ID> --item HB-<n>`
+(its `estimate` and `actual`). A log whose rows name no item is one item's run, and
+`--item` then takes every row. With no time log, or when the summary says
+`"complete": false`, leave them out of the note. Never type
+a runtime in their place.
+
 Step 6 verifies the close-out, the lessons gate, and that `holding --check <entry>` reads
 `executed`. It does not verify a terminal record or a register status, because there are
 none yet. The buffer check is skipped, since ad hoc work never drew on the buffer. If an
@@ -168,11 +174,11 @@ once, as one crossing, and the crossing retires each item:
 | Step | For a combined epic |
 |---|---|
 | Wave 1 | One brief and one findings table for the run. The register and roadmap changes name every item. |
-| Step 1 — evidence | Every charter DoD row, fresh: each item's own *Done when* rows, and the row that proves they pass together. An item is complete only when all of its rows pass. |
+| Step 1 — evidence | Every charter DoD row, fresh: each item's own *Done when* rows, and the row that proves they pass together. An item is complete only when all of its rows pass. The packet's done.md is on the default branch (Step 1). |
 | Step 2 — artifact | One report, keyed by the packet: `closeout --item "<PACKET-ID>"`. |
-| Step 3 — terminal record | One record per item, in the charter's serial order, each naming the one report as its evidence. |
+| Step 3 — terminal record | One record per item, in the charter's serial order, each naming the one report as its evidence (`--ledger-only` for an external register). |
 | Step 4 — persist | Lessons and the report once. A lesson's heading names the item that taught it, or the packet when the run as a whole taught it. |
-| Step 5 — register | Each item closed, in serial order: `record-completion --item <ITEM-ID>` for a local register, the mutation handshake for an external one. |
+| Step 5 — register | Each item closed, in serial order: `record-completion --item <ITEM-ID>` for a local register, the mutation handshake for an external one — one plan per connector call, each read back before its confirm. |
 | Step 6 — verify | Every item terminal in the register, one record each in the ledger, and the lessons gate run for the whole run: `lessons --check "<report>" --closeout --item "<PACKET-ID>,<ITEM-ID>,<ITEM-ID>"`. |
 
 A run that stopped before `done.md` is not a completion. When the user closes it anyway,
@@ -220,6 +226,10 @@ Every case stays idempotent: a record already in the ledger for the item is a no
    add to the ignore file, or name for the user's decision; each **uncommitted**
    change proposed to commit or revert. Nothing is left unreconciled by default: a
    close-out that leaves litter makes the next merge a forensic exercise.
+   A record under `Virtuoso/.recovery/` is always proposed to commit, never to remove
+   or ignore, and is never a fault by itself: it is the trail that keeps an external
+   write from repeating, and a confirmed write marks its record resolved and keeps
+   it. Only `virtuoso_registry recovery` says whether anything is outstanding.
 8. State the **crossing plan**: the exact ordered steps Wave 2 will perform, the
    roles each touches, and what happens on a partial failure.
 9. Ask the user to confirm dispositions, lessons, file dispositions, and the crossing plan.
@@ -314,7 +324,21 @@ Before writing anything, confirm the work is actually done:
 - the repository state matches what was claimed (read-only inspection:
   `GIT_OPTIONAL_LOCKS=0 git --no-optional-locks status -sb`, `log --oneline -5`,
   `show <commit> --stat`);
-- any mid-dispatch amendments are accounted for.
+- any mid-dispatch amendments are accounted for;
+- for an epic packet, its done.md is on the default branch:
+
+      "$HOME/.virtuoso/bin/virtuoso" sprint_guards artifacts-exist --ref <default branch> <packet directory>/done.md
+
+  exits 0. Exit 1 means the record sits only on the run branch: the crossing waits for a
+  merge into the default branch — the run branch's, or, where its code is already
+  merged, its docs-only completion commit's, with `--no-ff` — made as far as `policy.git`
+  permits, or handed with the exact command to whoever it names. For the docs-only merge,
+  check that it touches only the packet directory (`git diff --name-only <merge>^1
+  <merge>` lists nothing outside it), then run the guard again;
+- a connector-backed register's snapshot is fresh, before the Wave-1 revision read:
+  read every page and the column list with the host's connector and import them with
+  `virtuoso_registry --root . snapshot --import <page> --columns <columns>`. Report each
+  `[DRIFT]` line as a finding.
 
 Evidence that does not hold **stops the crossing**. Report exactly which
 criterion failed, with its output. A close-out is a claim about reality; do not
@@ -470,6 +494,11 @@ Write the close-out report into the registered `closeOuts` directory.
 **Idempotent:** if the artifact already exists for this item and date, do not
 duplicate it. Update it in place, or stop and ask — never write a second one.
 
+Fill the report's `runtime:` line and its `## Time` section from the time log. Run
+`timing --summary --sprint <SPRINT-ID>` (add `--item <ITEM-ID>` for a combined epic), which prints the row table (predicted, actual,
+wait, kind, added, flag) and the two totals, and paste it as printed. With no time log,
+write `runtime: not measured (no time log)` and leave the section out.
+
 Also process a governance staging file if the project uses one (a worktree-
 resident dispatch stages its governance changes rather than editing main
 documents directly). Parse the fold-in instructions, apply them to the registered
@@ -500,14 +529,36 @@ Append **one** record to the registered `terminalLedger`:
 appends the record, closes the item at the revision you read in Wave 1, and verifies
 both; Step 4 then persists the ledger and the register with everything else:
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout record-completion --item "<ITEM-ID>" --date "<YYYY-MM-DD>" --result "<result>" --evidence "<close-out file>" --estimate "<the spec's effort, as a duration>" --actual "<the report's runtime>" --revision "<revision>" --apply
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout record-completion --item "<ITEM-ID>" --date "<YYYY-MM-DD>" --result "<result>" --evidence "<close-out file>" --estimate "<estimate>" --actual "<actual>" --revision "<revision>" --apply
 
-`--estimate` and `--actual` are what effort calibration learns from: pass them whenever
-the specification stated its effort as a duration and the report records its runtime.
+`--estimate` and `--actual` are what effort calibration learns from. Take both from the
+dispatch's time log: `virtuoso_registry timing --summary --json --sprint <SPRINT-ID>`
+(add `--item <ITEM-ID>` for a combined epic). `estimate` is the first listing's
+predicted total, and `actual` is the measured working total, both over the rows that ran
+one after another. When the dispatch kept no time log, or the summary says
+`"complete": false` (a row ran without a measured time), pass neither. Settle the
+summary's `flagged` rows with the owner before this step: the Actual includes their time
+either way, and a confirmation returns them to pricing history, not to the ledger. A typed runtime is
+never an actual.
+
+The record's Effort (the item's size word, which pace reads trailing points from) is the
+register's: `record-completion` records it itself, and reports `effortRecorded: false`
+when the ledger has no Effort column. Then add the *Effort* header and separator cell to
+the ledger's table, never touching a record row, and append a correction of the new
+record carrying its Effort.
+
+**For an external register**, append the record alone here; the item is closed in Step 5:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout record-completion --ledger-only --item "<ITEM-ID>" --date "<YYYY-MM-DD>" --result "<result>" --evidence "<close-out file>" --estimate "<estimate>" --actual "<actual>" --apply
+
+It records Effort from the register snapshot, so refresh the snapshot first if the item's
+size changed in the register since Wave 1. Re-running it is a no-op that still verifies.
 
 Run it once without `--apply` to preview. If the register refuses after the ledger
-append, the command leaves a recovery record naming what remains — follow *On partial
-failure*. An external register goes through the handshake in Step 5 instead.
+append, or the ledger record does not read back, the command leaves a recovery record
+naming what remains — follow *On partial failure*. An external register closes the item through the handshake in Step 5: one plan
+per connector call, the item read back before each confirm, and `mutation-abandon` for a
+plan that will not be executed.
 
 ### Step 4 — Persist local governance changes
 
@@ -546,12 +597,19 @@ Through the provider, not by editing a file:
   than clobbered;
 - set the terminal status using the project's own vocabulary
   (`policy.workRegister.statusMappings`);
-- record the completion date and the evidence link (the close-out artifact).
+- record the completion date and the evidence link (the close-out artifact) — the
+  link only where the register has a column for it (`policy.workRegister.fieldMappings`
+  names `evidence`); otherwise the ledger row and the close-out carry it.
 
 **External registers are mutated by this ceremony, not by the plugin.** The
 provider returns a structured instruction — operation, item, fields, expected
-revision, idempotency key. Execute it with the host's connector, then confirm the
-result. Re-running with the same idempotency key must not repeat the change.
+revision, idempotency key. Execute it with the host's connector — one plan per
+connector call — read the item back, then confirm what the read-back shows:
+`mutation-confirm --recovery-id <ID>` with `--succeeded`, `--failed`, or `--partial
+--written <fields>` when only some landed. A plan that will not be executed is closed
+with `mutation-abandon --recovery-id <ID> --reason <why>`. A field the register has no
+column for (`policy.workRegister.fieldMappings`) is refused at planning; leave it out.
+Re-running with the same idempotency key must not repeat the change.
 
 **Two mandatory register outcomes** — the belt moves forward by exactly one:
 
@@ -567,6 +625,13 @@ Re-read each thing you wrote, from its source:
 - the close-out artifact exists at the resolved path and carries the expected content;
 - the terminal ledger carries exactly one new record for this item, and prior
   records are byte-identical to before;
+- the record's Estimate and Actual equal `estimate` and `actual` from
+  `timing --summary --json --sprint <SPRINT-ID>`. This matters most on an external
+  register. The summary's `flagged` rows ran
+  over 3× their prediction and may hide a wait nobody saw, such as a host approval
+  prompt. Ask the owner about each one: `timing --confirm N --sprint <SPRINT-ID> --actor pointer-closeout` returns it to the history
+  as real work. Otherwise it stays out, and the report names it;
+- the record's Effort equals the register item's effort;
 - the roadmap and lessons changes are present, and committed if policy required it;
 - the report's Lessons section passes the lessons gate — every lesson it names is
   now in the registered role, or it says "No new lesson" with a reason:
@@ -597,6 +662,18 @@ must know the crossing is incomplete before it happens again.
 ---
 
 ## After the crossing
+
+### Regenerate the roadmap board
+
+The crossing changed the register and the ledger, so a registered board follows them:
+
+    "$HOME/.virtuoso/bin/virtuoso" generate_board --root .
+
+`record-completion` already did this for a local register (its output ends with
+`board regenerated: <path>`); run it here after an external register's crossing, or
+when that line is missing. A project with no `board` role skips this — creating the
+board is `/roadmap-review` D.7's job, not this one. A failure here is reported in the
+summary and never undoes the crossing.
 
 ### Buffer check
 

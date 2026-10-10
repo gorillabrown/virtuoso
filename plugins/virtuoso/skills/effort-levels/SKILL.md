@@ -225,6 +225,13 @@ recur, both in the same direction:
   it replaces the figure above for this project — size by it (1.3 means scale an
   estimate up by 30%) and say that you did. When it is *not computable*, say so and
   use the figure above.
+- **Rows are priced from the time logs, not from this table.** When the virtuoso skill
+  first lists a dispatch's tasks, `timing --open` prices each row from the measured rows
+  of past dispatches. It uses the row's kind, else its tier and effort, else the row's
+  own estimate, labelled `estimated`. The ledger's Estimate and Actual come from that
+  log (`timing --summary`), so `effort-calibration` stays the item-level figure, and
+  `row-error` and `total-error` in `kpis` say how far off the rows were. Effort levels
+  and T-shirt sizes keep their meaning: a prediction is minutes, never a level.
 - **Workload volume overrides nominal task type.** Authoring pin-tests across many source
   patterns, or annotating hundreds of items, sizes by *volume* even when the per-item work
   is mechanical. Above roughly ten items with multi-pattern reading, default up a tier;

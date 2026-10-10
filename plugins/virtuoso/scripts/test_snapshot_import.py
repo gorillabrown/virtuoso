@@ -178,6 +178,24 @@ def test_import_writes_the_registered_snapshot_and_next_reads_the_real_head(boar
     assert head["provenance"]["stale"] is False
 
 
+def test_next_reports_in_flight_and_missing_prerequisites_apart(board):
+    rows = [dict(row, Status="In Progress") if row["Code"] == "PAY-RETRY" else row
+            for row in ROWS]
+    rows.append({"Code": "PAY-AUDIT", "Name": "Audit trail", "Seq": 14, "Status": "Ready",
+                 "Spec Status": "Specified", "Depends On": ["PAY-GONE"], "Parent": ""})
+    (board / "rows.json").write_text(json.dumps({"takenAt": _now(), "rows": rows}),
+                                     encoding="utf-8")
+    imported = run("--root", str(board), "snapshot", "--import", "rows.json")
+    assert imported.returncode == 0, imported.stderr
+    head = json.loads(run("--root", str(board), "next", "--json").stdout)
+    assert head["item"]["id"] == "PAY-REFUND"
+    assert [i["id"] for i in head["inFlight"]] == ["PAY-RETRY"]
+    assert head["missingPrerequisites"] == {"PAY-AUDIT": ["PAY-GONE"]}
+    listing = run("--root", str(board), "next").stdout
+    assert "in flight:     PAY-RETRY" in listing
+    assert "PAY-GONE (named by PAY-AUDIT)" in listing
+
+
 def test_import_reports_as_json(board):
     payload = json.loads(run("--root", str(board), "snapshot", "--import", "rows.json",
                              "--json").stdout)
@@ -230,3 +248,159 @@ def test_a_malformed_rows_file_is_unanswerable(board):
     refused = run("--root", str(board), "snapshot", "--import", "rows.json")
     assert refused.returncode == 3 and "list of row objects" in refused.stderr
     assert not (board / "Virtuoso" / "board.snapshot.json").exists()
+
+
+# --- a connector's raw page, keyed by column id (VIR-003) ------------------------------
+#
+# The fixtures are the connector's own responses for a real board, trimmed only by
+# reading fewer whole items (and, in the column list, by dropping the owner's personal
+# details, which nothing reads). Expected values are literals from that capture.
+
+FIXTURES = Path(PLUGIN_ROOT) / "scripts" / "fixtures"
+PAGE = str(FIXTURES / "monday_board_page.json")
+COLUMNS = str(FIXTURES / "monday_board_columns.json")
+MONDAY = "monday:board/18432510412"
+MONDAY_POLICY = {"workRegister": {
+    "snapshot": "workRegisterSnapshot",
+    "fieldMappings": {"id": "Item ID", "title": "Name", "status": "Status",
+                      "written_status": "Spec", "sequence": "Sequence", "effort": "Effort",
+                      "prerequisites": "Depends On", "spec_link": "Spec Link",
+                      "completed": "Completed", "group": "Group"},
+    "statusMappings": {"queued": ["Queued"], "in-flight": ["Working on it"],
+                       "blocked": ["Stuck"], "completed": ["Done"],
+                       "dissolved": ["Dissolved"], "superseded": ["Superseded"],
+                       "written": {"stub": ["Stub"], "full-spec": ["Full Spec"]}},
+}}
+
+
+def monday_project(project, external=MONDAY, field_mappings=None):
+    policy = json.loads(json.dumps(MONDAY_POLICY))
+    policy["workRegister"]["fieldMappings"].update(field_mappings or {})
+    (project / "Virtuoso").mkdir(exist_ok=True)
+    manifest = {"schemaVersion": 2, "policy": policy, "roles": {
+        "workRegister": {"external": external, "provider": "connector", "authority": "live",
+                         "mutability": "read-write", "allowedWriters": ["roadmap-review"],
+                         "validation": "external", "classification": "active",
+                         "origin": "authored"},
+        "workRegisterSnapshot": {"path": "Virtuoso/board.snapshot.json",
+                                 "provider": "snapshot", "authority": "report",
+                                 "mutability": "generated", "validation": "exists",
+                                 "classification": "active", "origin": "generated"},
+    }}
+    (project / "Virtuoso" / "workspace-layout.json").write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8")
+    return project
+
+
+def written_items(project):
+    snap = json.loads((project / "Virtuoso" / "board.snapshot.json").read_text(encoding="utf-8"))
+    return {i["id"]: i for i in snap["items"]}
+
+
+def test_a_raw_monday_page_imports_without_hand_built_rows(project):
+    monday_project(project)
+    imported = run("--root", str(project), "snapshot", "--import", PAGE, "--columns", COLUMNS,
+                   "--json")
+    assert imported.returncode == 0, imported.stderr
+    item = written_items(project)["ROADMAP-BOARD"]
+    assert (item["sequence"], item["status"], item["written_status"], item["effort"],
+            item["group"]) == (19, "queued", "stub", "L", "Up next")
+    assert item["extra"] == {
+        "providerId": "13122472255", "revision": "2026-10-09T04:15:32Z",
+        "url": "https://estrattbrown.monday.com/boards/18432510412/pulses/13122472255"}
+
+
+def test_drift_names_a_mapped_column_the_board_lacks(project):
+    monday_project(project, field_mappings={"started": "Started"})
+    payload = json.loads(run("--root", str(project), "snapshot", "--import", PAGE,
+                             "--columns", COLUMNS, "--json").stdout)
+    assert payload["missingColumns"] == [{"field": "started", "column": "Started"}]
+    text = run("--root", str(project), "snapshot", "--import", PAGE, "--columns", COLUMNS)
+    assert text.returncode == 0 and "[DRIFT]" in text.stdout
+
+
+def test_drift_names_a_board_column_nothing_maps(project):
+    monday_project(project)
+    payload = json.loads(run("--root", str(project), "snapshot", "--import", PAGE,
+                             "--columns", COLUMNS, "--json").stdout)
+    assert {"id": "person", "title": "Person"} in payload["unmappedColumns"]
+    assert not any("Person" in item["extra"] for item in written_items(project).values())
+
+
+def _page():
+    return json.loads(Path(PAGE).read_text(encoding="utf-8"))
+
+
+def test_a_page_with_more_to_read_is_refused(project):
+    monday_project(project)
+    partial = _page()
+    partial["pagination"]["has_more"] = True
+    (project / "page.json").write_text(json.dumps(partial), encoding="utf-8")
+    before = snapshot_tree(str(project))
+    refused = run("--root", str(project), "snapshot", "--import", "page.json",
+                  "--columns", COLUMNS)
+    assert refused.returncode == 3 and "has_more" in refused.stderr
+    assert snapshot_tree(str(project)) == before
+
+
+def test_pages_are_read_together(project):
+    monday_project(project)
+    whole, first = _page(), _page()
+    first["items"], first["pagination"]["has_more"] = whole["items"][:2], True
+    last = dict(whole, items=whole["items"][2:])
+    (project / "pages.json").write_text(json.dumps([first, last]), encoding="utf-8")
+    assert run("--root", str(project), "snapshot", "--import", PAGE,
+               "--columns", COLUMNS).returncode == 0
+    single = set(written_items(project))
+    assert run("--root", str(project), "snapshot", "--import", "pages.json",
+               "--columns", COLUMNS).returncode == 0
+    assert set(written_items(project)) == single and len(single) == 4
+
+
+def test_a_page_from_another_board_is_refused(project):
+    monday_project(project, external="monday:board/1234567890")
+    refused = run("--root", str(project), "snapshot", "--import", PAGE, "--columns", COLUMNS)
+    assert refused.returncode == 3
+    assert "18432510412" in refused.stderr and "1234567890" in refused.stderr
+    assert not (project / "Virtuoso" / "board.snapshot.json").exists()
+
+
+def test_a_raw_page_without_columns_is_refused(project):
+    monday_project(project)
+    refused = run("--root", str(project), "snapshot", "--import", PAGE)
+    assert refused.returncode == 3 and "--columns" in refused.stderr
+
+
+@pytest.mark.parametrize("columns, mappings", [
+    ([{"id": "a", "title": "Effort"}, {"id": "b", "title": "Effort"}], {}),
+    ([{"id": "a", "title": "url"}], {"effort": "url"}),
+])
+def test_an_ambiguous_board_column_is_refused(columns, mappings):
+    ambiguous = mapping_mod.Mapping.from_policy({"fieldMappings": mappings})
+    with pytest.raises(ValueError, match="ambiguous"):
+        snapshot_provider.page_to_rows([_page()], columns, ambiguous, mappings)
+
+
+def test_a_page_naming_no_board_is_refused_where_a_board_is_registered(project):
+    monday_project(project)
+    anonymous = _page()
+    del anonymous["board"]
+    (project / "page.json").write_text(json.dumps(anonymous), encoding="utf-8")
+    refused = run("--root", str(project), "snapshot", "--import", "page.json",
+                  "--columns", COLUMNS)
+    assert refused.returncode == 3 and "(none named)" in refused.stderr
+
+
+def test_a_file_mixing_pages_and_rows_is_refused():
+    with pytest.raises(ValueError, match="mixes"):
+        snapshot_provider.parse_rows(json.dumps([_page(), {"Code": "A"}]))
+
+
+@pytest.mark.parametrize("cell", ["None", "none", "-", "—", "n/a"])
+def test_placeholder_prerequisites_mean_none(cell):
+    rows = [{"Code": "PAY-1", "Status": "Ready", "Depends On": cell},
+            {"Code": "PAY-2", "Status": "Ready", "Depends On": "VIR-001, -"}]
+    snap, _ = snapshot_provider.from_rows(rows, mapping(), source=BOARD,
+                                          taken_at="2026-10-09T00:00:00Z")
+    by_id = {i.id: i for i in snap.items}
+    assert by_id["PAY-1"].prerequisites == [] and by_id["PAY-2"].prerequisites == ["VIR-001"]

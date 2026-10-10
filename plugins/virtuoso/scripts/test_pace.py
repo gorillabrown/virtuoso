@@ -340,7 +340,7 @@ def run(script, *args):
 
 
 def days_ago(n):
-    return (_dt.date.today() - _dt.timedelta(days=n)).isoformat()
+    return (_dt.datetime.now(_dt.timezone.utc).date() - _dt.timedelta(days=n)).isoformat()
 
 
 def role_path(root, role):
@@ -745,3 +745,121 @@ def test_gog_shaped_workspace_paces_through_the_mapping(paced):
     assert report["trailing"]["byResult"] == {"Completed": 2}
     assert report["trailing"]["excluded"] == {"Superseded": 1}
     assert report["verdict"] == "ahead"
+
+
+# --- the ledger records effort points (VIR-013) ---------------------------------
+
+import dataclasses  # noqa: E402
+
+
+def sized(records, effort, numbers=range(2, 14)):
+    return [dataclasses.replace(r, effort=effort) if int(r.record_id[3:]) in numbers else r
+            for r in records]
+
+
+def test_trailing_points_read_effort_from_the_ledger():
+    report = compute(records=sized(gog_ledger(), "l"))
+    assert report.trailing["points"] == 12 * 8 / 4
+    assert report.unit_verdicts["points"] == "ahead"
+
+
+def test_the_ledger_effort_wins_over_the_register():
+    done = [item("DONE-%03d" % n, "xs", base.COMPLETED) for n in range(2, 14)]
+    report = compute(items=gog_items() + done, records=sized(gog_ledger(), "l"))
+    assert report.trailing["points"] == 24.0
+
+
+def test_a_completion_sized_by_neither_source_names_the_effort_column():
+    report = compute()
+    assert report.trailing["points"] is None
+    assert "Effort column" in report.missing["trailing.points"][0]
+
+
+def test_an_empty_window_over_an_unsized_register_is_still_not_computable():
+    unsized = snapshot(gog_items(), fields=("status", "completed"))
+    report = compute(records=[record(1, "2026-01-05")], snap=unsized)
+    assert report.trailing["completions"] == 0 and report.trailing["points"] is None
+
+
+@pytest.mark.parametrize("mappings", [{"effort": "Estimate"},
+                                      {"effortActual": "Took", "effort": "took"}])
+def test_effort_never_maps_onto_a_duration_column(mappings):
+    [problem] = policy_mod.ledger_mapping_problems(mappings)
+    assert "duration column" in problem
+
+
+def test_a_correction_can_size_a_completion():
+    records = [record(2, "2026-08-28"),
+               LedgerRecord(record_id="TR-015", item_id="", completed="", result="",
+                            corrects="TR-002", effort="m")]
+    [completion] = pace.from_ledger(records, STATUSES)
+    assert completion.effort == "m" and completion.date == _dt.date(2026, 8, 28)
+
+
+#: The header and separator a ledger gains for Effort (the close-out applies them to this
+#: project's own ledger; the test applies them to its copy, never to the source).
+EFFORT_HEADER = ("| Record | Item | Completed | Result | Evidence | Corrects | Estimate | Actual |",
+                 "| Record | Item | Completed | Result | Evidence | Corrects | Estimate | Actual | Effort |")
+EFFORT_SEPARATOR = ("|--------|------|-----------|--------|----------|----------|----------|--------|",
+                    "|--------|------|-----------|--------|----------|----------|----------|--------|--------|")
+
+
+def test_this_projects_ledger_paces_points_once_sized(tmp_path):
+    """The repository's own ledger and the board's own sizes, never a fixture written to
+    match the reader. Skipped where the repository registers no ledger."""
+    repo = Path(PLUGIN_ROOT).parents[1]
+    try:
+        roles = json.loads((repo / "Virtuoso" / "workspace-layout.json")
+                           .read_text(encoding="utf-8"))["roles"]
+        source_path = repo / roles["terminalLedger"]["path"]
+        source_text = source_path.read_text(encoding="utf-8")
+    except (OSError, KeyError, ValueError):
+        pytest.skip("this repository registers no terminal ledger")
+    copy = tmp_path / "ledger.md"
+    copy.write_text(source_text.replace(*EFFORT_HEADER).replace(*EFFORT_SEPARATOR)
+                    if EFFORT_HEADER[1] not in source_text else source_text,
+                    encoding="utf-8", newline="\n")
+    book = ledger_mod.TerminalLedger(str(copy), correction_writers=["roadmap-review"])
+    first = book.records()[:8]
+    assert [r.record_id for r in first] == ["TR-%03d" % n for n in range(1, 9)]
+    assert all(r.effort == "" for r in first)
+    sizes = {"VIR-008": "m", "VIR-001": "s", "VIR-017": "m", "VIR-018": "l",
+             "VIR-019": "m", "VIR-016": "s", "VIR-007": "s", "VIR-020": "m"}
+    for r in first:
+        book.append(LedgerRecord(record_id=book.next_record_id(), item_id="", completed="",
+                                 result="", corrects=r.record_id, effort=sizes[r.item_id]),
+                    actor="roadmap-review", correction=True)
+    report = pace.compute(GAME_BUILD, snapshot([item("VIR-013", "s")],
+                                               taken_at="2026-10-08T12:00:00Z"),
+                          source(book.records()))
+    assert report.trailing["completions"] == 8
+    assert report.trailing["points"] == 23 / 4
+    rows = [line for line in source_text.splitlines() if line.startswith("| TR-")]
+    copied = [line for line in copy.read_text(encoding="utf-8").splitlines()
+              if line.startswith("| TR-")]
+    assert copied[:len(rows)] == rows                    # no record row rewritten
+
+
+def test_a_markdown_ledger_with_an_effort_column_round_trips(tmp_path):
+    path = tmp_path / "ledger.md"
+    path.write_text("# Ledger\n\n" + EFFORT_HEADER[1] + "\n" + EFFORT_SEPARATOR[1] + "\n",
+                    encoding="utf-8")
+    book = ledger_mod.TerminalLedger(str(path), writers=["pointer-closeout"])
+    book.append(LedgerRecord(record_id="TR-001", item_id="W-1", completed="2026-10-01",
+                             result="completed", effort_estimate="2h", effort_actual="150m",
+                             effort="M"), actor="pointer-closeout")
+    assert path.read_text(encoding="utf-8").splitlines()[-1].endswith("| 2h | 150m | M |")
+    assert book.records()[0].effort == "M"
+
+
+def test_a_csv_ledger_maps_the_effort_column(tmp_path):
+    assert policy_mod.ledger_mapping_problems({"effort": "Size"}) == []
+    path = tmp_path / "ledger.csv"
+    path.write_text("recordId,itemId,completed,result,evidence,corrects,Size\n",
+                    encoding="utf-8")
+    book = ledger_mod.TerminalLedger(str(path), fmt="csv", writers=["pointer-closeout"],
+                                     field_mappings={"effort": "Size"})
+    book.append(LedgerRecord(record_id="TR-1", item_id="W-1", completed="2026-10-01",
+                             result="completed", effort="s"), actor="pointer-closeout")
+    assert path.read_text(encoding="utf-8").splitlines()[-1].split(",")[-1] == "s"
+    assert book.records()[0].effort == "s"

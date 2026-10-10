@@ -152,8 +152,17 @@ if [ "$#" -lt 1 ]; then
   exit 2
 fi
 
-PY=python3
-command -v python3 >/dev/null 2>&1 || PY=python
+PY=
+for candidate in python3 python; do
+  if "$candidate" -c 'import sys' >/dev/null 2>&1; then
+    PY=$candidate
+    break
+  fi
+done
+if [ -z "$PY" ]; then
+  echo "virtuoso: no Python that runs: tried python3, python." >&2
+  exit 1
+fi
 
 VIRTUOSO_ROOT=$("$PY" - <<'PY'
 import json, os, sys
@@ -244,6 +253,22 @@ if (-not (Test-VirtuosoRoot $root)) {
 }
 
 $py = if (Get-Command python3 -ErrorAction SilentlyContinue) { 'python3' } else { 'python' }
+# Windows PowerShell 5.x quotes a native program's arguments wrongly: an embedded double
+# quote goes through unescaped, so --fields-json '{"status":"In Flight"}' reached Python
+# split in two. Under 5.x, build the command line here, quoting each argument the way
+# Windows parses it back: escape each quote, doubling the backslashes before it, and
+# double trailing backslashes inside the closing quote. PowerShell 7+ does this itself.
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+  $line = (@((Join-Path $root "scripts/$Script.py")) + @($Rest) | ForEach-Object {
+    if ($_ -ne '' -and $_ -notmatch '[\\s"]') { $_ }
+    else { '"' + (($_ -replace '(\\\\*)"', '$1$1\\"') -replace '(\\\\+)$', '$1$1') + '"' }
+  }) -join ' '
+  $start = New-Object System.Diagnostics.ProcessStartInfo $py, $line
+  $start.UseShellExecute = $false
+  $process = [System.Diagnostics.Process]::Start($start)
+  $process.WaitForExit()
+  exit $process.ExitCode
+}
 & $py (Join-Path $root "scripts/$Script.py") @Rest
 exit $LASTEXITCODE
 """

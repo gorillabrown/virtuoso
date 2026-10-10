@@ -1,11 +1,12 @@
 ---
 name: delayed-start
 description: >
-  Wait until a specified target time before executing the task that follows. Use when the
-  user says "start at 3pm", "in N minutes/hours", "at midnight/noon", "kick off at 9:30",
-  or otherwise wants execution deferred to a clock time or relative delay.
-  Parses absolute times, named times, and relative delays; sleeps until the target; then
-  runs whatever task comes after. Governs only the wait — normal execution resumes after.
+  Defer one task to a clock time or a delay without pausing the session. Use when the user
+  says "start at 3pm", "in N minutes/hours", "at midnight/noon", "kick off at 9:30", or
+  otherwise wants a task to wait for a clock time or relative delay. Parses absolute times,
+  named times, and relative delays; starts a wait that blocks only that task while other
+  work carries on; runs the task when the time comes. Pauses everything only when the user
+  asks for that.
 ---
 
 <!-- virtuoso-shared-contract v2 -->
@@ -44,44 +45,64 @@ Before executing the task below, wait until the specified target time.
 
 2. Calculate the wait in seconds between now and the target time. For absolute times, assume the **next occurrence** — if it's 11:50 PM and I say "start at 12:00 AM", that's 10 minutes from now, not 22 hours. If the target has already passed today, schedule for tomorrow.
 
-3. Print a confirmation block:
+3. Print a confirmation block, its *How it waits* line filled from the choice in step 4:
    ```
-   ⏳ Scheduled start: <target time>
-      Current time:    <now>
-      Waiting:         <X minutes and Y seconds>
-      Task:            <brief summary of the task that follows>
+   ⏳ Deferred:      <brief summary of the task>
+      Starts at:     <target, local time with the zone, e.g. 21:00 (-05:00)>
+      Current time:  <now, same zone>
+      Waiting:       <X minutes and Y seconds>
+      How it waits:  <host scheduler | scheduled wake-up | background timer | foreground, after the work in hand | blocking, as asked>
+      Meanwhile:     <other work carries on | everything holds, as you asked>
    ```
 
-4. Run this to sleep until the target time (replace HH, MM with parsed values):
-   ```bash
-   python3 -c "
-   import time
-   from datetime import datetime, timedelta
-   now = datetime.now()
-   target = now.replace(hour=HH, minute=MM, second=0, microsecond=0)
-   if target <= now:
-       target += timedelta(days=1)
-       print('Target time passed today — scheduling for tomorrow.')
-   wait = (target - now).total_seconds()
-   print(f'Sleeping {int(wait)}s until {target.strftime(\"%I:%M %p\")}...')
-   time.sleep(wait)
-   print('Timer resolved. Starting now.')
-   "
-   ```
-   For relative delays, just `sleep <seconds>` directly.
+4. Start a wait that blocks only the deferred task. Use the first of these the host offers:
+   - **The wait may outlive the session** — the host can reclaim this session while it
+     sits idle, or the wait is longer than the host lets a wake-up or background command
+     run: hand the task to the host's scheduler as a one-time run at the target time,
+     carrying the full task text and what it needs to resume. The task then runs there;
+     the confirmation says so. If the host has no scheduler, say the task will not run if
+     the session is reclaimed, and ask whether to keep the session alive or schedule it
+     another way.
+   - **A scheduled wake-up:** the host can resume this conversation at a set time — set
+     it for the target.
+   - **A background timer:** the host can run a command in the background and report
+     when it ends — run the wait there (`sleep <seconds>` or the shell's equivalent).
+   - **None of these:** say so in the confirmation, finish the other work in hand first,
+     then wait in the foreground in steps the host allows, re-reading the clock after
+     each.
 
-5. After the sleep completes, execute the task that follows. This skill only governs the wait — everything after the timer is normal execution under whatever other instructions apply.
+5. **While the task waits.** Carry on with any other work in hand; other work carries on
+   exactly as without the wait, and a background agent's report that arrives during the
+   wait is read and integrated as it comes. If a task plan is open, mark the deferred task
+   ✗ with the reason `deferred until <time> <zone>`, and each task that depends on it ✗
+   with `waits on #N`; the host's task tracker, if it keeps one, carries the same. This is
+   a wait the user asked for, not a stop: it raises no issue document. Nothing that does
+   not depend on the deferred task waits with it.
+
+6. **When the wait ends**, mark the waiting tasks □ again and run the deferred task. If
+   another step is part-way, finish that step, then start. If the wake-up arrives late,
+   start at once and say how late. A task handed to the host's scheduler runs there: mark
+   it ✓ as handed off, and keep each task that depends on it ✗ with `waits on #N` until
+   its result is reported, then mark them □. This skill governs only the wait — everything
+   after is normal execution under whatever other instructions apply.
+
+7. **Pause everything only when asked.** When the user asks for all work to wait —
+   "hold everything until 9", "pause until noon", "start nothing before 6" — wait in the
+   foreground in steps the host allows, re-reading the clock after each, and start
+   nothing else until the target. The confirmation reads `blocking, as asked` and
+   `everything holds, as you asked`.
 
 ## Rules
 - Don't ask for confirmation unless the wait exceeds 8 hours. For very long waits, double-check since I may have specified the wrong day.
-- Use the system's local timezone. Don't convert or assume UTC unless I explicitly say so.
-- The sleep is blocking — hold the terminal until the timer resolves.
+- Use the system's local timezone, and show it with every time. Don't convert or assume UTC unless I explicitly say so.
+- The wait blocks only the deferred task and the tasks that depend on it. Never hold the whole session unless I ask for everything to pause.
 - Aim for second-level accuracy. Sub-second precision isn't needed.
 
 ## Examples
-- "Start next dispatch at 12:00 AM" → sleep until midnight, then begin.
-- "Run this in 30 minutes" → sleep 1800 seconds, then begin.
-- "Kick off the build at 6:15 AM tomorrow" → sleep until 06:15 next calendar day.
-- "Start at 2 PM — here's the dispatch: [task]" → sleep until 14:00, then execute.
+- "Start next dispatch at 12:00 AM" → defer the dispatch to midnight; other work in hand carries on.
+- "Run this in 30 minutes" → a 1800-second wait for this task only.
+- "Kick off the build at 6:15 AM tomorrow" → a wait that outlives most sessions: the host's scheduler, where it has one.
+- "Check the board in an hour", while background agents are still reporting → defer the check, and keep reading and integrating their reports during the hour.
+- "Hold everything until 9" → the one case for a blocking wait.
 
 $ARGUMENTS

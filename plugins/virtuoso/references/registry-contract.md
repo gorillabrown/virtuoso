@@ -121,7 +121,55 @@ Two optional fields record effort: `effortEstimate` and `effortActual`, as durat
 camelCase names) in a CSV or JSONL ledger, and in a markdown ledger only when its own table
 header carries *Estimate* and *Actual* columns after the six documented ones. A ledger
 without them reads and appends exactly as before; `kpis` computes `effort-calibration` from
-them.
+them. Close-out takes both from the dispatch's time log (`timing --summary --json`), never
+from a typed runtime.
+
+One optional field records size: `effort`, the item's size word on the effort scale
+(`xs` … `xl`) exactly as the register held it at close-out — not a duration, and kept apart from
+*Estimate* and *Actual*. Its header is *Effort* (or `effort`), or the column
+`fieldMappings.effort` names, in every format; a markdown ledger reads it only when its own
+table header carries the column. `record-completion` writes it from the register item.
+Pace converts it through `policy.roadmap.effortScale`. A ledger without the column reads
+`effort` blank and appends exactly as before.
+
+### The time log
+
+A dispatch's rows and their measured working time: `Timing.<sprint-id>.jsonl` in the
+`closeOuts` role, one JSON object per line, append-only, written only through
+`virtuoso_registry timing` by an actor that may write `closeOuts`. Every event has `event`
+and `at` (UTC, `YYYY-MM-DDTHH:MM:SSZ`, from the machine clock; no flag accepts a time or a
+duration):
+
+| event | carries | written by |
+|---|---|---|
+| `open` | `rows`: each `id`, `title`, `owner`, `tier`, `effort`, `item`, `parallel`, optional `kind` and `estimate`, the optional fields below, and the `predicted` minutes and `basis` timing priced | `--open --rows-file` |
+| `add` | one or more such rows, numbered after the last, shown as `+N` | `--add --rows-file` |
+| `start`, `resume` | `row`; optional `model` and `host` | `--start N`, `--resume N` (`--model`, `--host`) |
+| `wait` | `row` and `reason`: `owner`, `approval`, `blocked` or `session-ended`; a wait without one is refused | `--wait N --reason R` |
+| `end` | `row`, `result` (`done`, `blocked`, `cancelled`, or `split`), optional `tokens` (a whole number the host reported); a `split` end also carries `rows`, the parts, each with `splitFrom` | `--end N` (`--tokens`), `--split N --rows-file` |
+| `confirm` | `row`: the owner confirms a flagged row was real work | `--confirm N` |
+| `timebox-reached` | `row`: a frontier row has worked its timebox; refused before the clock reaches it | `--timebox-reached N` |
+
+A row's optional fields, recorded from the first run because an append-only log cannot
+backfill them:
+`class` (`calculable`, `repeat`, `frontier`), `model` and `host` (identities, never a
+time; a row keeps those named at its start), `specRevision`, `group` (the parallel
+group's id), and, on a frontier row only and both required, `timebox` (minutes) and
+`onTimebox` (the action when it is reached). A frontier row is never estimated: it is
+priced at its timebox, basis `timeboxed`. `splitFrom` is written only by `--split`.
+Writers refuse a malformed value. Readers show a field a row does not carry, including
+every field of a log written before these existed, as `not recorded`.
+
+A row's working time is end − start − waits. A row missing its start or end, or ended
+before it started, is *not measured*. A row priced by `kind` uses the median of at least 3
+measured rows of that kind, else of its tier and effort, else its `estimate` (`estimated`).
+A row measured at over 3× its prediction is flagged `possible unseen wait` and kept out of
+pricing until confirmed. `timing --summary` gives the close-out's table and, with `--json`,
+`estimate` (the first listing's predicted total) and `actual` (the measured working total),
+both over non-parallel rows, as durations the ledger reads. `--item` limits it to one item's
+rows (a log whose rows name no item is one item's run). `complete` is false when a row that
+ran has no measured time; the ledger then takes neither total. Flagged time stays in the
+Actual, `total-error` and `added-share`; only `row-error` and pricing leave it out.
 
 Every other column is kept, untouched. A mapped field is found by its mapped header and nowhere
 else. An append lays its row out under the file's own header and is refused, naming the missing
@@ -138,6 +186,7 @@ python <plugin>/scripts/virtuoso_registry.py --root . items
 python <plugin>/scripts/virtuoso_registry.py --root . next
 python <plugin>/scripts/virtuoso_registry.py --root . combine --items <ID> <ID> ...
 python <plugin>/scripts/virtuoso_registry.py --root . kpis
+python <plugin>/scripts/virtuoso_registry.py --root . review --date <YYYY-MM-DD>
 python <plugin>/scripts/virtuoso_registry.py --root . repo --expect <paths>
 python <plugin>/scripts/virtuoso_registry.py --root . deps
 python <plugin>/scripts/virtuoso_registry.py --root . protected
@@ -147,8 +196,12 @@ python <plugin>/scripts/virtuoso_registry.py --root . overlays
 
 All of those are queries: none of them creates a directory, seeds a document, or heals
 anything as a side effect. The commands that write say so explicitly — `snapshot`,
-`closeout --prepare`, `create-item`, `policy-set --apply`, `mutation-plan`, and
-`mutation-confirm`.
+`closeout --prepare`, `create-item`, `policy-set --apply`, `mutation-plan`,
+`mutation-confirm`, and `mutation-abandon`.
+
+`next` returns the first eligible item that is not in flight, with `inFlight` (the items
+already in flight) and `missingPrerequisites` (each active item's prerequisites the
+register does not hold) beside it.
 
 `policy-set` writes the **declaration** half of a project rule. It runs on the same
 transaction `repair` does: the candidate registry is validated before anything is touched,
@@ -220,6 +273,33 @@ A cell may be text, a number, a list (prerequisites), or an object with a `text`
 A snapshot's reader applies the same subitem rule to a snapshot another builder
 wrote: an item carrying `parent` is not a card.
 
+**A connector's raw page imports as it came.** A connector that keys cells by column
+**id** (an items page whose `items[]` carry `column_values`) needs no hand-built rows:
+save the page (or a list of every page) and the board's column list, and import both:
+
+```sh
+python <plugin>/scripts/virtuoso_registry.py --root . snapshot --import <page.json> --columns <columns.json> [--taken-at <ISO time of the read>] [--json]
+```
+
+`--columns` takes a list of `{id, title}` objects, or the connector's board information
+(an object whose `columns` or `board.columns` is that list). Each cell is read under its
+column's title, so the same mappings apply; the item's name fills the title, its group's
+title the group, and `providerId`, `revision` and `url` ride along in `extra`. The import
+refuses a raw page without `--columns`, a page set whose last page says
+`pagination.has_more: true` (a partial read never passes for a full one), and a page whose
+`board.id` is not the board the registered `workRegister` names. Every import of a raw page
+reports **column drift**, one `[DRIFT]` line each (and `missingColumns`,
+`unmappedColumns` in `--json`): a declared `fieldMappings` column the board no longer has,
+and a board column nothing maps, which is left out of the snapshot. It still exits 0;
+fix `policy.workRegister.fieldMappings` before any `mutation-plan` writes a missing
+field. Title-keyed rows remain the fallback for any other shape.
+
+A *Depends On* placeholder cell (`None`, `-`, `—`, `n/a`, in any case) means no
+prerequisite, for imported rows and local CSV rows alike.
+
+Refresh at three points: before `mutation-plan --operation create-item`, at roadmap
+review, and at close-out.
+
 **A stale snapshot is refreshed before it is acted on.** `next` and `items` print
 `[STALE]` with the age; a ceremony that is about to name the head of the belt, or
 check a combination for an epic, refreshes the snapshot first. When it cannot, it
@@ -249,12 +329,36 @@ crafting an untracked mutation:
 
 ```sh
 python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> mutation-plan \
-  --operation set-status --item <ID> --fields-json '<JSON>' --revision <REVISION> --json
-# execute the returned instruction with the host connector
+  --operation set-status --item <ID> --fields-file <fields.json> --revision <REVISION> --json
+# execute the returned instruction with the host connector, then read the item back
 python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> mutation-confirm \
-  --operation set-status --item <ID> --idempotency-key <KEY> --recovery-id <RECOVERY-ID> \
-  --succeeded --actual-revision <NEW-REVISION> --json
+  --recovery-id <RECOVERY-ID> --succeeded --actual-revision <NEW-REVISION> --json
 ```
+
+- **Send one plan per connector call.** Each connector call carries exactly one planned
+  mutation. Several changes sent in one call leave no record of which landed.
+- **Read back before every confirm**, not only after a creation. The read-back, not the
+  connector's reply, says what landed.
+- **Some fields landed:** confirm `--partial --written FIELD[,FIELD…]`. The record notes
+  `partial: {written, unwritten}` and stays outstanding. A later plan for the same item
+  covering only the unwritten fields supersedes it (`supersededBy`) and resolves it with
+  outcome `superseded`.
+- **A plan that will not be executed** — planned against a stale snapshot, or no longer
+  wanted — is closed with `mutation-abandon --recovery-id <RECOVERY-ID> --reason <TEXT>`.
+  The record resolves with outcome `abandoned` and the reason. Nothing is sent.
+- **Fields come from a file.** `--fields-file <path>` reads UTF-8 JSON, which no shell
+  quoting can damage; `--fields-json` remains for simple values. Give one, not both.
+- **Confirm by recovery id.** The record supplies the operation, item and idempotency
+  key; any of `--operation`, `--item`, `--idempotency-key` given must match it, and a
+  mismatch is refused, naming the field.
+- **A field the register has no column for is refused at planning.** When
+  `policy.workRegister.fieldMappings` is declared, a canonical field it does not name
+  (`id` excepted) cannot land on the board, so the plan names it and stops.
+
+A resolved record carries its `outcome` — `succeeded`, `abandoned`, or `superseded` (a
+later plan replaced it; `detail.supersededBy` names that plan). A record resolved before
+outcomes were recorded reads as `succeeded`, or as `superseded` when it names a
+`supersededBy`.
 
 ### Bringing a new item into existence
 
@@ -300,13 +404,13 @@ An external register uses the same handshake as every other mutation:
 
 ```sh
 python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> mutation-plan \
-  --operation create-item --item <ID> --fields-json '<JSON>' --json
+  --operation create-item --item <ID> --fields-file <fields.json> --json
 # the plan carries expectedAbsent, snapshotTakenAt, projectFields (the project's own
 # column names), defaultsApplied, preconditions for the host, and postconditions.
 # Execute it with the host connector; read the created item back.
 python <plugin>/scripts/virtuoso_registry.py --root . --actor <ceremony> mutation-confirm \
-  --operation create-item --item <ID> --idempotency-key <KEY> --recovery-id <RECOVERY-ID> \
-  --succeeded --provider-id <PROVIDER-ITEM-ID> --actual-revision <REVISION> --json
+  --recovery-id <RECOVERY-ID> --succeeded --provider-id <PROVIDER-ITEM-ID> \
+  --actual-revision <REVISION> --json
 # then refresh the canonical snapshot and confirm nothing is outstanding:
 python <plugin>/scripts/virtuoso_registry.py --root . recovery
 ```
@@ -481,7 +585,8 @@ its other figures. It is computed as of the **snapshot's** date, never the reade
   `policy.terminalLedger.fieldMappings`), with corrections
   applied and results read through `policy.workRegister.statusMappings`; only a project with no
   ledger uses the register's completion dates, and the two are never mixed. The output breaks
-  the count down by the result words recorded, and lists what it excluded.
+  the count down by the result words recorded, and lists what it excluded. Trailing points
+  read each completion's effort from the ledger first and the register second.
 - **Verdict** — per unit: `ahead` above the required rate by more than
   `policy.roadmap.pace.tolerance`, `on track` within it, `behind` below it. The headline is the
   worse of the two units and names the unit. `met` when nothing in scope remains; `overdue`
@@ -501,7 +606,8 @@ A figure whose inputs are missing is **not computable**, with the inputs named �
 source that holds no recorded completion at all (a board that keeps only live items, or a
 ledger whose columns are not mapped), an undatable completion (append a correction that dates
 it), an unsized item, a completed item that left the
-register (trailing points only), a scope that matches nothing. Nothing is estimated, and nothing
+register and whose ledger record carries no Effort (trailing points only), a scope that
+matches nothing. Nothing is estimated, and nothing
 silently becomes zero.
 
 | finding | severity | meaning |
@@ -614,7 +720,11 @@ shortness. Two read-only reports keep it short, and one command changes it — b
   first recorded and the rest superseded by it; **retire** — a live observation older than
   `policy.lessons.staleAfterDays` (default 180; 0 turns it off) that no close-out ever
   applied; **tidy** — a live lesson missing *Verdict*, *Evidence*, *Recommendation* or
-  *Applies to*; **repair** — an identifier reused for a second lesson.
+  *Applies to*; **record** — a live lesson whose prose claims a status (`Promoted to
+  SR-12`) that no status record carries, with the `lessons --record-status` command that
+  records it; **repair** — an identifier reused for a second lesson. A field line may be
+  written as a list item (`- **Status:** …`) and reads exactly as the plain form; an
+  existing catalog migrates in one sweep, by appended status records only.
 - **`lessons --candidates`** (`roadmap-review` D.4) lists the lessons that have earned a
   decision: **promote** a pattern that recurred (the second occurrence) or a lesson applied
   and held in two close-outs; **revise or retire** one that did not hold in two. A
@@ -658,6 +768,9 @@ never zero.
 | `time-to-apply` | median days from a lesson's date to the first dated close-out that applied it | a dated lesson applied in a dated close-out |
 | `repeated-trap-rate` | the share of lessons that record a pattern already recorded (the merge groups) | two recorded lessons |
 | `effort-calibration` | the median of actual ÷ estimate over terminal records carrying both as durations; above 1 the project under-estimates. `effort-levels` sizes by it when computable | three records with both |
+| `row-error` | the median of \|actual − predicted\| ÷ predicted over the measured rows of closed time logs (flagged rows left out) | three closed time logs |
+| `total-error` | the same over each closed log's sequential totals: actual against the first listing's estimate | three closed time logs |
+| `added-share` | the share of working minutes spent on rows added after the first listing — what the listing missed | three closed time logs |
 
 Read together over successive reviews: a flat or falling live count with a positive yield,
 promotions above zero, a high held rate, a falling repeated-trap rate. Any one figure can be
@@ -686,7 +799,19 @@ A disposition changes only by appending a record under the same id —
 Writers by default: `governance-sweep`, `adversarial-review`, `virtuoso` (for the agents it
 dispatches), `pointer-closeout`, `roadmap-review`, `3rd-party-audit`. **Reader:**
 `roadmap-review` B.3 reads every finding whose latest disposition is `open`, with the
-previous review's lessons-applied, and carries each into the plan.
+previous review's lessons-applied — the set `virtuoso_registry review --date <YYYY-MM-DD>`
+names as `previous`, latest by date, then run — and carries each into the plan.
+
+## Dates
+
+Every governance date is the UTC calendar date. The tooling generates its dates in
+UTC: `kpis` as-of dates, deadline countdowns, the default `--date` of `lessons`,
+`holding` and `review`, and every snapshot, recovery and time-log stamp. A date you
+supply — `closeout --date`, `record-completion --date`, `review --date`, a heading you
+write — is today's UTC date too; when unsure, read it from `review`'s `date`. Local time
+appears only in human-facing clock lines — the `timing` header's estimated finish. A
+session near midnight may therefore record the next calendar day; that is the date, not
+a slip.
 
 ## Combining roadmap items into one epic
 
@@ -843,9 +968,20 @@ idempotent: a record already in the ledger for the item, or an item already comp
 is reported and not repeated. When the register refuses the completion after the ledger
 append — a stale revision, a permission — it opens a **recovery record** naming the steps
 that remain (`close-in-register`, `verify-results`) and exits non-zero; `recovery` lists
-it until it is resolved. An external register is refused and pointed at the
-`mutation-plan --operation record-completion` handshake; an external ledger is refused by
-name.
+it until it is resolved. An external ledger is refused by name.
+
+**An external register: `--ledger-only`.** Without the flag an external register is
+refused, and the refusal names `--ledger-only`. With it, the command appends the terminal
+record exactly as above — next `TR-NNN`, the date, result, evidence, estimate and actual,
+and Effort taken from the item in the register snapshot — then reads the ledger back.
+Its two steps are `append-terminal-record` and `verify-results`; it never writes the
+register, which the `mutation-plan --operation record-completion` handshake closes
+afterwards. It previews without `--apply`, and a record already in the ledger for the
+item makes it a no-op that still verifies. A local register refuses `--ledger-only`,
+because `record-completion` closes it itself. It opens a recovery record only when the
+appended record does not read back (`completed_steps` `append-terminal-record`,
+`remaining_steps` `verify-results`, `detail.ledgerOnly` true); a handshake that fails
+later is covered by the handshake's own recovery record.
 
 **Who may append what.** The terminal ledger takes two kinds of record, and each is
 checked against its own list:
@@ -879,12 +1015,32 @@ role does not resolve.
 `pointer-closeout` runs `created-files` in Wave 1 to draft the report's *Files Created*
 dispositions and again at Step 6: a close-out ends with nothing temporary and nothing
 unreconciled beyond the files the report names.
+An untracked file under `Virtuoso/.recovery/` carries its own verdict, `commit: a
+recovery record, never remove or ignore` (see *What git versions*).
+
+## What git versions
+
+The plugin keeps some of its state under `Virtuoso/` and some in the registered
+`temp` role. Each has one right answer:
+
+| Path | Git | Why |
+|---|---|---|
+| `Virtuoso/workspace-layout.json`, `Virtuoso/.virtuoso`, `Virtuoso/work-register.snapshot.json` | commit | the registry, its marker, and the register snapshot every session reads |
+| `Virtuoso/.recovery/` | commit | the idempotency trail for external writes. A confirmed write marks its record resolved and keeps it; a clone without the records can repeat a write that already happened |
+| `Virtuoso/.backups/` | ignore | repair backups for this machine |
+| `policy.sweep.quarantineDirectory` (default `Virtuoso/.quarantine/`) | ignore | files the sweep set aside instead of deleting |
+| the `temp` role (default `Project Documentation/3 temp/`) | ignore | scratch; `created-files` reports anything in it as temporary until it is ignored |
+
+`create` appends the three ignore lines to the workspace's `.gitignore`, after a
+`# Virtuoso: machine-local state` header, adding only the lines it lacks. `adopt` never
+writes one. Instead, `check` and `adopt` report what is wrong (see *Preflight status
+contract*).
 
 ## Preflight status contract (items 10, 11)
 
 `scripts/virtuoso_preflight.py` always prints two parseable lines, plus a line
-reporting overlays, a line reporting deadlines, and a line reporting the roadmap's
-integrity:
+reporting overlays, a line reporting deadlines, a line reporting the roadmap's
+integrity, and a line reporting the roadmap board's freshness:
 
 ```
 virtuoso-status: <status>
@@ -892,6 +1048,7 @@ writes: <N>
 overlays: <state>
 deadlines: <state>
 roadmap-integrity: <state>
+board: <state>
 ```
 
 | status | meaning | writes |
@@ -949,6 +1106,20 @@ The ceremonies that rewrite the roadmap act on it before touching the file, and
 | `fail (<why>) size=<N>` | `not-text` (undecodable, a byte-order mark honoured) or `null-bytes` (after decoding) |
 | `fail (missing: <path>)` | the registered path is not a file |
 
+The `board:` line follows the same rule, with JSON key `board`. It is advice and never
+changes the status. The roadmap board embeds, at generation, the modification time of
+each local file it was built from (the register or its snapshot, the terminal ledger,
+the roadmap, the board comments); the line compares those with the times now. It reads
+file times, the manifest and the page — never the work register.
+
+| board state | meaning |
+|---|---|
+| `not registered` | the project declares no `board` role |
+| `missing (<path>; ...)` | the role is registered and the page is absent (a fresh clone): `generate_board --root .` builds it |
+| `stale (<roles> changed since <time>)` | a source changed after the page was generated: regenerate it |
+| `current (generated <time>)` | every source is as it was when the page was generated |
+| `unreadable (<why>)` | the page carries no board model, or the check itself failed |
+
 ### Stale vendored tools
 
 Installs before 1.4 copied plugin scripts into `Virtuoso/scripts/`; 1.4 stopped vendoring
@@ -956,6 +1127,16 @@ and never removed the copies. Each retired tool still present there is a
 **`retired-vendored-tool`** warning at every load, naming what replaces it. A stale copy
 reads the v1 `paths` map and answers from conventional fallbacks instead of failing, so
 it is reported — never deleted by the plugin.
+
+### Plugin state git treats the wrong way
+
+`check`, `adopt` and `create` ask git (read-only, `git check-ignore`) how it treats the
+paths in *What git versions*. Each problem is a warning that names the fix:
+**`local-state-not-ignored`** lists the ignore lines the project lacks, and
+**`recovery-records-ignored`** says that `Virtuoso/.recovery/` is ignored and must not
+be. Outside a git repository, or without git, nothing is reported. The check runs in
+preflight only, not at every registry load, so only session start pays for the git
+call.
 
 ### Policy validated at every load
 

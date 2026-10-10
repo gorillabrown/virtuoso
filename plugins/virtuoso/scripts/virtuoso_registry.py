@@ -4,8 +4,9 @@
 Query subcommands create nothing and heal nothing as a side effect (item 86).
 The commands that write say so explicitly: `snapshot`, `closeout --prepare`,
 `create-item` (appends a new item to a LOCAL register), `mutation-plan` (opens
-durable recovery before a host connector write), and `mutation-confirm` (records
-the connector result and resolves recovery only on success).
+durable recovery before a host connector write), `mutation-confirm` (records
+the connector result and resolves recovery only on success), and `timing`
+(appends clock-stamped events to a dispatch's time log in the closeOuts role).
 
 Subcommands:
   roles                     list every registered role and how it resolves
@@ -23,10 +24,13 @@ Subcommands:
   kpis                      derived metrics, each with its provenance, and pace
                             against every declared deadline
   closeout --item ID --date D   resolve close-out artifact paths (read-only)
+  review [--date D]         where a roadmap review writes its records: the prefix,
+                            an interrupted review to resume, the previous review
+                            (read-only)
   lessons [--open]          the registered lessons and their status (read-only)
           --check PATH      check a spec's Lessons applied (rubric U9), or with
                             --closeout a close-out's Lessons section
-          --hygiene         what to merge, retire, tidy or repair (governance-sweep)
+          --hygiene         what to merge, retire, tidy, record or repair (governance-sweep)
           --candidates      lessons that have earned promotion or revision
           --record-status ID --status S   append a status record (--apply writes)
           --record-link ID --item ITEM    append a link record (--apply writes)
@@ -35,20 +39,30 @@ Subcommands:
           --check PATH      check one held plan's structure and trail
           --next-id         the next provisional item identifier (HB-<n>)
           --record ENTRY --state S   append a trail row (--apply writes)
+  timing --sprint ID        a dispatch's time log (Timing.<ID>.jsonl in closeOuts):
+          --open|--add --rows-file PATH   the first listing, or rows added mid-run
+          --start|--wait|--resume|--end N  row N, stamped by the clock (a write)
+          --status          each row's state and measured working minutes
   repo [--expect PATHS]     read-only repository state and readiness finding
   deps                      check the project's declared runtime dependencies
   protected                 hash every protected file (immutable-hash verification)
   snapshot --out PATH       capture a timestamped snapshot of the work register
            --import ROWS    build the snapshot from rows a host connector read: the
                             project's mappings applied, subitems kept out, stamped
+           --columns PATH   with a connector's raw items page as ROWS: the board's
+                            column list; prints [DRIFT] per unmatched column
   recovery                  list unresolved partial-failure recovery records
   record-completion         append the terminal record and close the item in a LOCAL
                             register, in order, then verify (preview; --apply writes)
+           --ledger-only    EXTERNAL register: append and verify the terminal record
+                            only; the mutation handshake closes the item
   create-item               bring a new item into a LOCAL register (a write)
   mutation-plan             emit a revision-aware host connector instruction
                             (operations: set-status, store-spec-link,
                             record-completion, create-item)
-  mutation-confirm          durably record the host connector result
+  mutation-confirm          durably record the host connector result (succeeded,
+                            failed, or partial --written FIELDS)
+  mutation-abandon          resolve a plan that will not be executed, with --reason
 
 Exit codes: 0 ok; 3 the query could not be answered (unregistered role, missing
 provider, malformed configuration) — always with a message naming the fix.
@@ -68,7 +82,7 @@ from tools.governance import (  # noqa: E402
     learning as learning_mod,
     lessons as lessons_mod, overlays as overlays_mod,
     policy as policy_mod, providers,
-    registry as registry_mod, repair as repair_mod, schema, textio,
+    registry as registry_mod, repair as repair_mod, schema, textio, timing as timing_mod,
 )
 from tools.governance.errors import CapabilityError, GovernanceError, RoleNotRegistered  # noqa: E402
 from tools.governance import dependencies, integrity, repostate  # noqa: E402
@@ -92,7 +106,7 @@ def _load(root: str) -> registry_mod.Registry:
 
 def _emit(payload, as_json: bool, renderer=None) -> int:
     if as_json:
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
     elif renderer is not None:
         print(renderer())
     else:
@@ -213,7 +227,7 @@ def cmd_provider(args) -> int:
     selection = (providers.work_register(reg, actor=args.actor) if args.role == "workRegister"
                  else providers.for_role(reg, args.role, actor=args.actor))
     return _emit(selection.as_dict(), args.as_json,
-                 lambda: json.dumps(selection.as_dict(), indent=2, ensure_ascii=False))
+                 lambda: json.dumps(selection.as_dict(), indent=2, ensure_ascii=True))
 
 
 def cmd_items(args) -> int:
@@ -251,16 +265,23 @@ def cmd_next(args) -> int:
     reg = _load(args.root)
     selection = providers.work_register(reg, actor=args.actor)
     item = selection.provider.next_eligible()
+    in_flight = selection.provider.in_flight()
+    missing = selection.provider.missing_prerequisites()
     snap = selection.provider.snapshot()
-    payload = {"item": item.as_dict() if item else None, "provenance": snap.provenance(),
-               "selection": selection.as_dict()}
+    payload = {"item": item.as_dict() if item else None,
+               "inFlight": [i.as_dict() for i in in_flight],
+               "missingPrerequisites": missing,
+               "provenance": snap.provenance(), "selection": selection.as_dict()}
     packet = _active_charters(reg)[0].get(item.id, "") if item else ""
     if packet:
         payload["inEpicPacket"] = packet
     if args.as_json:
         return _emit(payload, True)
+    for flight in in_flight:
+        print("  in flight:     %s — %s" % (flight.id, flight.title or "(untitled)"))
     if item is None:
         print("no eligible item: every active item is blocked or waiting on a prerequisite")
+        _print_missing_prerequisites(missing)
         return EXIT_OK
     print("%s — %s" % (item.title or "(untitled)", item.id))
     if packet:
@@ -271,12 +292,20 @@ def cmd_next(args) -> int:
     print("  specification: %s" % (item.written_status or "unknown"))
     print("  prerequisites: %s" % (", ".join(item.prerequisites) or "none"))
     print("  effort:        %s" % (item.effort or "unrecorded"))
+    _print_missing_prerequisites(missing)
     if snap.stale:
         print("\n[STALE] %s. Refresh the snapshot before naming this the head: read the "
               "register with the host's connector, then `snapshot --import <rows>`."
               % snap.stale_reason)
     print("\nsource: %s via %s, snapshot %s" % (snap.source, snap.provider, snap.taken_at))
     return EXIT_OK
+
+
+def _print_missing_prerequisites(missing: dict) -> None:
+    for item_id, gone in missing.items():
+        for prerequisite in gone:
+            print("  missing prerequisite: %s (named by %s) — not in the register; check "
+                  "the terminal ledger" % (prerequisite, item_id))
 
 
 def cmd_kpis(args) -> int:
@@ -295,9 +324,26 @@ def cmd_kpis(args) -> int:
     return _emit(metrics.as_dict(), args.as_json, metrics.render)
 
 
+#: Rubric checks whose gap a gate closes itself, by adding what is missing (U10: the task
+#: list, references/task-rows.md). A closable gap never makes a written specification
+#: unready, so the buffer judges U9 alone; a check taken out of here counts against it.
+CLOSABLE_CHECKS = ("U10",)
+
+
+def _task_list_ready(text: str, item: str = "") -> bool:
+    """U10, unless it is closable: the specification's task list parses."""
+    if "U10" in CLOSABLE_CHECKS:
+        return True
+    try:
+        timing_mod.spec_rows(text, item)
+    except GovernanceError:
+        return False
+    return True
+
+
 def _spec_ready(reg, project_policy):
     """A judge of whether an item's specification passes U9, for the buffer figure —
-    or the reason no judge is possible here."""
+    or the reason no judge is possible here. U10's gap is closable and never counts."""
     prefix = project_policy.lesson_prefix
     try:
         lessons_path = reg.resolve("lessons")
@@ -317,7 +363,7 @@ def _spec_ready(reg, project_policy):
             result = lessons_mod.check(roadmap, recorded, prefix, item=item.id)
             if any(f["code"] == lessons_mod.ITEM_MISSING for f in result.findings):
                 return None
-            return result.passed
+            return result.passed and _task_list_ready(roadmap, item.id)
         return judge
 
     def judge_file(item):
@@ -325,7 +371,8 @@ def _spec_ready(reg, project_policy):
         if not link or "://" in link:
             return None
         text = textio.read_text(link if os.path.isabs(link) else os.path.join(reg.root, link))
-        return None if text is None else lessons_mod.check(text, recorded, prefix).passed
+        return None if text is None else (lessons_mod.check(text, recorded, prefix).passed
+                                          and _task_list_ready(text))
     return judge_file
 
 
@@ -337,8 +384,9 @@ def _learning_metrics(reg, project_policy):
         path = reg.resolve("lessons")
     except RoleNotRegistered:
         from tools.governance.providers.kpi import Metric
+        provenance = {}
         return ([Metric(name, computable=False, missing_inputs=["a registered lessons role"])
-                 for name in LEARNING_METRICS], {})
+                 for name in LEARNING_METRICS] + _timing_figures(reg, provenance), provenance)
     recorded = lessons_mod.parse(textio.read_text(path) or "", prefix)
     outcomes, closeouts = _lesson_outcomes(reg, prefix)
     figures = learning_mod.metrics(recorded, outcomes)
@@ -346,7 +394,20 @@ def _learning_metrics(reg, project_policy):
                   "closeOuts": closeouts, "closeOutsRead": outcomes.closeouts,
                   "asOf": _today().isoformat()}
     figures.append(_effort_calibration(reg, provenance))
+    figures.extend(_timing_figures(reg, provenance))
     return figures, provenance
+
+
+def _timing_figures(reg, provenance):
+    """How far off the row predictions were, from the closed time logs in closeOuts."""
+    try:
+        directory = reg.resolve("closeOuts")
+    except RoleNotRegistered:
+        return [kpi.Metric(name, computable=False, missing_inputs=["a registered closeOuts role"])
+                for name in timing_mod.TIMING_METRICS]
+    provenance["timeLogs"] = os.path.relpath(directory, reg.root).replace(os.sep, "/")
+    provenance["timeLogsClosed"] = len(timing_mod.closed_logs(directory))
+    return timing_mod.figures(directory)
 
 
 def _effort_calibration(reg, provenance):
@@ -428,9 +489,95 @@ def _next_lesson_id(lessons: str, prefix: str) -> str:
 EXIT_CHECK_FAILED = 1
 
 
-def _today():
+REVIEW_KINDS = ("audit", "assessment", "plan", "lessons-applied", "phase-brief")
+_REVIEW_RECORD = re.compile(r"(\d{4}-\d{2}-\d{2})(?:-([2-9]|[1-9]\d+))?-(%s)\.md"
+                            % "|".join(re.escape(kind) for kind in REVIEW_KINDS))
+
+
+def _review_prefix(date: str, run: int) -> str:
+    return date if run == 1 else "%s-%d" % (date, run)
+
+
+def cmd_review(args) -> int:
+    """Where a roadmap review writes its records, so a second review on one date never
+    overwrites the first. Read-only.
+
+    ``prefix`` is the date when no record carries it, else ``DATE-N`` for the next free
+    run (an unnumbered set is run 1). ``resume`` names the date's latest set when it has
+    no phase brief — an interrupted review, which a ceremony finishes under that prefix
+    instead; an unfinished set a later complete run replaced is not resumed.
+    ``previous`` is the latest set before the one this review writes, ordered by date,
+    then run, and ``previousComplete`` the latest such set with a phase brief (the one
+    whose lessons-applied a review reads when ``previous`` was interrupted). An entry
+    whose name is not ``DATE[-N]-<kind>.md`` (N ≥ 2) is skipped and listed, never an
+    error. ``--date`` defaults to today's UTC date. Exit 0, or 3 without a usable
+    registry or a ``roadmapReviews`` role, or with a malformed ``--date``.
+    """
+    reg = _load(args.root)
+    if not reg.manifest_present:
+        print("no governance registry at %s/%s; the reviews directory is resolved through "
+              "it" % (args.root, schema.MANIFEST_RELPATH), file=sys.stderr)
+        return EXIT_UNANSWERABLE
+    blocking = [f for f in reg.findings if f.severity == "error"]
+    if blocking:
+        print("the governance registry is present but invalid; refusing to guess a reviews "
+              "directory.\n  " + "\n  ".join(f.message for f in blocking), file=sys.stderr)
+        return EXIT_UNANSWERABLE
+    date = args.date or _today().isoformat()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        raise GovernanceError("--date is YYYY-MM-DD, not %r" % date)
     import datetime as _dt
-    return _dt.date.today()
+    try:
+        _dt.date.fromisoformat(date)
+    except ValueError:
+        raise GovernanceError("--date %s is not a calendar date" % date)
+    directory = reg.resolve("roadmapReviews")   # RoleNotRegistered surfaces as exit 3
+    sets, skipped = {}, []
+    names = sorted(os.listdir(directory)) if os.path.isdir(directory) else []
+    for name in names:
+        match = _REVIEW_RECORD.fullmatch(name)
+        if match is None or not os.path.isfile(os.path.join(directory, name)):
+            skipped.append(name + ("/" if os.path.isdir(os.path.join(directory, name)) else ""))
+            continue
+        key = (match.group(1), int(match.group(2) or 1))
+        sets.setdefault(key, []).append(name)
+    def finished(key):
+        return any(name.endswith("-phase-brief.md") for name in sets[key])
+
+    def described(key):
+        return {"prefix": _review_prefix(*key), "date": key[0], "run": key[1],
+                "files": sets[key]} if key else {}
+
+    runs = sorted(run for day, run in sets if day == date)
+    prefix = _review_prefix(date, runs[-1] + 1 if runs else 1)
+    resumed = runs[-1] if runs and not finished((date, runs[-1])) else None
+    resume = _review_prefix(date, resumed) if resumed else ""
+    current = (date, resumed or (runs[-1] + 1 if runs else 1))
+    earlier = sorted(key for key in sets if key < current)
+    complete = [key for key in earlier if finished(key)]
+    payload = {"reviewDirectory": directory, "date": date, "prefix": prefix,
+               "resume": resume, "previous": described(earlier[-1] if earlier else None),
+               "previousComplete": described(complete[-1] if complete else None),
+               "skipped": skipped}
+    previous = payload["previous"]
+    if args.as_json:
+        return _emit(payload, True)
+    for key in ("reviewDirectory", "date", "prefix", "resume"):
+        print("%s=%s" % (key, payload[key]))
+    for label in ("previous", "previousComplete"):
+        print("%s=%s" % (label, payload[label].get("prefix", "")))
+        for name in payload[label].get("files", []):
+            print("  %s" % name)
+    for name in skipped:
+        print("skipped=%s (not DATE[-N]-<kind>.md)" % name)
+    return EXIT_OK
+
+
+def _today():
+    """Today's governance date: the UTC calendar date (references/registry-contract.md,
+    Dates)."""
+    import datetime as _dt
+    return _dt.date.fromisoformat(ledger_mod.utc_today())
 
 
 def _lesson_outcomes(reg, prefix):
@@ -594,10 +741,16 @@ def cmd_lessons(args) -> int:
                       % (entry["id"], entry["recorded"], entry["ageDays"]))
             for entry in report["incomplete"]:
                 print("  tidy     %s — missing %s" % (entry["id"], ", ".join(entry["missing"])))
+            for entry in report["unrecorded"]:
+                print('  record   %s — prose says "%s"; %s' % (
+                    entry["id"], entry["claims"],
+                    "run: %s" % entry["command"] if entry["command"]
+                    else "%s — route to the user" % entry["problem"]))
             for entry in report["malformed"]:
                 print("  repair   %s — %s" % (entry["id"], entry["why"]))
-            if not any(report[k] for k in ("duplicates", "stale", "incomplete", "malformed")):
-                print("  clean — nothing to merge, retire, tidy or repair")
+            if not any(report[k] for k in ("duplicates", "stale", "incomplete", "malformed",
+                                           "unrecorded")):
+                print("  clean — nothing to merge, retire, tidy, record or repair")
             return EXIT_OK
         found = learning_mod.candidates(recorded, outcomes)
         payload = {"candidates": found, "source": source, "closeOuts": closeouts,
@@ -791,6 +944,155 @@ def cmd_holding(args) -> int:
     return EXIT_OK
 
 
+_TIMING_WRITES = ("open", "add", "start", "wait", "resume", "end", "confirm", "split",
+                  "timebox_reached")
+
+
+def _skipped_logs(skipped: list) -> None:
+    for problem in skipped:
+        print("note: a time log was left out of the history: %s" % problem, file=sys.stderr)
+
+
+def _read_spec(path: str) -> str:
+    text = textio.read_text(path)
+    if text is None:
+        raise GovernanceError("%s cannot be read" % path)
+    return text
+
+
+def _timing_rows_from_spec(args, directory: str) -> int:
+    """A specification's task list, priced from the history as ``--open`` would price
+    it, with its total line — or, exit 1, what the task list is missing."""
+    text = _read_spec(args.do_rows_from_spec)
+    skipped = []
+    past = timing_mod.history(directory, skipped)
+    _skipped_logs(skipped)
+    try:
+        priced = timing_mod.price_rows(timing_mod.spec_rows(text, args.item), past)
+    except GovernanceError as exc:
+        _emit({"ready": False, "missing": str(exc)}, args.as_json,
+              lambda: "task list: NOT READY — %s" % exc)
+        return EXIT_CHECK_FAILED
+    total = timing_mod.total_line(priced)
+    return _emit({"ready": True, "rows": priced, "total": total}, args.as_json,
+                 lambda: "\n".join(["%d. %s [%s]%s — %s" % (
+                     row["id"], row["title"], row["class"],
+                     " @%s" % row["kind"] if row.get("kind") else "",
+                     "%s (%s)" % (timing_mod.duration(row["predicted"]), row["basis"]))
+                     for row in priced] + ["Total: " + total]))
+
+
+def cmd_timing(args) -> int:
+    """A dispatch's time log: open it from the first task listing, record each row's
+    start, wait, resume and end from the machine clock, and read its status.
+
+    Every write needs an ``--actor`` that may write the ``closeOuts`` role. No flag
+    takes a time or a duration. Exit 0 ok, 3 when refused (no ``closeOuts`` role, an
+    actor that may not write it, no open log, an unknown row, a second start).
+    ``--rows-from-spec`` reads a specification's task list (rubric U10): exit 0 prints
+    the priced rows and their total line, exit 1 names what is missing.
+    """
+    reg = _load(args.root)
+    chosen = {name: getattr(args, "do_" + name, None)
+              for name in _TIMING_WRITES + ("status", "kinds", "summary", "rows_from_spec")}
+    action = next(name for name, value in chosen.items()
+                  if value is not None and value is not False)
+    if args.from_spec and action != "open":
+        raise GovernanceError("--from-spec goes with --open")
+    if action == "rows_from_spec":
+        try:
+            directory = reg.resolve("closeOuts")
+        except RoleNotRegistered:
+            directory = ""              # no time logs: every task prices from its estimate
+        return _timing_rows_from_spec(args, directory)
+    directory = reg.resolve("closeOuts")
+    event_name = action.replace("_", "-")
+    extra = timing_mod.event_fields(event_name, reason=args.reason, tokens=args.tokens,
+                                    model=args.model, host=args.host)
+    if action == "kinds":
+        skipped = []
+        used = timing_mod.kinds(timing_mod.history(directory, skipped))
+        source = os.path.relpath(directory, args.root).replace(os.sep, "/")
+        _skipped_logs(skipped)
+        return _emit({"kinds": used, "source": source, "skipped": skipped}, args.as_json,
+                     lambda: "\n".join(["%d kind(s) in use in %s" % (len(used), source)]
+                                       + ["  %-24s %d measured run(s)" % pair
+                                          for pair in used.items()]))
+    if not args.sprint:
+        raise GovernanceError("timing --%s needs --sprint: the dispatch the log belongs to"
+                              % action)
+    path = os.path.join(directory, timing_mod.log_name(args.sprint))
+    if action in _TIMING_WRITES:
+        actor = args.actor or ""
+        if not actor:
+            raise GovernanceError("timing --%s needs --actor: the ceremony recording it"
+                                  % action)
+        if not reg.writable("closeOuts", actor):
+            raise GovernanceError("%s may not write the closeOuts role, where the time log "
+                                  "lives (allowedWriters in %s)"
+                                  % (actor, schema.MANIFEST_RELPATH))
+    events = timing_mod.load(path)
+    if action in ("open", "add", "split"):
+        split = args.do_split if action == "split" else None
+        timing_mod.check(events, action, split)
+        written = {}
+        if args.from_spec:
+            if args.rows_file:
+                raise GovernanceError("--from-spec opens the log (--open), in place of "
+                                      "--rows-file")
+            specs = timing_mod.spec_rows(_read_spec(args.from_spec), args.item)
+            written = {spec["id"]: {name: spec.pop(name) for name in timing_mod.WRITTEN_FIELDS
+                                    if name in spec} for spec in specs}
+        elif not args.rows_file:
+            raise GovernanceError("--%s needs --rows-file: a JSON list of rows" % action)
+        else:
+            raw = textio.read_text(args.rows_file)
+            if raw is None:
+                raise GovernanceError("%s cannot be read" % args.rows_file)
+            try:
+                specs = json.loads(raw)
+            except ValueError as exc:
+                raise GovernanceError("%s is not JSON: %s" % (args.rows_file, exc))
+        planned = timing_mod.plan_rows(specs, timing_mod.rows(events), added=(action != "open"))
+        skipped = []
+        past = timing_mod.history(directory, skipped)
+        _skipped_logs(skipped)
+        if not args.as_json:
+            used = timing_mod.kinds(past)
+            print("kinds in use: %s" % (", ".join("%s (%d)" % pair for pair in used.items())
+                                         or "none yet"))
+        if split is None:
+            timing_mod.append(path, {"event": action, "rows": [
+                dict(row, **written.get(row["id"], {}))
+                for row in timing_mod.price_rows(planned, past)]})
+        else:
+            # One line ends the row and adds its parts, so a cut-off write leaves neither.
+            parts = [dict(spec, splitFrom=split) for spec in planned]
+            timing_mod.append(path, {"event": "end", "row": split, "result": timing_mod.SPLIT,
+                                     "rows": timing_mod.price_rows(parts, past)})
+    elif action in ("start", "wait", "resume", "end", "confirm", "timebox_reached"):
+        row_id = getattr(args, "do_" + action)
+        timing_mod.check(events, event_name, row_id)
+        event = dict({"event": event_name, "row": row_id}, **extra)
+        if action == "end":
+            event["result"] = args.result
+        timing_mod.append(path, event)
+    elif not events:
+        raise GovernanceError("no time log for sprint %s at %s; open one with --open"
+                              % (args.sprint, path))
+    elif action == "summary":
+        result = dict(timing_mod.summary(events, args.item or None),
+                      log=os.path.relpath(path, args.root).replace(os.sep, "/"))
+        return _emit(result, args.as_json, lambda: timing_mod.summary_markdown(result))
+    moment = timing_mod.now()
+    found = timing_mod.rows(timing_mod.load(path), moment)
+    if args.as_json:
+        return _emit({"log": path, "now": timing_mod.stamp(moment),
+                      "rows": [row.as_dict() for row in found]}, True)
+    print(timing_mod.render_status(found, moment))
+    return EXIT_OK
+
+
 def cmd_combine(args) -> int:
     """Whether a set of roadmap items combines into one epic run. Read-only.
 
@@ -922,7 +1224,7 @@ def _import_snapshot(args) -> int:
     if text is None:
         raise GovernanceError("%s cannot be read as text" % args.import_rows)
     try:
-        rows, read_at = snapshot_provider.parse_rows(text)
+        rows, read_at, is_page = snapshot_provider.parse_rows(text)
         taken_at = snapshot_provider.parse_taken_at(args.taken_at or read_at) \
             if (args.taken_at or read_at) else provider_base.utc_now()
     except ValueError as exc:
@@ -931,12 +1233,18 @@ def _import_snapshot(args) -> int:
     source = (spec.external if spec is not None and spec.is_external
               else os.path.relpath(rows_path, args.root).replace(os.sep, "/"))
     mapping = provider_mapping.Mapping.from_policy(project_policy.section("workRegister"))
+    drift = {"missingColumns": [], "unmappedColumns": []}
+    if is_page:
+        rows, drift = _page_rows(args, rows, source, mapping,
+                                 project_policy.get("workRegister.fieldMappings") or {})
     try:
         snap, report = snapshot_provider.from_rows(rows, mapping, source=source,
                                                    taken_at=taken_at,
                                                    parent_column=args.parent_column)
     except ValueError as exc:
         raise GovernanceError("%s: %s" % (args.import_rows, exc))
+    report.missing_columns = drift["missingColumns"]
+    report.unmapped_columns = drift["unmappedColumns"]
     target, label = _snapshot_target(reg, args)
     snapshot_provider.write_snapshot(target, snap)
     payload = dict(report.as_dict(), snapshot=label, source=source, takenAt=taken_at)
@@ -964,7 +1272,38 @@ def _import_snapshot(args) -> int:
     if report.unmapped_fields:
         print("  no column feeds: %s (policy.workRegister.fieldMappings)"
               % ", ".join(report.unmapped_fields))
+    for gone in report.missing_columns:
+        print("[DRIFT] fieldMappings.%s names %r, which the board has no column for: fix "
+              "policy.workRegister.fieldMappings before any mutation-plan writes that field"
+              % (gone["field"], gone["column"]))
+    for extra in report.unmapped_columns:
+        print("[DRIFT] board column %r (%s) is mapped by nothing; its values are left out "
+              "of the snapshot" % (extra["title"], extra["id"]))
     return EXIT_OK
+
+
+def _page_rows(args, pages: list, source: str, mapping, declared: dict):
+    """Title-keyed rows and the column drift from a connector's raw items pages."""
+    if not args.columns:
+        raise GovernanceError("%s is a raw items page, keyed by column id: pass the board's "
+                              "column list with --columns <file> (the connector's board "
+                              "information)" % args.import_rows)
+    registered = re.search(r"board/(\d+)$", source or "")
+    read = sorted({str((page.get("board") or {}).get("id") or "") for page in pages})
+    if registered and read != [registered.group(1)]:
+        raise GovernanceError("%s was read from board %s, but the registered work register is "
+                              "board %s; nothing was written"
+                              % (args.import_rows, ", ".join(r or "(none named)" for r in read),
+                                 registered.group(1)))
+    columns_path = (args.columns if os.path.isabs(args.columns)
+                    else os.path.join(args.root, args.columns))
+    columns = textio.read_text(columns_path)
+    if columns is None:
+        raise GovernanceError("%s cannot be read as text" % args.columns)
+    try:
+        return snapshot_provider.page_to_rows(pages, json.loads(columns), mapping, declared)
+    except ValueError as exc:
+        raise GovernanceError("%s: %s" % (args.import_rows, exc))
 
 
 def cmd_deps(args) -> int:
@@ -1047,6 +1386,12 @@ def cmd_recovery(args) -> int:
             record.get("item_id") or record.get("itemId")))
         for step in record.get("remaining_steps", []):
             print("    remaining: %s" % step)
+        partial = (record.get("detail") or {}).get("partial") \
+            if isinstance(record.get("detail"), dict) else None
+        if isinstance(partial, dict):
+            print("    partial: written %s; unwritten %s — plan the unwritten fields"
+                  % (", ".join(partial.get("written") or []) or "none",
+                     ", ".join(partial.get("unwritten") or []) or "none"))
     return EXIT_OK
 
 
@@ -1071,20 +1416,32 @@ def cmd_record_completion(args) -> int:
     Previews without ``--apply``. Idempotent: a record already in the ledger for this
     item, or an item already completed, is reported and not repeated. A register
     write that fails after the ledger append leaves a recovery record naming the
-    steps that remain. An external register or ledger is refused: those go through
-    the mutation handshake the host's connector executes.
+    steps that remain. An external ledger is refused.
+
+    With ``--ledger-only`` (an external register only) it appends and verifies the
+    terminal record alone, Effort taken from the register snapshot, and never writes
+    the register: the mutation handshake the host's connector executes closes the
+    item. It opens a recovery record only when the appended record does not read
+    back; a later handshake failure is covered by the handshake's own record. A
+    local register refuses ``--ledger-only``, because this command closes it.
     """
     actor = getattr(args, "actor", "") or ""
     if not actor:
         raise CapabilityError("record-completion needs --actor: the ceremony closing the item")
+    ledger_only = bool(getattr(args, "ledger_only", False))
     reg = _load(args.root)
     selection = providers.work_register(reg, actor=actor)
     provider = selection.provider
-    if hasattr(provider, "plan_mutation"):
+    external = hasattr(provider, "plan_mutation")
+    if external and not ledger_only:
         raise CapabilityError(
             "the live register %r is external: close the item with `mutation-plan "
             "--operation record-completion`, the host's connector, and `mutation-confirm`"
+            ", or append the terminal record alone with --ledger-only"
             % provider.name)
+    if ledger_only and not external:
+        raise CapabilityError("--ledger-only is for an external register: a local register "
+                              "closes the item with record-completion itself")
     book = providers.terminal_ledger(reg)          # refuses an external ledger by name
     item = provider.get(args.item)
     if item is None:
@@ -1103,12 +1460,14 @@ def cmd_record_completion(args) -> int:
     record = ledger_mod.LedgerRecord(record_id=book.next_record_id(), item_id=args.item,
                                      completed=args.date, result=args.result,
                                      evidence=args.evidence, effort_estimate=args.estimate,
-                                     effort_actual=args.actual)
+                                     effort_actual=args.actual, effort=item.effort)
     completed_already = item.status == provider_base.COMPLETED
     plan = {"item": args.item, "actor": actor, "register": provider.source,
             "ledger": os.path.relpath(book.path, reg.root).replace(os.sep, "/"),
             "ledgerRecord": prior[0].as_dict() if prior else record.as_dict(),
-            "appendRecord": not prior, "closeInRegister": not completed_already,
+            "appendRecord": not prior,
+            "closeInRegister": not completed_already and not ledger_only,
+            "ledgerOnly": ledger_only,
             "revision": args.revision or item.revision}
     if not args.apply:
         return _emit(dict(plan, applied=False), args.as_json, lambda: "\n".join([
@@ -1118,14 +1477,38 @@ def cmd_record_completion(args) -> int:
                                              args.evidence))
                 if not prior else "already holds %s — nothing to append" % prior[0].record_id),
             "  2. live register %s: %s" % (plan["register"], (
+                "not written — close it with the mutation handshake") if ledger_only else (
                 "record completion at revision %s" % plan["revision"])
                 if not completed_already else "item already completed — nothing to change"),
-            "  3. verify both from their sources"]))
+            "  3. verify %s" % ("the ledger from its source" if ledger_only
+                                else "both from their sources")]))
 
     done: list[str] = []
     if not prior:
         book.append(record, actor=actor)
     done.append("append-terminal-record")
+    if ledger_only:
+        in_ledger = [r for r in book.records() if r.item_id == args.item and not r.corrects]
+        if not in_ledger:
+            opened = recovery.open_record(
+                args.root, operation="record-completion", item_id=args.item,
+                completed_steps=list(done), remaining_steps=["verify-results"],
+                detail={"register": provider.source, "ledger": plan["ledger"],
+                        "ledgerOnly": True})
+            raise GovernanceError("the terminal record did not read back from %s; recovery "
+                                  "record %s" % (plan["ledger"], opened.id))
+        done.append("verify-results")
+        effort_recorded = in_ledger[0].effort == item.effort
+        from tools.roadmap_visualizer.generate import refresh_board
+        board_line = refresh_board(args.root)
+        result = dict(plan, applied=True, steps=done, ledgerRecord=in_ledger[0].as_dict(),
+                      effortRecorded=effort_recorded, board=board_line)
+        return _emit(result, args.as_json, lambda: (
+            "recorded %s: ledger %s (%s); register not written — close it with the "
+            "mutation handshake%s%s"
+            % (args.item, in_ledger[0].record_id, ", ".join(done),
+               _effort_suffix(prior, effort_recorded, item.effort),
+               ("\n" + board_line) if board_line else "")))
     if not completed_already:
         try:
             provider.record_completion(args.item, completed=args.date, evidence=args.evidence,
@@ -1154,9 +1537,26 @@ def cmd_record_completion(args) -> int:
                                                       after.status if after else "missing",
                                                       opened.id))
     done.append("verify-results")
-    result = dict(plan, applied=True, steps=done, ledgerRecord=in_ledger[0].as_dict())
-    return _emit(result, args.as_json, lambda: "recorded %s: ledger %s, register %s (%s)"
-                 % (args.item, in_ledger[0].record_id, after.status, ", ".join(done)))
+    effort_recorded = in_ledger[0].effort == item.effort
+    # The register and the ledger changed: a registered roadmap board follows them.
+    # Best effort — a board that cannot be written is reported, never a failed record.
+    from tools.roadmap_visualizer.generate import refresh_board
+    board_line = refresh_board(args.root)
+    result = dict(plan, applied=True, steps=done, ledgerRecord=in_ledger[0].as_dict(),
+                  effortRecorded=effort_recorded, board=board_line)
+    return _emit(result, args.as_json, lambda: "recorded %s: ledger %s, register %s (%s)%s%s"
+                 % (args.item, in_ledger[0].record_id, after.status, ", ".join(done),
+                    _effort_suffix(prior, effort_recorded, item.effort),
+                    ("\n" + board_line) if board_line else ""))
+
+
+def _effort_suffix(prior, effort_recorded, effort) -> str:
+    if effort_recorded or not effort:
+        return ""
+    if prior:
+        return ("; effort not recorded on %s, written before; append a correction carrying it"
+                % prior[0].record_id)
+    return "; effort not recorded: the ledger has no Effort column"
 
 
 def _external_mutation_provider(args):
@@ -1171,14 +1571,25 @@ def _external_mutation_provider(args):
     return provider
 
 
+def _plan_fields(args) -> dict:
+    """The planned fields, from ``--fields-file`` (UTF-8 JSON, which no shell can mangle)
+    or ``--fields-json``."""
+    if args.fields_file is not None:
+        text = textio.read_text(args.fields_file) if args.fields_file else None
+        if text is None:
+            raise GovernanceError("%s cannot be read" % args.fields_file)
+        return _json_object(text, "--fields-file")
+    return _json_object(args.fields_json, "--fields-json")
+
+
 def cmd_mutation_plan(args) -> int:
     """Create a revision-aware instruction and durable recovery record."""
     provider = _external_mutation_provider(args)
     plan = provider.plan_mutation(
-        args.operation, args.item, _json_object(args.fields_json, "--fields-json"),
+        args.operation, args.item, _plan_fields(args),
         revision=args.revision, idempotency_key=args.idempotency_key)
     return _emit(plan.as_dict(), args.as_json,
-                 lambda: json.dumps(plan.as_dict(), indent=2, ensure_ascii=False))
+                 lambda: json.dumps(plan.as_dict(), indent=2, ensure_ascii=True))
 
 
 def cmd_mutation_confirm(args) -> int:
@@ -1186,19 +1597,35 @@ def cmd_mutation_confirm(args) -> int:
     provider = _external_mutation_provider(args)
     if not hasattr(provider, "confirm"):
         raise CapabilityError("provider %r cannot confirm host mutations" % provider.name)
+    # The record names the operation, item and key; a flag given must agree with it.
+    record = recovery.get_record(os.path.abspath(args.root), args.recovery_id) or {}
+    detail = record.get("detail") if isinstance(record.get("detail"), dict) else {}
     plan = providers.PendingMutation(
-        operation=args.operation,
+        operation=args.operation or str(detail.get("operation") or ""),
         register=provider.source,
-        item_id=args.item,
-        idempotency_key=args.idempotency_key,
+        item_id=args.item or str(record.get("item_id") or ""),
+        idempotency_key=args.idempotency_key or str(detail.get("idempotencyKey") or ""),
         recovery_id=args.recovery_id,
     )
+    if args.written and args.outcome != "partial":
+        raise GovernanceError("--written names the fields a --partial write landed")
     outcome = provider.confirm(
-        plan, succeeded=args.succeeded, actual_revision=args.actual_revision,
+        plan, outcome=args.outcome, actual_revision=args.actual_revision,
         detail=_json_object(args.detail_json, "--detail-json"),
-        provider_item_id=args.provider_id)
+        provider_item_id=args.provider_id,
+        written=[f.strip() for f in (args.written or "").split(",") if f.strip()])
     return _emit(outcome, args.as_json,
-                 lambda: json.dumps(outcome, indent=2, ensure_ascii=False))
+                 lambda: json.dumps(outcome, indent=2, ensure_ascii=True))
+
+
+def cmd_mutation_abandon(args) -> int:
+    """Resolve a plan that will not be executed, recording why. Nothing is sent."""
+    provider = _external_mutation_provider(args)
+    outcome = provider.abandon(args.recovery_id, args.reason)
+    return _emit(outcome, args.as_json,
+                 lambda: "abandoned %s (%s %s): %s" % (outcome["recoveryId"],
+                                                      outcome["operation"], outcome["itemId"],
+                                                      outcome["reason"]))
 
 
 def cmd_create_item(args) -> int:
@@ -1329,8 +1756,8 @@ def cmd_policy_set(args) -> int:
         raise GovernanceError(
             "policy.%s was written, but the manifest on disk now reads %s instead of %s. "
             "The previous manifest is backed up in %s."
-            % (args.key, "(absent)" if landed is _ABSENT else json.dumps(landed, ensure_ascii=False),
-               "(absent)" if expected is _ABSENT else json.dumps(expected, ensure_ascii=False),
+            % (args.key, "(absent)" if landed is _ABSENT else json.dumps(landed, ensure_ascii=True),
+               "(absent)" if expected is _ABSENT else json.dumps(expected, ensure_ascii=True),
                backup_set.relative_directory))
     backup_mod.prune(args.root, keep=int(
         policy_mod.load(reg.policy).get("sweep.backupRetention", 10)))
@@ -1340,9 +1767,9 @@ def cmd_policy_set(args) -> int:
     if args.as_json:
         return _emit(payload, True)
     print("policy.%s %s" % (args.key, "withdrawn" if withdrawing else "set"))
-    print("  was:    %s" % json.dumps(before, ensure_ascii=False))
+    print("  was:    %s" % json.dumps(before, ensure_ascii=True))
     print("  now:    %s" % ("(withdrawn)" if withdrawing
-                            else json.dumps(value, ensure_ascii=False)))
+                            else json.dumps(value, ensure_ascii=True)))
     print("  wrote:  %s" % (", ".join(written) or "(already that value)"))
     print("  backup: %s" % backup_set.relative_directory)
     print("  verified: read back from disk")
@@ -1421,6 +1848,12 @@ def build_parser() -> argparse.ArgumentParser:
                           help="create the close-out directory (a write; off by default)")
     closeout.set_defaults(func=cmd_closeout)
 
+    review = sub.add_parser("review", parents=[common],
+                            help="where a roadmap review writes its records (read-only)")
+    review.add_argument("--date", default="",
+                        help="the review's UTC date, YYYY-MM-DD (default: today, UTC)")
+    review.set_defaults(func=cmd_review)
+
     lessons = sub.add_parser("lessons", parents=[common])
     lessons.add_argument("--open", action="store_true", help="live lessons only")
     lessons.add_argument("--check", default="", metavar="PATH",
@@ -1435,7 +1868,8 @@ def build_parser() -> argparse.ArgumentParser:
                          help="check a close-out's Lessons section instead of a "
                               "specification's Lessons applied")
     lessons.add_argument("--hygiene", action="store_true",
-                         help="what to merge, retire, tidy or repair (governance-sweep)")
+                         help="what to merge, retire, tidy, record or repair "
+                              "(governance-sweep)")
     lessons.add_argument("--candidates", action="store_true",
                          help="lessons that have earned promotion or revision (roadmap-review)")
     lessons.add_argument("--record-status", default="", metavar="ID",
@@ -1445,7 +1879,8 @@ def build_parser() -> argparse.ArgumentParser:
     lessons.add_argument("--status", default="",
                          help="the status to record: Promoted -> <rule> / Retired — <why> / "
                               "Superseded -> <ID> / Observation")
-    lessons.add_argument("--date", default="", help="the record's date (default: today)")
+    lessons.add_argument("--date", default="",
+                         help="the record's date (default: today, UTC)")
     lessons.add_argument("--apply", action="store_true",
                          help="append the record (without it, --record-status and "
                               "--record-link preview)")
@@ -1463,10 +1898,72 @@ def build_parser() -> argparse.ArgumentParser:
     holding.add_argument("--state", default="",
                          help="the state to record: %s" % ", ".join(holding_mod.STATES))
     holding.add_argument("--note", default="", help="the trail row's note (one line)")
-    holding.add_argument("--date", default="", help="the row's date (default: today)")
+    holding.add_argument("--date", default="", help="the row's date (default: today, UTC)")
     holding.add_argument("--apply", action="store_true",
                          help="append the row (without it, --record previews)")
     holding.set_defaults(func=cmd_holding)
+
+    timing = sub.add_parser("timing", parents=[common])
+    timing.add_argument("--sprint", default="",
+                        help="the dispatch the log belongs to (every action but --kinds)")
+    timing_action = timing.add_mutually_exclusive_group(required=True)
+    timing_action.add_argument("--open", dest="do_open", action="store_true",
+                               help="open the log from the first task listing (--rows-file)")
+    timing_action.add_argument("--add", dest="do_add", action="store_true",
+                               help="add rows mid-run (--rows-file); each takes the next number")
+    timing_action.add_argument("--start", dest="do_start", type=int, metavar="N",
+                               help="row N starts now")
+    timing_action.add_argument("--wait", dest="do_wait", type=int, metavar="N",
+                               help="row N waits on the owner from now")
+    timing_action.add_argument("--resume", dest="do_resume", type=int, metavar="N",
+                               help="row N resumes work now")
+    timing_action.add_argument("--end", dest="do_end", type=int, metavar="N",
+                               help="row N ends now (with --result)")
+    timing_action.add_argument("--status", dest="do_status", action="store_true",
+                               help="the header and every row: predicted and measured minutes")
+    timing_action.add_argument("--kinds", dest="do_kinds", action="store_true",
+                               help="the kind names already in use, with their measured runs")
+    timing_action.add_argument("--summary", dest="do_summary", action="store_true",
+                               help="the close-out's Time table; with --json, the ledger's "
+                                    "estimate and actual")
+    timing_action.add_argument("--confirm", dest="do_confirm", type=int, metavar="N",
+                               help="the owner confirms flagged row N was real work")
+    timing_action.add_argument("--timebox-reached", dest="do_timebox_reached", type=int,
+                               metavar="N", help="frontier row N has worked its timebox "
+                                                 "(refused until the clock says so)")
+    timing_action.add_argument("--split", dest="do_split", type=int, metavar="N",
+                               help="end row N as split and add its parts (--rows-file), "
+                                    "each carrying splitFrom N")
+    timing_action.add_argument("--rows-from-spec", dest="do_rows_from_spec", metavar="SPEC",
+                               help="read a specification's task list (rubric U10): its "
+                                    "priced rows and total line, or exit 1 naming what is "
+                                    "missing")
+    timing.add_argument("--from-spec", default="", metavar="SPEC",
+                        help="with --open: the rows from a specification's task list, "
+                             "keeping its ids and its written price")
+    timing.add_argument("--item", default="",
+                        help="with --summary: only this item's rows (a combined epic); with "
+                             "--rows-from-spec or --from-spec: the item whose inline "
+                             "specification holds the task list")
+    timing.add_argument("--rows-file", default="", metavar="PATH",
+                        help="a JSON list of rows: id, title, owner, tier, effort, item, "
+                             "parallel, and optional kind, estimate (minutes), class, model, "
+                             "host, specRevision, group, and a frontier row's timebox "
+                             "(minutes) and onTimebox")
+    timing.add_argument("--result", default="done",
+                        choices=[r for r in timing_mod.RESULTS if r != timing_mod.SPLIT],
+                        help="how the row ended (with --end)")
+    timing.add_argument("--reason", default=None,
+                        help="why row N waits (with --wait, required): "
+                             + ", ".join(timing_mod.WAIT_REASONS))
+    timing.add_argument("--model", default=None,
+                        help="the model at work on the row (with --start or --resume)")
+    timing.add_argument("--host", default=None,
+                        help="the host running the row (with --start or --resume)")
+    timing.add_argument("--tokens", default=None, metavar="COUNT",
+                        help="the host's reported token count for the row (with --end); "
+                             "a count, never minutes")
+    timing.set_defaults(func=cmd_timing)
 
     completion = sub.add_parser("record-completion", parents=[common])
     completion.add_argument("--item", required=True)
@@ -1479,6 +1976,9 @@ def build_parser() -> argparse.ArgumentParser:
                             help="the effort it took, as a duration (the close-out's runtime)")
     completion.add_argument("--revision", default="",
                             help="the revision read in Wave 1 (default: the current one)")
+    completion.add_argument("--ledger-only", action="store_true",
+                            help="external register: append and verify the terminal record "
+                                 "only; the mutation handshake closes the item")
     completion.add_argument("--apply", action="store_true",
                             help="perform the writes (without it, previews)")
     completion.set_defaults(func=cmd_record_completion)
@@ -1490,7 +1990,11 @@ def build_parser() -> argparse.ArgumentParser:
     snapshot.add_argument("--import", dest="import_rows", default="", metavar="ROWS",
                           help="build the snapshot from rows a host connector read: a JSON "
                                "list of row objects keyed by the register's own columns, or "
-                               "{\"takenAt\": ..., \"rows\": [...]}")
+                               "{\"takenAt\": ..., \"rows\": [...]}, or the connector's raw "
+                               "items page(s) with --columns")
+    snapshot.add_argument("--columns", default="", metavar="PATH",
+                          help="with a raw items page: the board's column list ({id, title} "
+                               "objects, or the connector's board information)")
     snapshot.add_argument("--taken-at", default="",
                           help="when the connector read the rows (ISO 8601 with an offset; "
                                "default: the rows file's takenAt, else now)")
@@ -1517,28 +2021,46 @@ def build_parser() -> argparse.ArgumentParser:
     mutation_plan = sub.add_parser("mutation-plan", parents=[common])
     mutation_plan.add_argument("--operation", required=True, choices=MUTATION_OPERATIONS)
     mutation_plan.add_argument("--item", required=True)
-    mutation_plan.add_argument("--fields-json", required=True)
+    plan_fields = mutation_plan.add_mutually_exclusive_group(required=True)
+    plan_fields.add_argument("--fields-json", help="the fields as a JSON object")
+    plan_fields.add_argument("--fields-file", metavar="PATH",
+                             help="the fields as a UTF-8 JSON file (safe from shell quoting)")
     mutation_plan.add_argument("--revision", default="")
     mutation_plan.add_argument("--idempotency-key", default="")
     mutation_plan.set_defaults(func=cmd_mutation_plan)
 
     mutation_confirm = sub.add_parser("mutation-confirm", parents=[common])
-    mutation_confirm.add_argument("--operation", required=True, choices=MUTATION_OPERATIONS)
-    mutation_confirm.add_argument("--item", required=True)
-    mutation_confirm.add_argument("--idempotency-key", required=True)
-    mutation_confirm.add_argument("--recovery-id", required=True)
+    mutation_confirm.add_argument("--recovery-id", required=True,
+                                  help="the plan's record; it supplies the three below")
+    mutation_confirm.add_argument("--operation", default="", choices=MUTATION_OPERATIONS,
+                                  help="optional; must match the record")
+    mutation_confirm.add_argument("--item", default="", help="optional; must match the record")
+    mutation_confirm.add_argument("--idempotency-key", default="",
+                                  help="optional; must match the record")
     mutation_confirm.add_argument("--actual-revision", default="")
     mutation_confirm.add_argument("--provider-id", default="",
                                   help="the identifier the external system assigned (creations)")
     mutation_confirm.add_argument("--detail-json", default="{}")
     confirmation = mutation_confirm.add_mutually_exclusive_group(required=True)
     confirmation.add_argument(
-        "--succeeded", dest="succeeded", action="store_true",
+        "--succeeded", dest="outcome", action="store_const", const="succeeded",
         help="the host connector mutation succeeded")
     confirmation.add_argument(
-        "--failed", dest="succeeded", action="store_false",
+        "--failed", dest="outcome", action="store_const", const="failed",
         help="the host connector mutation failed; leave recovery outstanding")
+    confirmation.add_argument(
+        "--partial", dest="outcome", action="store_const", const="partial",
+        help="some fields landed (--written); the record stays outstanding until a plan "
+             "for the rest supersedes it")
+    mutation_confirm.add_argument("--written", default="", metavar="FIELD[,FIELD...]",
+                                  help="with --partial: the fields the read-back shows landed")
     mutation_confirm.set_defaults(func=cmd_mutation_confirm)
+
+    mutation_abandon = sub.add_parser("mutation-abandon", parents=[common])
+    mutation_abandon.add_argument("--recovery-id", required=True)
+    mutation_abandon.add_argument("--reason", required=True,
+                                  help="why the plan will not be executed")
+    mutation_abandon.set_defaults(func=cmd_mutation_abandon)
     return parser
 
 

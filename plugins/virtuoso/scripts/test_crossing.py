@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -298,6 +299,29 @@ def test_record_completion_appends_closes_and_verifies_in_order(workspace):
     assert len(providers.terminal_ledger(registry_mod.load(str(workspace))).records()) == 1
 
 
+def test_record_completion_records_the_registers_effort(workspace):
+    (workspace / "docs" / "ledger.md").write_text(
+        "# Terminal Ledger\n\nAppend-only.\n\n"
+        "| Record | Item | Completed | Result | Evidence | Corrects | Effort |\n"
+        "|--------|------|-----------|--------|----------|----------|--------|\n",
+        encoding="utf-8")
+    completed = record_completion(workspace, "--apply", "--json")
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["ledgerRecord"]["effort"] == "S" and result["effortRecorded"] is True
+
+
+def test_record_completion_says_when_the_ledger_has_no_effort_column(workspace, tmp_path):
+    second = tmp_path / "second"
+    shutil.copytree(workspace, second)
+    completed = record_completion(workspace, "--apply", "--json")
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert json.loads(completed.stdout)["effortRecorded"] is False
+    text = record_completion(second, "--apply")
+    assert text.returncode == 0, text.stdout + text.stderr
+    assert "no Effort column" in text.stdout
+
+
 def test_record_completion_leaves_a_recovery_record_when_the_register_refuses(workspace):
     completed = record_completion(workspace, "--apply", "--revision", "stale-revision")
     assert completed.returncode != 0
@@ -368,3 +392,152 @@ def test_the_close_out_records_the_retirement_the_review_routes_to_it(default_wo
     reg = registry_mod.load(str(default_workspace))
     assert [r.item_id for r in providers.terminal_ledger(reg).records()] == ["ITEM-1"]
     assert providers.work_register(reg).provider.get("ITEM-1").status == base.COMPLETED
+
+
+# --- --ledger-only: the terminal record alone, for an external register ---------------
+#
+# An external register is closed by the mutation handshake the host's connector runs; the
+# ledger is local, so record-completion appends and verifies the record and nothing else.
+
+EXTERNAL_LEDGER = (
+    "# Terminal Ledger\n\nAppend-only.\n\n"
+    "| Record | Item | Completed | Result | Evidence | Corrects | Estimate | Actual | Effort |\n"
+    "|--------|------|-----------|--------|----------|----------|----------|--------|--------|\n")
+THIS_PROJECTS_LEDGER = (Path(__file__).resolve().parents[3] / "Project Documentation"
+                        / "1 governance" / "CompletedWork.Ledger.md")
+
+
+@pytest.fixture
+def external_workspace(project):
+    (project / "Virtuoso").mkdir()
+    (project / "Virtuoso" / "snap.json").write_text(json.dumps({
+        "snapshotVersion": 1, "takenAt": "2099-01-01T00:00:00Z", "provider": "connector",
+        "source": "monday:board/1234567890", "fields": ["id", "status", "effort", "revision"],
+        "items": [{"id": "ITEM-1", "title": "First thing", "status": "queued",
+                   "raw_status": "Queued", "effort": "S", "revision": "rev-1"}]}),
+        encoding="utf-8")
+    (project / "docs").mkdir()
+    (project / "docs" / "ledger.md").write_text(EXTERNAL_LEDGER, encoding="utf-8")
+    (project / "docs" / "Close-Outs").mkdir()
+    manifest = {
+        "schemaVersion": 2,
+        "roles": {
+            "workRegister": {"external": "monday:board/1234567890", "provider": "connector",
+                             "authority": "live", "mutability": "read-write",
+                             "allowedWriters": ["pointer-closeout"],
+                             "validation": "external", "classification": "active",
+                             "origin": "authored"},
+            "workRegisterSnapshot": {"path": "Virtuoso/snap.json", "provider": "snapshot",
+                                     "authority": "report", "mutability": "generated",
+                                     "validation": "exists", "classification": "active",
+                                     "origin": "generated"},
+            "terminalLedger": {"path": "docs/ledger.md", "provider": "markdown",
+                               "authority": "terminal", "mutability": "append-only",
+                               "allowedWriters": ["pointer-closeout"],
+                               "validation": "markdown", "classification": "active",
+                               "origin": "authored"},
+            "closeOuts": {"path": "docs/Close-Outs", "provider": "directory",
+                          "authority": "evidence", "mutability": "append-only",
+                          "allowedWriters": ["pointer-closeout"], "validation": "exists",
+                          "classification": "active", "origin": "authored"},
+        },
+        "policy": {"workRegister": {"snapshot": "workRegisterSnapshot"},
+                   "terminalLedger": {"writers": ["pointer-closeout"],
+                                      "correctionWriters": ["pointer-closeout"]}},
+    }
+    (project / "Virtuoso" / "workspace-layout.json").write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8")
+    return project
+
+
+def _ledger_bytes(root):
+    return (root / "docs" / "ledger.md").read_bytes()
+
+
+def test_ledger_only_appends_the_record_for_an_external_register(external_workspace):
+    ext = external_workspace
+    snapshot = (ext / "Virtuoso" / "snap.json").read_bytes()
+    completed = record_completion(ext, "--ledger-only", "--estimate", "40m", "--actual", "55m",
+                                  "--apply", "--json")
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["steps"] == ["append-terminal-record", "verify-results"]
+    assert result["closeInRegister"] is False and result["ledgerOnly"] is True
+    record = result["ledgerRecord"]
+    assert (record["effort"], record["effortEstimate"], record["effortActual"]) == \
+        ("S", "40m", "55m")
+    assert result["effortRecorded"] is True
+    assert (ext / "Virtuoso" / "snap.json").read_bytes() == snapshot
+    assert recovery.outstanding(str(ext)) == []
+
+
+def test_ledger_only_is_idempotent(external_workspace):
+    ext = external_workspace
+    first = record_completion(ext, "--ledger-only", "--apply", "--json")
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert json.loads(first.stdout)["appendRecord"] is True
+    after_first = _ledger_bytes(ext)
+    second = record_completion(ext, "--ledger-only", "--apply", "--json")
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert json.loads(second.stdout)["appendRecord"] is False
+    assert _ledger_bytes(ext) == after_first
+    reg = registry_mod.load(str(ext))
+    assert [r.item_id for r in providers.terminal_ledger(reg).records()] == ["ITEM-1"]
+
+
+def test_ledger_only_previews_without_writing(external_workspace):
+    before = _ledger_bytes(external_workspace)
+    completed = record_completion(external_workspace, "--ledger-only")
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "append TR-001" in completed.stdout and "not written" in completed.stdout
+    assert _ledger_bytes(external_workspace) == before
+
+
+def test_an_external_register_without_ledger_only_names_it(external_workspace):
+    before = _ledger_bytes(external_workspace)
+    completed = record_completion(external_workspace, "--apply")
+    assert completed.returncode != 0
+    assert "--ledger-only" in completed.stdout + completed.stderr
+    assert _ledger_bytes(external_workspace) == before
+
+
+def test_ledger_only_is_refused_for_a_local_register(workspace):
+    register = (workspace / "docs" / "register.csv").read_bytes()
+    completed = record_completion(workspace, "--ledger-only", "--apply")
+    assert completed.returncode != 0
+    assert "--ledger-only is for an external register" in completed.stdout + completed.stderr
+    assert "ITEM-1" not in (workspace / "docs" / "ledger.md").read_text(encoding="utf-8")
+    assert (workspace / "docs" / "register.csv").read_bytes() == register
+
+
+def test_ledger_only_opens_a_recovery_record_when_the_record_does_not_read_back(
+        external_workspace, monkeypatch):
+    import virtuoso_registry
+    ext = external_workspace
+    monkeypatch.setattr(ledger.TerminalLedger, "append", lambda self, record, **kw: True)
+    assert virtuoso_registry.main([
+        "--root", str(ext), "--actor", "pointer-closeout", "record-completion",
+        "--ledger-only", "--item", "ITEM-1", "--date", "2026-01-01", "--result", "shipped",
+        "--apply"]) != 0
+    [rec] = recovery.outstanding(str(ext))
+    assert rec["completed_steps"] == ["append-terminal-record"]
+    assert rec["remaining_steps"] == ["verify-results"]
+    assert rec["detail"]["ledgerOnly"] is True
+
+
+def test_ledger_only_appends_to_this_projects_ledger(external_workspace):
+    if not THIS_PROJECTS_LEDGER.is_file():
+        pytest.skip("this project's ledger is not in this tree")
+    ext = external_workspace
+    original = THIS_PROJECTS_LEDGER.read_bytes()
+    (ext / "docs" / "ledger.md").write_bytes(original)
+    expected = ledger.TerminalLedger(str(ext / "docs" / "ledger.md")).next_record_id()
+    completed = record_completion(ext, "--ledger-only", "--apply", "--json")
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["ledgerRecord"]["recordId"] == expected
+    assert result["ledgerRecord"]["effort"] == "S"
+    after = _ledger_bytes(ext)
+    assert after.startswith(original)
+    added = after[len(original):].decode("utf-8").splitlines()
+    assert len(added) == 1 and added[0].endswith("| S |")

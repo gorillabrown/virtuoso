@@ -39,10 +39,13 @@ _DEFAULT_HEADERS = {
     # ("90m", "1.5h", "2h30m"; a bare number is hours). Read by effort calibration.
     "effortEstimate": ("effortestimate", "estimate", "effort estimate"),
     "effortActual": ("effortactual", "actual", "effort actual"),
+    # Optional: the item's size word on the effort scale (xs … xl), as the register held
+    # it at close-out. Not a duration. Read by pace's trailing points.
+    "effort": ("effort",),
 }
 
 #: The optional effort fields, and the markdown header each is found by.
-EFFORT_FIELDS = {"effortEstimate": "estimate", "effortActual": "actual"}
+EFFORT_FIELDS = {"effortEstimate": "estimate", "effortActual": "actual", "effort": "effort"}
 
 #: Fields a record cannot be appended without, because a record lacking them is
 #: not one any reader could use.
@@ -95,6 +98,7 @@ class LedgerRecord:
     corrects: str = ""
     effort_estimate: str = ""
     effort_actual: str = ""
+    effort: str = ""
     extra: dict = field(default_factory=dict)
 
     @property
@@ -114,6 +118,8 @@ class LedgerRecord:
             data["effortEstimate"] = self.effort_estimate
         if self.effort_actual:
             data["effortActual"] = self.effort_actual
+        if self.effort:
+            data["effort"] = self.effort
         data.update(self.extra)
         return data
 
@@ -177,8 +183,10 @@ class TerminalLedger:
 
     def _markdown_records(self, text: str) -> list[LedgerRecord]:
         """The first six columns are positional, as they always were. The optional
-        effort columns are found by their header (*Estimate*, *Actual*) in the
-        table's own header row, so a ledger without them reads exactly as before."""
+        effort columns are found by their header (*Estimate*, *Actual*, *Effort* or the
+        column ``fieldMappings.effort`` names) in the table's own header row, so a
+        ledger without them reads exactly as before."""
+        labels = self._markdown_effort_labels()
         out: list[LedgerRecord] = []
         rows_started = False
         header: list[str] = []
@@ -200,12 +208,18 @@ class TerminalLedger:
             while len(cells) < max(6, len(header)):
                 cells.append("")
             effort = {name: cells[header.index(label)] if label in header else ""
-                      for name, label in EFFORT_FIELDS.items()}
+                      for name, label in labels.items()}
             out.append(LedgerRecord(record_id=cells[0], item_id=cells[1], completed=cells[2],
                                     result=cells[3], evidence=cells[4], corrects=cells[5],
                                     effort_estimate=effort["effortEstimate"],
-                                    effort_actual=effort["effortActual"]))
+                                    effort_actual=effort["effortActual"],
+                                    effort=effort["effort"]))
         return out
+
+    def _markdown_effort_labels(self) -> dict:
+        """``{effort field: its lower-cased markdown header}``."""
+        return dict(EFFORT_FIELDS,
+                    effort=(self.field_mappings.get("effort") or "effort").strip().lower())
 
     def contains(self, record: LedgerRecord) -> bool:
         key = record.idempotency_key
@@ -254,7 +268,7 @@ class TerminalLedger:
                   "completed": record.completed, "result": record.result,
                   "evidence": record.evidence, "corrects": record.corrects,
                   "effortEstimate": record.effort_estimate,
-                  "effortActual": record.effort_actual}
+                  "effortActual": record.effort_actual, "effort": record.effort}
         buffer = io.StringIO(newline="")
         if not existing or not existing.strip():
             # The documented six columns; the optional effort columns only when this
@@ -286,7 +300,10 @@ class TerminalLedger:
                  record.evidence, record.corrects]
         header = _last_markdown_header(existing or "")
         if len(header) > 6:
-            extra = {"estimate": record.effort_estimate, "actual": record.effort_actual}
+            labels = self._markdown_effort_labels()
+            extra = {labels["effortEstimate"]: record.effort_estimate,
+                     labels["effortActual"]: record.effort_actual,
+                     labels["effort"]: record.effort}
             cells += [extra.get(label, "") for label in header[6:]]
         row = "| %s |" % " | ".join(cells)
         if not existing:
@@ -325,7 +342,7 @@ def _from_payload(payload: dict, columns: dict | None = None) -> LedgerRecord:
         record_id=value("recordId"), item_id=value("itemId"), completed=value("completed"),
         result=value("result"), evidence=value("evidence"), corrects=value("corrects"),
         effort_estimate=value("effortEstimate"), effort_actual=value("effortActual"),
-        extra={k: v for k, v in payload.items() if k not in used},
+        effort=value("effort"), extra={k: v for k, v in payload.items() if k not in used},
     )
 
 
