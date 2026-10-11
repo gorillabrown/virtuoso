@@ -244,6 +244,31 @@ def test_the_posix_launcher_reports_when_no_python_runs(tmp_path):
     assert completed.stdout == ""
 
 
+def test_the_posix_launcher_prefers_any_python_to_the_store_alias(tmp_path):
+    # The Store alias passes the run-check, then fails the real call: the launcher
+    # must not pick it while another Python runs.
+    sh = _posix_shell()
+    if sh is None:
+        pytest.skip("no POSIX sh: none on PATH and no Git for Windows")
+    store, other = tmp_path / "WindowsApps", tmp_path / "bin"
+    real = Path(sys.executable).as_posix()
+    flaky = '#!/bin/sh\ncase "$1" in -c) exec "%s" "$@" ;; esac\nexit 126\n' % real
+    for directory, name, body in ((store, "python3", flaky),
+                                  (other, "python", '#!/bin/sh\nexec "%s" "$@"\n' % real)):
+        directory.mkdir()
+        path = directory / name
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(body)
+        path.chmod(0o755)
+    env = dict(os.environ, PATH=os.pathsep.join([str(store), str(other), os.environ["PATH"]]),
+               VIRTUOSO_PLUGIN_ROOT=PLUGIN_ROOT, VIRTUOSO_HOME=str(tmp_path / "home"))
+    completed = subprocess.run([sh, os.path.join(PLUGIN_ROOT, "bin", "virtuoso"),
+                                "virtuoso_registry", "--help"],
+                               capture_output=True, text=True, env=env)
+    assert completed.returncode == 0, completed.stderr
+    assert "usage: virtuoso_registry.py" in completed.stdout
+
+
 # --- the PowerShell launcher, when pwsh is present -----------------------------
 
 

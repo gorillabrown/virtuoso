@@ -48,13 +48,14 @@ on an existing spec, or deciding whether a sprint needs wave-splitting by effort
 
 ---
 
-## The Four Effort Levels
+## The Five Effort Levels
 
 | Level | Thinking Budget | Agent Behavior | Cost Multiplier |
 |-------|----------------|----------------|-----------------|
 | **Low** | Minimal | Responds quickly from trained knowledge and pattern recognition. Answers from memory rather than working through the problem. No extended reasoning chains. | ~1x (baseline) |
 | **Medium** | Moderate | Does meaningful reasoning but stops well short of exhausting capacity. Handles most everyday coding tasks well. This is the default for standard work. | ~2–3x |
 | **High** | Substantial | Traces through complex logic, considers multiple approaches, backtracks when needed. Response time increases noticeably, and so does token cost. | ~5x |
+| **Extra high** (`xhigh`) | Deep | More deliberation than high, short of max: long traces across several modules, where a wrong answer is costly but the problem is not the hardest kind. | ~7x |
 | **Max** | Full available | Reasons as extensively as the current context allows. Most expensive and slowest option, but produces highest-quality output on genuinely hard problems. | ~10x+ |
 
 ### Why This Matters for Cost
@@ -175,8 +176,8 @@ Ask these five questions in order before setting each task's effort level:
 | 1 | Is the answer obvious given the input? | **Low** — stop here |
 | 2 | Does the task require understanding context beyond the current file or prompt? | **Medium** or higher |
 | 3 | Have I already tried a lower effort level and gotten a wrong or incomplete answer? | Step up one level |
-| 4 | Would getting this wrong have real consequences? | **High** or **Max** |
-| 5 | Is this a genuinely novel problem — something not seen in common form? | **High** or **Max** |
+| 4 | Would getting this wrong have real consequences? | **High**, `xhigh` or **Max** |
+| 5 | Is this a genuinely novel problem — something not seen in common form? | **High**, `xhigh` or **Max** |
 
 ---
 
@@ -202,6 +203,7 @@ Use this as a quick lookup when assigning effort to tasks in a dispatch spec.
 | Performance optimization | High | Runtime behavior analysis |
 | Security review | High | Non-obvious reasoning required |
 | Calibration interpretation | High | Statistical + domain judgment |
+| Cross-module change with a wide blast radius | `xhigh` | Deeper than high, short of max's cost |
 | Hard algorithmic problem | Max | Correctness non-trivial, edge cases |
 | Mission-critical system design | Max | Full architecture reasoning |
 | Race conditions, non-deterministic bugs | Max | Long causal chains |
@@ -267,9 +269,11 @@ is not explicitly annotated on a task:
 | bounded | Medium | Standard implementation — judgment within bounded scope |
 | cross-cutting | High | Cross-system reasoning — multiple approaches, careful tracing |
 
-**Only annotate effort when it differs from the model-tier default.** A `[bounded]` task
-is implicitly `{medium}`. Write `[bounded] {high}` only when the task needs deeper
-reasoning than bounded normally provides. This keeps the dispatch readable.
+No tier defaults to `xhigh` or `max`: a task gets either only by its own annotation.
+A specification may leave a task's effort blank when it is the tier's default — a
+`[bounded]` task is then `{medium}` — and writes `[bounded] {high}` when the task needs
+deeper reasoning than bounded normally provides. The run's plan prints the effort on
+every row either way (the virtuoso skill's row format).
 
 ---
 
@@ -323,7 +327,7 @@ Effort declarations in the spec are **planning decisions**. The actual mechanism
 changes the deliberation budget at runtime is the host command:
 
 ```
-/effort-levels [low | medium | high | max]
+/effort-levels [low | medium | high | xhigh | max]
 ```
 
 Run it inside the implementation agent's session before dispatching tasks at the

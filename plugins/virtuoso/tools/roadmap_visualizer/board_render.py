@@ -143,6 +143,7 @@ tfoot td { background: var(--panel); height: 30px; }
 .note { color: var(--muted); font-size: 13px; }
 .problems { color: var(--warn); font-size: 13px; margin: 0 0 12px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 0 0 16px; }
+.health { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 16px 0 0; overflow-wrap: anywhere; }
 .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
 .tile span { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .02em; }
 .tile strong { display: block; font-size: 24px; margin-top: 4px; overflow-wrap: anywhere; }
@@ -194,6 +195,7 @@ tfoot td { background: var(--panel); height: 30px; }
     <div class="slicers" id="slicers"></div>
     <div class="tiles" id="tiles"></div>
     <div class="charts" id="charts"></div>
+    <div class="health" id="health"><strong>Drift findings</strong><ul id="drift-list"></ul><p id="recommendation"></p></div>
   </section>
   <section id="roadmap">
     <div class="toolbar" id="roadmap-toolbar"></div>
@@ -519,8 +521,11 @@ function renderHeader() {
   const meta = document.getElementById("meta");
   meta.append(el("span", {}, "snapshot " + (p.takenAt || "unknown")),
               el("span", {}, "provider " + (p.provider || "unknown")),
-              el("span", {}, "source " + (p.source || "unknown")),
-              el("span", {}, "generated " + (BOARD.generatedAt || "")));
+              el("span", {}, "source " + (p.source || "unknown")));
+  const r = BOARD.register || {};
+  meta.append(el("span", {}, "register " + (r.role || "unknown") + " (" + (r.authority || "unknown") + ")"));
+  if (r.compatibilityAdapter) meta.append(el("span", {}, "read through the legacy compatibility adapter"));
+  meta.append(el("span", {}, "generated " + (BOARD.generatedAt || "")));
   const taken = Date.parse(p.takenAt || "");
   const hours = isNaN(taken) ? null : (Date.now() - taken) / 3600000;
   if (p.stale) meta.append(el("span", { class: "badge", title: p.staleReason || "" }, "stale snapshot"));
@@ -989,6 +994,15 @@ function renderDashboard() {
     chart("Completions per week (last 12)", completionsOverTime()));
 }
 
+// The register's health, as summarize_health computed it; the slicers do not apply.
+function renderHealth() {
+  const h = BOARD.health || {};
+  const findings = h.drift_findings || [];
+  const list = document.getElementById("drift-list");
+  list.replaceChildren(...(findings.length ? findings : ["No drift findings."]).map((f) => el("li", {}, f)));
+  document.getElementById("recommendation").textContent = h.recommendation || "";
+}
+
 // --- wiring -------------------------------------------------------------------------
 const RENDERERS = [];
 function renderAll() { RENDERERS.forEach((render) => render()); }
@@ -996,6 +1010,7 @@ function boot() {
   try { JSON.parse(store("hidden") || "[]").forEach((k) => VIEW.hidden.add(k)); } catch (e) { /* ignore */ }
   loadHash();
   renderHeader();
+  renderHealth();
   RENDERERS.push(renderRoadmap, renderCompleted, renderDashboard);
   buildToolbar();
   buildDoneToolbar();

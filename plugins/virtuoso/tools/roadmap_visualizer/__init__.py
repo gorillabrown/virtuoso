@@ -1,3 +1,3 @@
-"""Static planning cockpit generator for Virtuoso roadmap workspaces."""
+"""Roadmap board generator for Virtuoso workspaces."""
 
 __version__ = "0.1.0"

@@ -2,6 +2,7 @@
 name: Plato
 description: "Bounded-scope reviewer covering code quality, spec compliance review, code review, and knowledge management. Use for any review task: code quality checks, style review, memory/knowledge evaluation."
 model: sonnet
+effort: medium
 ---
 
 <!-- virtuoso-overlay-clause v2 -->

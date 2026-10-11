@@ -143,10 +143,11 @@ duration):
 | event | carries | written by |
 |---|---|---|
 | `open` | `rows`: each `id`, `title`, `owner`, `tier`, `effort`, `item`, `parallel`, optional `kind` and `estimate`, the optional fields below, and the `predicted` minutes and `basis` timing priced | `--open --rows-file` |
-| `add` | one or more such rows, numbered after the last, shown as `+N` | `--add --rows-file` |
+| `add` | one or more such rows, numbered after the last, and `origin` (`added`, `review` or `audit`; a log without it reads `added`), shown as `+N`, `RN` or `AN` | `--add --rows-file` (`--origin`) |
 | `start`, `resume` | `row`; optional `model` and `host` | `--start N`, `--resume N` (`--model`, `--host`) |
 | `wait` | `row` and `reason`: `owner`, `approval`, `blocked` or `session-ended`; a wait without one is refused | `--wait N --reason R` |
-| `end` | `row`, `result` (`done`, `blocked`, `cancelled`, or `split`), optional `tokens` (a whole number the host reported); a `split` end also carries `rows`, the parts, each with `splitFrom` | `--end N` (`--tokens`), `--split N --rows-file` |
+| `end` | `row`, `result` (`done`, `blocked`, `cancelled`, or `split`), optional `tokens` (a whole number the host reported), and `evidence` (what proves the row, or `null` when `--end` was given none; an end written before evidence existed has no key); a `split` end also carries `rows`, the parts, each with `splitFrom` | `--end N` (`--tokens`, `--evidence`), `--split N --rows-file` |
+| `park` | `row` and `reason` (words, required): a row not yet started that the run will not do; shown `◇` under *Parked*, and a `findings` entry at the close-out | `--park N --reason R` |
 | `confirm` | `row`: the owner confirms a flagged row was real work | `--confirm N` |
 | `timebox-reached` | `row`: a frontier row has worked its timebox; refused before the clock reaches it | `--timebox-reached N` |
 
@@ -170,6 +171,21 @@ both over non-parallel rows, as durations the ledger reads. `--item` limits it t
 rows (a log whose rows name no item is one item's run). `complete` is false when a row that
 ran has no measured time; the ledger then takes neither total. Flagged time stays in the
 Actual, `total-error` and `added-share`; only `row-error` and pricing leave it out.
+The table names each row's *Model* (the one its `start` named) and *Effort* (its own, else
+its tier's). With `--json`, `byModelEffort` lists each (model, effort) pair's measured rows
+and their median actual ÷ predicted, `not computable` below 3 rows; rows whose log recorded
+no model are skipped and counted in `skippedNoModel`, never refused. The table's last column
+is each row's *Evidence*; parked rows are listed under it, and `--json` carries them as
+`parked` (`id`, `label`, `title`, `reason`).
+
+`timing --status` opens with the counted header `[D/N ✓ · R ■ · X ✗ · O □ · P ◇]`: only a row
+ended `done` is ✓; blocked, cancelled and split rows are ✗. `--status --compact`, past 12
+rows, prints the header, every row not done and the last 3 done. `timing --check` reads the
+log against its own promises and is read by its exit code: 0 clean; 1 with findings — a
+row number used twice, a row ended `done` whose end carries `evidence: null`, a parked row
+without a reason, a row still running or waiting, or a log that cannot be read; 2 for a
+usage error (no `--sprint`, no `closeOuts` role, a flag `--check` does not take) or no log
+for the sprint. A log whose rows have all ended or been parked counts as closed.
 
 Every other column is kept, untouched. A mapped field is found by its mapped header and nowhere
 else. An append lays its row out under the file's own header and is refused, naming the missing
@@ -771,6 +787,7 @@ never zero.
 | `row-error` | the median of \|actual − predicted\| ÷ predicted over the measured rows of closed time logs (flagged rows left out) | three closed time logs |
 | `total-error` | the same over each closed log's sequential totals: actual against the first listing's estimate | three closed time logs |
 | `added-share` | the share of working minutes spent on rows added after the first listing — what the listing missed | three closed time logs |
+| `row-error-by-model-effort` | `row-error` per (model, effort) pair, as `{"<model> {<effort>}": value}`; rows with no model recorded are skipped and counted in the unit | three measured rows of one pair, in closed time logs |
 
 Read together over successive reviews: a flat or falling live count with a positive yield,
 promotions above zero, a high held rate, a falling repeated-trap rate. Any one figure can be

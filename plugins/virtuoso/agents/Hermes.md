@@ -2,6 +2,7 @@
 name: Hermes
 description: "General-purpose mechanical implementation agent. Use for any `mechanical` task with no matching specialist: config edits, version bumps, formatting, prescribed code changes, git operations. Receives exact change specs and executes precisely."
 model: haiku
+effort: low
 color: green
 ---
 

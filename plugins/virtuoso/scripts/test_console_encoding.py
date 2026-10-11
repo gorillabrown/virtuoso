@@ -106,9 +106,9 @@ def test_every_user_facing_entry_point_asks_for_utf8(script):
     assert "textio.utf8_stdio()" in body.split("\n", 3)[1] + body.split("\n", 3)[2]
 
 
-def test_the_cockpit_entry_point_asks_for_utf8():
+def test_the_board_entry_point_asks_for_utf8():
     text = (ROOT / "tools" / "roadmap_visualizer" / "generate.py").read_text(encoding="utf-8")
-    assert "textio.utf8_stdio()" in text.split("def main(", 1)[1].split("\n", 3)[1]
+    assert "textio.utf8_stdio()" in text.split("def board_main(", 1)[1].split("\n", 3)[1]
 
 
 def test_json_output_is_ascii_safe(project):

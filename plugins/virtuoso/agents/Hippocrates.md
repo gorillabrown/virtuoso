@@ -2,6 +2,7 @@
 name: Hippocrates
 description: "Use this agent to run the pytest test suite and report results. Launch after any code change, before and after fixes, or when verifying regressions. Lightweight verification agent."
 model: haiku
+effort: low
 color: gray
 memory: project
 ---

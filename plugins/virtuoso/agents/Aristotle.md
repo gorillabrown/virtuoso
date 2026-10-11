@@ -2,6 +2,7 @@
 name: Aristotle
 description: "Cross-cutting lead agent. Handles investigation, cross-system implementation, and domain-specialist work. Use for any `cross-cutting` task: root-cause diagnosis, multi-module refactors, architectural decisions, subsystem forensics, output auditing, interaction analysis, time-series analysis."
 model: opus
+effort: high
 ---
 
 <!-- virtuoso-overlay-clause v2 -->

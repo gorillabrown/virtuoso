@@ -7,7 +7,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class WorkspaceContext:
-    """Where the cockpit reads from — always the registry, never a convention."""
+    """Where the board reads from — always the registry, never a convention."""
 
     root: Path
     manifest: Path
@@ -40,16 +40,6 @@ class HealthSummary:
     drift_count: int
     drift_findings: list[str]
     recommendation: str
-
-
-@dataclass(frozen=True)
-class PlanningModel:
-    workspace: WorkspaceContext
-    roadmap: RoadmapSnapshot
-    items: list[Any]
-    metrics: dict
-    health: HealthSummary
-    provenance: dict
 
 
 def to_jsonable(value: Any) -> Any:

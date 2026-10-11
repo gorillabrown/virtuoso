@@ -404,7 +404,7 @@ def _timing_figures(reg, provenance):
         directory = reg.resolve("closeOuts")
     except RoleNotRegistered:
         return [kpi.Metric(name, computable=False, missing_inputs=["a registered closeOuts role"])
-                for name in timing_mod.TIMING_METRICS]
+                for name in timing_mod.TIMING_METRICS + (timing_mod.PAIR_METRIC,)]
     provenance["timeLogs"] = os.path.relpath(directory, reg.root).replace(os.sep, "/")
     provenance["timeLogsClosed"] = len(timing_mod.closed_logs(directory))
     return timing_mod.figures(directory)
@@ -945,7 +945,7 @@ def cmd_holding(args) -> int:
 
 
 _TIMING_WRITES = ("open", "add", "start", "wait", "resume", "end", "confirm", "split",
-                  "timebox_reached")
+                  "timebox_reached", "park")
 
 
 def _skipped_logs(skipped: list) -> None:
@@ -982,6 +982,23 @@ def _timing_rows_from_spec(args, directory: str) -> int:
                      for row in priced] + ["Total: " + total]))
 
 
+def _timing_check(path: str, args) -> int:
+    """``timing --check``: exit 0 clean, 1 with findings (an unreadable log is one), 2 when
+    there is no log for the sprint to check."""
+    if not os.path.isfile(path):
+        print("error: no time log for sprint %s at %s" % (args.sprint, path), file=sys.stderr)
+        return 2
+    try:
+        findings = timing_mod.check_log(timing_mod.load(path))
+    except GovernanceError as exc:
+        findings = ["the log cannot be read: %s" % exc]
+    _emit({"log": path, "findings": findings}, args.as_json,
+          lambda: "\n".join(["timing --check %s: %s" % (args.sprint, "clean" if not findings
+                                                        else "%d finding(s)" % len(findings))]
+                            + ["- %s" % finding for finding in findings]))
+    return EXIT_CHECK_FAILED if findings else EXIT_OK
+
+
 def cmd_timing(args) -> int:
     """A dispatch's time log: open it from the first task listing, record each row's
     start, wait, resume and end from the machine clock, and read its status.
@@ -994,11 +1011,27 @@ def cmd_timing(args) -> int:
     """
     reg = _load(args.root)
     chosen = {name: getattr(args, "do_" + name, None)
-              for name in _TIMING_WRITES + ("status", "kinds", "summary", "rows_from_spec")}
+              for name in _TIMING_WRITES + ("status", "kinds", "summary", "rows_from_spec",
+                                            "check")}
     action = next(name for name, value in chosen.items()
                   if value is not None and value is not False)
     if args.from_spec and action != "open":
         raise GovernanceError("--from-spec goes with --open")
+    if args.compact and action != "status":
+        raise GovernanceError("--compact goes with --status")
+    if action == "check":
+        # Read by its exit code: 0 clean, 1 findings, 2 for any usage error.
+        try:
+            timing_mod.event_fields("check", reason=args.reason, tokens=args.tokens,
+                                    model=args.model, host=args.host,
+                                    evidence=args.evidence, origin=args.origin)
+            if not args.sprint:
+                raise GovernanceError("timing --check needs --sprint: the dispatch to check")
+            path = os.path.join(reg.resolve("closeOuts"), timing_mod.log_name(args.sprint))
+        except GovernanceError as exc:
+            print("error: %s" % exc, file=sys.stderr)
+            return 2
+        return _timing_check(path, args)
     if action == "rows_from_spec":
         try:
             directory = reg.resolve("closeOuts")
@@ -1008,7 +1041,8 @@ def cmd_timing(args) -> int:
     directory = reg.resolve("closeOuts")
     event_name = action.replace("_", "-")
     extra = timing_mod.event_fields(event_name, reason=args.reason, tokens=args.tokens,
-                                    model=args.model, host=args.host)
+                                    model=args.model, host=args.host,
+                                    evidence=args.evidence, origin=args.origin)
     if action == "kinds":
         skipped = []
         used = timing_mod.kinds(timing_mod.history(directory, skipped))
@@ -1062,15 +1096,15 @@ def cmd_timing(args) -> int:
             print("kinds in use: %s" % (", ".join("%s (%d)" % pair for pair in used.items())
                                          or "none yet"))
         if split is None:
-            timing_mod.append(path, {"event": action, "rows": [
+            timing_mod.append(path, dict({"event": action, "rows": [
                 dict(row, **written.get(row["id"], {}))
-                for row in timing_mod.price_rows(planned, past)]})
+                for row in timing_mod.price_rows(planned, past)]}, **extra))
         else:
             # One line ends the row and adds its parts, so a cut-off write leaves neither.
             parts = [dict(spec, splitFrom=split) for spec in planned]
             timing_mod.append(path, {"event": "end", "row": split, "result": timing_mod.SPLIT,
                                      "rows": timing_mod.price_rows(parts, past)})
-    elif action in ("start", "wait", "resume", "end", "confirm", "timebox_reached"):
+    elif action in ("start", "wait", "resume", "end", "confirm", "timebox_reached", "park"):
         row_id = getattr(args, "do_" + action)
         timing_mod.check(events, event_name, row_id)
         event = dict({"event": event_name, "row": row_id}, **extra)
@@ -1089,7 +1123,7 @@ def cmd_timing(args) -> int:
     if args.as_json:
         return _emit({"log": path, "now": timing_mod.stamp(moment),
                       "rows": [row.as_dict() for row in found]}, True)
-    print(timing_mod.render_status(found, moment))
+    print(timing_mod.render_status(found, moment, compact=args.compact))
     return EXIT_OK
 
 
@@ -1934,6 +1968,13 @@ def build_parser() -> argparse.ArgumentParser:
     timing_action.add_argument("--split", dest="do_split", type=int, metavar="N",
                                help="end row N as split and add its parts (--rows-file), "
                                     "each carrying splitFrom N")
+    timing_action.add_argument("--check", dest="do_check", action="store_true",
+                               help="the log against its own promises: exit 0 clean, 1 with "
+                                    "findings (a number used twice, done without evidence, "
+                                    "parked without a reason, a row still running), 2 usage")
+    timing_action.add_argument("--park", dest="do_park", type=int, metavar="N",
+                               help="set aside row N, not yet started, which the run will not "
+                                    "do (with --reason); the close-out files it as a finding")
     timing_action.add_argument("--rows-from-spec", dest="do_rows_from_spec", metavar="SPEC",
                                help="read a specification's task list (rubric U10): its "
                                     "priced rows and total line, or exit 1 naming what is "
@@ -1955,7 +1996,18 @@ def build_parser() -> argparse.ArgumentParser:
                         help="how the row ended (with --end)")
     timing.add_argument("--reason", default=None,
                         help="why row N waits (with --wait, required): "
-                             + ", ".join(timing_mod.WAIT_REASONS))
+                             + ", ".join(timing_mod.WAIT_REASONS)
+                             + "; why row N is parked (with --park, required, in words)")
+    timing.add_argument("--compact", action="store_true",
+                        help="with --status: past %d rows, the header, every row not done "
+                             "and the last %d done" % (timing_mod.COMPACT_ABOVE,
+                                                        timing_mod.COMPACT_DONE_KEPT))
+    timing.add_argument("--evidence", default=None,
+                        help="what proves row N (with --end): a test, a command's output, a "
+                             "commit")
+    timing.add_argument("--origin", default=None, choices=list(timing_mod.ORIGINS),
+                        help="where added rows came from (with --add; default added): "
+                             "labelled +N, RN or AN")
     timing.add_argument("--model", default=None,
                         help="the model at work on the row (with --start or --resume)")
     timing.add_argument("--host", default=None,

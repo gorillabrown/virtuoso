@@ -1,6 +1,6 @@
 """Tooling corrections (items 82-87).
 
-The cockpit reads the configured authoritative provider; the report generator
+The board reads the configured authoritative provider; the report generator
 writes only roles the project declared generated; the close-out path helper is
 read-only and fails loudly; nothing falls back to a conventional path.
 """
@@ -21,6 +21,7 @@ from tools.governance import registry as registry_mod
 PREFLIGHT = str(Path(PLUGIN_ROOT) / "scripts" / "virtuoso_preflight.py")
 REGISTRY_CLI = str(Path(PLUGIN_ROOT) / "scripts" / "virtuoso_registry.py")
 COCKPIT = str(Path(PLUGIN_ROOT) / "scripts" / "generate_cockpit.py")
+BOARD = str(Path(PLUGIN_ROOT) / "scripts" / "generate_board.py")
 REPORT = str(Path(PLUGIN_ROOT) / "scripts" / "build_register_report.py")
 
 ROWS = (
@@ -94,66 +95,69 @@ def build_external_workspace(project):
     return project
 
 
-def cockpit_model(html: str) -> dict:
-    match = re.search(r"const MODEL = (\{.*?\});\n", html, re.S)
-    assert match, "the cockpit did not embed its model"
+def board_model(html: str) -> dict:
+    match = re.search(r'<script id="board-data" type="application/json">(.*?)</script>',
+                      html, re.S)
+    assert match, "the board did not embed its model"
     return json.loads(match.group(1))
 
 
-# --- item 82/84: the cockpit reads the configured provider ---------------------
-
-
-def test_the_cockpit_reads_the_configured_work_register(workspace):
-    completed = run(COCKPIT, "--root", str(workspace))
+def create_board(workspace):
+    completed = run(BOARD, "--root", str(workspace), "--create")
     assert completed.returncode == 0, completed.stderr
-    model = cockpit_model((workspace / "Virtuoso" / "reports"
-                           / "planning-cockpit.html").read_text(encoding="utf-8"))
-    assert model["workspace"]["work_register_role"] == "workRegister"
-    assert model["workspace"]["work_register_authority"] == "live"
+    return board_model((workspace / "roadmap-board.html").read_text(encoding="utf-8"))
+
+
+# --- item 82/84: the board reads the configured provider -----------------------
+
+
+def test_the_board_reads_the_configured_work_register(workspace):
+    model = create_board(workspace)
+    assert model["register"] == {"role": "workRegister", "authority": "live",
+                                 "compatibilityAdapter": False}
     assert model["provenance"]["provider"] == "csv"
-    assert [i["id"] for i in model["items"]] == ["ITEM-1", "ITEM-2"]
+    assert [r["id"] for r in model["rows"]] == ["ITEM-1", "ITEM-2"]
 
 
-def test_the_cockpit_needs_no_spreadsheet(workspace):
+def test_the_board_needs_no_spreadsheet(workspace):
     """Item 82: it must not require a generated workbook."""
     for path in workspace.rglob("*.xlsx"):
         path.unlink()
-    completed = run(COCKPIT, "--root", str(workspace))
+    completed = run(BOARD, "--root", str(workspace), "--create")
     assert completed.returncode == 0, completed.stderr
 
 
-def test_the_cockpit_states_its_provenance_and_health(workspace):
-    run(COCKPIT, "--root", str(workspace))
-    model = cockpit_model((workspace / "Virtuoso" / "reports"
-                           / "planning-cockpit.html").read_text(encoding="utf-8"))
+def test_the_board_states_its_provenance_and_health(workspace):
+    model = create_board(workspace)
     assert model["provenance"]["takenAt"]
     assert model["provenance"]["stale"] is False
     assert model["health"]["head_id"] == "ITEM-2"
     assert model["health"]["drift_findings"] == []
 
 
-def test_the_cockpit_refuses_a_project_without_a_registry(project):
-    completed = run(COCKPIT, "--root", str(project))
+def test_the_board_refuses_a_project_without_a_registry(project):
+    completed = run(BOARD, "--root", str(project))
     assert completed.returncode != 0
     assert "virtuoso_preflight" in (completed.stderr + completed.stdout)
 
 
-def test_the_cockpit_never_overwrites_a_registered_document(workspace):
+def test_the_board_never_overwrites_a_registered_document(workspace):
+    create_board(workspace)
     reg = registry_mod.load(str(workspace))
     roadmap = reg.resolve("roadmap")
-    completed = run(COCKPIT, "--root", str(workspace), "--output", roadmap)
+    completed = run(BOARD, "--root", str(workspace), "--output", roadmap)
     assert completed.returncode != 0
     assert "refusing to overwrite" in (completed.stderr + completed.stdout)
 
 
-def test_the_cockpit_surfaces_drift_rather_than_fixing_it(workspace):
+def test_the_board_surfaces_drift_rather_than_fixing_it(workspace):
     register = workspace / "Project Documentation" / "2 operational" / "work-register.csv"
     with open(register, "a", encoding="utf-8") as handle:
         handle.write("ITEM-9,Ghost item,9,Queued,Stub,,S,,G1,,,,,,,\n")
+    create_board(workspace)                 # --create writes the registry and the page
     before = snapshot_tree(workspace / "Project Documentation")
-    run(COCKPIT, "--root", str(workspace))
-    model = cockpit_model((workspace / "Virtuoso" / "reports"
-                           / "planning-cockpit.html").read_text(encoding="utf-8"))
+    assert run(BOARD, "--root", str(workspace)).returncode == 0
+    model = board_model((workspace / "roadmap-board.html").read_text(encoding="utf-8"))
     assert any("ITEM-9" in finding for finding in model["health"]["drift_findings"])
     assert snapshot_tree(workspace / "Project Documentation") == before
 

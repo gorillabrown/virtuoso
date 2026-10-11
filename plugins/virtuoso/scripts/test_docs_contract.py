@@ -600,6 +600,55 @@ def test_an_epics_completion_record_reaches_the_default_branch():
     assert "on the default branch (Step 1)" in row
 
 
+def test_the_record_merge_is_scope_checked_before_it_lands():
+    """A stray commit on the run branch stops the record merge before it reaches the
+    default branch; the commit names the paths it staged; the close-out, not the run,
+    checks the record merge itself."""
+    flat = lambda t: " ".join(t.split())  # noqa: E731
+    launch = (ROOT / "skills" / "epic" / "assets" / "launch.template.md").read_text(
+        encoding="utf-8")
+    kickoff = launch.split("## Kickoff / resume prompt", 1)[1].split("## Goal line", 1)[0]
+    completion = kickoff.split("```", 2)[1].split("Completion only", 1)[1].split("Never:", 1)[0]
+    before = completion.index("git diff --name-only [DEFAULT]...[BRANCH]")
+    merge = completion.index("git merge --no-ff")
+    assert before < merge < completion.index("git diff --name-only HEAD^1 HEAD")
+    [scope] = [line for line in completion.splitlines()
+               if "git diff --name-only [DEFAULT]...[BRANCH]" in line]
+    assert '-- . ":(exclude)[PACKET DIR]"' in scope
+    [add] = [line for line in completion.splitlines() if line.strip().startswith("git add")]
+    [commit] = [line for line in completion.splitlines()
+                if line.strip().startswith("git commit")]
+    assert commit.rstrip().endswith("[PACKET DIR]/journal.md")
+    assert add.split(" -- ", 1)[1].split() == commit.split(" -- ", 1)[1].split()
+    assert completion.index(add) < completion.index("git diff --cached --name-only") \
+        < completion.index(commit)
+    protocol = flat(_between(launch, "## Completion protocol", "## Monitoring"))
+    assert "record only checks that run before the record commit" in protocol
+
+    step1 = flat(_between(skill_text("pointer-closeout"),
+                          "### Step 1 — Verify completion evidence",
+                          "### Acceptance and evidence reconciliation"))
+    assert "runs the record merge's scope check itself" in step1
+
+
+def test_the_plan_is_the_time_log():
+    """The virtuoso skill runs `timing --check`, reprints compactly past 12 rows, parks
+    what it will not do; zeus numbers setup as row 1; the close-out files parked rows."""
+    skill = " ".join(skill_text("virtuoso").split())
+    for fragment in ("timing --sprint <SPRINT-ID> --check", "after a compaction and again "
+                     "before the close-out", "`timing --status --compact`", "Past 12 rows",
+                     "the last 3 done", "every fifth task", "**A row the run will not do is "
+                     "parked, not deleted:**", "--park N --reason", "--origin review",
+                     "--evidence \"<what proves it>\"", "[D/N ✓ · R ■ · X ✗ · O □ · P ◇]"):
+        assert fragment in skill, fragment
+    assert "rows done = " not in skill
+    zeus = (ROOT / "skills" / "virtuoso" / "references" / "zeus.md").read_text(encoding="utf-8")
+    assert "Task 0" not in zeus and "There is no row 0" in " ".join(zeus.split())
+    closeout = " ".join(_between(skill_text("pointer-closeout"), "### Step 4",
+                                 "### Step 5").split())
+    assert "**Parked rows become findings.**" in closeout and "**Disposition:** `open`" in closeout
+
+
 def test_delayed_start_blocks_only_the_deferred_task():
     flat = " ".join(skill_text("delayed-start").split())
     for gone in ("The sleep is blocking", "hold the terminal", "time.sleep(",

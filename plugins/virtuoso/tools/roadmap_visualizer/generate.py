@@ -19,15 +19,14 @@ from . import board as board_mod, comments as comments_mod  # noqa: E402
 from . import completed as completed_mod, dashboard as dashboard_mod, freshness  # noqa: E402
 from .board_render import render_board  # noqa: E402
 from .health import summarize_health  # noqa: E402
-from .model import PlanningModel, RoadmapSnapshot, to_jsonable  # noqa: E402
-from .render import render_html  # noqa: E402
+from .model import RoadmapSnapshot, to_jsonable  # noqa: E402
 from .roadmap import parse_roadmap  # noqa: E402
 from .workspace import load_workspace  # noqa: E402
 
 
 @dataclass
 class Reading:
-    """One read of the workspace. The cockpit and the board are both built from it."""
+    """One read of the workspace. The board is built from it."""
 
     context: object
     reg: object
@@ -56,32 +55,6 @@ def read(root: Path | str) -> Reading:
     health = summarize_health(roadmap, snapshot, buffer_target=project_policy.dispatch_buffer,
                               pace=[report.as_dict() for report in metrics.pace])
     return Reading(context, reg, project_policy, snapshot, roadmap, metrics, health)
-
-
-def _planning_model(reading: Reading) -> PlanningModel:
-    return PlanningModel(
-        workspace=reading.context,
-        roadmap=reading.roadmap,
-        items=[item.as_dict() for item in reading.snapshot.items],
-        metrics=reading.metrics.as_dict(),
-        health=reading.health,
-        provenance=reading.snapshot.provenance(),
-    )
-
-
-def build_model(root: Path | str) -> PlanningModel:
-    return _planning_model(read(root))
-
-
-def generate(root: Path | str, output: Path | str | None = None) -> Path:
-    reading = read(root)
-    output_path = _output_path(reading.context, output)
-    _refuse_protected_output(reading, output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    board = _registered_board(reading.reg)
-    output_path.write_text(render_html(_planning_model(reading), board=board),
-                           encoding="utf-8", newline="\n")
-    return output_path
 
 
 # --- the board ---------------------------------------------------------------------
@@ -151,7 +124,8 @@ def build_board(reading: Reading, sources: list | None = None) -> dict:
         "generatedAt": base.utc_now(),
         "provenance": snapshot.provenance(),
         "register": {"role": reading.context.work_register_role,
-                     "authority": reading.context.work_register_authority},
+                     "authority": reading.context.work_register_authority,
+                     "compatibilityAdapter": reading.context.compatibility_adapter},
         "sources": sources if sources is not None else freshness.source_times(reading.reg),
         "columns": columns,
         "rows": rows,
@@ -269,9 +243,7 @@ def ignore_page(root: Path, relative: str) -> str:
 # --- shared ----------------------------------------------------------------------
 
 
-def _output_path(context, output: Path | str | None) -> Path:
-    if output is None:
-        return context.reports / "planning-cockpit.html"
+def _output_path(context, output: Path | str) -> Path:
     output_path = Path(output)
     if output_path.is_absolute():
         return output_path
@@ -294,23 +266,6 @@ def _refuse_protected_output(reading: Reading, output_path: Path) -> None:
     if output_path.resolve() in protected:
         raise ValueError("refusing to overwrite a registered governance document: %s"
                          % output_path)
-
-
-def main(argv: list[str] | None = None) -> int:
-    textio.utf8_stdio()
-    parser = argparse.ArgumentParser(description="Generate the Virtuoso planning cockpit.")
-    parser.add_argument("--root", default=".",
-                        help="project root carrying Virtuoso/workspace-layout.json")
-    parser.add_argument("--output", default="",
-                        help="output HTML path; relative paths resolve under --root")
-    args = parser.parse_args(argv)
-
-    output = generate(args.root, args.output or None)
-    print("planning cockpit written: %s" % output)
-    line = refresh_board(args.root)
-    if line:
-        print(line)
-    return 0
 
 
 def board_main(argv: list[str] | None = None) -> int:
@@ -337,4 +292,4 @@ def board_main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(board_main())

@@ -153,11 +153,20 @@ if [ "$#" -lt 1 ]; then
 fi
 
 PY=
-for candidate in python3 python; do
-  if "$candidate" -c 'import sys' >/dev/null 2>&1; then
-    PY=$candidate
-    break
-  fi
+# The Windows Store alias (under WindowsApps) fails intermittently even after it
+# ran once, so it is tried only when no other Python runs.
+for pass in other store; do
+  for candidate in python3 python; do
+    where=$(command -v "$candidate" 2>/dev/null) || continue
+    case "$where" in
+      */WindowsApps/*) [ "$pass" = store ] || continue ;;
+      *) [ "$pass" = other ] || continue ;;
+    esac
+    if "$candidate" -c 'import sys' >/dev/null 2>&1; then
+      PY=$candidate
+      break 2
+    fi
+  done
 done
 if [ -z "$PY" ]; then
   echo "virtuoso: no Python that runs: tried python3, python." >&2

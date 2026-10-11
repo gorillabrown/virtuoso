@@ -1349,6 +1349,66 @@ def test_the_frontmatter_reader_agrees_with_a_yaml_parser():
             assert fields[key] == str(header[key]).strip(), (path.name, key)
 
 
+MODEL_TABLE = ROOT / "references" / "model-tiers.md"
+
+
+def model_tiers() -> dict:
+    """``alias -> (tier, default effort)``, read from the one model table."""
+    rows = re.findall(
+        r"^\| (mechanical|bounded|cross-cutting) \| `(\w+)` \| `[^`]+` \| `(\w+)` \| ([^|]+) \|",
+        MODEL_TABLE.read_text(encoding="utf-8"), re.M)
+    return {alias: (tier, effort, {a.strip() for a in agents.split(",")})
+            for tier, alias, effort, agents in rows}
+
+
+def test_every_agent_declares_a_model_and_an_effort(fake_plugin):
+    """Each agent keeps its model alias and declares its tier's default effort, the tier
+    being the one the model table gives its alias."""
+    from tools.governance import timing
+    module = load_validate()
+    tiers = model_tiers()
+    assert sorted(t for t, _, _ in tiers.values()) == ["bounded", "cross-cutting", "mechanical"]
+    for name in AGENT_FILES:
+        fields = module.frontmatter_fields((ROOT / "agents" / name).read_text(encoding="utf-8"))
+        assert fields.get("model") in tiers, name
+        tier, default, listed = tiers[fields["model"]]
+        assert name[:-3] in listed, name                   # the table's Agents column
+        assert fields.get("effort") in timing.EFFORT_LEVELS, name
+        assert fields["effort"] == default == timing.TIER_EFFORT[tier], name
+    # validate's host check accepts only the five levels.
+    agent = fake_plugin / "agents" / "Alpha.md"
+    text = agent.read_text(encoding="utf-8")
+    agent.write_text(text.replace("memory: project\n", "memory: project\neffort: xhigh\n", 1),
+                     encoding="utf-8")
+    assert check_against(module, fake_plugin, "check_host_frontmatter")[1] == []
+    agent.write_text(text.replace("memory: project\n", "memory: project\neffort: extreme\n", 1),
+                     encoding="utf-8")
+    _oks, fails = check_against(module, fake_plugin, "check_host_frontmatter")
+    assert len(fails) == 1 and "agents/Alpha.md: effort 'extreme' is not one of" in fails[0]
+
+
+def test_the_model_table_is_the_one_place_aliases_live(fake_plugin):
+    module = load_validate()
+    line = "Runs on the sonnet alias.\n"  # validate-ok: the alias the scan must catch
+    skill = fake_plugin / "skills" / "alpha" / "SKILL.md"
+    skill.write_text(skill.read_text(encoding="utf-8") + line, encoding="utf-8")
+    _oks, fails = _scan(module, fake_plugin)
+    assert any("skills/alpha/SKILL.md" in f and "model name" in f for f in fails), fails
+    skill.write_text(skill.read_text(encoding="utf-8").replace(line, ""), encoding="utf-8")
+    (fake_plugin / "references").mkdir()
+    (fake_plugin / "references" / "model-tiers.md").write_text(line, encoding="utf-8")
+    _oks, fails = _scan(module, fake_plugin)
+    assert not any("host terms" in f for f in fails), fails
+
+
+def _scan(module, root):
+    module.ROOT = str(root)
+    module.oks.clear()
+    module.fails.clear()
+    module.check_text_scans(["alpha", "beta"])
+    return list(module.oks), list(module.fails)
+
+
 # =============================================================================
 # Scaffolding — emitted, never written
 # =============================================================================

@@ -555,6 +555,285 @@ def test_the_ledger_takes_the_summary_values(workspace):
     assert figure["value"] == 1.5
 
 
+def test_the_summary_names_model_and_effort(workspace):
+    """A log written by the real commands: each row's model is the one its start named,
+    its effort the row's own or its tier's."""
+    listing = rows_file(workspace, [
+        {"id": 1, "title": "Load spec", "tier": "bounded", "estimate": 10},
+        {"id": 2, "title": "Hard part", "tier": "bounded", "effort": "xhigh", "estimate": 20},
+        {"id": 3, "title": "Old-style row", "tier": "mechanical", "estimate": 5}])
+    assert timing_cli(workspace, "--open", "--rows-file", listing).returncode == 0
+    for row, model in ((1, "model-a"), (2, "model-b"), (3, None)):
+        start = ("--start", str(row)) + (("--model", model) if model else ())
+        assert timing_cli(workspace, *start).returncode == 0
+        assert timing_cli(workspace, "--end", str(row), "--result", "done").returncode == 0
+    table = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint", "HB-9",
+                "--summary")
+    assert table.returncode == 0, table.stderr
+    lines = table.stdout.splitlines()
+    assert lines[0].startswith("| Row | Task | Kind | Model | Effort |")
+    assert any(line.startswith("| 1 | Load spec | — | model-a | medium |") for line in lines)
+    assert any(line.startswith("| 2 | Hard part | — | model-b | xhigh |") for line in lines)
+    assert any(line.startswith("| 3 | Old-style row | — | — | low |") for line in lines)
+    status = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint", "HB-9",
+                 "--status").stdout                      # every row prints its effort
+    assert "✓ 1. Load spec [bounded] {medium} ‹model-a›" in status
+    assert "✓ 2. Hard part [bounded] {xhigh} ‹model-b›" in status
+    assert "✓ 3. Old-style row [mechanical] {low} — " in status   # no model was named
+    shown = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint", "HB-9",
+                "--summary", "--json")
+    assert shown.returncode == 0, shown.stderr
+    split = json.loads(shown.stdout)["byModelEffort"]
+    assert [(p["model"], p["effort"], p["rows"]) for p in split["pairs"]] == [
+        ("model-a", "medium", 1), ("model-b", "xhigh", 1)]
+    assert split["skippedNoModel"] == 1
+
+
+def test_by_model_effort_is_not_computable_below_three_rows(tmp_path):
+    events = worked([(10, 20, False), (10, 30, False), (10, 10, False), (10, 12, False),
+                     (10, 15, False), (10, 10, False)])
+    models = {1: "model-a", 2: "model-a", 3: "model-a", 4: "model-b", 5: "model-b"}
+    for event in events:
+        if event["event"] == "start" and event["row"] in models:
+            event["model"] = models[event["row"]]
+    split = timing.summary(events)["byModelEffort"]
+    a, b = split["pairs"]
+    assert (a["model"], a["rows"], a["value"]) == ("model-a", 3, 2.0)    # median of 2, 3, 1
+    assert (b["model"], b["rows"], b["value"]) == ("model-b", 2, None)
+    assert b["note"] == "not computable" and "3 measured rows (2 found)" in b["missingInputs"][0]
+    assert split["skippedNoModel"] == 1                    # row 6: an older log's row
+    write_log(tmp_path, "R-1", events)
+    found = {m.name: m for m in timing.figures(str(tmp_path))}
+    pair = found[timing.PAIR_METRIC]                       # read at one closed log
+    assert pair.computable and pair.value == {"model-a {not recorded}": 1.0}   # |1|, |2|, |0|
+    assert "1 rows with no model recorded skipped" in pair.unit
+    assert not found["row-error"].computable
+    write_log(tmp_path, "R-1", events[:3])                 # an open log is not read
+    assert not {m.name: m for m in timing.figures(str(tmp_path))}[timing.PAIR_METRIC].computable
+
+
+def test_the_pair_figure_leaves_flagged_rows_out_and_reads_three_closed_logs(tmp_path):
+    def log(minutes):
+        events = worked([(10, m, False) for m in minutes])
+        for event in events:
+            if event["event"] == "start":
+                event["model"] = "model-a"
+        return events
+    flagged = log([20, 10, 10, 40])                         # row 4: 40 > 3 × 10, unconfirmed
+    pair = timing.summary(flagged)["byModelEffort"]["pairs"][0]
+    assert (pair["rows"], pair["value"]) == (3, 1.0)        # ratios 2, 1, 1: row 4 left out
+    for name, minutes in (("R-1", [20]), ("R-2", [10]), ("R-3", [15])):
+        write_log(tmp_path, name, log(minutes))
+    found = {m.name: m for m in timing.figures(str(tmp_path))}
+    assert found["row-error"].computable                   # the three-closed-logs path
+    assert found[timing.PAIR_METRIC].value == {"model-a {not recorded}": 0.5}   # 1, 0, .5
+
+
+def test_kpis_names_the_pair_figure_without_a_close_outs_role(workspace):
+    layout = workspace / "Virtuoso" / "workspace-layout.json"
+    manifest = json.loads(layout.read_text(encoding="utf-8"))
+    del manifest["roles"]["closeOuts"]
+    layout.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    completed = run(REGISTRY_CLI, "--root", str(workspace), "kpis", "--json")
+    assert completed.returncode == 0, completed.stderr
+    found = {m["name"]: m for m in json.loads(completed.stdout)["learning"]["metrics"]}
+    assert found[timing.PAIR_METRIC]["missingInputs"] == ["a registered closeOuts role"]
+
+
+# --- the time log is the plan (VIR-006) -------------------------------------------------------
+
+def status_of(workspace) -> str:
+    shown = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint", "HB-9", "--status")
+    assert shown.returncode == 0, shown.stderr
+    return shown.stdout
+
+
+def summary_of(workspace, *flags):
+    shown = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint", "HB-9",
+                "--summary", *flags)
+    assert shown.returncode == 0, shown.stderr
+    return json.loads(shown.stdout) if "--json" in flags else shown.stdout
+
+
+def test_an_added_row_carries_its_origin(workspace):
+    listing = rows_file(workspace, [{"id": 1, "title": "Build", "estimate": 10}])
+    assert timing_cli(workspace, "--open", "--rows-file", listing).returncode == 0
+    for origin, title in ((None, "Missed step"), ("review", "Review finding"),
+                          ("audit", "Audit finding")):
+        listing = rows_file(workspace, [{"title": title, "estimate": 5}])
+        flags = ("--origin", origin) if origin else ()
+        assert timing_cli(workspace, "--add", "--rows-file", listing, *flags).returncode == 0
+    events = [json.loads(line) for line in log_path(workspace).read_text(
+        encoding="utf-8").splitlines()]
+    assert [e["origin"] for e in events if e["event"] == "add"] == ["added", "review", "audit"]
+    status = status_of(workspace)
+    for line in ("□ +2. Missed step", "□ R3. Review finding", "□ A4. Audit finding"):
+        assert line in status, line
+    table = summary_of(workspace)
+    assert "| R3 | Review finding |" in table and "| A4 | Audit finding |" in table
+    refused = timing_cli(workspace, "--add", "--rows-file", listing, "--origin", "gut")
+    assert refused.returncode == 2                     # argparse: not one of the origins
+
+
+def test_a_parked_row_needs_a_reason_and_shows_parked(workspace):
+    listing = rows_file(workspace, [{"id": 1, "title": "Build", "estimate": 10},
+                                    {"id": 2, "title": "Nice to have", "estimate": 20}])
+    assert timing_cli(workspace, "--open", "--rows-file", listing).returncode == 0
+    refused = timing_cli(workspace, "--park", "2")
+    assert refused.returncode == 3 and "names why the run will not do it" in refused.stderr
+    assert timing_cli(workspace, "--park", "2", "--reason", "out of scope").returncode == 0
+    status = status_of(workspace)
+    assert "Parked:\n◇ 2. Nice to have — parked: out of scope" in status
+    assert "Remaining 10 min (sequential row 1)" in status       # a parked row is not work
+    refused = timing_cli(workspace, "--start", "2")
+    assert refused.returncode == 3 and "row 2 is parked" in refused.stderr
+    assert timing_cli(workspace, "--start", "1").returncode == 0
+    refused = timing_cli(workspace, "--park", "1", "--reason", "late")
+    assert refused.returncode == 3 and "only a row not yet started is parked" in refused.stderr
+    assert timing_cli(workspace, "--end", "1", "--evidence", "tests").returncode == 0
+    result = summary_of(workspace, "--json")
+    assert result["parked"] == [{"id": 2, "label": "2", "title": "Nice to have",
+                                 "reason": "out of scope"}]
+    assert result["complete"] is True                  # a parked row never ran
+    assert "- ◇ 2. Nice to have — out of scope" in summary_of(workspace)
+    # Every row ended or parked: the log is closed evidence for the figures.
+    assert [len(log) for log in timing.closed_logs(str(log_path(workspace).parent))] == [2]
+    refused = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint", "HB-9",
+                  "--summary", "--compact")
+    assert refused.returncode == 3 and "--compact goes with --status" in refused.stderr
+
+
+def test_evidence_is_kept_on_end(workspace):
+    listing = rows_file(workspace, [{"id": 1, "title": "Build", "estimate": 10}])
+    assert timing_cli(workspace, "--open", "--rows-file", listing).returncode == 0
+    assert timing_cli(workspace, "--start", "1").returncode == 0
+    refused = timing_cli(workspace, "--start", "1", "--evidence", "x")
+    assert refused.returncode == 3 and "--evidence does not go with --start" in refused.stderr
+    assert timing_cli(workspace, "--end", "1", "--evidence", "test_x passed").returncode == 0
+    [end] = [json.loads(line) for line in log_path(workspace).read_text(
+        encoding="utf-8").splitlines() if '"end"' in line]
+    assert end["evidence"] == "test_x passed"
+    assert summary_of(workspace, "--json")["rows"][0]["evidence"] == "test_x passed"
+    assert "| test_x passed |" in summary_of(workspace)
+
+
+def test_the_counted_header_counts_only_done_as_done():
+    events = [plan(*range(1, 11)),
+              ev("start", 1, 0), ev("end", 1, 1),
+              ev("start", 2, 1), ev("end", 2, 2, result="blocked"),
+              ev("start", 3, 2), ev("end", 3, 3, result="cancelled"),
+              ev("start", 4, 3), ev("end", 4, 4),
+              ev("start", 5, 4), ev("wait", 5, 5, reason="owner"),
+              ev("start", 6, 5),
+              ev("park", 7, 6, reason="out of scope")]
+    head = timing.header(timing.rows(events, T), T, UTC)
+    assert head.startswith("[2/10 ✓ · 2 ■ · 2 ✗ · 3 □ · 1 ◇] Remaining ")
+    assert "rows done" not in head
+
+
+def test_compact_status_keeps_open_rows_and_the_last_three_done():
+    events = [plan(*range(1, 15))]
+    for i in range(1, 9):                         # rows 1-8 done, in order
+        events += [ev("start", i, i), ev("end", i, i + 0.5)]
+    events += [ev("start", 9, 10), ev("end", 9, 11, result="blocked"), ev("start", 10, 11)]
+    found = timing.rows(events, T + dt.timedelta(minutes=12))
+    moment = T + dt.timedelta(minutes=12)
+    full = timing.render_status(found, moment, UTC).splitlines()
+    short = timing.render_status(found, moment, UTC, compact=True).splitlines()
+    assert len(full) == 15 and full[0] == short[0]
+    assert short[1] == "… 5 earlier done rows not shown (timing --status lists every row)"
+    labels = [line.split(".")[0].split(" ")[1] for line in short[2:]]
+    assert labels == ["6", "7", "8", "9", "10", "11", "12", "13", "14"]
+    few = timing.rows([plan(1, 2), ev("start", 1, 0), ev("end", 1, 1)], T)
+    assert timing.render_status(few, T, UTC, compact=True) == timing.render_status(few, T, UTC)
+    for total, shortened in ((12, False), (13, True)):     # the threshold: past 12 rows
+        events = [plan(*range(1, total + 1))]
+        for i in range(1, 6):
+            events += [ev("start", i, i), ev("end", i, i + 0.5)]
+        found = timing.rows(events, T)
+        compact = timing.render_status(found, T, UTC, compact=True)
+        assert (compact != timing.render_status(found, T, UTC)) is shortened, total
+
+
+def test_timing_check_reports_done_without_evidence(workspace):
+    def check():
+        return timing_cli(workspace, "--check")
+    assert check().returncode == 2                     # no log for the sprint: usage
+    no_sprint = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--check")
+    assert no_sprint.returncode == 2 and "needs --sprint" in no_sprint.stderr
+    assert timing_cli(workspace, "--check", "--reason", "x").returncode == 2
+    listing = rows_file(workspace, [{"id": 1, "title": "Build", "estimate": 10},
+                                    {"id": 2, "title": "Test", "estimate": 10},
+                                    {"id": 3, "title": "Docs", "estimate": 10}])
+    assert timing_cli(workspace, "--open", "--rows-file", listing).returncode == 0
+    assert check().returncode == 0 and "clean" in check().stdout
+    for row in ("1", "2"):
+        assert timing_cli(workspace, "--start", row).returncode == 0
+    assert timing_cli(workspace, "--end", "1").returncode == 0           # no evidence
+    found = check()
+    assert found.returncode == 1
+    assert "row 1 ended done with no evidence" in found.stdout
+    assert "row 2 is still running" in found.stdout
+    assert timing_cli(workspace, "--end", "2", "--evidence", "pytest green").returncode == 0
+    path = log_path(workspace)
+    with open(path, "a", encoding="utf-8") as handle:     # hand edits the CLI never writes
+        handle.write(json.dumps({"event": "park", "row": 3, "at": timing.stamp(timing.now())})
+                     + "\n")
+        handle.write(json.dumps({"event": "add", "at": timing.stamp(timing.now()),
+                                 "rows": [{"id": 2, "title": "Again"}]}) + "\n")
+    out = json.loads(timing_cli(workspace, "--check", "--json").stdout)["findings"]
+    assert out == ["row 2 is numbered 2 times; a number is used once",
+                   "row 1 ended done with no evidence (--end 1 --evidence ...)",
+                   "row 3 is parked with no reason"]
+    # An end written before evidence existed carries no key: nothing was promised.
+    old = [{"event": "open", "at": at(0), "rows": [{"id": 1, "title": "Old"}]},
+           ev("start", 1, 0), ev("end", 1, 5, result="done")]
+    assert timing.check_log(old) == []
+    path.write_text('{"event": "open", "at": "2026-09-30T14:00:00Z", "rows": [\n',
+                    encoding="utf-8")
+    found = check()
+    assert found.returncode == 1 and "the log cannot be read" in found.stdout
+
+
+# The case id is what `-k reads_back_after` selects (the specification's gate names both).
+@pytest.mark.parametrize("case", ["compaction"], ids=["reads_back_after_compaction"])
+def test_the_status_reads_back_identically_after_a_reload(workspace, case):
+    """The compaction case: a log written by the real commands, read from disk by a fresh
+    process, renders the status the writing session saw."""
+    listing = rows_file(workspace, [{"id": n, "title": "Row %d" % n, "estimate": 10}
+                                    for n in range(1, 6)])
+    assert timing_cli(workspace, "--open", "--rows-file", listing).returncode == 0
+    for origin in (None, "review", "audit"):
+        extra = rows_file(workspace, [{"title": "Added %s" % (origin or "added"),
+                                       "estimate": 5}])
+        flags = ("--origin", origin) if origin else ()
+        assert timing_cli(workspace, "--add", "--rows-file", extra, *flags).returncode == 0
+    steps = [("--start", "1"), ("--end", "1", "--evidence", "done"), ("--start", "2"),
+             ("--end", "2", "--result", "blocked"), ("--park", "3", "--reason", "later"),
+             ("--start", "6"), ("--end", "6", "--evidence", "ok"), ("--start", "4")]
+    for step in steps:
+        assert timing_cli(workspace, *step).returncode == 0, step
+    path = log_path(workspace)
+    moment = "2026-12-01T00:00:00Z"
+    script = ("import sys; from tools.governance import timing; "
+              "m = timing.parse_stamp(sys.argv[2]); "
+              "sys.stdout.buffer.write(timing.render_status("
+              "timing.rows(timing.load(sys.argv[1]), m), m, timing._dt.timezone.utc)"
+              ".encode('utf-8'))")
+    fresh = subprocess.run([sys.executable, "-c", script, str(path), moment],
+                           capture_output=True, cwd=PLUGIN_ROOT)
+    assert fresh.returncode == 0, fresh.stderr
+    m = timing.parse_stamp(moment)
+    before = timing.render_status(timing.rows(timing.load(str(path)), m), m, UTC)
+    assert fresh.stdout.decode("utf-8") == before
+    for line in ("✓ 1. Row 1", "✗ 2. Row 2", "■ 4. Row 4", "✓ +6. Added added",
+                 "□ R7. Added review", "□ A8. Added audit", "Parked:\n◇ 3. Row 3"):
+        assert line in before, line
+    assert before.startswith("[2/8 ✓ · 1 ■ · 1 ✗ · 3 □ · 1 ◇]")
+    shown = status_of(workspace)                       # the CLI's own fresh process
+    assert shown.splitlines()[0].startswith("[2/8 ✓ · 1 ■ · 1 ✗ · 3 □ · 1 ◇]")
+
+
 def test_the_cli_confirms_a_flagged_row(workspace):
     listing = rows_file(workspace, [{"id": 1, "title": "Load spec", "estimate": 10}])
     assert timing_cli(workspace, "--open", "--rows-file", listing).returncode == 0
@@ -676,8 +955,12 @@ def test_a_log_from_9071713_reads_unchanged(tmp_path):
             assert all(new[key] == "not recorded" for key in timing.NEW_FIELDS + ("tokens",))
             assert (new["waitReasons"], new["timeboxReached"]) == (
                 ["not recorded"] if new["waited"] else [], False)
-    assert {k: v for k, v in result.items() if k != "rows"} == {
-        k: v for k, v in expected["summary"].items() if k != "rows"}
+    # Every key the old summary had reads unchanged; byModelEffort is new (VIR-005), and
+    # a log that recorded no model skips its rows and says how many; parked is new
+    # (VIR-006), and a log with no park events parks nothing.
+    added = {"byModelEffort": {"pairs": [], "skippedNoModel": 7}, "parked": []}
+    assert {k: v for k, v in result.items() if k != "rows"} == dict(
+        {k: v for k, v in expected["summary"].items() if k != "rows"}, **added)
     specs = [{key: value for key, value in spec.items() if key not in timing.PRICE_FIELDS}
              for spec in expected["price"]]
     assert timing.price_rows(specs, timing.history(str(tmp_path))) == expected["price"]
@@ -943,6 +1226,17 @@ def test_a_frontier_row_with_an_estimate_is_refused(workspace):
 def test_a_duration_in_a_task_lists_effort_is_refused():
     with pytest.raises(GovernanceError, match="Effort is a level, never a duration"):
         timing.spec_rows(FRAME_1.replace("| bounded | low | 40m", "| bounded | 40m | 40m"),
+                         "VIR-X")
+
+
+def test_a_spec_row_may_carry_xhigh():
+    """Five effort levels, the host's own; a four-level task list stays valid."""
+    rows = timing.spec_rows(FRAME_1.replace("| bounded | low | 40m", "| bounded | xhigh | 40m"),
+                            "VIR-X")
+    assert {r["id"]: r.get("effort") for r in rows}[7] == "xhigh"
+    assert [r.get("effort") for r in timing.spec_rows(FRAME_1, "VIR-X")][:2] == ["medium"] * 2
+    with pytest.raises(GovernanceError, match="Effort is one of low, medium, high, xhigh, max"):
+        timing.spec_rows(FRAME_1.replace("| bounded | low | 40m", "| bounded | extreme | 40m"),
                          "VIR-X")
 
 

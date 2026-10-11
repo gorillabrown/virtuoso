@@ -334,7 +334,10 @@ Before writing anything, confirm the work is actually done:
   merged, its docs-only completion commit's, with `--no-ff` — made as far as `policy.git`
   permits, or handed with the exact command to whoever it names. For the docs-only merge,
   check that it touches only the packet directory (`git diff --name-only <merge>^1
-  <merge>` lists nothing outside it), then run the guard again;
+  <merge>` lists nothing outside it), then run the guard again. It
+  runs the record merge's scope check itself (`git diff --name-only <record merge>^1
+  <record merge> -- . ":(exclude)<packet directory>"` prints nothing) and reports it in
+  the close-out: the run cannot record a check of its own last merge;
 - a connector-backed register's snapshot is fresh, before the Wave-1 revision read:
   read every page and the column list with the host's connector and import them with
   `virtuoso_registry --root . snapshot --import <page> --columns <columns>`. Report each
@@ -564,7 +567,17 @@ plan that will not be executed.
 
 Apply the confirmed roadmap changes and append the lessons — new entries and
 status records, each appended under the next or the existing identifier, none
-edited — then persist per `policy.git`:
+edited — then persist per `policy.git`.
+
+**Parked rows become findings.** Each row `timing --summary --json` lists under
+`parked` — a row the run set aside and did not do — is appended to the registered
+`findings` role as its own entry: `### F-NNN — <row title> (<sprint-id> parked row,
+YYYY-MM-DD)`, **Source:** the dispatch, **Severity:** `info` unless Wave 1 confirmed
+otherwise, **Where:** the time log and row label, **Finding:** the park reason, and
+**Disposition:** `open`, so the roadmap review decides it. A project without the role
+gets the entries in the close-out instead, with the manifest entry to add.
+
+Then persist:
 
 | `policy.git.policy` | What happens |
 |---|---|

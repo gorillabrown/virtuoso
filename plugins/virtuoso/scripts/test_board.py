@@ -693,16 +693,53 @@ def test_every_ceremony_that_changes_the_register_names_the_board():
         assert "generate_board" in text, skill
 
 
-# --- D8: the cockpit's banner ------------------------------------------------------
+# --- the cockpit retired (VIR-029) -------------------------------------------------
+
+LEGACY_COCKPIT = Path("Virtuoso") / "reports" / "planning-cockpit.html"
 
 
-def test_the_cockpit_points_to_the_board(workspace):  # noqa: F811
-    cockpit = workspace / "Virtuoso" / "reports" / "planning-cockpit.html"
-    assert run(COCKPIT, "--root", str(workspace)).returncode == 0
-    assert 'id="board-banner"' in cockpit.read_text(encoding="utf-8")
-    assert "generate_board --create" in cockpit.read_text(encoding="utf-8")
+def test_the_dashboard_shows_drift_findings(workspace):  # noqa: F811
+    with open(workspace / REGISTER, "a", encoding="utf-8") as handle:
+        handle.write("ITEM-9,Ghost item,9,Queued,Stub,,S,,G1,,,,,,,\n")
+    generate.ensure_board(workspace)
+    html = (workspace / board.DEFAULT_PATH).read_text(encoding="utf-8")
+    assert 'id="drift-list"' in html and "BOARD.health" in html
+    health = embedded(html)["health"]
+    assert any("ITEM-9" in f for f in health["drift_findings"])
+    assert isinstance(health["recommendation"], str) and health["recommendation"]
+
+
+def test_the_header_names_the_register_role(workspace):  # noqa: F811
+    generate.ensure_board(workspace)
+    html = (workspace / board.DEFAULT_PATH).read_text(encoding="utf-8")
+    assert embedded(html)["register"] == {"role": "workRegister", "authority": "live",
+                                          "compatibilityAdapter": False}
+    assert "BOARD.register" in html
+
+
+def test_generate_cockpit_is_an_alias_for_the_board(workspace):  # noqa: F811
+    out = run(COCKPIT, "--root", str(workspace))
+    assert out.returncode == 2 and "generate_board --create" in out.stderr
+    assert out.stderr.index("generate_board --create") < out.stderr.index(
+        "generate_cockpit is retired")                     # the notice follows the error
     generate.ensure_board(workspace)
     out = run(COCKPIT, "--root", str(workspace))
-    assert "board regenerated: " in out.stdout
-    page = cockpit.read_text(encoding="utf-8")
-    assert "The roadmap board replaces it" in page and "roadmap-board.html" in page
+    assert out.returncode == 0, out.stderr
+    assert "board written: " in out.stdout
+    assert "generate_cockpit is retired" in out.stderr
+    assert not (workspace / LEGACY_COCKPIT).exists()
+
+
+def test_an_existing_cockpit_page_is_left_alone(workspace):  # noqa: F811
+    page = workspace / LEGACY_COCKPIT
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_bytes(b"<html>an old cockpit</html>")
+    generate.ensure_board(workspace)
+    assert run(COCKPIT, "--root", str(workspace)).returncode == 0
+    assert run(BOARD_CLI, "--root", str(workspace)).returncode == 0
+    assert page.read_bytes() == b"<html>an old cockpit</html>"
+
+
+def test_the_cockpit_renderer_is_gone():
+    assert not (Path(PLUGIN_ROOT) / "tools" / "roadmap_visualizer" / "render.py").exists()
+    assert not hasattr(generate, "generate") and not hasattr(generate, "main")

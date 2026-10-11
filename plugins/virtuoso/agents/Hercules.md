@@ -2,6 +2,7 @@
 name: Hercules
 description: "General-purpose single-domain implementation agent. Use for any `bounded` task with no matching specialist: writing functions, fixing identified bugs, implementing features within one module, refactoring bounded scope, tuning constants."
 model: sonnet
+effort: medium
 color: yellow
 ---
 

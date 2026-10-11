@@ -47,14 +47,18 @@ outputs, tracking progress, and reporting results.
 
 ```
 Zeus (orchestrate only — zero implementation)
-  ├── Hermes  — mechanical execution, prescribed changes
-  ├── Hercules — single-domain implementation, bounded judgment
-  ├── Aristotle — cross-system implementation, lead, architectural decisions
-  ├── Hippocrates  — executes tests, reports facts
-  ├── MarcusAurelius — spec compliance, chronicles, maintains documentation
-  ├── Plato — verifies code quality and architecture
+  ├── Hermes  — mechanical execution, prescribed changes          [mechanical] {low}
+  ├── Hercules — single-domain implementation, bounded judgment    [bounded] {medium}
+  ├── Aristotle — cross-system implementation, lead, architectural decisions [cross-cutting] {high}
+  ├── Hippocrates  — executes tests, reports facts                 [mechanical] {low}
+  ├── MarcusAurelius — spec compliance, chronicles, maintains documentation [bounded] {medium}
+  ├── Plato — verifies code quality and architecture               [bounded] {medium}
   └── [Project specialists as available]
 ```
+
+Each agent's frontmatter declares its `model` alias and its default `effort`; the
+plugin's `references/model-tiers.md` is the one table that maps an alias to a model. A
+plan row prints `[tier] {effort} ‹model›`, the model being the owner agent's alias.
 
 ---
 
@@ -69,11 +73,11 @@ field from each agent's YAML frontmatter. Zeus discovers available agents by sca
 plugin's bundled `agents/` roster and the project's `.claude/agents/`, reading each file's
 `name:` field. The names below are the standard workflow names — projects may define more.
 
-| Agent (dispatch name) | Model | Trigger | Output Contract |
+| Agent (dispatch name) | Tier · effort | Trigger | Output Contract |
 |-------|-------|---------|-----------------|
-| **Hermes** | mechanical | Mechanical change; exact diff known; config edits, git ops | COMPLETE / FAILED with output |
-| **Hercules** | bounded | Single-domain implementation; judgment within one module | COMPLETE with decisions documented / BLOCKED |
-| **Aristotle** | cross-cutting | Cross-system work; architectural judgment needed | COMPLETE with interaction map / BLOCKED |
+| **Hermes** | mechanical · low | Mechanical change; exact diff known; config edits, git ops | COMPLETE / FAILED with output |
+| **Hercules** | bounded · medium | Single-domain implementation; judgment within one module | COMPLETE with decisions documented / BLOCKED |
+| **Aristotle** | cross-cutting · high | Cross-system work; architectural judgment needed | COMPLETE with interaction map / BLOCKED |
 
 ### Specialist Agents (Verification & Support)
 
@@ -235,8 +239,8 @@ Proceeding to PLAN phase.
 ===== PHASE 2: PLAN COMPLETE =====
 
 TASK PLAN (<sprint-id>):
-  Task 0: [Hermes/mechanical] Prepare the isolated workspace (if the project's Git Workflow uses one)  <M> min (<basis>)
-  Task 1: [<Agent>/<tier>] <description> @<kind>  <M> min (median of <N> runs | estimated)
+  Task 1: [Zeus/cross-cutting] Setup — load spec, build plan, assign owners; prepare the isolated workspace (if the project's Git Workflow uses one)  <M> min (<basis>)
+  Task 2: [<Agent>/<tier>] <description> @<kind>  <M> min (median of <N> runs | estimated)
   ...
   Task N: [Hermes/mechanical] Persist per the project's Git Workflow  <M> min (<basis>)
 
@@ -252,9 +256,11 @@ Estimated agent spawns: <N>
 ### Phase 3 — IMPLEMENT
 
 **Actions:**
-- Task 0 (if the project's Git Workflow uses isolated workspaces): create the per-sprint
-  workspace (e.g., a git worktree or feature branch) per that workflow. If the project
-  works directly on a branch, skip Task 0.
+- Row 1, the setup row (as the virtuoso skill numbers it): when the project's Git
+  Workflow uses isolated workspaces, it also creates the per-sprint workspace (e.g., a
+  git worktree or feature branch) per that workflow. A project that works directly on a
+  branch skips that part. There is no row 0: the plan and the time log share one
+  numbering from 1.
 - Every `timing` call below runs as
   `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing …`.
 - For each subsequent task sequentially:
@@ -284,8 +290,8 @@ Estimated agent spawns: <N>
 ===== PHASE 3: IMPLEMENT COMPLETE =====
 
 TASK STATUS:
-  ✓ Task 0: Workspace prepared (<branch/worktree>)
-  ✓ Task 1: <outcome summary>
+  ✓ Task 1: Setup — plan built, workspace prepared (<branch/worktree>)
+  ✓ Task 2: <outcome summary>
   ...
 
 Files changed: <count>
@@ -560,19 +566,18 @@ that path to **`/mid-dispatch-decision`**:
 
 ## Progress Reporting
 
-At the START of every dispatch, count total steps and print a progress header. After EACH step completes, print an update.
+The progress line is the time log's header, never a count kept by hand. Print what
+`timing --sprint <sprint-id> --status` prints (past 12 rows, `--status --compact`), then
+one sentence with the key result of the step that just ended:
 
 ```
-===== PROGRESS: [0/N] Starting — [task title] =====
-===== PROGRESS: [1/N] X% — [step description + key result] =====
-...
-===== PROGRESS: [N/N] 100% — Complete =====
+[D/N ✓ · R ■ · X ✗ · O □ · P ◇] Remaining M (…) → est. finish HH:MM local (±HH:MM) · HH:MM UTC. Now: row r running.
 ```
 
 **Rules:**
-- Always print `[0/N] Starting` first so the user sees total scope immediately
-- Include the key metric or result on each line (not just "done")
-- If a step FAILS: `===== PROGRESS: [X/N] BLOCKED — [what failed] =====`
+- Print it once as the plan is first listed, so the user sees total scope immediately
+- Include the key metric or result after it (not just "done")
+- A step that fails ends `--result blocked`, and the header counts it under ✗
 
 ---
 
@@ -653,8 +658,8 @@ regardless of strategy:
 - **Never force-push.**
 - **Main must always pass tests.**
 
-*Illustrative strategy (one option, not required):* a **worktree-per-sprint** model — Task 0
-creates a per-sprint worktree on a feature branch from main; sub-agents commit inside it;
+*Illustrative strategy (one option, not required):* a **worktree-per-sprint** model — the
+setup row (row 1) creates a per-sprint worktree on a feature branch from main; sub-agents commit inside it;
 at the end, merge `--no-ff` to main from the canonical root, push, and remove the worktree;
 on failure, commit WIP to the feature branch and leave the worktree for inspection. Use
 whatever isolation your project's workflow prescribes.

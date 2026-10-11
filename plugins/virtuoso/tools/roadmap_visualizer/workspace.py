@@ -1,9 +1,7 @@
-"""Resolve the cockpit's inputs through the governance registry (items 82, 84, 87).
+"""Resolve the board's inputs through the governance registry (items 82, 84, 87).
 
-The cockpit used to require a generated spreadsheet and fell back to a
-conventional layout when no manifest existed. It now reads the *declared*
-authoritative work register through its provider, and a project with no registry
-gets an actionable error instead of a guess.
+It reads the *declared* authoritative work register through its provider, and a
+project with no registry gets an actionable error instead of a guess.
 """
 from __future__ import annotations
 

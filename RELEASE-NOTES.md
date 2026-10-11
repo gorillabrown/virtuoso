@@ -1,5 +1,42 @@
 # Virtuoso Release Notes
 
+## v1.14.0 (2026-10-10) — the board replaces the cockpit, and every step is sized and tracked
+
+**Upgrading from 1.13.0.** Nothing is required. `Virtuoso/reports/planning-cockpit.html` is
+no longer written; delete it when you like. `generate_cockpit` still works for this release
+and runs `generate_board`. Specs, task rows and time logs written with four effort levels
+stay valid; `xhigh` is now a fifth. Time logs written by 1.13.0 read unchanged.
+
+- The planning cockpit is retired. The board shows its drift findings, recommendation and
+  full provenance; `generate_cockpit` runs `generate_board` for one more release, then
+  goes. An existing `Virtuoso/reports/planning-cockpit.html` is left alone: delete it when
+  you like. (VIR-029)
+- An epic's completion record is scope-checked before it merges: the launch template's
+  *Completion only* lines diff the run branch against the default branch first, and the
+  record commit names the same paths its `git add` staged. The record merge's own check
+  is run and reported by `/pointer-closeout`, since the run cannot record a check of its
+  last merge. Packets already scaffolded keep their text. (VIR-031)
+- Every step says what model and effort it runs at. The effort scale gains `xhigh`
+  (`low`, `medium`, `high`, `xhigh`, `max`); four-level specs and logs stay valid. Every
+  agent declares `effort` beside its unchanged `model`, by tier, and
+  `references/model-tiers.md` is the one table that maps an alias to a model. Plan rows
+  print `[tier] {effort} ‹model›` on every row. `timing --summary` adds *Model* and *Effort*
+  columns and, with `--json`, `byModelEffort`; `kpis` adds `row-error-by-model-effort`.
+  (VIR-005)
+- The time log is the run's plan. Setup is row 1 everywhere (zeus no longer says Task 0).
+  Added rows carry their origin (`--add --origin review|audit` shows `RN` / `AN`); a row
+  the run will not do is parked (`--park N --reason`, `◇`) and becomes a finding at the
+  close-out; `--end N --evidence` records what proves a row. The status header counts per
+  marker — `[6/10 ✓ · 1 ■ · 1 ✗ · 2 □ · 0 ◇]` — so blocked rows no longer count as done;
+  `--status --compact` keeps long plans short; `timing --check` (exit 0, 1 findings, 2
+  usage) runs after a compaction and before the close-out. Logs written earlier read
+  unchanged. Rolling back to an earlier version reads a `park` event as unknown and skips
+  it, so a parked row shows as not started. (VIR-006)
+- The POSIX launcher no longer picks the Windows Store `python3` while another Python is
+  installed. The Store alias can pass the launcher's run-check and still fail the real call
+  (`Permission denied`), so any Python outside `WindowsApps` is tried first, and the alias
+  only when nothing else runs. (F-005)
+
 ## v1.13.0 (2026-10-10) — a roadmap board, priced task lists, and close-outs that record themselves
 
 The first release since 1.12.0. It carries the work noted earlier as 1.13.0 and 1.13.1,

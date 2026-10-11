@@ -39,7 +39,12 @@ from .providers.kpi import Metric
 
 LOG_PREFIX = "Timing."
 LOG_SUFFIX = ".jsonl"
-EVENTS = ("open", "add", "start", "wait", "resume", "end", "confirm", "timebox-reached")
+EVENTS = ("open", "add", "start", "wait", "resume", "end", "confirm", "timebox-reached",
+          "park")
+#: Where an added row came from, stored on its ``add`` event, and its label's prefix. A
+#: log written before origins existed reads every added row as ``added``.
+ORIGINS = {"added": "+", "review": "R", "audit": "A"}
+PARKED = "parked"
 SPLIT = "split"
 #: How a row ends. ``split`` is written only by ``--split``, never by ``--end``.
 RESULTS = ("done", "blocked", "cancelled", SPLIT)
@@ -133,7 +138,11 @@ def load(path: str) -> list[dict]:
 
 
 def append(path: str, event: dict, moment: _dt.datetime | None = None) -> dict:
-    """Stamp ``event`` with the clock (or ``moment``, for tests) and append it."""
+    """Stamp ``event`` with the clock (or ``moment``, for tests) and append it. The writer
+    is strict: an event the log does not know is refused (a reader skips one)."""
+    if event.get("event") not in EVENTS:
+        raise GovernanceError("%r is not a time-log event (%s)"
+                              % (event.get("event"), ", ".join(EVENTS)))
     stamped = dict(event, at=stamp(moment or now()))
     parent = os.path.dirname(path)
     if parent and not os.path.isdir(parent):
@@ -177,6 +186,19 @@ class Row:
     wait_reasons: list = field(default_factory=list)   # one per wait, in order
     tokens: int | None = None                      # host-reported, from the end event
     timebox_reached: bool = False                  # a timebox-reached event was recorded
+    origin: str = ""                               # an added row's ORIGINS key
+    evidence: str = ""                             # what proves the row, from its end event
+    park_reason: str = ""                          # set by a park event: the run will not do it
+
+    @property
+    def parked(self) -> bool:
+        return bool(self.park_reason) and self.ended is None
+
+    @property
+    def label(self) -> str:
+        """``N``, or ``+N``, ``RN`` or ``AN`` for a row added mid-run, by its origin."""
+        return ("%s%d" % (ORIGINS.get(self.origin, "+"), self.id)) if self.added \
+            else "%d" % self.id
 
     @property
     def timebox(self) -> float | None:
@@ -201,6 +223,8 @@ class Row:
     def state(self) -> str:
         if self.ended is not None:
             return self.result or "done"
+        if self.park_reason:
+            return PARKED
         if self.started is None:
             return "open"
         if self.waits and self.waits[-1][1] is None:
@@ -237,6 +261,8 @@ class Row:
                      for name in NEW_FIELDS + WRITTEN_FIELDS})
         data.update(tokens=NOT_RECORDED if self.tokens is None else self.tokens,
                     waitReasons=self.wait_reasons, timeboxReached=self.timebox_reached)
+        data.update(label=self.label, origin=(self.origin or "added") if self.added else "",
+                    evidence=self.evidence, parkReason=self.park_reason)
         return data
 
 
@@ -275,20 +301,25 @@ def rows(events: list[dict], moment: _dt.datetime | None = None) -> list[Row]:
     found: dict[int, Row] = {}
     for event in events:
         kind = event.get("event")
+        if kind not in EVENTS:
+            continue          # a newer writer's event: read what is known, skip the rest
         at = parse_stamp(event.get("at", ""))
         if kind in ("open", "add"):
             specs = event.get("rows")
+            origin = event.get("origin") if event.get("origin") in ORIGINS else "added"
             for spec in specs if isinstance(specs, list) else []:
                 try:
                     row = _row(spec, added=(kind == "add"))
                 except (AttributeError, KeyError, TypeError, ValueError):
                     continue      # plan_rows admits no such row; a hand edit is not a row
+                if row.added:
+                    row.origin = origin
                 found[row.id] = row
             continue
         row = found.get(_row_id(event.get("row")))
         if row is None or at is None:
             continue
-        if kind == "start" and row.started is None:
+        if kind == "start" and row.started is None and not row.park_reason:
             row.started = at
             # The row keeps the model and host named at its start; a resume's stay on it.
             row.fields.update({name: event[name] for name in ("model", "host")
@@ -304,6 +335,8 @@ def rows(events: list[dict], moment: _dt.datetime | None = None) -> list[Row]:
             tokens = event.get("tokens")
             row.tokens = tokens if isinstance(tokens, int) and not isinstance(tokens, bool) \
                 else None
+            evidence = event.get("evidence")
+            row.evidence = evidence.strip() if isinstance(evidence, str) else ""
             parts = event.get("rows") if row.result == SPLIT else None
             for spec in parts if isinstance(parts, list) else []:
                 try:
@@ -311,6 +344,10 @@ def rows(events: list[dict], moment: _dt.datetime | None = None) -> list[Row]:
                 except (AttributeError, KeyError, TypeError, ValueError):
                     continue
                 found.setdefault(part.id, part)
+        elif kind == "park" and row.started is None and row.ended is None:
+            reason = event.get("reason")
+            row.park_reason = reason.strip() if isinstance(reason, str) and reason.strip() \
+                else NOT_RECORDED
         elif kind == "confirm":
             row.confirmed = True
         elif kind == "timebox-reached":
@@ -356,6 +393,12 @@ def check(events: list[dict], action: str, row_id: int | None = None,
         raise GovernanceError("row %s is not in this sprint's plan (rows %s); add it with "
                               "--add first" % (row_id, ", ".join(str(k) for k in sorted(by_id))))
     state = row.state
+    if state == PARKED:
+        raise GovernanceError("row %d is parked (%s); the run set it aside, and a parked row "
+                              "is reported at the close-out, not worked" % (row.id, row.park_reason))
+    if action == "park" and state != "open":
+        raise GovernanceError("row %d is %s; only a row not yet started is parked — end a "
+                              "started row with --result cancelled" % (row.id, state))
     if action == "start" and row.started is not None:
         raise GovernanceError("row %d is already %s; a second start would double-count it "
                               "(is another session running this sprint?)"
@@ -385,14 +428,19 @@ def check(events: list[dict], action: str, row_id: int | None = None,
                                   % (row.id, minutes_text(worked), minutes_text(row.timebox)))
 
 
-def event_fields(action: str, reason=None, tokens=None, model=None, host=None) -> dict:
+def event_fields(action: str, reason=None, tokens=None, model=None, host=None,
+                 evidence=None, origin=None) -> dict:
     """The extra fields a ``timing`` event carries, validated: a ``wait`` names its
-    ``reason`` from ``WAIT_REASONS``; an ``end`` may carry the host's ``tokens`` count;
-    a ``start`` or ``resume`` may name the ``model`` and ``host``. A field given to an
-    action that does not take it is refused, so nothing typed is silently dropped."""
-    given = {"reason": reason, "tokens": tokens, "model": model, "host": host}
-    takes = {"wait": ("reason",), "end": ("tokens",), "start": ("model", "host"),
-             "resume": ("model", "host")}.get(action, ())
+    ``reason`` from ``WAIT_REASONS``, a ``park`` its own reason in words; an ``end`` may
+    carry the host's ``tokens`` count and the ``evidence`` that proves the row; a ``start``
+    or ``resume`` may name the ``model`` and ``host``; an ``add`` names its ``origin``
+    (default ``added``). A field given to an action that does not take it is refused, so
+    nothing typed is silently dropped."""
+    given = {"reason": reason, "tokens": tokens, "model": model, "host": host,
+             "evidence": evidence, "origin": origin}
+    takes = {"wait": ("reason",), "park": ("reason",), "end": ("tokens", "evidence"),
+             "start": ("model", "host"), "resume": ("model", "host"),
+             "add": ("origin",)}.get(action, ())
     stray = [name for name, value in given.items() if value is not None and name not in takes]
     if stray:
         raise GovernanceError("--%s does not go with --%s" % (", --".join(stray), action))
@@ -403,6 +451,23 @@ def event_fields(action: str, reason=None, tokens=None, model=None, host=None) -
                                   % (" | ".join(WAIT_REASONS),
                                      "" if reason is None else " (not %r)" % reason))
         fields["reason"] = reason
+    if action == "park":
+        if not str(reason or "").strip():
+            raise GovernanceError("a parked row names why the run will not do it: "
+                                  "--reason \"<why>\"")
+        fields["reason"] = str(reason).strip()
+    if action == "add":
+        origin = "added" if origin is None else origin
+        if origin not in ORIGINS:
+            raise GovernanceError("--origin is one of %s, not %r"
+                                  % (", ".join(ORIGINS), origin))
+        fields["origin"] = origin
+    if evidence is not None:
+        if not str(evidence).strip():
+            raise GovernanceError("--evidence names what proves the row; it cannot be empty")
+        fields["evidence"] = str(evidence).strip()
+    elif action == "end":
+        fields["evidence"] = None     # asked for and not given: `--check` reports it
     if tokens is not None:
         text = str(tokens).strip()
         if not re.fullmatch(r"[0-9]+", text):
@@ -587,7 +652,7 @@ def kinds(past: list[Row]) -> dict[str, int]:
 # --- a specification's task list (references/task-rows.md) ---------------------------------
 
 SPEC_COLUMNS = ("#", "Task", "Class", "Kind", "Tier", "Effort", "Estimate", "Timebox", "Group")
-EFFORT_LEVELS = ("low", "medium", "high", "max")
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 FRONTIER_ESTIMATE = "a frontier task receives no single-number estimate"
 _BLANK = ("", "—", "–", "-")
 _DURATION_RE = re.compile(r"(?:(\d+)\s*h)?\s*(?:(\d+)\s*m(?:in)?)?")
@@ -759,33 +824,117 @@ def summary(events: list[dict], item: str | None = None) -> dict:
     estimate = sum(row.predicted or 0 for row in sequential if not row.added)
     actual = sum(row.working for row in sequential if row.measured)
     partial = [row.id for row in sequential if not row.measured
-               and not (row.state in ("cancelled", SPLIT) and row.started is None)]
+               and not (row.state in ("cancelled", SPLIT, PARKED) and row.started is None)]
     return {
         "item": item or "",
         "estimate": duration(estimate), "actual": duration(actual),
         "estimateMinutes": estimate, "actualMinutes": round(actual, 1),
         "complete": not partial,
-        "rows": [dict(row.as_dict(), flag=UNSEEN_WAIT if row.flagged else "")
-                 for row in found],
+        "rows": [dict(row.as_dict(), flag=UNSEEN_WAIT if row.flagged else "",
+                      effortLevel=row.effort_level) for row in found],
         "flagged": [row.id for row in found if row.flagged],
         "notMeasured": partial,
+        "byModelEffort": by_model_effort(found, _ratio),
+        # Each becomes a findings entry (Disposition open) at the close-out.
+        "parked": [{"id": row.id, "label": row.label, "title": row.title,
+                    "reason": row.park_reason} for row in found if row.parked],
     }
+
+
+def check_log(events: list[dict]) -> list[str]:
+    """What ``timing --check`` reports: a row number used twice, a row ended ``done``
+    without the evidence its end was asked for, a parked row with no reason, and a row
+    still running or waiting. An ``end`` written before evidence existed carries no
+    ``evidence`` key and is never reported: the check holds a log only to what its
+    writer promised."""
+    findings = []
+    numbers: dict[int, int] = {}
+    ends: dict[int, dict] = {}
+    for event in events:
+        listed = event.get("rows") if event.get("event") in ("open", "add", "end") else None
+        for spec in listed if isinstance(listed, list) else []:
+            number = _row_id(spec.get("id")) if isinstance(spec, dict) else None
+            if number is not None:
+                numbers[number] = numbers.get(number, 0) + 1
+        if event.get("event") == "end":
+            ends.setdefault(_row_id(event.get("row")), event)
+    findings += ["row %d is numbered %d times; a number is used once" % (number, count)
+                 for number, count in sorted(numbers.items()) if count > 1]
+    for row in rows(events):
+        end = ends.get(row.id, {})
+        if row.state == "done" and "evidence" in end and not row.evidence:
+            findings.append("row %s ended done with no evidence (--end %d --evidence ...)"
+                            % (row.label, row.id))
+        if row.state == PARKED and row.park_reason == NOT_RECORDED:
+            findings.append("row %s is parked with no reason" % row.label)
+        if row.state in ("running", "waiting"):
+            findings.append("row %s is still %s; end it before the summary" % (row.label,
+                                                                               row.state))
+    return findings
+
+
+def _ratio(row: Row) -> float:
+    return row.working / row.predicted
+
+
+def _error(row: Row) -> float:
+    return abs(row.working - row.predicted) / row.predicted
+
+
+def by_model_effort(found: list[Row], figure) -> dict:
+    """``figure`` of each (model, effort) pair's measured, priced rows: the median, or not
+    computable below ``CALIBRATION_MINIMUM`` rows. The model is the one the row's start
+    named; the effort is the row's own, else its tier's. A row whose log recorded no model
+    (an older log) is skipped and counted, never refused."""
+    pairs: dict[tuple, list] = {}
+    skipped = 0
+    for row in found:
+        if not (row.measured and row.predicted) or row.flagged or row.state == SPLIT:
+            continue
+        model = row.fields.get("model")
+        if not isinstance(model, str) or not model.strip():
+            skipped += 1
+            continue
+        pairs.setdefault((model, row.effort_level or NOT_RECORDED), []).append(figure(row))
+    found_pairs = []
+    for (model, effort), values in sorted(pairs.items()):
+        entry = {"model": model, "effort": effort, "rows": len(values)}
+        if len(values) >= CALIBRATION_MINIMUM:
+            entry["value"] = round(statistics.median(values), 2)
+        else:
+            entry.update(value=None, computable=False, note="not computable",
+                         missingInputs=["%d measured rows (%d found)"
+                                        % (CALIBRATION_MINIMUM, len(values))])
+        found_pairs.append(entry)
+    return {"pairs": found_pairs, "skippedNoModel": skipped}
 
 
 def summary_markdown(result: dict) -> str:
     """The close-out's ``## Time`` table."""
-    lines = ["| Row | Task | Kind | Predicted | Actual | Waited | Added | Flag |",
-             "|---|---|---|---|---|---|---|---|"]
+    lines = ["| Row | Task | Kind | Model | Effort | Predicted | Actual | Waited | Added | Flag "
+             "| Evidence |",
+             "|---|---|---|---|---|---|---|---|---|---|---|"]
     for row in result["rows"]:
-        lines.append("| %s | %s | %s | %s | %s | %s | %s | %s |" % (
-            ("+%s" if row["added"] else "%s") % row["id"], row["title"].replace("|", "/"),
+        if row["state"] == PARKED:
+            continue                                   # listed under Parked below
+        model = row.get("model")
+        lines.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (
+            row.get("label") or row["id"], row["title"].replace("|", "/"),
             row["kind"] or "—",
+            model if model and model != NOT_RECORDED else "—",
+            row.get("effortLevel") or "—",
             "%s min (%s)" % (row["predicted"], row["basis"]) if row["predicted"] is not None
             else "—",
             "%d min" % int(round(row["working"])) if row["measured"] else "not measured",
             minutes_text(row["waited"]) if row["waited"] >= 0.5 else "—",
             "yes" if row["added"] else "—",
-            row["flag"] or ("confirmed" if row["confirmed"] else "—")))
+            row["flag"] or ("confirmed" if row["confirmed"] else "—"),
+            (row.get("evidence") or "—").replace("|", "/")))
+    if result.get("parked"):
+        lines += ["", "Parked — each becomes a findings entry (Disposition open) at the "
+                      "close-out:"]
+        lines += ["- ◇ %s. %s — %s" % (p["label"], p["title"], p["reason"])
+                  for p in result["parked"]]
     lines.append("")
     lines.append("Estimate %s (the first listing, sequential rows) · Actual %s (measured "
                  "working time, sequential rows)%s" % (
@@ -800,18 +949,21 @@ def summary_markdown(result: dict) -> str:
 # --- the loop's figures --------------------------------------------------------------------
 
 TIMING_METRICS = ("row-error", "total-error", "added-share")
+#: Needs rows per (model, effort) pair rather than closed logs, so it is read at any count.
+PAIR_METRIC = "row-error-by-model-effort"
 
 
 def closed_logs(directory: str) -> list[list[Row]]:
-    """The rows of every time log whose rows have all ended. A log that cannot be read
-    is not closed evidence; ``history`` names it when a row is priced."""
+    """The rows of every time log whose rows have all ended or been parked. A log that
+    cannot be read is not closed evidence; ``history`` names it when a row is priced."""
     found = []
     for path in log_paths(directory):
         try:
             logged = rows(load(path))
         except GovernanceError:
             continue
-        if logged and all(row.ended is not None for row in logged):
+        # A parked row is finished business: the run set it aside and will not do it.
+        if logged and all(row.ended is not None or row.parked for row in logged):
             found.append(logged)
     return found
 
@@ -827,7 +979,8 @@ def figures(directory: str) -> list[Metric]:
         missing = "%d closed time logs in the closeOuts role (%d found)" % (
             CALIBRATION_MINIMUM, len(logs))
         return [Metric(name, computable=False, missing_inputs=[missing])
-                for name in TIMING_METRICS]
+                for name in TIMING_METRICS] + [
+            _row_error_by_model_effort([row for logged in logs for row in logged])]
     # A split row's time so far is part of its work, not a miss against its prediction.
     measured = [row for logged in logs for row in logged
                 if row.measured and row.predicted and not row.flagged and row.state != SPLIT]
@@ -855,13 +1008,31 @@ def figures(directory: str) -> list[Metric]:
                unit="of working minutes spent on rows added after the first listing")
         if worked else Metric("added-share", computable=False,
                               missing_inputs=["a measured row in a closed log"]),
+        _row_error_by_model_effort([row for logged in logs for row in logged]),
     ]
+
+
+def _row_error_by_model_effort(found: list[Row]) -> Metric:
+    """``row-error`` per (model, effort) pair: ``{"<model> {<effort>}": value}`` over the
+    pairs with ``CALIBRATION_MINIMUM`` measured rows; not computable when none has."""
+    split = by_model_effort(found, _error)
+    values = {"%s {%s}" % (p["model"], p["effort"]): p["value"]
+              for p in split["pairs"] if p["value"] is not None}
+    skipped = (", %d rows with no model recorded skipped" % split["skippedNoModel"]
+               if split["skippedNoModel"] else "")
+    if not values:
+        return Metric(PAIR_METRIC, computable=False, missing_inputs=[
+            "%d measured rows for one model and effort (%d pairs below it%s)"
+            % (CALIBRATION_MINIMUM, len(split["pairs"]), skipped)])
+    return Metric(PAIR_METRIC, values,
+                  unit="median |actual - predicted| / predicted per model {effort}, %d pairs%s"
+                  % (len(values), skipped))
 
 
 # --- rendering -------------------------------------------------------------------------------
 
 _MARKER = {"open": "□", "running": "■", "waiting": "■", "done": "✓", "blocked": "✗",
-           "cancelled": "✗", SPLIT: "✗"}
+           "cancelled": "✗", SPLIT: "✗", PARKED: "◇"}
 
 
 def _prediction(row: Row) -> str:
@@ -871,18 +1042,22 @@ def _prediction(row: Row) -> str:
 
 
 def row_line(row: Row, moment: _dt.datetime) -> str:
-    label = "+%d" % row.id if row.added else "%d" % row.id
-    text = "%s %s. %s%s" % (_MARKER.get(row.state, "□"), label,
+    text = "%s %s. %s%s" % (_MARKER.get(row.state, "□"), row.label,
                             ("%s: " % row.owner) if row.owner else "", row.title)
     if row.tier:
         text += " [%s]" % row.tier
-    if row.effort:
-        text += " {%s}" % row.effort
+    if row.effort_level:
+        text += " {%s}" % row.effort_level
+    model = row.fields.get("model")
+    if isinstance(model, str) and model.strip():
+        text += " ‹%s›" % model
     if row.kind:
         text += " @%s" % row.kind
     if row.parallel:
         text += " (parallel)"
-    if row.state == "open":
+    if row.state == PARKED:
+        text += " — parked: %s" % row.park_reason
+    elif row.state == "open":
         text += "  " + (_prediction(row) or "unpriced")
     elif row.state in ("running", "waiting"):
         text += "  %s — %s, %s worked" % (_prediction(row) or "unpriced",
@@ -909,7 +1084,7 @@ def row_line(row: Row, moment: _dt.datetime) -> str:
 def remaining(found: list[Row], moment: _dt.datetime) -> tuple[float, list[int], list[int]]:
     """Predicted minutes left over the unfinished sequential rows (a running row counts
     only its remainder), the ids summed, and the unfinished parallel rows left out."""
-    unfinished = [row for row in found if row.ended is None]
+    unfinished = [row for row in found if row.ended is None and not row.parked]
     sequential = [row for row in unfinished if not row.parallel]
     parallel = [row.id for row in unfinished if row.parallel]
     return (sum(row.remainder(moment) for row in sequential),
@@ -926,11 +1101,10 @@ def _clock(moment: _dt.datetime, reference: _dt.datetime) -> str:
 
 
 def header(found: list[Row], moment: _dt.datetime, zone: _dt.tzinfo | None = None) -> str:
-    """``[D/N rows done = P%] Remaining M (…) → est. finish HH:MM local (±HH:MM) · HH:MM
-    UTC. Now: …`` — computed, so the lead never sums minutes."""
-    done = sum(1 for row in found if row.ended is not None)
-    total = len(found)
-    share = (100 * done // total) if total else 0
+    """``[D/N ✓ · R ■ · X ✗ · O □ · P ◇] Remaining M (…) → est. finish HH:MM local
+    (±HH:MM) · HH:MM UTC. Now: …`` — computed, so the lead never sums minutes. Only a row
+    ended ``done`` counts as ✓; blocked, cancelled and split rows count as ✗."""
+    counts = counted(found)
     left, sequential, parallel = remaining(found, moment)
     scope = "sequential " + _ids(sequential) if sequential else "no sequential rows remain"
     if parallel:
@@ -953,13 +1127,45 @@ def header(found: list[Row], moment: _dt.datetime, zone: _dt.tzinfo | None = Non
     if not now_parts:
         upcoming = [row.id for row in found if row.state == "open"]
         now_parts.append("%s next" % _ids(upcoming[:1]) if upcoming else "every row has ended")
-    return ("[%d/%d rows done = %d%%] Remaining %d min (%s) → est. finish %s local (%s) · %s "
-            "UTC. Now: %s." % (done, total, share, _whole(left), scope,
+    return ("[%d/%d ✓ · %d ■ · %d ✗ · %d □ · %d ◇] Remaining %d min (%s) → est. finish %s "
+            "local (%s) · %s UTC. Now: %s." % (counts["✓"], len(found), counts["■"],
+                                              counts["✗"], counts["□"], counts["◇"],
+                                              _whole(left), scope,
                           _clock(local, moment.astimezone(local.tzinfo)), offset,
                           _clock(utc, moment.astimezone(_dt.timezone.utc)),
                           "; ".join(now_parts)))
 
 
+def counted(found: list[Row]) -> dict:
+    """Rows per marker: ✓ done, ■ running or waiting, ✗ blocked, cancelled or split,
+    □ open, ◇ parked."""
+    counts = dict.fromkeys(("✓", "■", "✗", "□", "◇"), 0)
+    for row in found:
+        counts[_MARKER.get(row.state, "□")] += 1
+    return counts
+
+
+#: Past this many rows, ``--compact`` keeps every row not done and the last few done.
+COMPACT_ABOVE = 12
+COMPACT_DONE_KEPT = 3
+
+
 def render_status(found: list[Row], moment: _dt.datetime,
-                  zone: _dt.tzinfo | None = None) -> str:
-    return "\n".join([header(found, moment, zone)] + [row_line(row, moment) for row in found])
+                  zone: _dt.tzinfo | None = None, compact: bool = False) -> str:
+    shown = [row for row in found if not row.parked]
+    hidden = 0
+    if compact and len(found) > COMPACT_ABOVE:
+        done = sorted((row for row in shown if row.state == "done"),
+                      key=lambda row: (row.ended, row.id))
+        keep = {row.id for row in done[-COMPACT_DONE_KEPT:]}
+        hidden = len(done) - len(keep)
+        shown = [row for row in shown if row.state != "done" or row.id in keep]
+    lines = [header(found, moment, zone)]
+    if hidden:
+        lines.append("… %d earlier done row%s not shown (timing --status lists every row)"
+                     % (hidden, "" if hidden == 1 else "s"))
+    lines += [row_line(row, moment) for row in shown]
+    parked = [row_line(row, moment) for row in found if row.parked]
+    if parked:
+        lines += ["Parked:"] + parked
+    return "\n".join(lines)

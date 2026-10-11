@@ -2,6 +2,7 @@
 name: MarcusAurelius
 description: "Documentation, compliance verification, and knowledge archiving. Handles changelog updates, governance doc maintenance, spec compliance checks, and sprint documentation."
 model: sonnet
+effort: medium
 ---
 
 <!-- virtuoso-overlay-clause v2 -->

@@ -39,6 +39,7 @@ import skill_rules  # noqa: E402
 from tools.governance import (  # noqa: E402
     overlays as overlays_mod, policy as policy_mod, result as result_mod,
 )
+from tools.governance.timing import EFFORT_LEVELS  # noqa: E402
 
 fails: list[str] = []
 oks: list[str] = []
@@ -78,6 +79,8 @@ HOST_TERM_PATTERNS = [
 HOST_ADAPTER_FILES = {
     "skills/pointer-closeout/agents/openai.yaml",
 }
+#: The one table that names model aliases (tier → alias → model id → effort).
+MODEL_TABLE_FILES = {"references/model-tiers.md"}
 #: The agent frontmatter `model:` field is host configuration, not prose.
 MODEL_FRONTMATTER_RE = re.compile(r"^model:\s*\S+\s*$")
 
@@ -326,6 +329,9 @@ def check_host_frontmatter() -> None:
             continue
         problems.extend("%s: no %s" % (rel, field) for field in ("name", "description")
                         if not fields.get(field))
+        if "effort" in fields and fields["effort"] not in EFFORT_LEVELS:
+            problems.append("%s: effort %r is not one of %s"
+                            % (rel, fields["effort"], ", ".join(EFFORT_LEVELS)))
 
     skills = shipped_skill_names()
     for skill in skills:
@@ -547,7 +553,7 @@ def check_text_scans(skill_names: list[str]) -> None:
         if not _is_test_file(rel):
             scan(rel, text, SHIPPED_PROJECT_PATTERNS, "project-specific", project)
         scan(rel, text, NONPORTABLE_SHELL_PATTERNS, "non-portable shell", shell)
-        if rel in HOST_ADAPTER_FILES:
+        if rel in HOST_ADAPTER_FILES or rel in MODEL_TABLE_FILES:
             continue
         for number, line in enumerate(text.splitlines(), start=1):
             if EXEMPT in line or MODEL_FRONTMATTER_RE.match(line):

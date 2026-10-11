@@ -92,11 +92,16 @@ Every checkpoint:
   record the Git line in the journal entry: [BRANCH] @ <sha>; uncommitted: <paths or none>
 Completion only — after the code merge, once done.md is written:
   git add -- [PACKET DIR]/done.md [PACKET DIR]/charter.md [PACKET DIR]/state.md [PACKET DIR]/journal.md
-  git commit -m "[PACKET-ID]: completion record" -- [PACKET DIR]
+  git diff --cached --name-only     # must list exactly those paths
+  git commit -m "[PACKET-ID]: completion record" -- [PACKET DIR]/done.md [PACKET DIR]/charter.md [PACKET DIR]/state.md [PACKET DIR]/journal.md
+  git diff --name-only [DEFAULT]...[BRANCH] -- . ":(exclude)[PACKET DIR]"   # must print
+                                    # nothing before the merge; any path -> STOP, BLOCKER(USER)
   git switch [DEFAULT]              # in the checkout the code merge used
   git merge --no-ff [BRANCH] -m "merge: [PACKET-ID] completion record"
   git diff --name-only HEAD^1 HEAD -- . ":(exclude)[PACKET DIR]"   # must print
                                     # nothing; any path -> STOP, BLOCKER(USER)
+  # plan.md and any evidence file the run wrote join the git add and git commit path
+  # lists when they changed.
 Never: force-push, rebase, reset --hard, stash, clean, or delete a lock file.
 
 Run this session under the virtuoso skill when it is available: this packet is your
@@ -125,10 +130,12 @@ achieve, and how completion is proven.
    commits, commit done.md, charter.md, state.md and journal.md on the run branch as one
    docs-only commit — after the code merge, never folded into it, so `[DEFAULT]`'s tree
    at the code merge stays the tree the DoD rows tested. When the run merged its code
-   into `[DEFAULT]`, merge this commit too, with `--no-ff`, and check that the merge
-   touches only this directory (GIT WORK → Completion only). When someone else merges,
+   into `[DEFAULT]`, merge this commit too, with `--no-ff`, and check, before and after
+   the merge, that it touches only this directory (GIT WORK → Completion only). When someone else merges,
    the record rides on that merge. `/pointer-closeout` checks that done.md is on
-   `[DEFAULT]` before it crosses.
+   `[DEFAULT]` before it crosses. The final journal entry and state.md record only
+   checks that run before the record commit; the record merge's own check is run and
+   reported by `/pointer-closeout`, not written back into this directory.
 5. Stop. **`done.md` existing is the stop signal** for any loop or scheduler driving
    sessions: check it before launching another session. Never create it under any other
    circumstances.

@@ -844,10 +844,9 @@ completed summary carries one line each; standing rules reflect the checklist.
   checks that blocked them
 - **Provenance** — provider, source, snapshot time for every figure
 
-### D.7 Regenerate the board and the planning cockpit
+### D.7 Regenerate the board
 
     "$HOME/.virtuoso/bin/virtuoso" generate_board --root . --create
-    "$HOME/.virtuoso/bin/virtuoso" generate_cockpit --root .
 
 The **roadmap board** is the project's one interactive page: a Dashboard (KPI tiles,
 charts, slicers built from the data), a Roadmap tab (live work as a board, grouped by
@@ -862,12 +861,11 @@ repository. The page is a build output: never commit it. The comments file is wr
 by people: commit it. A later review regenerates the page and reports `board
 regenerated`.
 
-The cockpit reads the **configured authoritative work register** through its
-provider and the roadmap through its registered role, and writes
-`Virtuoso/reports/planning-cockpit.html` with a banner pointing to the board, its
-successor; this release still writes it. Neither page modifies a source document;
-both surface drift instead. Every figure carries its provenance, and a
-snapshot-backed read is labelled with its age.
+The board reads the configured authoritative work register through its provider and
+the roadmap through its registered role. It never modifies a source document; it
+surfaces drift on the Dashboard instead. Every figure carries its provenance, and a
+snapshot-backed read is labelled with its age. A `planning-cockpit.html` left by an
+earlier version is not read or written; delete it when you like.
 
 ### D.8 Final summary
 
@@ -881,7 +879,6 @@ snapshot-backed read is labelled with its age.
 - Lessons applied
 - Board: `created` or `regenerated`, its path, and what `.gitignore` got; board
   comments resolved (by item) and adopted as new items
-- Cockpit path
 - Any outstanding recovery records
 
 ---

@@ -7,7 +7,7 @@ checks the pairing, and states the session-start line. Pace against a deadline i
 ``providers/pace.py``.
 
 One authority: the date lives in the manifest and nowhere else. Every surface that
-shows it — ``kpis``, the cockpit, the session-start line, a review — reads it from
+shows it — ``kpis``, the board, the session-start line, a review — reads it from
 here, so there is one place to move it and no copy to drift.
 """
 from __future__ import annotations

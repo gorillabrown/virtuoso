@@ -1,4 +1,4 @@
-"""Pace against a dated deadline (v1.8.1): the engine, ``kpis``, and the cockpit.
+"""Pace against a dated deadline (v1.8.1): the engine, ``kpis``, and the board.
 
 The acceptance fixture is the Gloves of Glory roadmap review of 2026-09-22, whose
 figures an operator derived by hand because the plugin could not: 60 items and
@@ -515,38 +515,38 @@ def test_an_invalid_pace_policy_falls_back_to_the_defaults_and_says_so(paced):
 
 
 # =============================================================================
-# The cockpit
+# The board
 # =============================================================================
 
 import re  # noqa: E402
 
-from tools.roadmap_visualizer import generate as cockpit  # noqa: E402
+from tools.roadmap_visualizer import generate  # noqa: E402
 from tools.roadmap_visualizer import health as health_mod  # noqa: E402
 
 
-def cockpit_html(root):
-    return Path(cockpit.generate(str(root))).read_text(encoding="utf-8")
+def board_html(root):
+    generate.ensure_board(root)
+    return (Path(root) / "roadmap-board.html").read_text(encoding="utf-8")
 
 
 def embedded_model(html):
-    match = re.search(r"const MODEL = (\{.*?\});\n", html, re.DOTALL)
-    assert match, "the cockpit did not embed its model"
-    return json.loads(match.group(1).replace("<\\/", "</"))
+    match = re.search(r'<script id="board-data" type="application/json">(.*?)</script>',
+                      html, re.DOTALL)
+    assert match, "the board did not embed its model"
+    return json.loads(match.group(1))
 
 
-def test_the_cockpit_model_carries_pace(paced):
-    model = embedded_model(cockpit_html(paced))
+def test_the_board_model_carries_pace(paced):
+    model = embedded_model(board_html(paced))
     [report] = model["metrics"]["pace"]
     assert report["deadline"]["id"] == "ship" and report["verdict"] == "ahead"
     assert model["metrics"]["invalidDeadlines"] == []
 
 
-def test_the_cockpit_renders_deadline_and_pace_tiles(paced):
-    html = cockpit_html(paced)
-    assert '["Deadline", deadlineValue(nextPace()), deadlineDetail(nextPace()), "compact"]' \
-        in html
-    assert '["Pace", paceValue(nextPace()), paceDetail(nextPace()), "compact"]' in html
-    assert "none declared" in html and "no deadline" in html
+def test_the_board_renders_the_pace_tile(paced):
+    tiles = {t["key"]: t for t in embedded_model(board_html(paced))["dashboard"]["tiles"]}
+    assert tiles["pace"]["value"] == "ahead"
+    assert "due 2099-01-01" in tiles["pace"]["detail"]
 
 
 def _concern(verdict):

@@ -112,25 +112,26 @@ decision framework, cost implications, and task-type reference live in the
 `effort-levels` skill. This section covers only what the parent thread needs
 to know during execution.
 
-### The Four Levels
+### The Five Levels
 
 | Level | Thinking Budget | Behavior |
 |-------|----------------|----------|
 | **low** | Minimal | Pattern-match from trained knowledge. Answer from memory, don't work through it. |
 | **medium** | Moderate | Meaningful reasoning within capacity. Handles majority of standard tasks. |
 | **high** | Substantial | Traces complex logic, considers multiple approaches, backtracks when needed. |
+| **xhigh** | Deep | More deliberation than high, short of max: long traces across several modules. |
 | **max** | Full available | Reasons as extensively as context allows. Slowest, most expensive, highest quality. |
 
 ### How Virtuoso Uses Effort Levels
 
 1. **Read the sprint's declared effort** from the dispatch header (e.g., `Effort: Medium`).
-2. **Check for task-level overrides** — individual tasks may annotate `{high}` or `{max}`
-   to override the sprint default.
+2. **Check for task-level overrides** — individual tasks may annotate `{high}`, `{xhigh}`
+   or `{max}` to override the sprint default.
 3. **Record effort on the task plan** and pass it through to any child worker prompt.
 4. **Effort ↔ task-tier defaults** — when effort is not explicitly annotated on a task, it
    inherits from the task tier: mechanical→low, bounded→medium, cross-cutting→high.
-5. **Only annotate effort when it differs from the default.** A `[bounded]` task is implicitly
-   `{medium}`. Write `[bounded] {high}` only when overriding.
+5. **Print effort on every row.** A `[bounded]` task with no annotation is `{medium}`, and
+   its row says `{medium}`; a task that overrides says its own level, `[bounded] {high}`.
 
 ### Close-out: Effort Mismatches
 
@@ -388,14 +389,18 @@ Use these markers consistently throughout:
 
 ### Task format
 
-Every task line follows this format: `□ N. owner-label: Task description [tier] {effort} @kind  M min (basis)`
+Every task line follows this format: `□ N. owner-label: Task description [tier] {effort} ‹model› @kind  M min (basis)`
 
 - **Task tier** in square brackets: `[mechanical]`, `[bounded]`, or `[cross-cutting]`.
   The tier describes the *task*, not the capability of whoever runs it; a host maps a tier
   to whatever model or agent it has available.
-- **Effort level** in curly braces: `{low}`, `{medium}`, `{high}`, or `{max}`.
-  Effort is optional when it matches the tier default (mechanical→low, bounded→medium,
-  cross-cutting→high). Only annotate effort when overriding the default.
+- **Effort level** in curly braces, on every row: `{low}`, `{medium}`, `{high}`,
+  `{xhigh}` or `{max}`. A task the specification leaves blank takes its tier's default
+  (mechanical→low, bounded→medium, cross-cutting→high), and the row prints it.
+- **Model** in angle quotes: the owner agent's `model` alias from its frontmatter, which
+  the plugin's `references/model-tiers.md` maps to a model. A row with no owner agent yet
+  shows its tier's alias from that table. A host that reads neither `model` nor `effort`
+  still runs the plan: the row says what the planner intended.
 - **Kind** after an `@`, optional: a name for a row that recurs across dispatches
   (`@merge-slot`, `@fix-round`, `@gate-3-calibration`). A recurring row is priced from its
   kind's own history, so reuse a name `timing --kinds` already lists rather than coin a
@@ -463,16 +468,16 @@ and cheap to redo. Three cases where it is not:
 
 ```
 ## Task Plan — Effort: Medium | Override: tasks #6, #8 → High
-□ 1. Zeus: Load spec, build plan, assign owners                [cross-cutting]  20 min (median of 5 runs)
-□ 2. unassigned: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [bounded]  25 min (estimated)
-□ 3. unassigned: Update constants.toml default                          [mechanical]  6 min (median of 9 runs)
-□ 4. unassigned: Run fast test suite — all shards pass                  [mechanical] @fast-suite  14 min (median of 4 runs)
-□ 5. unassigned: Run the full verification sweep                           [mechanical]
-□ 6. unassigned: Interpret cal results + decide if tuning needed        [cross-cutting] {max}
-□ 7. unassigned: Generate profiler snapshot with pathway metrics        [mechanical]
-□ 8. unassigned: Analyze profiler — does freed space flow to both?      [cross-cutting] {max}
-□ 9. unassigned: Update CLAUDE.md with constants and cal results        [bounded]
-□ 10. unassigned: Commit, merge to main, push                          [mechanical]
+□ 1. Zeus: Load spec, build plan, assign owners                [cross-cutting] {high} ‹model›  20 min (median of 5 runs)
+□ 2. unassigned: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [bounded] {medium} ‹model›  25 min (estimated)
+□ 3. unassigned: Update constants.toml default                          [mechanical] {low} ‹model›  6 min (median of 9 runs)
+□ 4. unassigned: Run fast test suite — all shards pass                  [mechanical] {low} ‹model› @fast-suite  14 min (median of 4 runs)
+□ 5. unassigned: Run the full verification sweep                           [mechanical] {low} ‹model›
+□ 6. unassigned: Interpret cal results + decide if tuning needed        [cross-cutting] {max} ‹model›
+□ 7. unassigned: Generate profiler snapshot with pathway metrics        [mechanical] {low} ‹model›
+□ 8. unassigned: Analyze profiler — does freed space flow to both?      [cross-cutting] {max} ‹model›
+□ 9. unassigned: Update CLAUDE.md with constants and cal results        [bounded] {medium} ‹model›
+□ 10. unassigned: Commit, merge to main, push                          [mechanical] {low} ‹model›
 ```
 
 (Rows 5–10 carry their predictions the same way; they are elided here.)
@@ -508,8 +513,14 @@ human readability; TodoWrite is for persistent tracking.
 - If the spec says to do it, it gets a line. Don't silently absorb steps.
 - If you discover a new required step during execution, ADD it to the plan with
   `timing --kinds`, then `timing --sprint <SPRINT-ID> --add --rows-file <row.json>`, and reprint. It takes the next number and shows as
-  `+N`, the mark of a row the first listing missed. Plan review and fix rounds as rows
-  from the start (they are priced from history), so they are not the ones added later.
+  `+N`, the mark of a row the first listing missed. A row a review or an audit raised says
+  so: `--add --origin review` shows `RN`, `--origin audit` shows `AN` (the default origin
+  is `added`). Plan review and fix rounds as rows from the start (they are priced from
+  history), so they are not the ones added later.
+- **A row the run will not do is parked, not deleted:** `timing --sprint <SPRINT-ID>
+  --park N --reason "<why>"`, for a row not yet started (a started row ends `--result
+  cancelled`). It shows `◇` under *Parked* in `--status` and `--summary`, and at the
+  close-out each parked row becomes a `findings` entry with Disposition `open`.
 
 ### Open the time log
 
@@ -726,10 +737,11 @@ For each task, the parent:
 6. Verifies the result meets the task spec — mechanically, per the rule below.
 7. If the result includes information needed by downstream tasks, records the relevant
    summary for later steps.
-8. **Ends the row's clock:** `timing --sprint <SPRINT-ID> --end N` (add
+8. **Ends the row's clock:** `timing --sprint <SPRINT-ID> --end N --evidence "<what
+   proves it>"` — the test, the command output or the commit step 6 checked (add
    `--result blocked` or `--result cancelled` when it did not complete, and
    `--tokens <count>` when the host reported the row's token usage), and marks the
-   task ✓ or ✗.
+   task ✓ or ✗. A row ended `done` without evidence is a `timing --check` finding.
 9. Reprints the plan.
 10. Moves to the next task.
 
@@ -747,7 +759,12 @@ until the clock reaches the budget), then take its `onTimebox` action. A row tha
 out to be two pieces of work is split, not stretched: `timing --split N --rows-file
 <parts.json>` ends it as `split` and adds the parts, each carrying `splitFrom: N`.
 `--status` reads back every row's state and measured minutes, so after a context
-compaction, read it back rather than reconstructing times.
+compaction, read it back rather than reconstructing times. The time log is the plan:
+run `timing --sprint <SPRINT-ID> --check` after a compaction and again before the
+close-out, and read its exit code — 0 clean, 1 findings (a number used twice, a row
+ended `done` without evidence, a parked row without a reason, a row still running), 2
+for a usage error or no log to check. After a compaction, the row in progress is
+expected to show as running; every other finding is resolved before the close-out.
 
 <!-- rule:worker-output-validation (evidence-not-assertion) -->
 **A "completed" message is not evidence that work happened.** The evidence is the
@@ -808,7 +825,7 @@ edit code, or decide the fix. It holds a handle, which is coordination work.
 **Effort level management:** Effort controls how deeply the parent and child workers
 reason. Set the sprint's default effort at the start of Phase 4 (read from the dispatch
 header's `Effort:` field), then note before/after any task with a `{curly brace}`
-override. The four levels are: `low`, `medium`, `high`, `max`.
+override. The five levels are: `low`, `medium`, `high`, `xhigh`, `max`.
 ```
 /effort-levels medium          ← set sprint default at start of Phase 4
 /effort-levels max             ← before a {max} override task
@@ -938,7 +955,9 @@ This is the most important habit. Reprinting the plan after each task:
 
 **The reprinting rule:** After completing each task, reprint the FULL checklist
 with a status bar. Not "see above." Not a partial update. The full list with
-current markers plus a one-line status bar at the top.
+current markers plus a one-line status bar at the top. Past 12 rows, the reprint
+after each task is `timing --status --compact` — the header, every row not done and
+the last 3 done; the full list is reprinted at each phase gate and every fifth task.
 
 **Single plan rule:** There is exactly ONE task plan. Do not maintain a second
 copy (e.g., a "tracking" list that echoes the plan without updating). When
@@ -949,25 +968,26 @@ of them is wrong.
 **Status bar format:** the header `timing --sprint <SPRINT-ID> --status` prints, then one
 sentence on the current state. Reprint its output. Never sum the minutes yourself:
 
-`[D/N rows done = P%] Remaining M (sequential rows a, b, c; row p parallel, excluded) → est. finish HH:MM local (±HH:MM) · HH:MM UTC. Now: row r running.`
+`[D/N ✓ · R ■ · X ✗ · O □ · P ◇] Remaining M (sequential rows a, b, c; row p parallel, excluded) → est. finish HH:MM local (±HH:MM) · HH:MM UTC. Now: row r running.`
 
-Remaining is the predicted minutes left over the unfinished rows that run one after
-another. A running row counts only what is left of its prediction, and parallel rows are
-named and left out. Finish is now plus remaining. While a row waits on the owner, the
+The count is per marker: ✓ done, ■ running or waiting, ✗ blocked, cancelled or split,
+□ not started, ◇ parked. Only a row ended `done` counts as ✓. Remaining is the predicted
+minutes left over the unfinished rows that run one after another. A running row counts
+only what is left of its prediction, and parallel rows are named and left out. Finish is now plus remaining. While a row waits on the owner, the
 header says so, and the finish time moves later with the clock.
 
 ```
-## Task Plan — [3/10 rows done = 30%] Remaining 112 min (sequential rows 4, 5, 6, 8, 9, 10; row 7 parallel, excluded) → est. finish 16:40 local (-05:00) · 21:40 UTC. Now: row 4 running.
-✓ 1. Zeus: Load spec, build plan, assign owners                [cross-cutting]
-✓ 2. hercules: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [bounded]
-✓ 3. hermes: Update constants.toml default                              [mechanical]
-■ 4. hippocrates: Run fast test suite — all shards pass                 [mechanical]
-□ 5. hippocrates: Run the full verification sweep                          [mechanical]
-□ 6. aristotle: Interpret cal results + decide if tuning needed          [cross-cutting]
-□ 7. hippocrates: Generate profiler snapshot with pathway metrics       [mechanical]
-□ 8. aristotle: Analyze profiler — does freed space flow to both?       [cross-cutting]
-□ 9. marcusaurelius: Update CLAUDE.md with constants and cal results    [bounded]
-□ 10. hermes: Commit, merge to main, push                              [mechanical]
+## Task Plan — [3/10 ✓ · 1 ■ · 0 ✗ · 6 □ · 0 ◇] Remaining 112 min (sequential rows 4, 5, 6, 8, 9, 10; row 7 parallel, excluded) → est. finish 16:40 local (-05:00) · 21:40 UTC. Now: row 4 running.
+✓ 1. Zeus: Load spec, build plan, assign owners                [cross-cutting] {high} ‹model›
+✓ 2. hercules: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [bounded] {medium} ‹model›
+✓ 3. hermes: Update constants.toml default                              [mechanical] {low} ‹model›
+■ 4. hippocrates: Run fast test suite — all shards pass                 [mechanical] {low} ‹model›
+□ 5. hippocrates: Run the full verification sweep                          [mechanical] {low} ‹model›
+□ 6. aristotle: Interpret cal results + decide if tuning needed          [cross-cutting] {high} ‹model›
+□ 7. hippocrates: Generate profiler snapshot with pathway metrics       [mechanical] {low} ‹model›
+□ 8. aristotle: Analyze profiler — does freed space flow to both?       [cross-cutting] {high} ‹model›
+□ 9. marcusaurelius: Update CLAUDE.md with constants and cal results    [bounded] {medium} ‹model›
+□ 10. hermes: Commit, merge to main, push                              [mechanical] {low} ‹model›
 ```
 
 ### Three-call rule
