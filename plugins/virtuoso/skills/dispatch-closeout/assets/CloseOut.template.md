@@ -1,14 +1,14 @@
 ---
-sprint: [SPRINT-ID]
+dispatch: [DISPATCH-ID]
 date: YYYY-MM-DD
-runtime: [Actual from timing --summary --sprint <SPRINT-ID>, or "not measured (no time log)"]
+runtime: [Actual from timing --summary --dispatch <DISPATCH-ID>, or "not measured (no time log)"]
 tokens: [~NNNk]
 status: [all-pass | has-regressions | has-discoveries]
 ---
 
-# Pointer Close-Out: [SPRINT-ID]
+# Dispatch Close-Out: [DISPATCH-ID]
 
-## Sprint Brief
+## Dispatch Brief
 
 **Goal:** [What the dispatch set out to do.]
 **Result:** [What actually happened — name things, no aggregates.]
@@ -18,7 +18,7 @@ status: [all-pass | has-regressions | has-discoveries]
 
 ## Time
 
-<!-- Pasted as printed by `timing --sprint <SPRINT-ID> --summary`: every row's predicted,
+<!-- Pasted as printed by `timing --dispatch <DISPATCH-ID> --summary`: every row's predicted,
      actual and waited minutes, its kind, whether it was added, and any flag. Leave the
      section out when the dispatch kept no time log. -->
 
@@ -33,8 +33,8 @@ status: [all-pass | has-regressions | has-discoveries]
 
 ## Mid-Dispatch Decisions
 
-<!-- Amendment blocks migrated verbatim from the sprint's staging file (or, for a
-     grandfathered sprint, from the inline spec). One block per decision: date, title,
+<!-- Amendment blocks migrated verbatim from the dispatch's staging file (or, for a
+     grandfathered dispatch, from the inline spec). One block per decision: date, title,
      decision type, context, decision, rationale. "None" is a valid and complete entry. -->
 
 ## Lessons
@@ -49,7 +49,7 @@ status: [all-pass | has-regressions | has-discoveries]
 
 ## Files Created
 
-<!-- From `sprint_guards created-files --base <ref>` in Wave 1; re-run in Wave 2 Step 6.
+<!-- From `dispatch_guards created-files --base <ref>` in Wave 1; re-run in Wave 2 Step 6.
      Every file the dispatch created is accounted for: nothing temporary survives, and
      nothing is left untracked or uncommitted without a named reason. -->
 
@@ -63,13 +63,13 @@ status: [all-pass | has-regressions | has-discoveries]
 
 ## Roadmap & Queue Movement
 
-- **Retired:** [SPRINT-ID] — moved out of the active queue head to completed/archive.
-- **Elevated:** [NEXT-SPRINT-ID] — promoted to the active queue head as next dispatch target.
+- **Retired:** [DISPATCH-ID] — moved out of the active queue head to completed/archive.
+- **Elevated:** [NEXT-DISPATCH-ID] — promoted to the active queue head as next dispatch target.
 
-## Next Work Pointer
+## Next Work
 
 ## Gates
 
 ## Git Hand-Off
 
-- [ ] `git-handoff` run to commit close-out report, retrospective, roadmap, and sprint queue.
+- [ ] `git-handoff` run to commit close-out report, retrospective, roadmap, and dispatch queue.

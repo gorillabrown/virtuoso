@@ -8,7 +8,7 @@ Lead with clear verdicts, not empty tables:
 
 - "Effort calibration: slightly under-scoped."
 - "Dispatch precision: high."
-- "Discovery yield: worth the sprint."
+- "Discovery yield: worth the dispatch."
 
 Use tables only as scaffolding for the reasoning.
 
@@ -77,7 +77,7 @@ record carries no status, so the lesson's status is unchanged:
     ### <prefix>-NNN — link (ITEM-ID, YYYY-MM-DD)
     **Item:** ITEM-ID
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --record-link <prefix>-NNN --item <ITEM-ID> --actor pointer-closeout --apply
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --record-link <prefix>-NNN --item <ITEM-ID> --actor dispatch-closeout --apply
 
 Link a lesson only to the item that taught it. Linking an older lesson to make a
 close-out's gate pass hides the fact that this dispatch recorded nothing new.
@@ -91,7 +91,7 @@ status; the latest status recorded is the current one, and the history shows why
 
 The command appends it for you, previews first, and refuses a status that says nothing:
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --record-status <prefix>-NNN --status "Promoted -> <rule id>" --actor pointer-closeout --item <ITEM-ID> --apply
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --record-status <prefix>-NNN --status "Promoted -> <rule id>" --actor dispatch-closeout --item <ITEM-ID> --apply
 
 A lesson is **live** until a status beginning `Promoted`, `Retired`, or `Superseded`
 is appended. The live lessons are what readiness check U9 holds every specification

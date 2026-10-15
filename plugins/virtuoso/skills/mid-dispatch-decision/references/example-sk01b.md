@@ -13,7 +13,7 @@ To illustrate the full workflow, here is how this skill would handle the SK-01B
 situation described in the motivating example:
 
 ### Step 0 — Depth selection:
-Deep. The sprint involves structural engine changes, the drift exceeds a
+Deep. The dispatch involves structural engine changes, the drift exceeds a
 pre-authorized threshold, and the implementation agent has a hypothesis about root cause. This isn't
 a rubber-stamp confirmation.
 
@@ -21,7 +21,7 @@ a rubber-stamp confirmation.
 - Pause report: quick-cal Immediate +3.5pp, Special -5.1pp, both exceed 3pp threshold
 - Dispatch spec (roadmap SK-01B): "Escalate to full-cal the full sweep if shift
   exceeds 3pp on any primary metric (per RULE-113)"
-- Roadmap: SK-01B is first Stage 1a gate. Every subsequent sprint (SK-18, SK-19,
+- Roadmap: SK-01B is first Stage 1a gate. Every subsequent dispatch (SK-18, SK-19,
   SK-02, all of 1b) measures against post-SK-01B baseline
 - Lessons learned: RULE-015 (the quick sweep unreliable for structural changes), RULE-113
   (full-cal escalation threshold)
@@ -37,7 +37,7 @@ a rubber-stamp confirmation.
 - **Known pattern:** RULE-015 warns that the quick sweep is unreliable for structural changes.
   This is the mid sweep (better) but still single-seed. RULE-113 pre-authorizes full-cal
   at the 3pp threshold.
-- **Downstream:** Every Stage 1a sprint measures against this baseline. If the
+- **Downstream:** Every Stage 1a dispatch measures against this baseline. If the
   drift is real (correctness, not regression), the baseline should reflect it.
   If it's noise, full-cal will reveal that.
 
@@ -54,10 +54,10 @@ a rubber-stamp confirmation.
 
 ### Step 4 — Cost-benefit:
 - Type 1a (full-cal): ~25 min additional compute. Establishes the post-zeroing
-  baseline with statistical confidence. Downstream sprints measure against
+  baseline with statistical confidence. Downstream dispatches measure against
   a validated number.
 - Type 3 (investigate threshold): ~30-40 min code analysis. Produces a hypothesis
-  but no validated baseline. Downstream sprints would still need the full-cal.
+  but no validated baseline. Downstream dispatches would still need the full-cal.
 
 ### Step 5 — Recommendation (presented to user):
 
@@ -69,7 +69,7 @@ a rubber-stamp confirmation.
 The implementation agent's quick-cal found that the Immediate-outcome rate rose 3.5 percentage points
 and the Special-outcome rate dropped 5.1 points after the profile-class-routing
 zeroing changes. Both exceed the 3-point threshold that triggers a full
-calibration run. The sprint is already over its time budget.
+calibration run. The dispatch is already over its time budget.
 
 The drift appears to be real — it's the expected consequence of participants
 now using their actual Special-Finish Rating values instead of the old
@@ -78,21 +78,21 @@ longer chain Special-outcome attempts, so simulated matches run longer before
 resolving, and more of them resolve via the Immediate-outcome category. This
 is correctness, not a bug.
 
-Every subsequent Stage 1a sprint (SK-18, SK-19, SK-02, and all of Stage 1b)
+Every subsequent Stage 1a dispatch (SK-18, SK-19, SK-02, and all of Stage 1b)
 measures against whatever baseline we establish here. If we don't validate the
-numbers with full-cal, those sprints measure against an uncertain baseline.
+numbers with full-cal, those dispatches measure against an uncertain baseline.
 
 ### Alternative Solutions
 
 **Option A: Run full-cal as the dispatch pre-authorized (Type 1a — Advance)**
 Run the full calibration (the full sweep x 3 seeds, ~25 additional minutes). This
 confirms the drift magnitude with statistical confidence and gives downstream
-sprints a validated baseline. The cost is time on an already over-budget sprint.
+dispatches a validated baseline. The cost is time on an already over-budget dispatch.
 
 **Option B: Skip full-cal, investigate CHAIN_ENGAGEMENT_THRESHOLD instead (Type 3 — Pivot)**
 The implementation agent identified the engagement threshold as the likely mechanism for the Special-outcome drop.
 Investigating it now (~30-40 min code analysis) would explain *why* the drift
-happened. But it doesn't validate the magnitude, and downstream sprints would
+happened. But it doesn't validate the magnitude, and downstream dispatches would
 still need the full-cal eventually.
 
 ### Recommended Way Forward
@@ -108,9 +108,9 @@ Option A — run full-cal as the dispatch pre-authorized (Type 1a).
   for structural changes. We're at the mid sweep (better), but still single-seed.
   RULE-113 established the 3pp escalation threshold as a standing rule.
   Both support running full-cal.
-- **What's downstream:** SK-18, SK-19, SK-02, and all Stage 1b sprints measure
+- **What's downstream:** SK-18, SK-19, SK-02, and all Stage 1b dispatches measure
   against post-SK-01B baseline. A validated 3-seed baseline is worth the 25
-  minutes. Without it, every downstream sprint's drift measurements are
+  minutes. Without it, every downstream dispatch's drift measurements are
   relative to an uncertain number.
 - **What would change my mind:** If the drift were noise rather than the
   expected behavioral change — but the implementation agent's analysis of CAL-079 seed-42's own
@@ -145,7 +145,7 @@ close-out but do not tune thresholds. I'll scope that on the planning side.
 **For the close-out:** Full-cal approved over budget — baseline validation
 outweighs 25-min cost. Flag CHAIN_ENGAGEMENT_THRESHOLD as a planner follow-up.
 
-**Why:** Correctness, not regression. Downstream sprints need a validated baseline.
+**Why:** Correctness, not regression. Downstream dispatches need a validated baseline.
 ```
 
 **6b. Amend dispatch spec** — the planner edits Roadmap.md SK-01B entry, appending:

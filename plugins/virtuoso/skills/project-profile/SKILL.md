@@ -2,7 +2,7 @@
 name: project-profile
 description: >
   Establish or revisit what makes THIS project different from every other one Virtuoso
-  governs — its phases and lanes, its status vocabulary, its extra readiness checks, its
+  governs — its phases and workstreams, its status vocabulary, its extra readiness checks, its
   standing rules, its git policy, its actor names, and what its agents must know that the
   plugin cannot. Reports the project's current specificity surface, interviews from a fixed
   catalogue, previews every change, and writes only the machine-readable half. Use when the
@@ -24,7 +24,7 @@ description: >
 - **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (its universal checks, at the version it declares, plus the project's declared extensions). No skill restates it in its own words.
 - **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
-- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
+- **Effort levels** — low / medium / high / xhigh / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 <!-- virtuoso-overlay-clause v2 -->
 **Project overlay.** If the registry declares an `overlays` role, read the overlay mirroring
@@ -90,8 +90,8 @@ Then report, in plain language, three things:
    `pairing-body-missing` here is a check the project declared and never defined; a
    `pairing-mirror-unregistered` is a set of checks with nowhere to live at all.
 
-Report what is *absent* as explicitly as what is present. A project with no declared lanes has
-no lanes — say so, rather than leaving the reader to infer it from silence.
+Report what is *absent* as explicitly as what is present. A project with no declared workstreams has
+no workstreams — say so, rather than leaving the reader to infer it from silence.
 
 ---
 
@@ -102,7 +102,7 @@ declaration does not belong here — it produces prose nothing can act on.
 
 | Ask | It declares |
 |-----|-------------|
-| What phases or stages does work move through? Which lanes run in parallel? | `policy.roadmap.hierarchy`, `policy.roadmap.lanes` |
+| What phases or stages does work move through? Which workstreams run in parallel? | `policy.roadmap.hierarchy`, `policy.roadmap.workstreams` |
 | What status words does your register actually use for queued, in-flight, blocked, done? | `policy.workRegister.statusMappings` |
 | Beyond the universal rubric, what must be true before work is dispatch-ready here? | `policy.rubric.extensions` **and their bodies** |
 | What rules does every item inherit, and where are they written? | `policy.standingRules.ids`, `policy.standingRules.source` |
@@ -121,7 +121,7 @@ found and ask only about what is missing or looks wrong — re-asking a settled 
 a profile gets overwritten with a worse answer.
 
 Where an answer is a *value*, record the value. Where it is genuinely prose, record which
-shipped file it belongs on top of: a rule about dispatching belongs on `next-pointer`, a rule
+shipped file it belongs on top of: a rule about dispatching belongs on `dispatch-kickoff`, a rule
 about running tests belongs on the test-running agent, a readiness check belongs on the
 rubric.
 

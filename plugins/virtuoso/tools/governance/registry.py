@@ -392,8 +392,35 @@ def load(root: str, *, plugin_version: str = "") -> Registry:
     reg.findings.extend(reg.validate(plugin_version=plugin_version))
     reg.findings.extend(reg.divergence(reg.readme_view))
     reg.findings.extend(policy_findings(reg.policy))
+    reg.findings.extend(old_actor_findings(data))
     reg.findings.extend(retired_vendored_tools(root))
     return reg
+
+
+def old_actor_findings(data) -> list[Finding]:
+    """One ``actor-renamed`` warning when any value in the manifest is a skill's pre-1.15
+    name. The old names still work (schema.ACTOR_ALIASES) until the next major."""
+    found: set[str] = set()
+
+    def walk(value) -> None:
+        if isinstance(value, str) and value in schema.ACTOR_ALIASES:
+            found.add(value)
+        elif isinstance(value, dict):
+            for item in value.values():
+                walk(item)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item)
+
+    walk(data)
+    if not found:
+        return []
+    renames = ", ".join("%s -> %s" % (old, schema.ACTOR_ALIASES[old]) for old in sorted(found))
+    return [Finding(
+        "actor-renamed", "warning",
+        "%s names skills by their pre-1.15 names (%s); they work until the next major. "
+        "Fix: make those replacements in %s" % (schema.MANIFEST_RELPATH, renames,
+                                                schema.MANIFEST_RELPATH))]
 
 
 def policy_findings(raw) -> list[Finding]:
@@ -402,8 +429,12 @@ def policy_findings(raw) -> list[Finding]:
     Warning, never error: the plugin reports a project's configuration and the
     project decides; an invalid value falls back to its documented default."""
     from . import policy as policy_mod
-    return [Finding("policy-invalid", "warning", problem, identifier=key)
-            for key, problem in policy_mod.audit(raw)]
+    found = [Finding("policy-invalid", "warning", problem, identifier=key)
+             for key, problem in policy_mod.audit(raw)]
+    if isinstance(raw, dict):
+        found += [Finding("policy-renamed", "warning", line, identifier="roadmap.lanes")
+                  for line in policy_mod.load(raw).renamed_keys()]
+    return found
 
 
 def retired_vendored_tools(root: str) -> list[Finding]:

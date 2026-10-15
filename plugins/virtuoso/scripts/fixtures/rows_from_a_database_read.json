@@ -1,0 +1,5 @@
+{"takenAt": "2026-10-13T12:00:00Z", "rows": [
+ {"Item ID": "ABC-3", "Name": "Import contacts", "Status": {"name": "Done"}, "Sequence": 1, "Effort": {"name": "s"}, "Depends On": []},
+ {"Item ID": "ABC-7", "Name": "Export to CSV", "Status": {"name": "In progress"}, "Sequence": 2, "Effort": {"name": "m"}, "Depends On": ["ABC-3"]},
+ {"Item ID": "ABC-9", "Name": "Scheduled exports", "Status": {"name": "Not started"}, "Sequence": 3, "Effort": {"name": "l"}, "Depends On": ["ABC-7"]}
+]}

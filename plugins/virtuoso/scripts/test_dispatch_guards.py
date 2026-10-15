@@ -1,8 +1,8 @@
 import importlib.util, json, os, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPT = os.path.join(HERE, "sprint_guards.py")
-_spec = importlib.util.spec_from_file_location("sprint_guards", SCRIPT)
+SCRIPT = os.path.join(HERE, "dispatch_guards.py")
+_spec = importlib.util.spec_from_file_location("dispatch_guards", SCRIPT)
 sg = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(sg)
 
@@ -219,3 +219,25 @@ def test_staging_sweep_runs_on_a_v2_workspace(tmp_path):
     (tmp_path / "Virtuoso" / "closeouts" / "Memo.A-1.GovernanceStaging.2026-09-23.md").write_text("x")
     rc, out = _run("staging-sweep", "--root", str(tmp_path))
     assert rc == 1 and "Memo.A-1.GovernanceStaging" in out, out
+
+
+def test_sprint_guards_shim_runs_dispatch_guards(tmp_path):
+    """The 1.14 name keeps working for one release: same exit code, same output, and
+    one deprecation line on stderr. Run from a subfolder, not the repository root."""
+    _init_repo(tmp_path)
+    (tmp_path / "made.txt").write_text("new\n", encoding="utf-8")
+    sub = tmp_path / "sub"
+    sub.mkdir()
+
+    def run(script):
+        return subprocess.run([sys.executable, os.path.join(HERE, script), "created-files",
+                               "--root", str(tmp_path), "--base", "main"], cwd=str(sub),
+                              capture_output=True, text=True, encoding="utf-8")
+
+    new, old = run("dispatch_guards.py"), run("sprint_guards.py")
+    assert (old.returncode, old.stdout) == (new.returncode, new.stdout)
+    assert "made.txt" in new.stdout, new.stdout + new.stderr
+    assert "deprecated" not in new.stderr
+    assert [line for line in old.stderr.splitlines() if "deprecated" in line] == [
+        "sprint_guards is deprecated: run dispatch_guards (same arguments); "
+        "the old name goes in the next major release"]

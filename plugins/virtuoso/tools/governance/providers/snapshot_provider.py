@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import re
 from dataclasses import dataclass, field
 
 from .. import textio
@@ -58,6 +59,7 @@ class SnapshotWorkRegister(base.WorkRegisterProvider):
                 continue
             if _parent_of(blob):
                 continue            # a subitem is part of its parent, never a card
+            blob = _renamed(blob)
             known = {f: blob.get(f) for f in base.WorkItem.__dataclass_fields__
                      if f in blob}
             known.setdefault("id", blob["id"])
@@ -69,9 +71,10 @@ class SnapshotWorkRegister(base.WorkRegisterProvider):
             items=items, provider=self.name,
             source=self.origin or str(payload.get("source") or self.source),
             taken_at=taken_at or "unknown",
-            fields=list(payload.get("fields") or []),
+            fields=[mapping_mod.RENAMED_FIELDS.get(f, f) for f in payload.get("fields") or []],
             stale=stale, stale_reason=reason,
-            headers={str(k): str(v) for k, v in (payload.get("headers") or {}).items()},
+            headers={str(k): str(v) for k, v in
+                     _renamed(payload.get("headers") or {}).items()},
         )
 
     def _staleness(self, taken_at: str) -> tuple[bool, str]:
@@ -86,6 +89,16 @@ class SnapshotWorkRegister(base.WorkRegisterProvider):
         if age > self.stale_after_hours:
             return True, "snapshot is %.1fh old (stale after %.1fh)" % (age, self.stale_after_hours)
         return False, ""
+
+
+def _renamed(blob: dict) -> dict:
+    """A snapshot written before a field was renamed, read under the new name. The file
+    is never rewritten; the next import writes the new name."""
+    out = dict(blob)
+    for old, new in mapping_mod.RENAMED_FIELDS.items():
+        if old in out and new not in out:
+            out[new] = out.pop(old)
+    return out
 
 
 def _parent_of(blob: dict) -> str:
@@ -125,6 +138,11 @@ class ImportReport:
                 "unmappedColumns": list(self.unmapped_columns)}
 
 
+#: A link a connector's Markdown read wraps around plain text: ``[a.md](http://a.md)``
+#: (``.md`` is a top-level domain) or ``[url](url)``. A plain-text read has none.
+_AUTOLINK = re.compile(r"\[([^\]]+)\]\((?:https?://)?\1\)")
+
+
 def _cell(value) -> str:
     """A connector value as the text a row-based register would hold."""
     if value is None:
@@ -138,7 +156,7 @@ def _cell(value) -> str:
             if value.get(key) not in (None, ""):
                 return _cell(value[key])
         return ""
-    return str(value)
+    return _AUTOLINK.sub(r"\1", str(value))
 
 
 #: Keys a row built from a raw page carries besides its columns.

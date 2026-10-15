@@ -77,7 +77,7 @@ HOST_TERM_PATTERNS = [
 ]
 #: Files allowed to name a host, because naming one is their entire purpose.
 HOST_ADAPTER_FILES = {
-    "skills/pointer-closeout/agents/openai.yaml",
+    "skills/dispatch-closeout/agents/openai.yaml",
 }
 #: The one table that names model aliases (tier → alias → model id → effort).
 MODEL_TABLE_FILES = {"references/model-tiers.md"}
@@ -543,6 +543,38 @@ def check_authority_claims() -> None:
         else "authority claimed outside the registry: %s" % hits[:6])
 
 
+#: Register tools, by identifier scheme or brand spelling (common words like "linear" and
+#: "notion" count only in those forms). One tool shown alone reads as a dependency.
+REGISTER_TOOL_PATTERNS = {
+    "monday": r"\bmonday(?::|\.com\b)", "notion": r"\bnotion:|(?<![\w-])Notion\b",
+    "linear": r"\blinear:|(?<![\w-])Linear\b", "jira": r"(?i)\bjira\b",
+    "asana": r"(?i)\basana\b", "clickup": r"(?i)\bclickup\b", "trello": r"(?i)\btrello\b",
+    "airtable": r"(?i)\bairtable\b", "github": r"\bgithub:|GitHub Issues",
+}
+#: The documented convenience reader for one connector's raw page may name it alone.
+SINGLE_TOOL_EXEMPT = {"tools/governance/providers/snapshot_provider.py", "scripts/validate.py"}
+
+
+def single_tool_files(files) -> list[str]:
+    """Shipped files that name exactly one register tool."""
+    lonely = []
+    for rel, text in files:
+        if rel in SINGLE_TOOL_EXEMPT or _is_test_file(rel) or "/fixtures/" in "/" + rel:
+            continue
+        named = {tool for tool, pattern in REGISTER_TOOL_PATTERNS.items()
+                 if re.search(pattern, text)}
+        if len(named) == 1:
+            lonely.append("%s (%s)" % (rel, named.pop()))
+    return lonely
+
+
+def check_single_tool_examples() -> None:
+    lonely = single_tool_files(walk_text_files())
+    (ok if not lonely else fail)(
+        "no single-tool register examples" if not lonely
+        else "register examples naming one tool alone: %s" % lonely)
+
+
 def check_text_scans(skill_names: list[str]) -> None:
     absolute, host, project, shell = [], [], [], []
     for rel, text in walk_text_files():
@@ -863,6 +895,7 @@ def main() -> int:
     check_promoted_rule_anchors()
     check_promoted_rule_text()
     check_text_scans(skill_names)
+    check_single_tool_examples()
     check_relative_resources()
     check_status_tokens()
     check_single_rubric()

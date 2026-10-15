@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _spec = importlib.util.spec_from_file_location("release_pipeline", os.path.join(_HERE, "release.py"))
@@ -248,3 +249,27 @@ def test_update_registry_survives_replace_failure(tmp_path, monkeypatch):
     except rp.Gate as exc:
         assert "registry update failed" in str(exc)
     assert open(reg, "rb").read() == original, "original registry bytes must survive"
+
+
+def test_the_preflight_suite_runs_under_the_suite_timeout(monkeypatch):
+    """F-006: the full suite outgrew run()'s 600s default, so the preflight's pytest step
+    carries its own SUITE_TIMEOUT. Every other command keeps the default."""
+    timeouts = {}
+
+    def fake_run(cmd, cwd=None, check=True, timeout=600):
+        text = " ".join(cmd)
+        timeouts[text] = timeout
+        out = ("All checks passed" if "validate.py" in text else
+               "in sync" if "bump_version.py" in text else
+               "1 passed" if "pytest" in text else "")
+        return SimpleNamespace(returncode=0, stdout=out, stderr="")
+    monkeypatch.setattr(rp, "run", fake_run)
+    monkeypatch.setattr(rp, "say", lambda _msg: None)
+    monkeypatch.setattr(rp, "current_version", lambda: "0.0.0")
+
+    rp.gate_preflight(None)
+
+    suite = [t for cmd, t in timeouts.items() if "-m pytest" in cmd]
+    assert suite == [rp.SUITE_TIMEOUT], timeouts
+    assert rp.SUITE_TIMEOUT >= 1800
+    assert all(t == 600 for cmd, t in timeouts.items() if "-m pytest" not in cmd), timeouts

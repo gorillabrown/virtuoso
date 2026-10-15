@@ -84,6 +84,23 @@ def test_no_unversioned_pointer_file_is_written(isolated_home):
     assert not (Path(isolated_home) / ".virtuoso" / "plugin-root").exists()
 
 
+def test_a_dev_checkout_preflight_leaves_the_real_home_alone(project, tmp_path):
+    """F-007: with no isolated home, a git checkout's preflight records nothing."""
+    home = tmp_path / "home"
+    home.mkdir()
+    env = {k: v for k, v in os.environ.items() if k != "VIRTUOSO_HOME"}
+    env.update(HOME=str(home), USERPROFILE=str(home))
+    command = [sys.executable, PREFLIGHT, "--root", str(project), "--mode", "check"]
+    completed = subprocess.run(command, env=env, capture_output=True, text=True)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert not (home / ".virtuoso").exists()
+    # Positive control: the same run with an isolated home does record, so the check can see a write.
+    isolated = tmp_path / "isolated"
+    subprocess.run(command, env=dict(env, VIRTUOSO_HOME=str(isolated)), check=True,
+                   capture_output=True)
+    assert (isolated / ".virtuoso" / "installs.json").exists()
+
+
 # --- launcher content ----------------------------------------------------------
 
 

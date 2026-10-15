@@ -94,6 +94,52 @@ def decode(raw: bytes) -> str | None:
         return None
 
 
+#: Each BOM's codec once the BOM itself is set aside, so text decoded with it
+#: re-encodes to the same bytes.
+_BARE_CODECS = {
+    codecs.BOM_UTF8: "utf-8",
+    codecs.BOM_UTF32_LE: "utf-32-le",
+    codecs.BOM_UTF32_BE: "utf-32-be",
+    codecs.BOM_UTF16_LE: "utf-16-le",
+    codecs.BOM_UTF16_BE: "utf-16-be",
+}
+
+
+def read_stored(path: str) -> tuple[bytes, str, str] | None:
+    """``(bom, codec, text)`` exactly as stored, or ``None`` when absent or not text.
+
+    Unlike :func:`read_text` the BOM is kept aside rather than dropped, and the
+    text keeps every line ending as it is. :func:`write_stored` of an unchanged
+    triple writes the original bytes back, so an edit made to ``text`` changes
+    those bytes and no others."""
+    raw = read_bytes(path)
+    if raw is None:
+        return None
+    bom = next((b for b, _ in _BOMS if raw.startswith(b)), b"")
+    codec = _BARE_CODECS.get(bom, "utf-8")
+    try:
+        return bom, codec, raw[len(bom):].decode(codec)
+    except UnicodeDecodeError:
+        return None
+
+
+def write_stored(path: str, bom: bytes, codec: str, text: str) -> None:
+    with open(path, "wb") as handle:
+        handle.write(bom + text.encode(codec))
+
+
+def insert_line(text: str, index: int, line: str) -> str:
+    """``text`` with ``line`` inserted at ``index``, which is the end of a line.
+
+    The line takes the ending of the line it follows, so a file whose endings are
+    mixed keeps them mixed and gains no churn. A last line with no ending is
+    first ended in that same style. Every newline inside ``line`` gets that ending."""
+    previous = text.rfind("\n", 0, index)
+    eol = "\r\n" if previous > 0 and text[previous - 1] == "\r" else "\n"
+    lead = "" if index == 0 or text[index - 1] == "\n" else eol
+    return text[:index] + lead + line.replace("\n", eol) + eol + text[index:]
+
+
 def detect_eol(path: str) -> str | None:
     """The dominant line ending already on disk (``"\\r\\n"`` / ``"\\n"``), or
     ``None`` when the file is absent, unreadable, or carries no newline."""

@@ -24,7 +24,7 @@ from types import SimpleNamespace
 
 from .. import policy as policy_mod
 from ..deadlines import Deadline
-from . import base
+from . import base, mapping as mapping_mod
 from .kpi import DEFAULT_EFFORT_SCALE
 
 #: Worst first. A deadline's headline verdict is the worst verdict among the
@@ -35,7 +35,7 @@ UNITS = ("items", "points")
 
 #: Canonical fields a scope may select on; anything else is looked up among the
 #: register's own columns, verbatim.
-_SCOPE_FIELDS = ("id", "title", "lane", "group", "effort", "branch")
+_SCOPE_FIELDS = ("id", "title", "workstream", "deliverable", "group", "effort", "branch")
 
 _DATE_PREFIX_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:$|[T ])")
 
@@ -377,7 +377,8 @@ def _select(snapshot: base.Snapshot, deadline: Deadline):
     if not deadline.scope_field:
         return items, []
     wanted = {v.strip().lower() for v in deadline.scope_values}
-    name = deadline.scope_field
+    # A deadline's scope is persisted text: an old field name still selects (mapping_mod).
+    name = mapping_mod.RENAMED_FIELDS.get(deadline.scope_field, deadline.scope_field)
     if name in _SCOPE_FIELDS:
         def value_of(item):
             return getattr(item, name)

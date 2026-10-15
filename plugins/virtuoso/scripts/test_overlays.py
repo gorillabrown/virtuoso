@@ -192,7 +192,7 @@ def test_create_lays_down_no_overlays_directory(project):
         (project / "Virtuoso" / "workspace-layout.json").read_text(encoding="utf-8"))["roles"]
 
 
-@pytest.mark.parametrize("actor", ["roadmap-review", "pointer-closeout", "next-pointer", "*"])
+@pytest.mark.parametrize("actor", ["roadmap-review", "dispatch-closeout", "dispatch-kickoff", "*"])
 def test_no_ceremony_may_write_the_overlays_role(registered, actor):
     # The read-only guard already in the plugin is what enforces this; the role
     # earns that protection by being registered read-only, not by new code.

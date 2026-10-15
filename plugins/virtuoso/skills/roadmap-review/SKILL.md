@@ -27,7 +27,7 @@ description: |
 - **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (its universal checks, at the version it declares, plus the project's declared extensions). No skill restates it in its own words.
 - **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
-- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
+- **Effort levels** — low / medium / high / xhigh / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 <!-- virtuoso-overlay-clause v2 -->
 **Project overlay.** If the registry declares an `overlays` role, read the overlay mirroring
@@ -98,7 +98,7 @@ Read the provider description and **negotiate capabilities up front**:
 | read the pipeline at all | `list-active`, `read-status` |
 | re-sequence the conveyor belt | `read-sequence` **and** `write-status` on a sequence field |
 | replenish the dispatch buffer | `store-spec-link` (or inline specs — see policy) |
-| record completion in Phase A (by `/pointer-closeout`, A.4) | `record-completion` |
+| record completion in Phase A (by `/dispatch-closeout`, A.4) | `record-completion` |
 | register a newly specified item that has no row yet | `create-item` |
 | absorb a held ad hoc plan (Phase A.4b, C.3) | `create-item`, plus `record-completion` for one that already ran |
 
@@ -114,7 +114,7 @@ terminal ledger (`terminalLedger`), and any compatibility export (`sprintCatalog
 ledger only when `policy.terminalLedger.correctionWriters` permits it, and an
 ordinary record, such as a retirement, only when `policy.terminalLedger.writers`
 names it. By default that never happens, so it routes those records to
-`/pointer-closeout` (A.4). It regenerates exports only through their registered
+`/dispatch-closeout` (A.4). It regenerates exports only through their registered
 generator.
 
 **If the project has no `workRegister` role,** the provider layer serves a
@@ -134,7 +134,7 @@ fixed number or a required structure:
 | `roadmap.dispatchBuffer` | how many dispatch-ready specifications to carry | 5 (0 disables eager specification) |
 | `roadmap.eagerSpec` | whether to specify ahead at all | true |
 | `roadmap.hierarchy` | grouping levels, e.g. `["phase","stage"]`, `["milestone"]`, or `[]` | `["phase","stage"]` |
-| `roadmap.lanes` | parallel lanes, if the project uses them | none |
+| `roadmap.workstreams` | parallel workstreams, if the project uses them | none |
 | `roadmap.specStorage` | `inline` (in the roadmap), `files` (one per item), or `external` | inline |
 | `roadmap.lengthCeilingLines` | when to snapshot and trim | 2000 |
 | `roadmap.effortScale` | size → points for effort-weighted metrics | generic t-shirt scale |
@@ -176,8 +176,8 @@ confirm with the user before proceeding.
 
 - **Work item** — a discrete unit of work with clear acceptance criteria. The
   atomic dispatch unit. Identified by whatever id the project's register uses.
-- **Group / lane** — optional grouping levels, named by `policy.roadmap.hierarchy`
-  and `policy.roadmap.lanes`. A project may use neither.
+- **Group / workstream** — optional grouping levels, named by `policy.roadmap.hierarchy`
+  and `policy.roadmap.workstreams`. A project may use neither.
 - **Stub** — a placeholder item: id, title, and optionally a one-line gist.
 - **Specification** — an item card with full structural fields plus implementation
   detail. It lives wherever `policy.roadmap.specStorage` says.
@@ -204,7 +204,7 @@ Stub  →  Specification  →  Dispatch-ready  →  Close-out
 **Do not restate the rubric here.** There is exactly one rubric, versioned, in
 the plugin's `references/readiness-rubric.md` — its universal checks, at the version
 it declares at its top, plus whatever the project declares in
-`policy.rubric.extensions`. Open it and apply it. `/next-pointer` applies the same
+`policy.rubric.extensions`. Open it and apply it. `/dispatch-kickoff` applies the same
 file — that is the point.
 
 Report readiness as the five separate findings the rubric defines
@@ -310,7 +310,8 @@ ceremony does not decide authority on its own):
 - a local file the project already maintains (CSV or Markdown table),
 - a spreadsheet,
 - a connector-backed task manager, issue tracker, or database (registered as an
-  external identifier such as `monday:board/1234567890`),
+  external identifier such as `notion:database/<id>`, `linear:team/<key>` or
+  `monday:board/1234567890`),
 - a read-only snapshot, for reporting only.
 
 If a legacy `sprintCatalog` is being read through the compatibility adapter, say
@@ -334,9 +335,10 @@ section, append its terminal record, and reconcile the register.
 Inventory every item and its claimed status, from the register and the roadmap
 separately. Record where they disagree; do not silently pick a winner.
 
-A connector-backed register is read fresh first: read every page and the board's column
-list with the host's connector, save both as they came, and import them with
-`virtuoso_registry --root . snapshot --import <page> --columns <columns>`
+A connector-backed register is read fresh first: read every item with the session's
+connector, write the rows keyed by the register's own column names, and import them with
+`virtuoso_registry --root . snapshot --import <rows.json>` (or a raw items page and its
+column list: `--import <page> --columns <columns>`)
 (`references/registry-contract.md`, *Refreshing a connector-backed register's
 snapshot*). Report each `[DRIFT]` line as a finding.
 
@@ -376,10 +378,10 @@ Batched, 5 at a time, with the bounded-question protocol.
 For each item being retired:
 1. **Route its terminal record to the close-out ceremony.** A retirement is an
    *ordinary* terminal record, and only an actor `policy.terminalLedger.writers`
-   names may append one. By default that is `pointer-closeout` alone.
+   names may append one. By default that is `dispatch-closeout` alone.
    `correctionWriters` does not cover a retirement: it permits only
    *corrections*, which are new records naming the record they correct, and a
-   retirement corrects nothing. So invoke `/pointer-closeout` for the item, as
+   retirement corrects nothing. So invoke `/dispatch-closeout` for the item, as
    A.4b does for held plans. Its section *Retirement records routed here* says
    what runs:
    - completed but never closed out → its full crossing, because no record is
@@ -399,7 +401,7 @@ For each item being retired:
 4. Remove the full content from the active roadmap.
 5. Update the item in the live register through the provider: its status, a
    cleared sequence, the date, and the evidence link. Skip anything
-   `/pointer-closeout`'s crossing already wrote for a completion; never write it
+   `/dispatch-closeout`'s crossing already wrote for a completion; never write it
    twice. Pass the `revision` you read, so a concurrent change is refused rather
    than clobbered.
 6. Re-running this step must not duplicate anything: the provider's writes are
@@ -416,7 +418,7 @@ For each `executed` entry, per `HB-<n>` item it closed out:
    register's own scheme. Give it the title, the effort, and `notes` reading
    `origin: held plan <entry> (HB-<n>)`. Use the mutation handshake for an external
    register, as in D.5.3.
-2. **Record its completion by invoking `/pointer-closeout`'s recording crossing**
+2. **Record its completion by invoking `/dispatch-closeout`'s recording crossing**
    (its *Held plans* section). Do not write the terminal ledger yourself: that ceremony
    is the ledger's writer. It appends the terminal record and closes the item, using
    the close-out, date, and result the entry's `executed` row names, and nothing is
@@ -549,8 +551,55 @@ provenance block at the top.
 3–7 large outcome blocks.
 
 ### C.2 Group them
-Only if `policy.roadmap.hierarchy` declares grouping levels. With `hierarchy: []`,
-skip this step entirely — do not invent phases.
+**Workstreams and deliverables.** Run the proposal. It is read-only:
+
+    python <plugin>/scripts/virtuoso_registry.py --root . structure --propose --json
+
+**First, check that the register can hold a structure.** The proposal's `registerColumns`
+says so. When `ready` is false, settle that before naming any candidate. Tell the owner
+which columns are missing (`missing`), and how to add them for their register
+(`references/registry-contract.md`, *Adding the workstream and deliverable columns*). Map
+them, refresh the snapshot, and run the proposal again. An approval the register cannot
+store is wasted, so never ask for one. When the owner declines to add the columns, record
+that, and skip the grouping this review.
+
+- **A first review** (no `policy.roadmap.workstreams`): it proposes the whole structure.
+  Candidate workstreams are joined by prerequisites or by mostly shared files, and
+  candidate deliverables inside them by prerequisites or an existing grouping. Give each
+  candidate a name and a one-line purpose. Show its signals, and the crossings between
+  workstreams as a hint only: the files and prerequisites they share. Run-time ordering
+  stays `combine`'s. An item flagged `noSignal` is named as its own candidate, never merged
+  without the owner saying so. Every item under `unread` is named too.
+- **A later review** (a structure approved): it proposes only a place for each item the
+  register does not assign, a split for a deliverable over 8 items, and a merge for two
+  deliverables sharing more than half their files.
+
+Ask the owner to approve, rename or reject each workstream and deliverable: the whole
+structure at a first review, only the proposals at a later one. **Nothing is written
+before the owner approves.** Then write the approved file, `{"workstreams": [{id, name,
+purpose, deliverables: [{id, name, purpose}]}], "assignments": {"<ITEM-ID>":
+{"workstream": "<id>", "deliverable": "<id>"}}}`, and apply it:
+
+    python <plugin>/scripts/virtuoso_registry.py --root . --actor roadmap-review structure --apply --file <approved.json>
+
+It writes `roadmap.workstreams` and `roadmap.hierarchy: ["workstream", "deliverable"]`
+through `policy-set`, which backs them up. Then it writes each assigned active item's
+workstream and deliverable to the register. A local register is written directly. For an
+external register it prints one `set-status` plan per item, which the host's connector
+executes and `mutation-confirm` records. Finished items are never touched. When the register has
+no workstream or deliverable column, it stops before any write and names the missing
+columns: adding them is the owner's call. A rejected proposal is an empty file, and
+nothing is written. After a rejection, the next review puts the proposal to the owner
+again only if the active items changed since: a judgement for the review, which the
+command does not track.
+
+After an apply, the roadmap's active section is grouped under `### <workstream>` and
+`#### <deliverable>` headings (the template below). Each item keeps its own `####`
+heading after its deliverable's, so its section still ends at the next heading.
+
+A project whose `hierarchy` names other levels (phases, stages) groups by those instead,
+and a project whose owner wants no workstreams skips `structure --propose`. With
+`hierarchy: []` and no structure approved, skip the grouping: do not invent phases.
 
 ### C.3 Decompose into items
 Each becomes a stub in the roadmap and a row in the register.
@@ -563,7 +612,7 @@ bounded-question protocol. Nothing is carried past the review.
 |---|---|
 | `planned` | Each `HB-<n>` becomes an item. Its specification moves into `policy.roadmap.specStorage`, with the provisional id replaced by the register's id. It is re-audited in D.3/D.4.5 before it counts as dispatch-ready, because code moves between planning and review. |
 | `storyboarded`, dispatch-sized | A stub per item in its draft stub, with the entry's alignment record and frames cited as its source |
-| `storyboarded`, epic-scale | One item whose structural fields carry `Path: epic`, with the entry cited as the source its charter is built from. `/next-pointer` routes it to `/epic` when it reaches the head. |
+| `storyboarded`, epic-scale | One item whose structural fields carry `Path: epic`, with the entry cited as the source its charter is built from. `/dispatch-kickoff` routes it to `/epic` when it reaches the head. |
 
 Create each item through `create-item`, with `notes` reading
 `origin: held plan <entry> (HB-<n>)`. Add the entry's downstream flags to the
@@ -583,7 +632,7 @@ A withdrawn entry records `--state withdrawn --note "<the user's reason>"`.
 roadmap carries none, and a missing field means `dispatch`. Walk the active items. One
 that is epic-scale on its own (outcome-stated, multi-phase, multi-session or walk-away)
 gets `- **Path:** epic — <why it cannot be one dispatch>` in its entry, so
-`/next-pointer` routes it to `/epic`. Dispatch-sized items that belong together keep
+`/dispatch-kickoff` routes it to `/epic`. Dispatch-sized items that belong together keep
 their own path: `/epic` combines them when the user wants them run as one
 (`references/execution-paths.md`). Name each item this review marks, with the reason,
 in the plan.
@@ -783,7 +832,7 @@ appear only if `policy.roadmap.hierarchy` declares them:
 Mid-dispatch amendments append as `##### Mid-Dispatch Amendment — YYYY-MM-DD`.
 
 **D.5.3 Update the live work register.** Through the provider, for each newly
-specified item: sequence, title, group, lane, effort, prerequisites, status, the
+specified item: sequence, title, group, workstream, effort, prerequisites, status, the
 specification state, branch, description — each only where the register has a
 column for it (a declared `policy.workRegister.fieldMappings` names it; a plan naming any
 other is refused). Pass the `revision` you read.
@@ -798,13 +847,13 @@ An item that is **not yet in the register** — a specification this review auth
 or approved that has no row — is brought into existence through `create-item`,
 never by writing a row into a file by hand and never by calling a connector's raw
 create. For a local register that is one write. For an external register it is
-the handshake: refresh the snapshot first (`snapshot --import <page> --columns
-<columns>`; a `[DRIFT]` line naming a field you are about to write is fixed in
+the handshake: refresh the snapshot first (`snapshot --import <rows.json>`, or a raw
+page with `--columns`; a `[DRIFT]` line naming a field you are about to write is fixed in
 `fieldMappings` before planning), then `mutation-plan --operation create-item`, execute
 the returned instruction with the host's connector, read the item back,
 `mutation-confirm --recovery-id <RECOVERY-ID> --succeeded --provider-id <ID>
 --actual-revision <REVISION>`, then refresh the canonical snapshot the same way
-(`snapshot --import <page> --columns <columns>`) and verify `recovery` is empty. The
+(`snapshot --import <rows.json>`) and verify `recovery` is empty. The
 plan is refused when the snapshot is absent or stale, when the id already exists (terminal
 items included), or when a creation under the same idempotency key was already
 confirmed; each refusal names the fix. If `policy.workRegister.creators` does not
@@ -911,6 +960,12 @@ and register the change. Grouping headings appear only if the project uses them.
 ### Standing Rules All Items Inherit
 - **[id from policy.standingRules.ids — short title].** [Rule.]
 
+### [Workstream name]    *(only after an approved structure, C.2)*
+[Its one-line purpose.]
+
+#### [Deliverable name]
+[Its one-line purpose.]
+
 #### ITEM-ID — Title    *(position 1 — dispatch-ready)*
 [structural fields + implementation detail, per D.5.2]
 
@@ -927,8 +982,8 @@ The register's shape is the project's, not the plugin's. The canonical fields th
 plugin reasons in are:
 
 `id`, `title`, `sequence`, `status`, `written_status`, `prerequisites`, `effort`,
-`lane`, `group`, `spec_link`, `branch`, `started`, `completed`, `evidence`,
-`description`, `notes`.
+`workstream`, `deliverable`, `group`, `spec_link`, `branch`, `started`, `completed`,
+`evidence`, `description`, `notes`.
 
 Map them to the project's own column names in
 `policy.workRegister.fieldMappings`, and the project's own status words in

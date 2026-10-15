@@ -35,7 +35,7 @@ and do not act on — statements of the form "this must be fully specified becau
 the implementer is a weaker model". The correct reason is: *a specification with
 unresolved decisions cannot be executed without inventing them, by anyone.*
 
-The `effort-levels` vocabulary (low / medium / high / max) describes how much
+The `effort-levels` vocabulary (low / medium / high / xhigh / max) describes how much
 deliberation a task warrants. It is a property of the task, not a ranking of
 whoever performs it.
 
@@ -55,7 +55,7 @@ then the options as a short lettered list, then the recommendation:
 Which register should be authoritative for this project?
   a) the local CSV at docs/work-register.csv   (recommended — it is the file you
      already maintain)
-  b) the external board monday:board/1234567890
+  b) the connected tracker it names, e.g. linear:team/ENG or monday:board/1234567890
   c) something else — tell me where it lives
 ```
 

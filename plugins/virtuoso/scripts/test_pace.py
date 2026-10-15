@@ -673,11 +673,11 @@ def test_an_append_lands_under_the_projects_own_header(tmp_path):
     path = tmp_path / "CompletedLedger.csv"
     gog_csv(path, [("arch-truth", "Completed", "2026-09-22")])
     before = path.read_text(encoding="utf-8")
-    ledger = ledger_mod.TerminalLedger(str(path), fmt="csv", writers=["pointer-closeout"],
+    ledger = ledger_mod.TerminalLedger(str(path), fmt="csv", writers=["dispatch-closeout"],
                                        field_mappings=GOG_MAPPING)
     appended = ledger.append(ledger_mod.LedgerRecord(
         record_id="", item_id="NEW-1", completed="2026-09-23", result="Completed",
-        evidence="CloseOut.NEW-1.md"), actor="pointer-closeout")
+        evidence="CloseOut.NEW-1.md"), actor="dispatch-closeout")
     assert appended is True
     text = path.read_text(encoding="utf-8")
     assert text.startswith(before)                      # history untouched
@@ -692,11 +692,11 @@ def test_an_append_with_no_column_for_a_field_is_refused_and_writes_nothing(tmp_
     path = tmp_path / "CompletedLedger.csv"
     gog_csv(path, [("arch-truth", "Completed", "2026-09-22")])
     before = path.read_bytes()
-    ledger = ledger_mod.TerminalLedger(str(path), fmt="csv", writers=["pointer-closeout"])
+    ledger = ledger_mod.TerminalLedger(str(path), fmt="csv", writers=["dispatch-closeout"])
     with pytest.raises(ledger_mod.LedgerError) as refused:
         ledger.append(ledger_mod.LedgerRecord(record_id="", item_id="NEW-1",
                                               completed="2026-09-23", result="Completed"),
-                      actor="pointer-closeout")
+                      actor="dispatch-closeout")
     assert "itemId, completed, result" in str(refused.value)
     assert "policy.terminalLedger.fieldMappings" in str(refused.value)
     assert path.read_bytes() == before
@@ -704,10 +704,10 @@ def test_an_append_with_no_column_for_a_field_is_refused_and_writes_nothing(tmp_
 
 def test_a_new_csv_ledger_still_gets_the_documented_header(tmp_path):
     path = tmp_path / "new.csv"
-    ledger = ledger_mod.TerminalLedger(str(path), fmt="csv", writers=["pointer-closeout"])
+    ledger = ledger_mod.TerminalLedger(str(path), fmt="csv", writers=["dispatch-closeout"])
     ledger.append(ledger_mod.LedgerRecord(record_id="TR-1", item_id="W-1",
                                           completed="2026-09-23", result="completed"),
-                  actor="pointer-closeout")
+                  actor="dispatch-closeout")
     assert path.read_text(encoding="utf-8").splitlines()[0] == \
         "recordId,itemId,completed,result,evidence,corrects"
 
@@ -844,10 +844,10 @@ def test_a_markdown_ledger_with_an_effort_column_round_trips(tmp_path):
     path = tmp_path / "ledger.md"
     path.write_text("# Ledger\n\n" + EFFORT_HEADER[1] + "\n" + EFFORT_SEPARATOR[1] + "\n",
                     encoding="utf-8")
-    book = ledger_mod.TerminalLedger(str(path), writers=["pointer-closeout"])
+    book = ledger_mod.TerminalLedger(str(path), writers=["dispatch-closeout"])
     book.append(LedgerRecord(record_id="TR-001", item_id="W-1", completed="2026-10-01",
                              result="completed", effort_estimate="2h", effort_actual="150m",
-                             effort="M"), actor="pointer-closeout")
+                             effort="M"), actor="dispatch-closeout")
     assert path.read_text(encoding="utf-8").splitlines()[-1].endswith("| 2h | 150m | M |")
     assert book.records()[0].effort == "M"
 
@@ -857,9 +857,9 @@ def test_a_csv_ledger_maps_the_effort_column(tmp_path):
     path = tmp_path / "ledger.csv"
     path.write_text("recordId,itemId,completed,result,evidence,corrects,Size\n",
                     encoding="utf-8")
-    book = ledger_mod.TerminalLedger(str(path), fmt="csv", writers=["pointer-closeout"],
+    book = ledger_mod.TerminalLedger(str(path), fmt="csv", writers=["dispatch-closeout"],
                                      field_mappings={"effort": "Size"})
     book.append(LedgerRecord(record_id="TR-1", item_id="W-1", completed="2026-10-01",
-                             result="completed", effort="s"), actor="pointer-closeout")
+                             result="completed", effort="s"), actor="dispatch-closeout")
     assert path.read_text(encoding="utf-8").splitlines()[-1].split(",")[-1] == "s"
     assert book.records()[0].effort == "s"

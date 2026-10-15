@@ -77,7 +77,7 @@ _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 #: the release commit, so dropping one is a deliberate edit here, never a side effect.
 PUBLIC_TREE = (".claude-plugin", ".gitattributes", ".github", ".gitignore", "LICENSE",
                "PRIVACY.md", "README.md", "RELEASE-NOTES.md", "docs/MIGRATION-1.4.md",
-               "plugins")
+               "docs/MIGRATION-1.15.md", "plugins")
 #: Names a publish target other than plugin.json's `repository` (tests use a local bare repo).
 PUBLIC_REMOTE_ENV = "VIRTUOSO_RELEASE_PUBLIC_REMOTE"
 _EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
@@ -94,6 +94,10 @@ def say(msg):
         print(msg, flush=True)
     except UnicodeEncodeError:
         print(msg.encode("ascii", "replace").decode("ascii"), flush=True)
+
+
+# The full suite outgrew run()'s 600s default (1265 tests in 600.09s, F-006).
+SUITE_TIMEOUT = 1800
 
 
 def run(cmd, cwd=REPO, check=True, timeout=600):
@@ -149,7 +153,7 @@ def gate_preflight(target, redeploy=False):
         raise Gate("validate.py is RED — CI would fail:\n" + p.stdout.strip()[-600:])
     say("[preflight] validate.py green")
 
-    p = run([sys.executable, "-m", "pytest", PLUGIN, "-q"], check=False)
+    p = run([sys.executable, "-m", "pytest", PLUGIN, "-q"], check=False, timeout=SUITE_TIMEOUT)
     tail = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else "(no output)"
     if p.returncode != 0:
         raise Gate("pytest RED: " + tail)

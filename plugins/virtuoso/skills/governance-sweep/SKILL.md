@@ -14,7 +14,7 @@ description: "Self-contained governance & operational document sweep for any pro
 - **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (its universal checks, at the version it declares, plus the project's declared extensions). No skill restates it in its own words.
 - **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
-- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
+- **Effort levels** — low / medium / high / xhigh / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 <!-- virtuoso-overlay-clause v2 -->
 **Project overlay.** If the registry declares an `overlays` role, read the overlay mirroring

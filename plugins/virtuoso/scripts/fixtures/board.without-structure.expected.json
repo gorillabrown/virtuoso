@@ -1,0 +1,694 @@
+{
+ "columns": [
+  {
+   "header": "Seq",
+   "key": "sequence",
+   "kind": "number"
+  },
+  {
+   "header": "Lane",
+   "key": "workstream",
+   "kind": "label"
+  },
+  {
+   "header": "Impl Status",
+   "key": "status",
+   "kind": "label"
+  },
+  {
+   "header": "Written",
+   "key": "written_status",
+   "kind": "label"
+  },
+  {
+   "header": "Description",
+   "key": "description",
+   "kind": "text"
+  },
+  {
+   "header": "Depends On",
+   "key": "prerequisites",
+   "kind": "deps"
+  },
+  {
+   "header": "Sprint Code",
+   "key": "id",
+   "kind": "text"
+  },
+  {
+   "header": "Branch",
+   "key": "branch",
+   "kind": "mono"
+  },
+  {
+   "header": "Repo Spec",
+   "key": "spec_link",
+   "kind": "link"
+  },
+  {
+   "header": "Notes",
+   "key": "notes",
+   "kind": "text"
+  },
+  {
+   "header": "LOE",
+   "key": "effort",
+   "kind": "label"
+  },
+  {
+   "header": "Phase",
+   "key": "group",
+   "kind": "chip"
+  },
+  {
+   "header": "Points",
+   "key": "extra:Points",
+   "kind": "number"
+  },
+  {
+   "header": "Stage",
+   "key": "extra:Stage",
+   "kind": "text"
+  }
+ ],
+ "commentProblems": [],
+ "comments": {},
+ "commentsFile": "roadmap-board.comments.json",
+ "completed": {
+  "columns": [
+   {
+    "header": "Result",
+    "key": "result",
+    "kind": "label"
+   },
+   {
+    "header": "Completed",
+    "key": "completedOn",
+    "kind": "text"
+   },
+   {
+    "header": "Close-out",
+    "key": "closeout",
+    "kind": "link"
+   },
+   {
+    "header": "Branch",
+    "key": "branch",
+    "kind": "mono"
+   },
+   {
+    "header": "Lane",
+    "key": "workstream",
+    "kind": "label"
+   },
+   {
+    "header": "Phase",
+    "key": "group",
+    "kind": "chip"
+   },
+   {
+    "header": "LOE",
+    "key": "loe",
+    "kind": "label"
+   },
+   {
+    "header": "Est. → Actual",
+    "key": "estimateActual",
+    "kind": "estimate"
+   },
+   {
+    "header": "Notes",
+    "key": "notes",
+    "kind": "text"
+   },
+   {
+    "header": "Points",
+    "key": "extra:Points",
+    "kind": "text"
+   },
+   {
+    "header": "Stage",
+    "key": "extra:Stage",
+    "kind": "text"
+   }
+  ],
+  "groups": [
+   {
+    "ids": [
+     "ENG-0"
+    ],
+    "key": "completed",
+    "rail": "green",
+    "title": "Completed"
+   }
+  ],
+  "problems": [],
+  "rows": [
+   {
+    "copy": "ENG-0 — Old work",
+    "copyDispatch": "ENG-0 — Old work",
+    "corrected": false,
+    "earlier": 0,
+    "facets": {
+     "complete": "complete",
+     "effort": "S",
+     "extra:Item": "ENG-0 — Old work",
+     "extra:Points": "2",
+     "extra:Stage": "Build",
+     "group": "Phase 1",
+     "status": "completed",
+     "workstream": "ENGINE",
+     "written_status": "full-spec"
+    },
+    "history": [],
+    "id": "ENG-0",
+    "name": "ENG-0 — Old work",
+    "over": false,
+    "record": "",
+    "result": "completed",
+    "retired": false,
+    "status": "completed",
+    "terminal": true,
+    "unreconciled": "no ledger record for this item",
+    "values": {
+     "branch": "",
+     "closeout": "",
+     "completed": "",
+     "completedOn": "",
+     "description": "",
+     "effort": "S",
+     "estimateActual": "",
+     "evidence": "",
+     "extra:Item": "ENG-0 — Old work",
+     "extra:Points": "2",
+     "extra:Stage": "Build",
+     "group": "Phase 1",
+     "id": "ENG-0",
+     "loe": "S",
+     "notes": "",
+     "prerequisites": [],
+     "result": "Done",
+     "sequence": 10,
+     "spec_link": "",
+     "started": "",
+     "status": "Done",
+     "supersededBy": "",
+     "workstream": "ENGINE",
+     "written_status": "Full Spec"
+    },
+    "warn": "",
+    "written": "full-spec"
+   }
+  ]
+ },
+ "dashboard": {
+  "slicers": [
+   {
+    "key": "complete",
+    "label": "Complete / Incomplete",
+    "labels": {
+     "complete": "Complete",
+     "incomplete": "Incomplete"
+    },
+    "values": [
+     "complete",
+     "incomplete"
+    ]
+   },
+   {
+    "key": "status",
+    "label": "Impl Status",
+    "values": [
+     "queued",
+     "in-flight",
+     "blocked",
+     "completed"
+    ]
+   },
+   {
+    "key": "workstream",
+    "label": "Lane",
+    "values": [
+     "ENGINE",
+     "GOV"
+    ]
+   },
+   {
+    "key": "written_status",
+    "label": "Written",
+    "labels": {
+     "full-spec": "Full Spec",
+     "stub": "Stub"
+    },
+    "values": [
+     "full-spec",
+     "stub"
+    ]
+   },
+   {
+    "key": "effort",
+    "label": "LOE",
+    "values": [
+     "S",
+     "M",
+     "L"
+    ]
+   },
+   {
+    "key": "group",
+    "label": "Phase",
+    "values": [
+     "Phase 1",
+     "Phase 2"
+    ]
+   },
+   {
+    "key": "extra:Stage",
+    "label": "Stage",
+    "values": [
+     "Build",
+     "Plan"
+    ]
+   }
+  ],
+  "tiles": [
+   {
+    "detail": "",
+    "key": "total",
+    "label": "Total",
+    "source": "kpi.compute total-items · csv · <root>/<register> · snapshot <time>",
+    "value": 4
+   },
+   {
+    "detail": "",
+    "key": "complete",
+    "label": "Complete",
+    "source": "kpi.compute count-completed + count-dissolved + count-superseded · csv · <root>/<register> · snapshot <time>",
+    "value": 1
+   },
+   {
+    "detail": "",
+    "key": "incomplete",
+    "label": "Incomplete",
+    "source": "kpi.compute total-items − complete · csv · <root>/<register> · snapshot <time>",
+    "value": 3
+   },
+   {
+    "detail": "",
+    "key": "percent",
+    "label": "% Complete",
+    "source": "kpi.compute percent-complete-by-count · csv · <root>/<register> · snapshot <time>",
+    "value": 25.0
+   },
+   {
+    "detail": "ready vs target",
+    "key": "buffer",
+    "label": "Dispatch buffer",
+    "source": "summarize_health buffer_filled / buffer_target · csv · <root>/<register> · snapshot <time>",
+    "value": "1 / 5"
+   },
+   {
+    "detail": "",
+    "key": "blocked",
+    "label": "Blocked",
+    "source": "kpi.compute count-blocked · csv · <root>/<register> · snapshot <time>",
+    "value": 1
+   },
+   {
+    "detail": "",
+    "key": "pace",
+    "label": "Pace",
+    "source": "pace_for (earliest declared deadline) · csv · <root>/<register> · snapshot <time>",
+    "value": "no deadline"
+   }
+  ]
+ },
+ "health": {
+  "buffer_filled": 1,
+  "buffer_target": 5,
+  "counts": {
+   "blocked": 1,
+   "completed": 1,
+   "dissolved": 0,
+   "in-flight": 1,
+   "queued": 1,
+   "superseded": 0,
+   "unknown": 0
+  },
+  "drift_count": 4,
+  "drift_findings": [
+   "In the roadmap's active section but not in the work register: ITEM-2",
+   "Work-register item absent from the roadmap: ENG-1",
+   "Work-register item absent from the roadmap: ENG-3",
+   "Work-register item absent from the roadmap: GOV-2"
+  ],
+  "head_id": "ENG-1",
+  "head_title": "",
+  "recommendation": "Run the roadmap-review ceremony: the roadmap and the work register disagree."
+ },
+ "metrics": {
+  "invalidDeadlines": [],
+  "learning": {
+   "metrics": [],
+   "provenance": {}
+  },
+  "metrics": [
+   {
+    "name": "total-items",
+    "unit": "items",
+    "value": 4
+   },
+   {
+    "name": "count-queued",
+    "unit": "items",
+    "value": 1
+   },
+   {
+    "name": "count-in-flight",
+    "unit": "items",
+    "value": 1
+   },
+   {
+    "name": "count-blocked",
+    "unit": "items",
+    "value": 1
+   },
+   {
+    "name": "count-completed",
+    "unit": "items",
+    "value": 1
+   },
+   {
+    "name": "count-dissolved",
+    "unit": "items",
+    "value": 0
+   },
+   {
+    "name": "count-superseded",
+    "unit": "items",
+    "value": 0
+   },
+   {
+    "name": "count-unknown",
+    "unit": "items",
+    "value": 0
+   },
+   {
+    "name": "percent-complete-by-count",
+    "unit": "%",
+    "value": 25.0
+   },
+   {
+    "name": "total-effort",
+    "unit": "points",
+    "value": 13
+   },
+   {
+    "name": "completed-effort",
+    "unit": "points",
+    "value": 1
+   },
+   {
+    "name": "percent-complete-by-effort",
+    "unit": "%",
+    "value": 7.7
+   },
+   {
+    "name": "dispatch-buffer-target",
+    "unit": "items",
+    "value": 5
+   },
+   {
+    "name": "dispatch-buffer-filled",
+    "unit": "items",
+    "value": 1
+   }
+  ],
+  "pace": [],
+  "provenance": {
+   "fields": [
+    "branch",
+    "description",
+    "effort",
+    "group",
+    "id",
+    "notes",
+    "prerequisites",
+    "sequence",
+    "spec_link",
+    "status",
+    "workstream",
+    "written_status"
+   ],
+   "provider": "csv",
+   "source": "<root>/<register>",
+   "stale": false
+  }
+ },
+ "project": "project",
+ "provenance": {
+  "fields": [
+   "branch",
+   "description",
+   "effort",
+   "group",
+   "id",
+   "notes",
+   "prerequisites",
+   "sequence",
+   "spec_link",
+   "status",
+   "workstream",
+   "written_status"
+  ],
+  "provider": "csv",
+  "source": "<root>/<register>",
+  "stale": false
+ },
+ "register": {
+  "authority": "live",
+  "compatibilityAdapter": false,
+  "role": "workRegister"
+ },
+ "roadmap": {
+  "groups": [
+   {
+    "ids": [
+     "GOV-2"
+    ],
+    "key": "in-flight",
+    "rail": "amber",
+    "title": "In Flight"
+   },
+   {
+    "ids": [
+     "ENG-1"
+    ],
+    "key": "conveyor",
+    "rail": "blue",
+    "title": "Conveyor"
+   },
+   {
+    "ids": [
+     "ENG-3"
+    ],
+    "key": "blocked",
+    "rail": "red",
+    "title": "Blocked / Gated"
+   }
+  ],
+  "live": [
+   "ENG-1",
+   "ENG-3",
+   "GOV-2"
+  ]
+ },
+ "root": "<root>",
+ "rootUri": "<root>/",
+ "rows": [
+  {
+   "copy": "ENG-0 — Old work",
+   "copyDispatch": "ENG-0 — Old work",
+   "facets": {
+    "complete": "complete",
+    "effort": "S",
+    "extra:Item": "ENG-0 — Old work",
+    "extra:Points": "2",
+    "extra:Stage": "Build",
+    "group": "Phase 1",
+    "status": "completed",
+    "workstream": "ENGINE",
+    "written_status": "full-spec"
+   },
+   "id": "ENG-0",
+   "name": "ENG-0 — Old work",
+   "status": "completed",
+   "terminal": true,
+   "values": {
+    "branch": "",
+    "completed": "",
+    "description": "",
+    "effort": "S",
+    "evidence": "",
+    "extra:Item": "ENG-0 — Old work",
+    "extra:Points": "2",
+    "extra:Stage": "Build",
+    "group": "Phase 1",
+    "id": "ENG-0",
+    "notes": "",
+    "prerequisites": [],
+    "sequence": 10,
+    "spec_link": "",
+    "started": "",
+    "status": "Done",
+    "workstream": "ENGINE",
+    "written_status": "Full Spec"
+   },
+   "warn": "",
+   "written": "full-spec"
+  },
+  {
+   "copy": "ENG-1 — Build the engine",
+   "copyDispatch": "ENG-1 — Build the engine\nSpec: docs/eng-1.md\nBranch: eng-1",
+   "facets": {
+    "complete": "incomplete",
+    "effort": "M",
+    "extra:Item": "ENG-1 — Build the engine",
+    "extra:Points": "3",
+    "extra:Stage": "Build",
+    "group": "Phase 1",
+    "status": "queued",
+    "workstream": "ENGINE",
+    "written_status": "full-spec"
+   },
+   "id": "ENG-1",
+   "name": "ENG-1 — Build the engine",
+   "status": "queued",
+   "terminal": false,
+   "values": {
+    "branch": "eng-1",
+    "completed": "",
+    "description": "First part",
+    "effort": "M",
+    "evidence": "",
+    "extra:Item": "ENG-1 — Build the engine",
+    "extra:Points": "3",
+    "extra:Stage": "Build",
+    "group": "Phase 1",
+    "id": "ENG-1",
+    "notes": "",
+    "prerequisites": [],
+    "sequence": 20,
+    "spec_link": "docs/eng-1.md",
+    "started": "",
+    "status": "Queued",
+    "workstream": "ENGINE",
+    "written_status": "Full Spec"
+   },
+   "warn": "",
+   "written": "full-spec"
+  },
+  {
+   "copy": "ENG-3 — Ship it",
+   "copyDispatch": "ENG-3 — Ship it",
+   "facets": {
+    "complete": "incomplete",
+    "effort": "L",
+    "extra:Item": "ENG-3 — Ship it",
+    "extra:Points": "5",
+    "extra:Stage": "Build",
+    "group": "Phase 2",
+    "status": "blocked",
+    "workstream": "ENGINE",
+    "written_status": "stub"
+   },
+   "id": "ENG-3",
+   "name": "ENG-3 — Ship it",
+   "status": "blocked",
+   "terminal": false,
+   "values": {
+    "branch": "",
+    "completed": "",
+    "description": "",
+    "effort": "L",
+    "evidence": "",
+    "extra:Item": "ENG-3 — Ship it",
+    "extra:Points": "5",
+    "extra:Stage": "Build",
+    "group": "Phase 2",
+    "id": "ENG-3",
+    "notes": "",
+    "prerequisites": [
+     "ENG-1",
+     "GOV-2"
+    ],
+    "sequence": 25,
+    "spec_link": "",
+    "started": "",
+    "status": "Blocked",
+    "workstream": "ENGINE",
+    "written_status": "Stub"
+   },
+   "warn": "",
+   "written": "stub"
+  },
+  {
+   "copy": "GOV-2 — Write the rules",
+   "copyDispatch": "GOV-2 — Write the rules",
+   "facets": {
+    "complete": "incomplete",
+    "effort": "S",
+    "extra:Item": "GOV-2 — Write the rules",
+    "extra:Points": "1",
+    "extra:Stage": "Plan",
+    "group": "Phase 1",
+    "status": "in-flight",
+    "workstream": "GOV",
+    "written_status": "stub"
+   },
+   "id": "GOV-2",
+   "name": "GOV-2 — Write the rules",
+   "status": "in-flight",
+   "terminal": false,
+   "values": {
+    "branch": "",
+    "completed": "",
+    "description": "Second part",
+    "effort": "S",
+    "evidence": "",
+    "extra:Item": "GOV-2 — Write the rules",
+    "extra:Points": "1",
+    "extra:Stage": "Plan",
+    "group": "Phase 1",
+    "id": "GOV-2",
+    "notes": "a note",
+    "prerequisites": [
+     "ENG-1"
+    ],
+    "sequence": 1000,
+    "spec_link": "",
+    "started": "",
+    "status": "In Flight",
+    "workstream": "GOV",
+    "written_status": "Stub"
+   },
+   "warn": "",
+   "written": "stub"
+  }
+ ],
+ "sources": [
+  {
+   "path": "<register>",
+   "role": "workRegister"
+  },
+  {
+   "path": "Project Documentation/1 governance/CompletedWork.Ledger.md",
+   "role": "terminalLedger"
+  },
+  {
+   "path": "Project Documentation/1 governance/Roadmap.md",
+   "role": "roadmap"
+  }
+ ],
+ "version": 1
+}

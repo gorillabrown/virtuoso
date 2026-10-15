@@ -344,7 +344,7 @@ def test_external_mutation_cli_rejects_stale_revision(external_workspace):
 
 def test_external_mutation_cli_rejects_an_unauthorized_actor(external_workspace):
     completed = run(
-        REGISTRY_CLI, "--root", str(external_workspace), "--actor", "next-pointer",
+        REGISTRY_CLI, "--root", str(external_workspace), "--actor", "dispatch-kickoff",
         "mutation-plan", "--operation", "set-status", "--item", "123",
         "--fields-json", json.dumps({"status": "In Flight"}),
         "--revision", "rev-1", "--json")
@@ -692,3 +692,24 @@ def test_previous_review_orders_by_date_then_run(workspace):
 def test_review_refuses_without_a_registry(project):
     completed = run(REGISTRY_CLI, "--root", str(project), "review", "--date", "2026-10-08")
     assert completed.returncode == 3 and "no governance registry" in completed.stderr
+
+
+def test_single_tool_examples_are_refused():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "virtuoso_validate", str(Path(PLUGIN_ROOT) / "scripts" / "validate.py"))
+    validate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(validate)
+    files = [
+        ("references/alone.md", 'e.g. "external": "monday:board/1"'),
+        ("references/pair.md", "notion:database/x or monday:board/1"),
+        ("references/prose.md", "a non-Linear rise; the notion of next"),
+        ("references/brand.md", "connect Linear first"),
+        ("references/scheme.md", "notion:database/x"),
+        ("scripts/test_alone.py", "monday:board/1"),
+        ("scripts/fixtures/page.json", "monday:board/1"),
+        ("tools/governance/providers/snapshot_provider.py", "monday:board/1"),
+    ]
+    assert validate.single_tool_files(files) == [
+        "references/alone.md (monday)", "references/brand.md (linear)",
+        "references/scheme.md (notion)"]

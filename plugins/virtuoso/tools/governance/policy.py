@@ -5,7 +5,7 @@ Redesign items 26, 27, 47, 49, 50, 51, 53, 64-73, 74, 76, 79.
 Policy lives under ``policy`` in the manifest. Every value here has a documented
 default, so an existing project keeps working, but nothing in the plugin may
 *assume* a default that policy can override: branch names, the default remote,
-the dispatch buffer size, the status vocabulary, the lane/phase hierarchy, the
+the dispatch buffer size, the status vocabulary, the workstream/phase hierarchy, the
 readiness-rubric extensions, actor names, and sweep boundaries are all project
 configuration.
 """
@@ -71,7 +71,8 @@ DEFAULTS: dict = {
         "dispatchBuffer": 5,            # item 49 — configurable, may be 0 (disabled)
         "eagerSpec": True,
         "hierarchy": ["phase", "stage"],  # item 50 — may be [] for a flat project
-        "lanes": [],
+        # [{id, name, purpose, deliverables: [{id, name, purpose}]}]; [] = no structure.
+        "workstreams": [],
         "specStorage": "inline",        # "inline" | "files" | "external"
         "specDirectory": "",
         "lengthCeilingLines": 2000,
@@ -104,8 +105,8 @@ DEFAULTS: dict = {
     },
     # --- terminal ledger (items 47, 48) --------------------------------------
     "terminalLedger": {
-        "writers": ["pointer-closeout"],
-        "correctionWriters": ["pointer-closeout", "roadmap-review"],
+        "writers": ["dispatch-closeout"],
+        "correctionWriters": ["dispatch-closeout", "roadmap-review"],
         "format": "markdown",           # "markdown" | "csv" | "jsonl"
         # ledger field -> the project's own column header, for a CSV or JSONL ledger
         # whose columns are not the documented ones (see TERMINAL_LEDGER_FIELDS).
@@ -526,8 +527,27 @@ class Policy:
         value = self.get("roadmap.hierarchy", [])
         return [str(v) for v in value] if isinstance(value, list) else []
 
+    @property
+    def workstreams(self) -> list:
+        """``roadmap.workstreams``, or the pre-1.15.0 ``roadmap.lanes`` when only that is
+        set: read for one release, with a ``policy-renamed`` warning (``renamed_keys``)."""
+        roadmap = self.section("roadmap")
+        value = roadmap.get("workstreams")
+        if not value and isinstance(roadmap.get("lanes"), list):
+            value = [{"id": v, "name": v} if isinstance(v, str) else v
+                     for v in roadmap["lanes"]]
+        return value if isinstance(value, list) else []
+
+    def renamed_keys(self) -> list[str]:
+        """One line per retired policy key the project still sets."""
+        if "lanes" not in self.section("roadmap"):
+            return []
+        return ["policy.roadmap.lanes is the old name of policy.roadmap.workstreams; it is "
+                "read until the next release. Fix: rename the key to roadmap.workstreams"]
+
     def validate(self) -> list[str]:
         problems = []
+        problems.extend(workstream_problems(self.workstreams))
         if self.git_policy not in GIT_POLICIES:
             problems.append("policy.git.policy=%r is not one of %s"
                             % (self.git_policy, ", ".join(GIT_POLICIES)))
@@ -549,6 +569,36 @@ class Policy:
         problems.extend(deadline_problems(self.get("roadmap.deadlines", {})))
         problems.extend(pace_problems(self.get("roadmap.pace", {})))
         return problems
+
+
+def workstream_problems(workstreams: list) -> list[str]:
+    """Every reason ``roadmap.workstreams`` is not a usable structure. A deliverable
+    belongs to exactly one workstream, so an id under two is refused."""
+    problems, owner, seen = [], {}, set()
+    for n, entry in enumerate(workstreams):
+        where = "policy.roadmap.workstreams[%d]" % n
+        if not isinstance(entry, dict) or not str(entry.get("id") or "").strip():
+            problems.append("%s needs an id" % where)
+            continue
+        if entry["id"] in seen:
+            problems.append("%s: workstream id %r is used twice" % (where, entry["id"]))
+        seen.add(entry["id"])
+        deliverables = entry.get("deliverables") or []
+        if not isinstance(deliverables, list):
+            problems.append("%s.deliverables is %s; it is a list"
+                            % (where, value_kind(deliverables)[1]))
+            continue
+        for d in deliverables:
+            did = str(d.get("id") or "").strip() if isinstance(d, dict) else ""
+            if not did:
+                problems.append("%s.deliverables has an entry with no id" % where)
+            elif did in owner and owner[did] != entry["id"]:
+                problems.append("policy.roadmap.workstreams: deliverable %r is under two "
+                                "workstreams, %r and %r; a deliverable belongs to one"
+                                % (did, owner[did], entry["id"]))
+            else:
+                owner[did] = entry["id"]
+    return problems
 
 
 def audit(raw) -> list[tuple[str, str]]:

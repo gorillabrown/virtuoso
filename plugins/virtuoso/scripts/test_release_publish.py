@@ -23,7 +23,7 @@ _IDENTITY = {"GIT_AUTHOR_NAME": "Release Test", "GIT_AUTHOR_EMAIL": "release@exa
 #: would agree with any change to it. One file per public entry, per VIR-008.
 PUBLIC_FILES = (".claude-plugin/f.txt", ".gitattributes", ".github/f.txt", ".gitignore",
                 "LICENSE", "PRIVACY.md", "README.md", "RELEASE-NOTES.md",
-                "docs/MIGRATION-1.4.md", "plugins/f.txt")
+                "docs/MIGRATION-1.4.md", "docs/MIGRATION-1.15.md", "plugins/f.txt")
 PRIVATE = ("docs/plans/x.md", "Virtuoso/workspace-layout.json", "Project Documentation/a.md")
 
 
@@ -68,7 +68,7 @@ def repos(tmp_path, monkeypatch):
 def test_public_tree_is_the_specified_set():
     assert set(rp.PUBLIC_TREE) == {".claude-plugin", ".gitattributes", ".github", ".gitignore",
                                    "LICENSE", "PRIVACY.md", "README.md", "RELEASE-NOTES.md",
-                                   "docs/MIGRATION-1.4.md", "plugins"}
+                                   "docs/MIGRATION-1.4.md", "docs/MIGRATION-1.15.md", "plugins"}
 
 
 def test_public_tree_keeps_only_release_paths(repos):

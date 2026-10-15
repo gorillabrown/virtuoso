@@ -111,7 +111,8 @@ class XlsxWorkRegister(base.WorkRegisterProvider):
             raw_written_status=value("written_status"),
             prerequisites=[p.strip() for p in
                            value("prerequisites").replace(";", ",").split(",") if p.strip()],
-            effort=value("effort"), lane=value("lane"), group=value("group"),
+            effort=value("effort"), workstream=value("workstream"),
+            deliverable=value("deliverable"), group=value("group"),
             spec_link=value("spec_link"), branch=value("branch"), started=value("started"),
             completed=value("completed"), evidence=value("evidence"),
             description=value("description"), notes=value("notes"),
@@ -158,6 +159,13 @@ class XlsxWorkRegister(base.WorkRegisterProvider):
     def store_spec_link(self, item_id: str, link: str, *, revision: str = "") -> base.WorkItem:
         self.require(base.STORE_SPEC_LINK)
         return self._write_field(item_id, "spec_link", link, revision)
+
+    def assign(self, item_id: str, workstream: str, deliverable: str, *,
+               revision: str = "") -> base.WorkItem:
+        self.require(base.WRITE_STATUS)
+        self.require_columns("workstream", "deliverable")
+        self._write_field(item_id, "workstream", workstream, revision)
+        return self._write_field(item_id, "deliverable", deliverable, "")
 
     def record_completion(self, item_id: str, *, completed: str = "", evidence: str = "",
                           revision: str = "") -> base.WorkItem:

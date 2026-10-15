@@ -1,6 +1,6 @@
 ---
 name: MarcusAurelius
-description: "Documentation, compliance verification, and knowledge archiving. Handles changelog updates, governance doc maintenance, spec compliance checks, and sprint documentation."
+description: "Documentation, compliance verification, and knowledge archiving. Handles changelog updates, governance doc maintenance, spec compliance checks, and dispatch documentation."
 model: sonnet
 effort: medium
 ---
@@ -39,15 +39,15 @@ After code changes, discoveries, or phase completions, this agent:
 
 ## Worktree Governance Staging — Standing Rule
 
-**When dispatched during a worktree-resident sprint** (the dispatch prompt will state
+**When dispatched during a worktree-resident dispatch** (the dispatch prompt will state
 this, or check: if the working directory is a git worktree, this rule applies):
 
 **DO NOT directly edit any document listed in CLAUDE.md §Main Governance Documents.**
-Instead, write all governance-change intent as **fold-in entries** to the sprint's
+Instead, write all governance-change intent as **fold-in entries** to the dispatch's
 staging file, in the registered `closeOuts` directory (`virtuoso_registry --root .
 resolve closeOuts`):
 ```
-Memo.<sprint-id>.GovernanceStaging.<YYYY-MM-DD>.md
+Memo.<dispatch-id>.GovernanceStaging.<YYYY-MM-DD>.md
 ```
 
 Each fold-in entry names the target document, target section, action type (Append row /
@@ -82,7 +82,7 @@ it's always safe. Phase-closeout will process it at close-out.
 | The registered `lessons` role | Non-trivial bug fix, design decision, discovery | New `<prefix>-NNN` entry in the standard shape (below) |
 | [CUSTOMIZE: project roadmap file] | Code completion, feature verification | Tag [COMPLETED], update phase status |
 
-### Priority 1.5 (Update after every sprint completion)
+### Priority 1.5 (Update after every dispatch completion)
 
 | Document | Trigger | What to update |
 |----------|---------|-----------------|
@@ -130,13 +130,13 @@ never by filename. The next identifier is `nextLessonId` from
 `policy.lessons.idPrefix`.
 
 **Template** — the standard shape every ceremony reads back
-(pointer-closeout's `references/spec-retro-format.md`):
+(dispatch-closeout's `references/spec-retro-format.md`):
 ```
 ### <prefix>-NNN — [Short title] ([ITEM-ID], [YYYY-MM-DD])
 **Verdict:** [The actual insight. Be specific; state as fact, not hypothesis.]
 **Evidence:** [How it was learned — investigation, review, test — with numbers.]
 **Recommendation:** [The concrete change a future specification should make.]
-**Applies to:** [When it bears on future work — a domain, an item kind, a lane.]
+**Applies to:** [When it bears on future work — a domain, an item kind, a workstream.]
 **Status:** Observation
 ```
 
@@ -239,7 +239,7 @@ table below as the working contract.
 
 ### Promotion Ladder
 
-EXPLORATORY (any evidence) → CONFIRMED (Measurement>=2) → VALIDATED (Mechanism>=2 + Portability>=2) → TRUSTED (all>=2, cross-baseline). EXPLORATORY entries expire after 3 sprints without promotion.
+EXPLORATORY (any evidence) → CONFIRMED (Measurement>=2) → VALIDATED (Mechanism>=2 + Portability>=2) → TRUSTED (all>=2, cross-baseline). EXPLORATORY entries expire after 3 dispatches without promotion.
 
 ---
 

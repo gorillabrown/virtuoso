@@ -40,7 +40,7 @@ MUTATIONS = frozenset({WRITE_STATUS, STORE_SPEC_LINK, RECORD_COMPLETION, CREATE_
 #: are computed by the provider from what it wrote, never supplied.
 CREATABLE_FIELDS = (
     "id", "title", "sequence", "status", "written_status", "prerequisites", "effort",
-    "lane", "group", "spec_link", "branch", "started", "completed", "evidence",
+    "workstream", "deliverable", "group", "spec_link", "branch", "started", "completed", "evidence",
     "description", "notes",
 )
 
@@ -75,7 +75,8 @@ class WorkItem:
     raw_written_status: str = ""
     prerequisites: list[str] = field(default_factory=list)
     effort: str = ""
-    lane: str = ""
+    workstream: str = ""
+    deliverable: str = ""
     group: str = ""
     spec_link: str = ""
     branch: str = ""
@@ -404,6 +405,20 @@ class WorkRegisterProvider:
 
     def store_spec_link(self, item_id: str, link: str, *, revision: str = "") -> WorkItem:
         raise CapabilityError("provider %r cannot store specification links" % self.name)
+
+    def assign(self, item_id: str, workstream: str, deliverable: str, *,
+               revision: str = "") -> WorkItem:
+        """Write an item's workstream and deliverable (capability ``write-status``)."""
+        raise CapabilityError("provider %r cannot assign workstreams" % self.name)
+
+    def require_columns(self, *names: str) -> None:
+        """Refuse before any write when the register serves no column for ``names``."""
+        missing = [n for n in names if n not in self.snapshot().fields]
+        if missing:
+            raise CapabilityError(
+                "work register %s has no column for %s; add the column or configure "
+                "policy.workRegister.fieldMappings" % (self.source, ", ".join(missing)),
+                detail={"register": self.source, "missing": missing})
 
     def record_completion(self, item_id: str, *, completed: str = "", evidence: str = "",
                           revision: str = "") -> WorkItem:

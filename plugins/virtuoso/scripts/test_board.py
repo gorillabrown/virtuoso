@@ -18,6 +18,7 @@ from conftest import PLUGIN_ROOT
 from test_tooling import (  # noqa: F401 - fixtures are used by name
     COCKPIT, PREFLIGHT, REGISTRY_CLI, external_workspace, run, workspace)
 from tools.governance import registry as registry_mod, schema
+from tools.governance.policy import Policy
 from tools.governance.providers import base, kpi, mapping
 from tools.governance.providers.csv_provider import CsvWorkRegister
 from tools.governance.providers.ledger import LedgerRecord
@@ -213,7 +214,7 @@ def test_reference_mapping(case, tmp_path):
         assert board.name_column(snap.items) == "Item"
         assert board.display_name(first, "Item") == "ENG-1 — Build the engine"
     elif case == "lane-vs-stage":
-        assert snap.headers["lane"] == "Lane" and first.lane == "ENGINE"
+        assert snap.headers["workstream"] == "Lane" and first.workstream == "ENGINE"
         assert first.extra["Stage"] == "Build"
     elif case == "loe-vs-points":
         assert snap.headers["effort"] == "LOE" and first.effort == "M"
@@ -431,33 +432,162 @@ def test_dashboard_tiles_restate_kpi_and_health(workspace):  # noqa: F811
 
 
 def test_slicers_are_built_from_the_data():
-    items = [item("A-1", base.QUEUED, 1, lane="UI", group="G1", extra={"Stage": "Build", "Desc": "a"}),
-             item("A-2", base.QUEUED, 2, lane="ENGINE", group="G1", extra={"Stage": "Plan", "Desc": "b"}),
-             item("A-3", base.QUEUED, 3, lane="UI", group="G1", extra={"Stage": "Build", "Desc": "c"})]
-    columns = board.roadmap_columns(["id", "lane", "group", "status"], {}, items)
+    items = [item("A-1", base.QUEUED, 1, workstream="UI", group="G1",
+                  extra={"Stage": "Build", "Desc": "a"}),
+             item("A-2", base.QUEUED, 2, workstream="ENGINE", group="G1",
+                  extra={"Stage": "Plan", "Desc": "b"}),
+             item("A-3", base.QUEUED, 3, workstream="UI", group="G1",
+                  extra={"Stage": "Build", "Desc": "c"})]
+    columns = board.roadmap_columns(["id", "workstream", "group", "status"], {}, items)
     found = {s["key"]: s for s in dashboard.slicers(items, columns, {})}
     assert found["complete"]["values"] == ["complete", "incomplete"]   # always offered
-    assert "lane" in found and found["lane"]["values"] == ["UI", "ENGINE"]
+    assert "workstream" in found and found["workstream"]["values"] == ["UI", "ENGINE"]
     assert "group" not in found and "status" not in found        # one value: no slicer
     assert "extra:Stage" in found and "extra:Desc" not in found  # unique per row: no slicer
-    blank = items + [item("A-4", base.QUEUED, 4, lane="")]
-    lanes = {s["key"]: s for s in dashboard.slicers(blank, columns, {})}["lane"]
-    assert lanes["values"] == ["UI", "ENGINE", ""] and lanes["labels"][""] == "(none)"
+    blank = items + [item("A-4", base.QUEUED, 4, workstream="")]
+    streams = {s["key"]: s for s in dashboard.slicers(blank, columns, {})}["workstream"]
+    assert streams["values"] == ["UI", "ENGINE", ""] and streams["labels"][""] == "(none)"
     some = [item("B-1", group="G1"), item("B-2", group="")]
     groups = {s["key"]: s for s in dashboard.slicers(some, [], {})}["group"]
     assert groups["values"] == ["G1", ""]                        # one value and blanks
 
 
 def test_slicer_order_follows_policy():
-    items = [item("A-1", base.BLOCKED, 1, lane="OPS", effort="L"),
-             item("A-2", base.QUEUED, 2, lane="ENGINE", effort="xs"),
-             item("A-3", base.IN_FLIGHT, 3, lane="UI", effort="M")]
-    orders = {"lane": ["UI", "ENGINE"], "effort": list(kpi.DEFAULT_EFFORT_SCALE),
+    items = [item("A-1", base.BLOCKED, 1, workstream="OPS", effort="L"),
+             item("A-2", base.QUEUED, 2, workstream="ENGINE", effort="xs"),
+             item("A-3", base.IN_FLIGHT, 3, workstream="UI", effort="M")]
+    orders = {"workstream": ["UI", "ENGINE"], "effort": list(kpi.DEFAULT_EFFORT_SCALE),
               "status": list(base.CANONICAL_STATUSES)}
     found = {s["key"]: s["values"] for s in dashboard.slicers(items, [], orders)}
-    assert found["lane"] == ["UI", "ENGINE", "OPS"]               # policy, then first seen
+    assert found["workstream"] == ["UI", "ENGINE", "OPS"]         # policy, then first seen
     assert found["effort"] == ["xs", "M", "L"]
     assert found["status"] == ["queued", "in-flight", "blocked"]
+
+
+# --- workstreams and deliverables ----------------------------------------------------
+
+STRUCTURE = [{"id": "W1", "name": "Engine", "deliverables": [
+                 {"id": "D1", "name": "Core"},
+                 {"id": "D2", "name": "A very long deliverable name"}]},
+             {"id": "W2", "name": "Docs", "deliverables": [{"id": "D3", "name": "Guide"}]}]
+WITHOUT_STRUCTURE = Path(__file__).parent / "fixtures" / "board.without-structure.expected.json"
+TIME_KEYS = ("generatedAt", "takenAt", "asOf", "mtime")
+_STAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?")
+
+
+def comparable(model, root):
+    """The model without its date- and time-valued fields; the workspace path reads
+    ``<root>``, the register's ``<register>``, and every separator ``/``, so the comparison
+    holds on any machine and the stored copy names no project's directory."""
+    forms = (Path(root).as_uri(), str(root).replace("\\", "/"))
+    register = REGISTER.as_posix()
+
+    def strip(value):
+        if isinstance(value, dict):
+            return {k: strip(v) for k, v in value.items() if k not in TIME_KEYS}
+        if isinstance(value, list):
+            return [strip(v) for v in value]
+        if isinstance(value, str):
+            value = value.replace("\\", "/")
+            for form in forms:
+                value = value.replace(form, "<root>")
+            value = value.replace(register, "<register>")
+            return _STAMP.sub("<time>", value)
+        return value
+    return strip(model)
+
+
+def approve(root: Path, workstreams) -> None:
+    layout = root / "Virtuoso" / "workspace-layout.json"
+    data = json.loads(layout.read_text(encoding="utf-8"))
+    data.setdefault("policy", {}).setdefault("roadmap", {})["workstreams"] = workstreams
+    layout.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def test_the_board_filters_by_workstream_and_deliverable():
+    policy = Policy(data={"roadmap": {"workstreams": STRUCTURE}})
+    assert board.approved_structure(policy) == STRUCTURE
+    assert board.approved_structure(Policy(data={"roadmap": {"lanes": ["UI"]}})) == []
+    items = [item("A-1", base.QUEUED, 1, workstream="Docs", deliverable="Guide"),
+             item("A-2", base.QUEUED, 2, workstream="W1",            # an id reads as assigned
+                  deliverable="A very long deliverable name"),
+             item("A-3", base.IN_FLIGHT, 3, workstream="Engine", deliverable="Core"),
+             item("A-4", base.QUEUED, 4, workstream="Engine"),
+             item("A-5", base.QUEUED, 5),
+             item("A-6", base.COMPLETED, 6, workstream="Engine", deliverable="Core")]
+    groups = board.structure_groups(items, STRUCTURE)
+    assert [(g["title"], g["ids"]) for g in groups] == [
+        ("Engine › Core", ["A-3"]), ("Engine › A very long deliverable name", ["A-2"]),
+        ("Engine", ["A-4"]), ("Docs › Guide", ["A-1"]), ("Unassigned", ["A-5"])]
+    found = {s["key"]: s for s in dashboard.slicers(items, [], dashboard.policy_orders(policy),
+                                                    structured=True)}
+    deliverables = found["deliverable"]
+    assert deliverables["values"] == ["Core", "A very long deliverable name", "Guide", ""]
+    assert deliverables["labels"] == {"A very long deliverable name": "A very long d…",
+                                      "": "Unassigned"}
+    assert len(deliverables["labels"]["A very long deliverable name"]) == dashboard.FACET_WIDTH
+    assert found["workstream"]["values"] == ["Engine", "Docs", "W1", ""]
+    assert found["workstream"]["labels"][""] == "Unassigned"
+    plain = {s["key"]: s for s in dashboard.slicers(items, [], {})}
+    assert plain["workstream"]["labels"][""] == "(none)"         # no structure: as before
+    assert "deliverable" not in plain                            # even with deliverable data
+    assert "deliverable" not in dashboard.facets(items[0])
+    for broken in ([{"id": "W", "deliverables": 5}], [{"id": "W", "deliverables": ["D"]}],
+                   ["W"]):                                       # refused, never a crash
+        policy = Policy(data={"roadmap": {"workstreams": broken}})
+        assert board.approved_structure(policy) == []
+        assert dashboard.policy_orders(policy)["deliverable"] == []
+
+
+def done_page(tmp_path, structure: bool) -> list[str]:
+    """The Completed tab's group titles, grouped by workstream, in the page's own script."""
+    sync_playwright = page_runner()
+    done = []
+    for id_, stream in (("C-1", "Engine"), ("C-2", "")):
+        finished = item(id_, base.COMPLETED, 1, workstream=stream)
+        done.append(dict(board.row(finished), facets=dashboard.facets(finished),
+                         result="completed", retired=False))
+    roadmap = {"groups": [], "live": []}
+    if structure:
+        roadmap["structure"] = []
+    model = {"project": "p", "rows": done, "columns": [], "roadmap": roadmap,
+             "completed": {"rows": done, "problems": [],
+                           "columns": [{"key": "workstream", "header": "Workstream",
+                                        "kind": "label"}],
+                           "groups": [{"key": "completed", "title": "Completed",
+                                       "rail": "green", "ids": ["C-1", "C-2"]}]},
+             "dashboard": {"tiles": [], "slicers": []}}
+    page_file = tmp_path / ("structured.html" if structure else "plain.html")
+    page_file.write_text(render_board(model), encoding="utf-8")
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(page_file.as_uri())
+        page.evaluate("selectTab('completed')")
+        page.select_option("#done-toolbar select[aria-label='Group by']", "workstream")
+        titles = page.locator("#done-groups .group-title > span:not(.count)").all_inner_texts()
+        browser.close()
+    assert errors == []
+    return titles
+
+
+def test_unassigned_finished_items_group_as_unassigned(workspace, tmp_path):  # noqa: F811
+    approve(workspace, STRUCTURE)
+    model = generate.build_board(generate.read(workspace))
+    live = model["roadmap"]["structure"]
+    assert live and live[-1]["title"] == "Unassigned" and live[-1]["ids"] == model["roadmap"]["live"]
+    finished = model["completed"]["rows"]
+    assert finished and all(not r["facets"]["workstream"] for r in finished)
+    assert done_page(tmp_path, structure=True) == ["Engine", "Unassigned"]
+    assert done_page(tmp_path, structure=False) == ["Engine", "(none)"]
+
+
+def test_a_board_without_structure_renders_as_before(reference_workspace):
+    page = render_board(generate.build_board(generate.read(reference_workspace)))
+    expected = json.loads(WITHOUT_STRUCTURE.read_text(encoding="utf-8"))
+    assert comparable(embedded(page), reference_workspace) == expected
 
 
 # --- D6: comments ------------------------------------------------------------------
@@ -601,7 +731,7 @@ def test_the_review_reads_and_resolves_board_comments(workspace):  # noqa: F811
     listed = run(tool, "--root", str(workspace), "--json")
     assert json.loads(listed.stdout)["open"] == [
         {"item": "ITEM-2", "at": "2026-10-01T10:00:00Z", "text": "needs a spec"}]
-    refused = run(tool, "--root", str(workspace), "--actor", "next-pointer", "--resolve",
+    refused = run(tool, "--root", str(workspace), "--actor", "dispatch-kickoff", "--resolve",
                   "ITEM-2", "--answer", "specified", "--apply")
     assert refused.returncode == 2 and "may not write" in refused.stderr
     done = run(tool, "--root", str(workspace), "--actor", "roadmap-review", "--resolve",
@@ -637,7 +767,7 @@ def test_the_board_regenerates_after_record_completion(workspace):  # noqa: F811
     assert "ITEM-2" not in by_id(before["completed"]["rows"])
     done = subprocess.run(
         [os.sys.executable, REGISTRY_CLI, "--root", str(workspace), "--actor",
-         "pointer-closeout", "record-completion", "--item", "ITEM-2", "--date", "2026-02-01",
+         "dispatch-closeout", "record-completion", "--item", "ITEM-2", "--date", "2026-02-01",
          "--result", "completed", "--evidence", "CloseOut.ITEM-2.md", "--apply"],
         capture_output=True, text=True, encoding="utf-8",
         env=dict(os.environ, PYTHONIOENCODING="utf-8"))
@@ -688,7 +818,7 @@ def test_the_board_missing_advisory(workspace):  # noqa: F811
 
 
 def test_every_ceremony_that_changes_the_register_names_the_board():
-    for skill in ("pointer-closeout", "next-pointer", "roadmap-review"):
+    for skill in ("dispatch-closeout", "dispatch-kickoff", "roadmap-review"):
         text = (SKILLS / skill / "SKILL.md").read_text(encoding="utf-8")
         assert "generate_board" in text, skill
 

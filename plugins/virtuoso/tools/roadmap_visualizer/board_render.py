@@ -547,7 +547,8 @@ function selectTab(name) {
 }
 
 // --- board tables (Roadmap and Completed) -----------------------------------------------
-const VIEW = { search: "", sort: "", desc: false, groupBy: "pipeline", hidden: new Set(), selected: new Set(), collapsed: new Set() };
+const STRUCTURE = (BOARD.roadmap && BOARD.roadmap.structure) || null;
+const VIEW = { search: "", sort: "", desc: false, groupBy: STRUCTURE ? "structure" : "pipeline", hidden: new Set(), selected: new Set(), collapsed: new Set() };
 const DONE_VIEW = { search: "", from: "", to: "", groupBy: "result" };
 const RAILS = { amber: "var(--r-amber)", blue: "var(--r-blue)", red: "var(--r-red)", green: "var(--r-green)", grey: "var(--r-grey)" };
 
@@ -591,15 +592,16 @@ function groupings(columns, rows, first) {
 function groupByValue(rows, key) {
   const groups = new Map();
   rows.forEach((r) => {
-    const value = key === "month" ? show(r.values.completedOn).slice(0, 7) || "(no date)" : show(r.values[key]) || "(none)";
+    const blank = STRUCTURE && ["workstream", "deliverable"].includes(key) ? "Unassigned" : "(none)";
+    const value = key === "month" ? show(r.values.completedOn).slice(0, 7) || "(no date)" : show(r.values[key]) || blank;
     if (!groups.has(value)) groups.set(value, { key: value, title: value, rail: slot(value), rows: [] });
     groups.get(value).rows.push(r);
   });
   return [...groups.values()];
 }
 function liveGroups() {
-  if (VIEW.groupBy === "pipeline") {
-    return (BOARD.roadmap.groups || []).map((g) => ({ key: g.key, title: g.title, rail: RAILS[g.rail], rows: g.ids.map((id) => BY_ID.get(id)) }));
+  if (VIEW.groupBy === "pipeline" || VIEW.groupBy === "structure") {
+    return ((VIEW.groupBy === "structure" ? STRUCTURE : BOARD.roadmap.groups) || []).map((g) => ({ key: g.key, title: g.title, rail: RAILS[g.rail], rows: g.ids.map((id) => BY_ID.get(id)) }));
   }
   return groupByValue(LIVE, VIEW.groupBy);
 }
@@ -801,7 +803,8 @@ function buildToolbar() {
   hide.append(hideButton, panel);
 
   const groupBy = el("select", { "aria-label": "Group by" });
-  groupings(BOARD.columns || [], LIVE, ["pipeline", "Pipeline state"])
+  (STRUCTURE ? [["structure", "Workstream, then deliverable"]] : [])
+    .concat(groupings(BOARD.columns || [], LIVE, ["pipeline", "Pipeline state"]))
     .forEach(([key, label]) => groupBy.append(el("option", { value: key }, "Group by: " + label)));
   groupBy.addEventListener("change", () => { VIEW.groupBy = groupBy.value; renderAll(); });
 
@@ -923,22 +926,22 @@ function renderTiles(rows) {
   });
 }
 function stackedByLane(rows) {
-  const lanes = [...new Set(rows.map((r) => facet(r, "lane") || "(none)"))];
+  const workstreams = [...new Set(rows.map((r) => facet(r, "workstream") || "(none)"))];
   const statuses = ["in-flight", "queued", "blocked", "unknown", "completed", "dissolved", "superseded"].filter((s) => rows.some((r) => r.status === s));
   const width = 320, bar = 18, gap = 8, labelW = 90;
-  const height = Math.max(bar, lanes.length * (bar + gap));
-  const box = svg("svg", { viewBox: "0 0 " + width + " " + height, role: "img", "aria-label": "Status by lane" });
-  const max = Math.max(1, ...lanes.map((l) => rows.filter((r) => (facet(r, "lane") || "(none)") === l).length));
-  lanes.forEach((lane, i) => {
+  const height = Math.max(bar, workstreams.length * (bar + gap));
+  const box = svg("svg", { viewBox: "0 0 " + width + " " + height, role: "img", "aria-label": "Status by workstream" });
+  const max = Math.max(1, ...workstreams.map((l) => rows.filter((r) => (facet(r, "workstream") || "(none)") === l).length));
+  workstreams.forEach((workstream, i) => {
     const y = i * (bar + gap);
-    box.append(svg("text", { x: 0, y: y + 13 }, lane.length > 14 ? lane.slice(0, 13) + "…" : lane));
+    box.append(svg("text", { x: 0, y: y + 13 }, workstream.length > 14 ? workstream.slice(0, 13) + "…" : workstream));
     let x = labelW;
     statuses.forEach((s) => {
-      const n = rows.filter((r) => (facet(r, "lane") || "(none)") === lane && r.status === s).length;
+      const n = rows.filter((r) => (facet(r, "workstream") || "(none)") === workstream && r.status === s).length;
       if (!n) return;
       const w = (width - labelW) * n / max;
       const rect = svg("rect", { x: x, y: y, width: Math.max(w, 1), height: bar, fill: statusColour(s) });
-      rect.append(svg("title", {}, lane + " · " + s + ": " + n));
+      rect.append(svg("title", {}, workstream + " · " + s + ": " + n));
       box.append(rect);
       x += w;
     });
@@ -989,7 +992,7 @@ function renderDashboard() {
   renderTiles(rows);
   const charts = document.getElementById("charts");
   charts.replaceChildren(
-    chart("Status by lane", stackedByLane(rows)),
+    chart("Status by workstream", stackedByLane(rows)),
     chart("Completion by group", progressByGroup(rows)),
     chart("Completions per week (last 12)", completionsOverTime()));
 }

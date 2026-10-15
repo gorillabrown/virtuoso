@@ -1,6 +1,6 @@
 """The time log: each task row's working time, measured by the machine clock.
 
-A dispatch's rows are listed once, into ``Timing.<sprint>.jsonl`` in the closeOuts
+A dispatch's rows are listed once, into ``Timing.<dispatch>.jsonl`` in the closeOuts
 role; each row's start, waits and end are stamped by the clock, never typed. A row's
 working time is end − start − waits, and a row the log cannot measure says so.
 """
@@ -100,7 +100,7 @@ def test_a_second_start_on_a_running_row_is_refused():
 
 
 def test_an_unknown_row_is_refused():
-    with pytest.raises(GovernanceError, match="row 9 is not in this sprint's plan"):
+    with pytest.raises(GovernanceError, match="row 9 is not in this dispatch's plan"):
         timing.check([plan(1, 2)], "start", 9)
 
 
@@ -175,7 +175,29 @@ def workspace(project):
 
 def timing_cli(root, *args, actor="virtuoso"):
     return run(REGISTRY_CLI, "--root", str(root), "--actor", actor, "timing",
-               "--sprint", "HB-9", *args)
+               "--dispatch", "HB-9", *args)
+
+
+def test_timing_sprint_is_an_alias_of_dispatch(workspace):
+    """The 1.14 flag keeps working for one release: the same log, the same output, one
+    deprecation line on stderr, and no trace of the flag in --help."""
+    opened = run(REGISTRY_CLI, "--root", str(workspace), "--actor", "virtuoso", "timing",
+                 "--dispatch", "HB-9", "--open",
+                 "--rows-file", rows_file(workspace, [{"id": 1, "title": "a", "estimate": 5}]))
+    assert opened.returncode == 0, opened.stderr
+
+    def status(flag):
+        return run(REGISTRY_CLI, "--root", str(workspace), "timing", flag, "HB-9", "--status")
+
+    new, old = status("--dispatch"), status("--sprint")
+    assert new.returncode == old.returncode == 0, old.stderr
+    assert old.stdout == new.stdout and "1." in new.stdout
+    assert "deprecated" not in new.stderr
+    assert [line for line in old.stderr.splitlines() if "deprecated" in line] == [
+        "timing --sprint is deprecated: use --dispatch; the old flag goes in the next "
+        "major release"]
+    shown = run(REGISTRY_CLI, "timing", "--help").stdout
+    assert "--dispatch" in shown and "--sprint" not in shown
 
 
 def rows_file(root, rows) -> str:
@@ -232,7 +254,7 @@ def test_the_cli_refuses_a_second_start_and_an_unknown_row(workspace):
     again = timing_cli(workspace, "--start", "1")
     assert again.returncode == 3 and "row 1 is already" in again.stderr
     unknown = timing_cli(workspace, "--end", "7")
-    assert unknown.returncode == 3 and "row 7 is not in this sprint's plan" in unknown.stderr
+    assert unknown.returncode == 3 and "row 7 is not in this dispatch's plan" in unknown.stderr
 
 
 # =============================================================================
@@ -534,13 +556,13 @@ def test_the_ledger_takes_the_summary_values(workspace):
     register = workspace.joinpath(*layout["workRegister"]["path"].split("/"))
     for item, predicted, minutes in (("A", 60, 90), ("B", 120, 180), ("C", 60, 60)):
         write_log(closeouts, item, worked([(predicted, minutes, False)], item=item))
-        summary = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint", item,
+        summary = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--dispatch", item,
                       "--summary", "--json")
         assert summary.returncode == 0, summary.stderr
         values = json.loads(summary.stdout)
         with open(register, "a", encoding="utf-8", newline="") as handle:
             handle.write("%s,%s,1,Queued,Full Spec,,S,,,,,,,,,\n" % (item, item))
-        completed = run(REGISTRY_CLI, "--root", str(workspace), "--actor", "pointer-closeout",
+        completed = run(REGISTRY_CLI, "--root", str(workspace), "--actor", "dispatch-closeout",
                         "record-completion", "--item", item, "--date", "2026-09-30",
                         "--result", "shipped", "--estimate", values["estimate"],
                         "--actual", values["actual"], "--apply")
@@ -567,7 +589,7 @@ def test_the_summary_names_model_and_effort(workspace):
         start = ("--start", str(row)) + (("--model", model) if model else ())
         assert timing_cli(workspace, *start).returncode == 0
         assert timing_cli(workspace, "--end", str(row), "--result", "done").returncode == 0
-    table = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint", "HB-9",
+    table = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--dispatch", "HB-9",
                 "--summary")
     assert table.returncode == 0, table.stderr
     lines = table.stdout.splitlines()
@@ -575,12 +597,12 @@ def test_the_summary_names_model_and_effort(workspace):
     assert any(line.startswith("| 1 | Load spec | — | model-a | medium |") for line in lines)
     assert any(line.startswith("| 2 | Hard part | — | model-b | xhigh |") for line in lines)
     assert any(line.startswith("| 3 | Old-style row | — | — | low |") for line in lines)
-    status = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint", "HB-9",
+    status = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--dispatch", "HB-9",
                  "--status").stdout                      # every row prints its effort
     assert "✓ 1. Load spec [bounded] {medium} ‹model-a›" in status
     assert "✓ 2. Hard part [bounded] {xhigh} ‹model-b›" in status
     assert "✓ 3. Old-style row [mechanical] {low} — " in status   # no model was named
-    shown = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint", "HB-9",
+    shown = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--dispatch", "HB-9",
                 "--summary", "--json")
     assert shown.returncode == 0, shown.stderr
     split = json.loads(shown.stdout)["byModelEffort"]
@@ -643,13 +665,13 @@ def test_kpis_names_the_pair_figure_without_a_close_outs_role(workspace):
 # --- the time log is the plan (VIR-006) -------------------------------------------------------
 
 def status_of(workspace) -> str:
-    shown = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint", "HB-9", "--status")
+    shown = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--dispatch", "HB-9", "--status")
     assert shown.returncode == 0, shown.stderr
     return shown.stdout
 
 
 def summary_of(workspace, *flags):
-    shown = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint", "HB-9",
+    shown = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--dispatch", "HB-9",
                 "--summary", *flags)
     assert shown.returncode == 0, shown.stderr
     return json.loads(shown.stdout) if "--json" in flags else shown.stdout
@@ -698,7 +720,7 @@ def test_a_parked_row_needs_a_reason_and_shows_parked(workspace):
     assert "- ◇ 2. Nice to have — out of scope" in summary_of(workspace)
     # Every row ended or parked: the log is closed evidence for the figures.
     assert [len(log) for log in timing.closed_logs(str(log_path(workspace).parent))] == [2]
-    refused = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint", "HB-9",
+    refused = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--dispatch", "HB-9",
                   "--summary", "--compact")
     assert refused.returncode == 3 and "--compact goes with --status" in refused.stderr
 
@@ -758,9 +780,9 @@ def test_compact_status_keeps_open_rows_and_the_last_three_done():
 def test_timing_check_reports_done_without_evidence(workspace):
     def check():
         return timing_cli(workspace, "--check")
-    assert check().returncode == 2                     # no log for the sprint: usage
+    assert check().returncode == 2                     # no log for the dispatch: usage
     no_sprint = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--check")
-    assert no_sprint.returncode == 2 and "needs --sprint" in no_sprint.stderr
+    assert no_sprint.returncode == 2 and "needs --dispatch" in no_sprint.stderr
     assert timing_cli(workspace, "--check", "--reason", "x").returncode == 2
     listing = rows_file(workspace, [{"id": 1, "title": "Build", "estimate": 10},
                                     {"id": 2, "title": "Test", "estimate": 10},
@@ -839,7 +861,7 @@ def test_the_cli_confirms_a_flagged_row(workspace):
     assert timing_cli(workspace, "--open", "--rows-file", listing).returncode == 0
     refused = timing_cli(workspace, "--confirm", "1")
     assert refused.returncode == 3 and "not flagged" in refused.stderr
-    shown = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint", "HB-9",
+    shown = run(REGISTRY_CLI, "--root", str(workspace), "timing", "--dispatch", "HB-9",
                 "--summary")
     assert shown.returncode == 0 and "| Row | Task |" in shown.stdout
 
@@ -857,18 +879,18 @@ def section(text, start, end):
 
 
 def test_the_close_out_takes_time_from_the_log_documented():
-    template = (ROOT / "skills" / "pointer-closeout" / "assets" / "CloseOut.template.md"
+    template = (ROOT / "skills" / "dispatch-closeout" / "assets" / "CloseOut.template.md"
                 ).read_text(encoding="utf-8")
     assert "## Time" in template
     assert "timing --summary" in [line for line in template.splitlines()
                                   if line.startswith("runtime:")][0]
-    closeout = (ROOT / "skills" / "pointer-closeout" / "SKILL.md").read_text(encoding="utf-8")
+    closeout = (ROOT / "skills" / "dispatch-closeout" / "SKILL.md").read_text(encoding="utf-8")
     assert "timing --summary --json" in section(closeout, "--state executed", "Step 6 verifies")
     assert "timing --summary --json" in section(closeout, "### Step 3", "### Step 4")
     assert "timing --summary --json" in section(closeout, "### Step 6", "### On partial failure")
     assert "the spec's effort, as a duration" not in closeout
     virtuoso = (ROOT / "skills" / "virtuoso" / "SKILL.md").read_text(encoding="utf-8")
-    assert "Timing.<SPRINT-ID>.jsonl" in section(virtuoso, "sprint_guards artifacts-exist",
+    assert "Timing.<DISPATCH-ID>.jsonl" in section(virtuoso, "dispatch_guards artifacts-exist",
                                                  "For a held plan")
     effort = (ROOT / "skills" / "effort-levels" / "SKILL.md").read_text(encoding="utf-8")
     assert "timing" in effort and "effort-calibration" in effort
@@ -923,7 +945,7 @@ def test_new_fields_round_trip(workspace):
         completed = timing_cli(workspace, *args)
         assert completed.returncode == 0, (args, completed.stderr)
     status = json.loads(timing_cli(workspace, "--status", "--json").stdout)["rows"]
-    summary = json.loads(run(REGISTRY_CLI, "--root", str(workspace), "timing", "--sprint",
+    summary = json.loads(run(REGISTRY_CLI, "--root", str(workspace), "timing", "--dispatch",
                              "HB-9", "--summary", "--json").stdout)["rows"]
     for found in (status, summary):
         one, two, three = found

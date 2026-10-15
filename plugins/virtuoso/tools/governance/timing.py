@@ -1,6 +1,6 @@
 """The time log: each task row's working time, measured by the machine clock.
 
-One append-only file per dispatch, ``Timing.<sprint-id>.jsonl`` in the ``closeOuts``
+One append-only file per dispatch, ``Timing.<dispatch-id>.jsonl`` in the ``closeOuts``
 role, one JSON object per line. The virtuoso skill opens it when it first lists the
 task rows, then records each row's start, any wait on the owner, its resume and its
 end. Every event is stamped here, in UTC, from the clock: no caller supplies a time or
@@ -70,7 +70,7 @@ WAIT_REASONS = ("owner", "approval", "blocked", "session-ended")
 #: the owner confirms it was real work (``timing --confirm N``).
 UNSEEN_WAIT_MULTIPLE = 3
 UNSEEN_WAIT = "possible unseen wait"
-_SPRINT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_DISPATCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _STAMP = "%Y-%m-%dT%H:%M:%SZ"
 
 
@@ -102,12 +102,12 @@ def minutes_text(minutes: float) -> str:
 
 # --- the file ------------------------------------------------------------------------------
 
-def log_name(sprint: str) -> str:
-    sprint = (sprint or "").strip()
-    if not _SPRINT_RE.match(sprint):
-        raise GovernanceError("%r is not a sprint identifier a file can carry (letters, "
-                              "digits, '.', '_' and '-')" % sprint)
-    return LOG_PREFIX + sprint + LOG_SUFFIX
+def log_name(dispatch: str) -> str:
+    dispatch = (dispatch or "").strip()
+    if not _DISPATCH_RE.match(dispatch):
+        raise GovernanceError("%r is not a dispatch identifier a file can carry (letters, "
+                              "digits, '.', '_' and '-')" % dispatch)
+    return LOG_PREFIX + dispatch + LOG_SUFFIX
 
 
 def load(path: str) -> list[dict]:
@@ -379,18 +379,18 @@ def check(events: list[dict], action: str, row_id: int | None = None,
     tests): the row's working time must have reached its timebox."""
     if action == "open":
         if events:
-            raise GovernanceError("this sprint's time log is already open; add a row with "
+            raise GovernanceError("this dispatch's time log is already open; add a row with "
                                   "--add, never a second --open")
         return
     if not any(event.get("event") == "open" for event in events):
-        raise GovernanceError("no time log is open for this sprint; open one with --open "
+        raise GovernanceError("no time log is open for this dispatch; open one with --open "
                               "--rows-file when the task rows are first listed")
     if action == "add":
         return
     by_id = {row.id: row for row in rows(events)}
     row = by_id.get(row_id)
     if row is None:
-        raise GovernanceError("row %s is not in this sprint's plan (rows %s); add it with "
+        raise GovernanceError("row %s is not in this dispatch's plan (rows %s); add it with "
                               "--add first" % (row_id, ", ".join(str(k) for k in sorted(by_id))))
     state = row.state
     if state == PARKED:
@@ -401,7 +401,7 @@ def check(events: list[dict], action: str, row_id: int | None = None,
                               "started row with --result cancelled" % (row.id, state))
     if action == "start" and row.started is not None:
         raise GovernanceError("row %d is already %s; a second start would double-count it "
-                              "(is another session running this sprint?)"
+                              "(is another session running this dispatch?)"
                               % (row.id, "started" if state == "running" else state))
     if action == "wait" and state != "running":
         raise GovernanceError("row %d is %s; only a running row waits on the owner"

@@ -68,7 +68,7 @@ total line. Exit 1 names what the task list is missing; that is U10's mechanical
 
 At launch, the virtuoso skill opens the log from the table:
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing --sprint <SPRINT-ID> --open --from-spec <spec> --item <ITEM-ID>
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing --dispatch <DISPATCH-ID> --open --from-spec <spec> --item <ITEM-ID>
 
 The rows keep their numbers. Each is priced again from the freshest history
 (`predicted`, `basis`), and the specification's own price is kept beside it

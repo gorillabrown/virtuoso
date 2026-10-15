@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.governance import providers, registry as registry_mod
+from tools.governance import providers, registry as registry_mod, schema
 from tools.governance.providers import base, ledger, recovery
 from tools.governance.errors import ConcurrencyError
 
@@ -39,21 +39,21 @@ def workspace(project):
         "roles": {
             "workRegister": {"path": "docs/register.csv", "provider": "csv",
                              "authority": "live", "mutability": "read-write",
-                             "allowedWriters": ["pointer-closeout"],
+                             "allowedWriters": ["dispatch-closeout"],
                              "validation": "csv-headers", "classification": "active",
                              "origin": "authored"},
             "terminalLedger": {"path": "docs/ledger.md", "provider": "markdown",
                                "authority": "terminal", "mutability": "append-only",
-                               "allowedWriters": ["pointer-closeout"],
+                               "allowedWriters": ["dispatch-closeout"],
                                "validation": "markdown", "classification": "active",
                                "origin": "authored"},
             "closeOuts": {"path": "docs/Close-Outs", "provider": "directory",
                           "authority": "evidence", "mutability": "append-only",
-                          "allowedWriters": ["pointer-closeout"], "validation": "exists",
+                          "allowedWriters": ["dispatch-closeout"], "validation": "exists",
                           "classification": "active", "origin": "authored"},
         },
-        "policy": {"terminalLedger": {"writers": ["pointer-closeout"],
-                                      "correctionWriters": ["pointer-closeout"]}},
+        "policy": {"terminalLedger": {"writers": ["dispatch-closeout"],
+                                      "correctionWriters": ["dispatch-closeout"]}},
     }
     (project / "Virtuoso" / "workspace-layout.json").write_text(
         json.dumps(manifest, indent=2), encoding="utf-8")
@@ -69,7 +69,7 @@ def crossing(root, item_id, *, fail_after=None):
     steps = ["verify-evidence", "create-artifact", "append-terminal-record",
              "persist-local", "close-in-register", "verify-results"]
     reg = registry_mod.load(str(root))
-    selection = providers.work_register(reg, actor="pointer-closeout")
+    selection = providers.work_register(reg, actor="dispatch-closeout")
     item = selection.provider.get(item_id)
     assert item is not None
     done: list[str] = []
@@ -98,7 +98,7 @@ def crossing(root, item_id, *, fail_after=None):
     record = ledger.LedgerRecord(record_id=book.next_record_id(), item_id=item_id,
                                  completed="2026-01-01", result="shipped",
                                  evidence=artifact.name)
-    book.append(record, actor="pointer-closeout")
+    book.append(record, actor="dispatch-closeout")
     done.append("append-terminal-record")
     maybe_fail("append-terminal-record")
 
@@ -137,7 +137,7 @@ def test_local_work_precedes_the_register_close(workspace):
     with pytest.raises(RuntimeError):
         crossing(workspace, "ITEM-1", fail_after="persist-local")
     reg = registry_mod.load(str(workspace))
-    provider = providers.work_register(reg, actor="pointer-closeout").provider
+    provider = providers.work_register(reg, actor="dispatch-closeout").provider
     assert provider.get("ITEM-1").status == base.QUEUED       # register untouched
     assert (workspace / "docs" / "persisted.marker").exists()  # local work survived
     assert providers.terminal_ledger(reg).records()            # ledger already carries it
@@ -193,7 +193,7 @@ def test_rerunning_the_crossing_duplicates_nothing(workspace):
     artifacts = os.listdir(reg.resolve("closeOuts"))
     assert artifacts == ["CloseOut.ITEM-1.2026-01-01.md"]
 
-    provider = providers.work_register(reg, actor="pointer-closeout").provider
+    provider = providers.work_register(reg, actor="dispatch-closeout").provider
     rows = [i for i in provider.snapshot().items if i.id == "ITEM-1"]
     assert len(rows) == 1 and rows[0].status == base.COMPLETED
 
@@ -212,7 +212,7 @@ def test_resuming_after_a_failure_completes_without_duplicating(workspace):
 
 def test_a_concurrent_register_change_is_refused_mid_crossing(workspace):
     reg = registry_mod.load(str(workspace))
-    provider = providers.work_register(reg, actor="pointer-closeout").provider
+    provider = providers.work_register(reg, actor="dispatch-closeout").provider
     item = provider.get("ITEM-1")
     provider.set_status("ITEM-1", base.BLOCKED)      # somebody else moved it
     with pytest.raises(ConcurrencyError):
@@ -246,7 +246,7 @@ def test_existing_terminal_history_is_never_rewritten(workspace):
 
 def test_registering_a_new_item_is_idempotent_and_leaves_no_recovery(workspace):
     reg = registry_mod.load(str(workspace))
-    provider = providers.work_register(reg, actor="pointer-closeout").provider
+    provider = providers.work_register(reg, actor="dispatch-closeout").provider
     request = {"id": "ITEM-3", "title": "Third thing", "sequence": 3,
                "prerequisites": ["ITEM-2"], "effort": "S"}
     for _ in range(3):
@@ -266,7 +266,7 @@ import sys  # noqa: E402
 REGISTRY_CLI = str(Path(__file__).resolve().parent / "virtuoso_registry.py")
 
 
-def record_completion(root, *extra, actor="pointer-closeout"):
+def record_completion(root, *extra, actor="dispatch-closeout"):
     return subprocess.run([sys.executable, REGISTRY_CLI, "--root", str(root), "--actor", actor,
                            "record-completion", "--item", "ITEM-1", "--date", "2026-01-01",
                            "--result", "shipped", "--evidence", "CloseOut.ITEM-1.2026-01-01.md",
@@ -341,7 +341,7 @@ def test_record_completion_refuses_a_writer_the_ledger_does_not_allow(workspace)
 #
 # A retirement at audit (roadmap-review A.4, roadmap-status's straggler migration) is an
 # ordinary terminal record: it names no record it corrects. The ledger lets only
-# `policy.terminalLedger.writers` append one, and by default that is pointer-closeout
+# `policy.terminalLedger.writers` append one, and by default that is dispatch-closeout
 # alone, so the retiring ceremonies route the record there. These pin that agreement.
 
 from conftest import snapshot_tree  # noqa: E402
@@ -370,7 +370,7 @@ def test_the_default_policy_keeps_ordinary_records_to_the_close_out(default_work
     reg = registry_mod.load(str(default_workspace))
     assert "terminalLedger" not in (reg.policy or {})          # the defaults decide
     book = providers.terminal_ledger(reg)
-    assert book.may_append("pointer-closeout") is True
+    assert book.may_append("dispatch-closeout") is True
     assert book.may_append("roadmap-review") is False          # a retirement is ordinary
     assert book.may_append("roadmap-review", correction=True) is True
 
@@ -381,7 +381,7 @@ def test_record_completion_refuses_roadmap_review_before_it_previews(default_wor
     refused = record_completion(default_workspace, *extra, actor="roadmap-review")
     assert refused.returncode == 3
     assert "policy.terminalLedger.writers" in refused.stderr
-    assert "/pointer-closeout" in refused.stderr
+    assert "/dispatch-closeout" in refused.stderr
     assert "preview" not in refused.stdout                     # no promise of a write
     assert snapshot_tree(str(default_workspace)) == before
 
@@ -424,7 +424,7 @@ def external_workspace(project):
         "roles": {
             "workRegister": {"external": "monday:board/1234567890", "provider": "connector",
                              "authority": "live", "mutability": "read-write",
-                             "allowedWriters": ["pointer-closeout"],
+                             "allowedWriters": ["dispatch-closeout"],
                              "validation": "external", "classification": "active",
                              "origin": "authored"},
             "workRegisterSnapshot": {"path": "Virtuoso/snap.json", "provider": "snapshot",
@@ -433,17 +433,17 @@ def external_workspace(project):
                                      "origin": "generated"},
             "terminalLedger": {"path": "docs/ledger.md", "provider": "markdown",
                                "authority": "terminal", "mutability": "append-only",
-                               "allowedWriters": ["pointer-closeout"],
+                               "allowedWriters": ["dispatch-closeout"],
                                "validation": "markdown", "classification": "active",
                                "origin": "authored"},
             "closeOuts": {"path": "docs/Close-Outs", "provider": "directory",
                           "authority": "evidence", "mutability": "append-only",
-                          "allowedWriters": ["pointer-closeout"], "validation": "exists",
+                          "allowedWriters": ["dispatch-closeout"], "validation": "exists",
                           "classification": "active", "origin": "authored"},
         },
         "policy": {"workRegister": {"snapshot": "workRegisterSnapshot"},
-                   "terminalLedger": {"writers": ["pointer-closeout"],
-                                      "correctionWriters": ["pointer-closeout"]}},
+                   "terminalLedger": {"writers": ["dispatch-closeout"],
+                                      "correctionWriters": ["dispatch-closeout"]}},
     }
     (project / "Virtuoso" / "workspace-layout.json").write_text(
         json.dumps(manifest, indent=2), encoding="utf-8")
@@ -516,7 +516,7 @@ def test_ledger_only_opens_a_recovery_record_when_the_record_does_not_read_back(
     ext = external_workspace
     monkeypatch.setattr(ledger.TerminalLedger, "append", lambda self, record, **kw: True)
     assert virtuoso_registry.main([
-        "--root", str(ext), "--actor", "pointer-closeout", "record-completion",
+        "--root", str(ext), "--actor", "dispatch-closeout", "record-completion",
         "--ledger-only", "--item", "ITEM-1", "--date", "2026-01-01", "--result", "shipped",
         "--apply"]) != 0
     [rec] = recovery.outstanding(str(ext))
@@ -541,3 +541,81 @@ def test_ledger_only_appends_to_this_projects_ledger(external_workspace):
     assert after.startswith(original)
     added = after[len(original):].decode("utf-8").splitlines()
     assert len(added) == 1 and added[0].endswith("| S |")
+
+
+# --- the 1.15 rename: old skill names keep working for one release ------------------
+
+#: The 1.14 name of each renamed skill, read from the alias table itself.
+OLD = {new: old for old, new in schema.ACTOR_ALIASES.items()}
+OLD_KICKOFF, OLD_CLOSEOUT = OLD["dispatch-kickoff"], OLD["dispatch-closeout"]
+
+
+def _check(root):
+    return subprocess.run([sys.executable, PREFLIGHT, "--root", str(root), "--mode", "check"],
+                          capture_output=True, text=True, encoding="utf-8",
+                          env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+
+
+def _renamed(root):
+    return [f for f in registry_mod.load(str(root)).findings if f.code == "actor-renamed"]
+
+
+def _rename_in_manifest(root, mapping):
+    path = root / "Virtuoso" / "workspace-layout.json"
+    text = path.read_text(encoding="utf-8")
+    for before, after in mapping.items():
+        text = text.replace('"%s"' % before, '"%s"' % after)
+    path.write_text(text, encoding="utf-8")
+
+
+@pytest.mark.parametrize("actor, names, allowed", [
+    (OLD_CLOSEOUT, ["dispatch-closeout"], True),           # old actor, new list
+    ("dispatch-kickoff", [OLD_KICKOFF], True),             # new actor, old list
+    ("dispatch-closeout", ["dispatch-kickoff"], False),    # the aliases stay distinct
+    ("anyone", ["*"], True),
+    ("", ["dispatch-closeout"], False),
+    (OLD_CLOSEOUT, [], False),
+    (OLD_CLOSEOUT, [["nested"], OLD_CLOSEOUT], True),      # junk entries skipped
+])
+def test_actor_allowed_reads_both_names(actor, names, allowed):
+    assert schema.actor_allowed(actor, names) is allowed
+
+
+def test_old_actor_names_are_accepted_for_one_release(workspace, tmp_path):
+    assert set(OLD) == {"dispatch-kickoff", "dispatch-closeout"}
+    # A project the plugin creates writes only the new names, so it never warns.
+    fresh = tmp_path / "fresh"
+    fresh.mkdir()
+    made = subprocess.run([sys.executable, PREFLIGHT, "--root", str(fresh), "--mode", "create",
+                           "--authorize"], capture_output=True, text=True, encoding="utf-8")
+    assert made.returncode == 0, made.stdout + made.stderr
+    assert _renamed(fresh) == []
+
+    # A 1.14 project: its manifest names both old skills.
+    _rename_in_manifest(workspace, OLD)
+    path = workspace / "Virtuoso" / "workspace-layout.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["roles"]["workRegister"]["allowedWriters"].append(OLD_KICKOFF)
+    path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    assert "dispatch-closeout" not in path.read_text(encoding="utf-8")
+
+    checked = _check(workspace)
+    assert "virtuoso-status: warning" in checked.stdout, checked.stdout + checked.stderr
+    [finding] = _renamed(workspace)
+    assert finding.severity == "warning"
+    for fragment in ("%s -> dispatch-kickoff" % OLD_KICKOFF,
+                     "%s -> dispatch-closeout" % OLD_CLOSEOUT, "Fix:"):
+        assert fragment in finding.message
+
+    reg = registry_mod.load(str(workspace))
+    assert reg.writable("workRegister", "dispatch-kickoff")      # a new name, an old manifest
+    assert providers.terminal_ledger(reg).may_append("dispatch-closeout")
+    completed = record_completion(workspace, "--apply", "--json", actor=OLD_CLOSEOUT)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert [r.item_id for r in providers.terminal_ledger(
+        registry_mod.load(str(workspace))).records()] == ["ITEM-1"]
+
+    # The control: the same project on the new names carries no rename warning.
+    _rename_in_manifest(workspace, schema.ACTOR_ALIASES)
+    assert _renamed(workspace) == []
+    assert registry_mod.load(str(workspace)).writable("workRegister", OLD_KICKOFF)  # reverse

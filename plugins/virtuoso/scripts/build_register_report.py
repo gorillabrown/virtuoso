@@ -30,7 +30,7 @@ from tools.governance.providers import kpi  # noqa: E402
 DEFAULT_ROLE = "sprintQueue"
 COLUMNS = [
     ("sequence", "Seq"), ("id", "Id"), ("title", "Title"), ("group", "Group"),
-    ("lane", "Lane"), ("effort", "Effort"), ("prerequisites", "Prerequisites"),
+    ("workstream", "Workstream"), ("deliverable", "Deliverable"), ("effort", "Effort"), ("prerequisites", "Prerequisites"),
     ("raw_status", "Status"), ("status", "Status (canonical)"),
     ("raw_written_status", "Specification"), ("branch", "Branch"),
     ("started", "Started"), ("completed", "Completed"), ("evidence", "Evidence"),

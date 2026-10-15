@@ -97,7 +97,7 @@ def test_the_preflight_writes_utf8_to_a_cp1252_stream(workspace):
 
 
 @pytest.mark.parametrize("script", ["virtuoso_registry.py", "virtuoso_preflight.py",
-                                    "sprint_guards.py", "build_register_report.py"])
+                                    "dispatch_guards.py", "build_register_report.py"])
 def test_every_user_facing_entry_point_asks_for_utf8(script):
     """The fix lives in each entry point's main, so a new command cannot miss it
     without this test naming it."""

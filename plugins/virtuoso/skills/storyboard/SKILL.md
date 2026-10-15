@@ -27,7 +27,7 @@ description: |
 - **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (its universal checks, at the version it declares, plus the project's declared extensions). No skill restates it in its own words.
 - **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
-- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
+- **Effort levels** — low / medium / high / xhigh / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 <!-- virtuoso-overlay-clause v2 -->
 **Project overlay.** If the registry declares an `overlays` role, read the overlay mirroring
@@ -52,7 +52,7 @@ Step one of the ad hoc path (`references/execution-paths.md`):
 | 3. Execute | the `virtuoso` skill | the work, checked first against upstream, downstream, and in-flight work |
 
 Work that arrives between roadmap reviews comes in here. The roadmap paths,
-`/next-pointer` and `/epic`, open only on items a review has already placed.
+`/dispatch-kickoff` and `/epic`, open only on items a review has already placed.
 
 This skill has one job: **make sure the agent and the user want the same thing before a
 plan exists.** An agent that misunderstands the work will build the wrong thing, and do
@@ -118,7 +118,7 @@ but Step 10 cannot run until the role exists.
 
 | Signal | Route |
 |---|---|
-| The work is already an item on the master roadmap | That item: `/next-pointer` if it is the head, otherwise `/roadmap-review` |
+| The work is already an item on the master roadmap | That item: `/dispatch-kickoff` if it is the head, otherwise `/roadmap-review` |
 | The work is several items already on the roadmap, to run together unattended | `/epic <ITEM-ID> <ITEM-ID> …`: it checks whether they combine and charters them. Nothing needs aligning here, because every piece is already placed |
 | The work is already a held entry | Reopen that entry (`/storyboard <entry>`) or plan it (`/write-plan <entry>`); never a second entry for the same work |
 | A question whose answer is information, not shipped work | Answer it directly |
@@ -216,7 +216,7 @@ that you skipped it.
 | Lens | What you need to know |
 |---|---|
 | **Outcome** | What does done look like, observably? What must never happen? What is out of scope? |
-| **Placement** | Where would this sit on the roadmap: which group, lane, or finish line? Does it count toward a declared deadline? Is it more urgent than the current head? The answer is a recommendation the review reads. You never act on it. |
+| **Placement** | Where would this sit on the roadmap: which group, workstream, or finish line? Does it count toward a declared deadline? Is it more urgent than the current head? The answer is a recommendation the review reads. You never act on it. |
 | **Touchpoints** | Which modules, interfaces, data, documents, and tests does it change directly? |
 | **Externalities** | Which services, credentials, data owners, users, teams, or repositories outside the codebase does it reach? |
 | **Upstream** | What must be true first? Which items, decisions, or dependencies does it wait on, directly or indirectly? |
@@ -274,7 +274,7 @@ implementation detail, no task list, and no code, draft each item:
 - **Done when (draft)** — taken from the confirmed frames
 - **Edit sites (expected)** — from investigation, named concretely
 - **Prerequisites** — by descriptive name
-- **Effort** — low / medium / high / max
+- **Effort** — low / medium / high / xhigh / max
 - **Interfaces** — for an item set only: what each item consumes and produces
 
 Then add a **placement recommendation** with its reason, which `/write-plan` sharpens
@@ -326,7 +326,7 @@ earliest step that affects them.
 
    The record is refused unless the verdict reads *Aligned*. That refusal is the gate
    working, not an obstacle to route around.
-4. Persist the file as `policy.git` permits, using the same five-level table next-pointer's
+4. Persist the file as `policy.git` permits, using the same five-level table dispatch-kickoff's
    Phase 3.5 applies: report it, leave it, stage it, commit it, or push it. Stage the exact
    path only.
 

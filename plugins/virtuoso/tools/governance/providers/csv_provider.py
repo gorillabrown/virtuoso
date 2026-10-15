@@ -146,6 +146,22 @@ class CsvWorkRegister(base.WorkRegisterProvider):
 
         return self._mutate(item_id, revision, apply_row)
 
+    def assign(self, item_id: str, workstream: str, deliverable: str, *,
+               revision: str = "") -> base.WorkItem:
+        self.require(base.WRITE_STATUS)
+        self.require_columns("workstream", "deliverable")
+
+        def apply_row(row, headers, index, current):
+            changed = False
+            for field_name, value in (("workstream", workstream), ("deliverable", deliverable)):
+                column = headers[index[field_name]]
+                if str(row.get(column, "") or "").strip() != value:
+                    row[column] = value
+                    changed = True
+            return changed
+
+        return self._mutate(item_id, revision, apply_row)
+
     def record_completion(self, item_id: str, *, completed: str = "", evidence: str = "",
                           revision: str = "") -> base.WorkItem:
         self.require(base.RECORD_COMPLETION)
@@ -249,7 +265,8 @@ def row_to_item(mapping, headers: list[str], index: dict, row: dict) -> base.Wor
         raw_written_status=raw_written,
         prerequisites=prerequisites,
         effort=value("effort"),
-        lane=value("lane"),
+        workstream=value("workstream"),
+        deliverable=value("deliverable"),
         group=value("group"),
         spec_link=value("spec_link"),
         branch=value("branch"),

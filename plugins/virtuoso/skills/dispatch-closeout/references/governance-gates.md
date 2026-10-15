@@ -13,7 +13,7 @@ Use this reference near the end of the close-out flow.
 Prefer the smallest truthful update set:
 
 - if roadmap status changed, update roadmap
-- if queue order changed, update sprint queue
+- if queue order changed, update dispatch queue
 - if a new trap or lesson surfaced, update the matching governance doc
 
 If nothing changed, say that plainly.

@@ -1,14 +1,14 @@
 ---
-name: next-pointer
+name: dispatch-kickoff
 description: |
   MANUAL INVOCATION ONLY. The dispatch gate. Reads the next eligible
   work item from the project's configured work-register provider,
   finalizes its specification against the shared readiness rubric,
   drives every pre-flight check to a resolved state, and prints a
-  dispatch pointer with a repository-reconciliation recipe matched to
+  dispatch kickoff with a repository-reconciliation recipe matched to
   the project's declared git policy. Routes a head item whose path is
-  epic to /epic. Triggered by "/next-pointer", "next pointer", "show
-  next", or "what's next". Does NOT replan, re-sequence, or author new
+  epic to /epic. Triggered by "/dispatch-kickoff", "dispatch kickoff",
+  "show next", or "what's next". Does NOT replan, re-sequence, or author new
   items — that is /roadmap-review; new work that is not on the roadmap
   starts at /storyboard.
 ---
@@ -24,7 +24,7 @@ description: |
 - **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (its universal checks, at the version it declares, plus the project's declared extensions). No skill restates it in its own words.
 - **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
-- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
+- **Effort levels** — low / medium / high / xhigh / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 <!-- virtuoso-overlay-clause v2 -->
 **Project overlay.** If the registry declares an `overlays` role, read the overlay mirroring
@@ -38,7 +38,7 @@ issue contract), and `references/registry-contract.md` may not be overlaid at al
 `overlays` role, an absent overlays directory, and no matching overlay file all mean the
 same thing — proceed on the shipped file alone.
 
-# Next Pointer
+# Dispatch Kickoff
 
 ## Preflight — read-only registry check (run first)
 
@@ -83,7 +83,7 @@ prints:
 
 1. **A plain-language summary** of what is next, by descriptive name
 2. **Readiness findings**, reported as five separate results
-3. **The dispatch pointer**, including a repository-reconciliation recipe matched
+3. **The dispatch kickoff**, including a repository-reconciliation recipe matched
    to the project's declared git policy
 
 A specification must be complete because an incomplete one cannot be executed
@@ -91,7 +91,7 @@ without inventing the missing decisions — by anyone, at any capability. That i
 the reason, and the only reason. This skill never asserts a capability ranking
 between hosts, products, or models.
 
-**Bookend with `/pointer-closeout`.** This skill opens a dispatch; that one
+**Bookend with `/dispatch-closeout`.** This skill opens a dispatch; that one
 closes it, transactionally.
 
 **One of three paths, one destination.** This is the roadmap-dispatch path: it opens
@@ -102,8 +102,8 @@ meets it.
 
 ## Resolve the register before anything else
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor next-pointer provider
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor next-pointer next --json
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor dispatch-kickoff provider
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor dispatch-kickoff next --json
 
 **The absence of any particular file is never a hard stop** (redesign item 37).
 The register may be a CSV, a Markdown table, a spreadsheet, a connector-backed
@@ -120,7 +120,7 @@ is what the provider can do:
 
 Negotiate these **before** planning the run. If the provider cannot serve one you
 need, say so up front, and adjust: a read-only snapshot still supports the whole
-read path and produces a complete pointer; it simply cannot record a pre-flight
+read path and produces a complete kickoff; it simply cannot record a pre-flight
 status correction, which you then hand to the user instead.
 
 If the register is served through the **compatibility adapter** (a legacy
@@ -128,11 +128,12 @@ If the register is served through the **compatibility adapter** (a legacy
 writes do not, and registering a `workRegister` role is the fix.
 
 If the snapshot is **stale**, refresh it before naming the head. `next` prints
-`[STALE]` with its age. For a connector-backed register, read every page of the
-register and its column list with the host's connector, save both as they came, and
-import them: `virtuoso_registry snapshot --import <page> --columns <columns>`
-(`references/registry-contract.md`, *Refreshing a connector-backed register's
-snapshot*). Report each `[DRIFT]` line as a finding. The import keeps a card's
+`[STALE]` with its age. For a connector-backed register, read every item with the
+session's connector, write the rows keyed by the register's own column names, and
+import them: `virtuoso_registry snapshot --import <rows.json>` — or, where the connector
+returns an items page with `column_values`, the page and its column list:
+`snapshot --import <page> --columns <columns>` (`references/registry-contract.md`,
+*Refreshing a connector-backed register's snapshot*). Report each `[DRIFT]` line as a finding. The import keeps a card's
 subitems, such as owner decisions, out of the work list, so none is named as the head
 card. Then run `next` again. When the snapshot
 cannot be refreshed, print its age. External-register readiness is then a GAP, and the
@@ -155,7 +156,7 @@ verdict is "Not ready" until the head is confirmed against the live register.
 
 ## Invocation
 
-Manual only: `/next-pointer`, "next pointer", "show next", "what's next".
+Manual only: `/dispatch-kickoff`, "dispatch kickoff", "show next", "what's next".
 
 ## Glossary
 
@@ -164,7 +165,7 @@ Manual only: `/next-pointer`, "next pointer", "show next", "what's next".
 - **Specification** — the full item card, wherever `policy.roadmap.specStorage`
   puts it.
 - **Dispatch-ready** — a specification that passes the shared readiness rubric.
-- **Pointer** — the code-boxed block telling the dispatcher exactly where the
+- **Kickoff** — the code-boxed block telling the dispatcher exactly where the
   specification lives, plus its immediate context.
 - **Buffer** — the dispatch-ready items carried ahead, sized by
   `policy.roadmap.dispatchBuffer`.
@@ -180,13 +181,13 @@ Manual only: `/next-pointer`, "next pointer", "show next", "what's next".
    specification and correct that item's own row in the live register. It does
    **not** re-sequence, add items, or edit other items' specifications — that is
    `/roadmap-review`. Every write goes through the provider with the `revision`
-   that was read, and only when the role's `allowedWriters` names `next-pointer`.
+   that was read, and only when the role's `allowedWriters` names `dispatch-kickoff`.
 4. **Hard halt on a stub at the head.** No partial dispatch.
 5. **Hard halt on a structural gap.** A deferred design decision or unresolved
    scope question stops the print and becomes a bounded question. Never improvise
    the decision.
 6. **Three-section output, in this order:** plain-language summary, readiness
-   findings and figures, code-boxed pointer.
+   findings and figures, code-boxed kickoff.
 7. **Descriptive names first** (item 38). Every reference to an item leads with
    its human title; the internal identifier appears second, in parentheses or a
    trailing field. An id alone is never the whole explanation.
@@ -203,7 +204,7 @@ Manual only: `/next-pointer`, "next pointer", "show next", "what's next".
     satisfied, completed now, explicitly accepted by the user, or named as the
     blocker that flips the verdict. "Noted, non-blocking" under a Ready verdict
     is forbidden.
-12. **Every pointer carries a reconciliation recipe** appropriate to the project's
+12. **Every kickoff carries a reconciliation recipe** appropriate to the project's
     git policy. It preserves uncommitted work, halts on divergence rather than
     forcing, and never prescribes deleting a lock file automatically.
 
@@ -252,7 +253,7 @@ is ready only when all five pass.
 
 1. One formatted briefing in chat (the three-section output).
 2. Possibly: enrichment edits to the head item's specification, in place.
-3. A reconciliation recipe embedded in the pointer, matched to `policy.git`.
+3. A reconciliation recipe embedded in the kickoff, matched to `policy.git`.
 4. Possibly: a corrected status for the head item in the live register, written
    through the provider.
 5. Possibly: bounded questions for any check needing a decision.
@@ -401,14 +402,14 @@ failed prerequisite — never improvised around.
 
 ### 1.1 Determine the head item
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor next-pointer next --json
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor dispatch-kickoff next --json
 
 The provider returns the next item that is not in flight and whose prerequisites are
 all terminal, in sequence order, together with its provenance. If the provider lacks
 `next-eligible`, fall back to `items` and compute it the same way.
 
 `next` skips in-flight items and lists them in `inFlight` (an `in flight:` line each).
-Name each one in the pointer's *What's next* as in flight, never as the head.
+Name each one in the kickoff's *What's next* as in flight, never as the head.
 
 If there are no active items → **Queue empty** edge case.
 
@@ -551,7 +552,7 @@ Walk the rubric again. Two passes maximum. Still failing → ask, or escalate to
 ### 3.2 Correct the head item's own register row (only if needed)
 If the head item's status in the register is behind reality, correct **that one
 item** through the provider, passing the `revision` you read. If the provider is
-read-only, or `allowedWriters` does not name `next-pointer`, do not attempt the
+read-only, or `allowedWriters` does not name `dispatch-kickoff`, do not attempt the
 write: report the discrepancy and hand it to the user.
 
 ### 3.3 Regenerate the roadmap board (only when the head changed)
@@ -654,7 +655,7 @@ plainly, 2–4 options, one recommended, and an escape hatch.
 ### 4.2 Output format
 
 ```
-# Dispatch Pointer — [Item title]
+# Dispatch Kickoff — [Item title]
 
 ## What's next
 
@@ -686,12 +687,12 @@ matters.]** *(item [ITEM-ID])*
 
 *Source: [register] via [provider], snapshot [timestamp][ — STALE: reason].*
 
-## Pointer
+## Kickoff
 
 \```
 [Item title]  ([ITEM-ID])
 Origin: roadmap — [ITEM-ID]
-[Group / lane, if the project uses them]
+[Group / workstream, if the project uses them]
 Effort: [size]
 Branch: [branch-name] from [default branch] @ [sha carrying the specification]
 Specification: [resolved location]
@@ -738,7 +739,7 @@ something to improvise around.
 2. Are all five readiness findings reported separately?
 3. Is every figure either a value with provenance, or explicitly *not computable*
    with its missing inputs named?
-4. Are met/pending markers consistent across the table, the pointer, and pre-flight?
+4. Are met/pending markers consistent across the table, the kickoff, and pre-flight?
 5. Does the verdict match the findings?
 6. If enrichment ran, did the re-audit pass?
 7. Is the recipe filled with real detected values — remote, default branch, branch
@@ -769,7 +770,7 @@ The item at the head of the conveyor belt has no specification.
 ## Required action
 
 Run **/roadmap-review** to author specifications up to the project's dispatch
-buffer ([policy.roadmap.dispatchBuffer]). Then run /next-pointer again.
+buffer ([policy.roadmap.dispatchBuffer]). Then run /dispatch-kickoff again.
 ```
 
 ---

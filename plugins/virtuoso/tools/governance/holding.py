@@ -46,6 +46,7 @@ import re
 from dataclasses import dataclass, field
 
 from . import overlays as overlays_mod
+from .schema import actor_allowed
 
 MARKER = "<!-- virtuoso-held-plan v1 -->"
 ID_PREFIX = "HB"
@@ -82,7 +83,7 @@ RECORDED_BY = {
     STORYBOARDED: ("storyboard", "write-plan"),
     PLANNED: ("write-plan", "virtuoso"),
     IN_FLIGHT: ("virtuoso",),
-    EXECUTED: ("pointer-closeout",),
+    EXECUTED: ("dispatch-closeout",),
     ABSORBED: ("roadmap-review",),
     WITHDRAWN: ("storyboard", "write-plan", "roadmap-review"),
 }
@@ -321,7 +322,7 @@ def validate(entry: Entry) -> list[dict]:
         if previous in TRANSITIONS and row.state not in TRANSITIONS[previous]:
             problems.append(_problem(TRANSITION_ILLEGAL, "%s -> %s is not a legal move"
                                                          % (previous, row.state)))
-        if row.by not in RECORDED_BY[row.state] + FORMERLY_RECORDED_BY.get(row.state, ()):
+        if not actor_allowed(row.by, RECORDED_BY[row.state] + FORMERLY_RECORDED_BY.get(row.state, ())):
             problems.append(_problem(RECORDER_WRONG, "%s was recorded by %r; only %s may record it"
                                                      % (row.state, row.by,
                                                         " or ".join(RECORDED_BY[row.state]))))
@@ -412,7 +413,7 @@ def record_problems(entry: Entry, state: str, actor: str, note: str, date: str) 
                                                      % (entry.state, state, entry.state,
                                                         ", ".join(TRANSITIONS.get(entry.state, ()))
                                                         or "nothing — the entry is closed")))
-    if actor not in RECORDED_BY[state]:
+    if not actor_allowed(actor, RECORDED_BY[state]):
         problems.append(_problem(RECORDER_WRONG, "%s may not record %s; only %s may"
                                                  % (actor, state, " or ".join(RECORDED_BY[state]))))
     else:

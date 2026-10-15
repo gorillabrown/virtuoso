@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import re
 
+from tools.governance.policy import workstream_problems
 from tools.governance.providers import base
+from tools.governance.structure import _approved_index
 
 BOARD_ROLE = "board"
 COMMENTS_ROLE = "boardComments"
@@ -21,13 +23,15 @@ PIPELINE_GROUPS = (
     ("conveyor", "Conveyor", "blue", None),
     ("blocked", "Blocked / Gated", "red", (base.BLOCKED,)),
 )
+#: With an approved structure: the group for work it does not place, shown last.
+UNASSIGNED = "Unassigned"
 
 #: Mapped columns in the reference board's order: canonical field, the label used
 #: when the provider does not say which register header it read, and the rendering.
 #: ``id`` appears only when the register keeps it apart from the item's name.
 ROADMAP_COLUMNS = (
     ("sequence", "Seq", "number"),
-    ("lane", "Lane", "label"),
+    ("workstream", "Workstream", "label"),
     ("status", "Status", "label"),
     ("written_status", "Written", "label"),
     ("description", "Description", "text"),
@@ -147,7 +151,7 @@ def cell_values(item) -> dict:
         "written_status": item.raw_written_status or item.written_status,
         "prerequisites": list(item.prerequisites),
     }
-    for key in ("id", "lane", "description", "branch", "spec_link", "notes", "effort",
+    for key in ("id", "workstream", "description", "branch", "spec_link", "notes", "effort",
                 "group", "started", "completed", "evidence"):
         values[key] = getattr(item, key)
     for header, value in item.extra.items():
@@ -187,4 +191,38 @@ def roadmap_groups(items) -> list[dict]:
                if (i.status in statuses if statuses else i.status not in claimed)]
         if ids:
             out.append({"key": key, "title": title, "rail": rail, "ids": ids})
+    return out
+
+
+def approved_structure(project_policy) -> list:
+    """The approved workstreams, ``roadmap.workstreams``, or ``[]``. The pre-1.15.0
+    ``roadmap.lanes`` is not a structure: a project with only lanes renders as before.
+    A structure policy validation refuses is not used either; preflight names its problems."""
+    value = project_policy.section("roadmap").get("workstreams")
+    return value if isinstance(value, list) and not workstream_problems(value) else []
+
+
+def structure_groups(items, workstreams) -> list[dict]:
+    """Live work grouped by workstream, then deliverable, in policy order. An item with a
+    workstream but no deliverable it owns follows that workstream's deliverables; one the
+    structure does not place goes under "Unassigned", last. An empty group is not shown."""
+    owner, spelling = _approved_index(workstreams)
+    placed: dict = {}
+    for i in live(items):
+        d = spelling.get("d:" + (i.deliverable or "").strip().lower())
+        w = spelling.get((i.workstream or "").strip().lower())
+        key = (owner[d], d) if d and (not w or owner[d] == w) else (w, None) if w else None
+        placed.setdefault(key, []).append(i.id)
+    out = []
+    for w in workstreams:
+        name = w.get("name") or w.get("id")
+        for d in list(w.get("deliverables") or []) + [None]:
+            ids = placed.get((w.get("id"), d.get("id") if d else None))
+            if ids:
+                out.append({"key": "ws:%s/%s" % (w.get("id"), d.get("id") if d else ""),
+                            "title": "%s › %s" % (name, d.get("name") or d.get("id"))
+                            if d else name, "rail": "blue", "ids": ids})
+    if placed.get(None):
+        out.append({"key": "unassigned", "title": UNASSIGNED, "rail": "grey",
+                    "ids": placed[None]})
     return out

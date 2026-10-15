@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from .. import textio
 from ..errors import GovernanceError
 from ..policy import TERMINAL_LEDGER_FIELDS
+from ..schema import actor_allowed
 from . import base
 
 FORMATS = ("markdown", "csv", "jsonl")
@@ -142,7 +143,7 @@ class TerminalLedger:
 
     def may_append(self, actor: str, *, correction: bool = False) -> bool:
         allowed = self.correction_writers if correction else self.writers
-        return bool(allowed) and (actor in allowed or "*" in allowed)
+        return bool(allowed) and actor_allowed(actor, allowed)
 
     def _authorize(self, actor: str, correction: bool) -> None:
         if not self.may_append(actor, correction=correction):
@@ -247,20 +248,27 @@ class TerminalLedger:
         if self.contains(record):
             return False
 
-        existing = textio.read_text(self.path)
+        # The record is inserted into the bytes as stored: the BOM, every earlier
+        # line and its own ending stay exactly as they were. Rewriting the whole
+        # file normalized both and changed every byte of history it re-ended.
+        stored = textio.read_stored(self.path)
+        if stored is None and os.path.exists(self.path):
+            raise LedgerError("the terminal ledger %s is not readable as text. Nothing "
+                              "was appended." % self.path, detail={"path": self.path})
+        bom, codec, existing = stored or (b"", "utf-8", "")
+        if not existing.strip():
+            existing = ""
         if self.format == "jsonl":
-            line = json.dumps(record.as_dict(), ensure_ascii=False)
-            content = (existing or "") + ("" if not existing or existing.endswith("\n") else "\n") \
-                + line + "\n"
+            index, line = len(existing), json.dumps(record.as_dict(), ensure_ascii=False)
         elif self.format == "csv":
-            content = self._csv_append(existing, record)
+            index, line = self._csv_append(existing, record)
         else:
-            content = self._markdown_append(existing, record)
+            index, line = self._markdown_append(existing, record)
         os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
-        textio.write_if_changed(self.path, content)
+        textio.write_stored(self.path, bom, codec, textio.insert_line(existing, index, line))
         return True
 
-    def _csv_append(self, existing: str | None, record: LedgerRecord) -> str:
+    def _csv_append(self, existing: str, record: LedgerRecord) -> tuple[int, str]:
         """The row laid out under the file's own header. A ledger with project
         columns gets its record in those columns; a column the record cannot be
         placed in is refused by name, never written under the wrong header."""
@@ -270,7 +278,7 @@ class TerminalLedger:
                   "effortEstimate": record.effort_estimate,
                   "effortActual": record.effort_actual, "effort": record.effort}
         buffer = io.StringIO(newline="")
-        if not existing or not existing.strip():
+        if not existing:
             # The documented six columns; the optional effort columns only when this
             # first record carries them, so a new ledger's header is what it always was.
             fields = [f for f in TERMINAL_LEDGER_FIELDS
@@ -279,7 +287,7 @@ class TerminalLedger:
                                     lineterminator="\n", extrasaction="ignore")
             writer.writeheader()
             writer.writerow(values)
-            return buffer.getvalue()
+            return 0, buffer.getvalue()[:-1]
         header = next(csv.reader(io.StringIO(existing)), [])
         columns = column_map(header, self.field_mappings)
         needed = list(_REQUIRED_TO_APPEND) + (["corrects"] if record.corrects else [])
@@ -292,13 +300,14 @@ class TerminalLedger:
         writer = csv.DictWriter(buffer, fieldnames=header, lineterminator="\n",
                                 restval="", extrasaction="ignore")
         writer.writerow({columns[name]: values[name] for name in columns})
-        base_text = existing if existing.endswith("\n") else existing + "\n"
-        return base_text + buffer.getvalue()
+        return len(existing), buffer.getvalue()[:-1]
 
-    def _markdown_append(self, existing: str | None, record: LedgerRecord) -> str:
+    def _markdown_append(self, existing: str, record: LedgerRecord) -> tuple[int, str]:
+        """Where the row goes and the row: after the last table line, so text that
+        follows the table stays below it."""
         cells = [record.record_id, record.item_id, record.completed, record.result,
                  record.evidence, record.corrects]
-        header = _last_markdown_header(existing or "")
+        header = _last_markdown_header(existing)
         if len(header) > 6:
             labels = self._markdown_effort_labels()
             extra = {labels["effortEstimate"]: record.effort_estimate,
@@ -307,17 +316,16 @@ class TerminalLedger:
             cells += [extra.get(label, "") for label in header[6:]]
         row = "| %s |" % " | ".join(cells)
         if not existing:
-            return "# Completed Work — Terminal Ledger\n\nAppend-only.\n\n" \
-                   + _MARKDOWN_HEADER + "\n" + row + "\n"
-        lines = existing.rstrip("\n").splitlines()
-        last_table_line = -1
-        for position, line in enumerate(lines):
+            return 0, ("# Completed Work — Terminal Ledger\n\nAppend-only.\n\n"
+                       + _MARKDOWN_HEADER + "\n" + row)
+        end = after_table = 0
+        for line in existing.splitlines(keepends=True):
+            end += len(line)
             if line.strip().startswith("|"):
-                last_table_line = position
-        if last_table_line < 0:
-            return existing.rstrip("\n") + "\n\n" + _MARKDOWN_HEADER + "\n" + row + "\n"
-        lines.insert(last_table_line + 1, row)
-        return "\n".join(lines) + "\n"
+                after_table = end
+        if not after_table:
+            return len(existing), "\n" + _MARKDOWN_HEADER + "\n" + row
+        return after_table, row
 
 
 def _last_markdown_header(text: str) -> list[str]:

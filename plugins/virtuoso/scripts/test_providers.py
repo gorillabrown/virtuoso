@@ -270,36 +270,95 @@ def test_repeating_a_completion_does_not_duplicate_a_row(tmp_path):
 @pytest.mark.parametrize("fmt", ["markdown", "csv", "jsonl"])
 def test_the_ledger_appends_and_never_rewrites(tmp_path, fmt):
     target = tmp_path / ("ledger.%s" % {"markdown": "md", "csv": "csv", "jsonl": "jsonl"}[fmt])
-    book = ledger.TerminalLedger(str(target), fmt=fmt, writers=["pointer-closeout"],
-                                 correction_writers=["pointer-closeout"])
+    book = ledger.TerminalLedger(str(target), fmt=fmt, writers=["dispatch-closeout"],
+                                 correction_writers=["dispatch-closeout"])
     first = ledger.LedgerRecord(record_id="TR-001", item_id="ITEM-1",
                                 completed="2026-01-01", result="shipped")
-    assert book.append(first, actor="pointer-closeout") is True
+    assert book.append(first, actor="dispatch-closeout") is True
     snapshot = target.read_bytes()
 
     # Idempotent: the identical record is a no-op.
-    assert book.append(first, actor="pointer-closeout") is False
+    assert book.append(first, actor="dispatch-closeout") is False
     assert target.read_bytes() == snapshot
 
     second = ledger.LedgerRecord(record_id=book.next_record_id(), item_id="ITEM-2",
                                  completed="2026-01-02", result="shipped")
-    assert book.append(second, actor="pointer-closeout") is True
+    assert book.append(second, actor="dispatch-closeout") is True
     records = book.records()
     assert [r.item_id for r in records] == ["ITEM-1", "ITEM-2"]
-    # The first record is byte-identical inside the file: history is not rewritten.
-    assert snapshot.rstrip(b"\n") in target.read_bytes() or records[0].record_id == "TR-001"
+    # History is not rewritten: every byte written before the append is still there.
+    assert target.read_bytes().startswith(snapshot)
+
+
+_BOM = b"\xef\xbb\xbf"
+_HISTORY = {
+    # A BOM, older rows ending CRLF and newer rows ending LF: what a ledger edited
+    # first in a Windows tool and later by others looks like.
+    "csv": _BOM + b"recordId,itemId,completed,result,evidence,corrects\r\n"
+                  b"TR-001,ITEM-1,2026-01-01,completed,,\r\n"
+                  b"TR-002,ITEM-2,2026-01-02,completed,,\n",
+    "jsonl": _BOM + b'{"recordId": "TR-001", "itemId": "ITEM-1", "completed": "2026-01-01", '
+                    b'"result": "completed"}\r\n'
+                    b'{"recordId": "TR-002", "itemId": "ITEM-2", "completed": "2026-01-02", '
+                    b'"result": "completed"}\n',
+    "markdown": _BOM + b"# Ledger\r\n\r\n"
+                       b"| Record | Item | Completed | Result | Evidence | Corrects |\r\n"
+                       b"|---|---|---|---|---|---|\r\n"
+                       b"| TR-001 | ITEM-1 | 2026-01-01 | completed |  |  |\r\n"
+                       b"| TR-002 | ITEM-2 | 2026-01-02 | completed |  |  |\n"
+                       b"\nNotes after the table.\r\n",
+}
+
+
+@pytest.mark.parametrize("fmt", ["csv", "jsonl", "markdown"])
+def test_an_append_changes_no_earlier_byte(tmp_path, fmt):
+    target = tmp_path / ("ledger." + fmt)
+    before = _HISTORY[fmt]
+    target.write_bytes(before)
+    book = ledger.TerminalLedger(str(target), fmt=fmt, writers=["dispatch-closeout"])
+
+    assert book.append(ledger.LedgerRecord("TR-003", "ITEM-3", "2026-01-03", "completed"),
+                       actor="dispatch-closeout") is True
+
+    after = target.read_bytes()
+    assert after.startswith(_BOM)
+    if fmt == "markdown":
+        # The row goes after the table's last row, with that row's own ending; the
+        # bytes on either side of it are the file's, untouched.
+        anchor = b"| TR-002 | ITEM-2 | 2026-01-02 | completed |  |  |\n"
+        cut = before.index(anchor) + len(anchor)
+        row = b"| TR-003 | ITEM-3 | 2026-01-03 | completed |  |  |\n"
+        assert after == before[:cut] + row + before[cut:]
+    else:
+        # Appended at the end, ending like the file's last line (LF here).
+        assert after.startswith(before)
+        added = after[len(before):]
+        assert added.endswith(b"\n") and not added.endswith(b"\r\n")
+        assert added.count(b"\n") == 1
+    assert [r.record_id for r in book.records()] == ["TR-001", "TR-002", "TR-003"]
+
+
+def test_an_append_terminates_an_unterminated_last_line_in_its_own_style(tmp_path):
+    target = tmp_path / "ledger.csv"
+    before = (b"recordId,itemId,completed,result,evidence,corrects\r\n"
+              b"TR-001,ITEM-1,2026-01-01,completed,,")
+    target.write_bytes(before)
+    book = ledger.TerminalLedger(str(target), fmt="csv", writers=["dispatch-closeout"])
+    book.append(ledger.LedgerRecord("TR-002", "ITEM-2", "2026-01-02", "completed"),
+                actor="dispatch-closeout")
+    assert target.read_bytes() == before + b"\r\nTR-002,ITEM-2,2026-01-02,completed,,\r\n"
 
 
 def test_a_correction_is_a_new_record_naming_the_one_it_corrects(tmp_path):
     target = tmp_path / "ledger.md"
-    book = ledger.TerminalLedger(str(target), writers=["pointer-closeout"],
+    book = ledger.TerminalLedger(str(target), writers=["dispatch-closeout"],
                                  correction_writers=["roadmap-review"])
     book.append(ledger.LedgerRecord("TR-001", "ITEM-1", "2026-01-01", "shipped"),
-                actor="pointer-closeout")
+                actor="dispatch-closeout")
     correction = ledger.LedgerRecord("TR-002", "ITEM-1", "2026-01-05", "corrected date",
                                      corrects="TR-001")
     with pytest.raises(ledger.LedgerError):
-        book.append(correction, actor="pointer-closeout")     # not a correction writer
+        book.append(correction, actor="dispatch-closeout")     # not a correction writer
     assert book.append(correction, actor="roadmap-review", correction=True) is True
     records = book.records()
     assert len(records) == 2
@@ -318,7 +377,7 @@ def test_a_correction_must_name_its_target(tmp_path):
 def test_ledger_writers_are_project_policy(tmp_path):
     book = ledger.TerminalLedger(str(tmp_path / "ledger.md"), writers=["maintenance-tool"],
                                  correction_writers=["maintenance-tool"])
-    assert book.may_append("pointer-closeout") is False
+    assert book.may_append("dispatch-closeout") is False
     assert book.may_append("maintenance-tool") is True
 
 
@@ -551,9 +610,9 @@ def test_the_local_csv_catalog_is_optional(project):
     (project / "docs" / "register.md").write_text(MARKDOWN_TEXT, encoding="utf-8")
     reg = _registry(project, {"workRegister": {
         "path": "docs/register.md", "provider": "markdown", "authority": "live",
-        "mutability": "read-write", "allowedWriters": ["next-pointer"],
+        "mutability": "read-write", "allowedWriters": ["dispatch-kickoff"],
         "validation": "markdown", "classification": "active", "origin": "authored"}})
-    selection = providers.work_register(reg, actor="next-pointer")
+    selection = providers.work_register(reg, actor="dispatch-kickoff")
     assert selection.provider.name == "markdown"
     assert selection.provider.next_eligible().id == "ITEM-2"
 
@@ -612,20 +671,20 @@ def test_the_terminal_ledger_is_a_separate_role_from_the_register(project):
         project,
         {"workRegister": {"path": "docs/register.csv", "provider": "csv",
                           "authority": "live", "mutability": "read-write",
-                          "allowedWriters": ["pointer-closeout"],
+                          "allowedWriters": ["dispatch-closeout"],
                           "validation": "csv-headers", "classification": "active",
                           "origin": "authored"},
          "terminalLedger": {"path": "docs/ledger.md", "provider": "markdown",
                             "authority": "terminal", "mutability": "append-only",
-                            "allowedWriters": ["pointer-closeout"],
+                            "allowedWriters": ["dispatch-closeout"],
                             "validation": "markdown", "classification": "active",
                             "origin": "authored"}},
-        policy={"terminalLedger": {"writers": ["pointer-closeout"],
-                                   "correctionWriters": ["pointer-closeout"]}})
+        policy={"terminalLedger": {"writers": ["dispatch-closeout"],
+                                   "correctionWriters": ["dispatch-closeout"]}})
     book = providers.terminal_ledger(reg)
-    assert book.may_append("pointer-closeout") is True
+    assert book.may_append("dispatch-closeout") is True
     assert book.may_append("roadmap-status") is False
-    register = providers.work_register(reg, actor="pointer-closeout")
+    register = providers.work_register(reg, actor="dispatch-closeout")
     assert register.role_name == "workRegister"
 
 
@@ -756,10 +815,10 @@ def test_creation_is_separately_authorized_by_policy(project):
     (project / "docs" / "register.csv").write_text(CSV_TEXT, encoding="utf-8")
     reg = _registry(project, {"workRegister": {
         "path": "docs/register.csv", "provider": "csv", "authority": "live",
-        "mutability": "read-write", "allowedWriters": ["roadmap-review", "pointer-closeout"],
+        "mutability": "read-write", "allowedWriters": ["roadmap-review", "dispatch-closeout"],
         "validation": "csv-headers", "classification": "active", "origin": "authored"}},
         policy={"workRegister": {"creators": ["roadmap-review"]}})
-    closer = providers.work_register(reg, actor="pointer-closeout").provider
+    closer = providers.work_register(reg, actor="dispatch-closeout").provider
     assert closer.supports(base.WRITE_STATUS)            # may change items
     assert not closer.supports(base.CREATE_ITEM)         # may not add them
     with pytest.raises(CapabilityError) as excinfo:
@@ -921,7 +980,7 @@ def test_an_external_creation_is_withdrawn_for_an_unauthorized_creator(project):
     reg = _registry(project, {
         "workRegister": {"external": "monday:board/1234567890", "provider": "connector",
                          "authority": "live", "mutability": "read-write",
-                         "allowedWriters": ["roadmap-review", "pointer-closeout"],
+                         "allowedWriters": ["roadmap-review", "dispatch-closeout"],
                          "validation": "external", "classification": "active",
                          "origin": "authored"},
         "workRegisterSnapshot": {"path": "Virtuoso/snap.json", "provider": "snapshot",
@@ -930,7 +989,7 @@ def test_an_external_creation_is_withdrawn_for_an_unauthorized_creator(project):
                                  "origin": "generated"},
     }, policy={"workRegister": {"snapshot": "workRegisterSnapshot",
                                 "creators": ["roadmap-review"]}})
-    closer = providers.work_register(reg, actor="pointer-closeout").provider
+    closer = providers.work_register(reg, actor="dispatch-closeout").provider
     with pytest.raises(CapabilityError) as excinfo:
         closer.plan_mutation("create-item", "NEW-1", {"title": "New"})
     assert "creators" in str(excinfo.value)

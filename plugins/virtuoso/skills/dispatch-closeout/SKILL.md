@@ -1,5 +1,5 @@
 ---
-name: pointer-closeout
+name: dispatch-closeout
 description: |
   MANUAL INVOCATION ONLY. Closes a completed dispatch. Verifies completion
   evidence, drafts the close-out report and retrospective entries, and then
@@ -7,7 +7,7 @@ description: |
   append-only terminal record, persist local governance changes, close the item
   in the live work register through its provider, and verify every result. Any
   partial failure leaves a recovery record naming exactly what remains. Triggered
-  by "/pointer-closeout", "close out this sprint", or "run the close-out".
+  by "/dispatch-closeout", "close out this dispatch", or "run the close-out".
 ---
 
 <!-- virtuoso-shared-contract v2 -->
@@ -21,7 +21,7 @@ description: |
 - **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (its universal checks, at the version it declares, plus the project's declared extensions). No skill restates it in its own words.
 - **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
-- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
+- **Effort levels** — low / medium / high / xhigh / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 <!-- virtuoso-overlay-clause v2 -->
 **Project overlay.** If the registry declares an `overlays` role, read the overlay mirroring
@@ -35,7 +35,7 @@ issue contract), and `references/registry-contract.md` may not be overlaid at al
 `overlays` role, an absent overlays directory, and no matching overlay file all mean the
 same thing — proceed on the shipped file alone.
 
-# Pointer Close-Out
+# Dispatch Close-Out
 
 ## Preflight — read-only registry check (run first)
 
@@ -73,7 +73,7 @@ never write to a role whose `allowedWriters` does not name this ceremony; never 
 
 Read the `roadmap-integrity:` line the preflight printed (it follows the `deadlines:` line; `--json` carries it as `roadmapIntegrity`). On `fail` (missing, not text, or null bytes), STOP and report the corruption to the user; do not migrate or rewrite a corrupt roadmap. On `warn` (empty or unusually large), surface it and confirm with the user before proceeding. On `ok`, or `external` (a roadmap the preflight does not read), continue. Before rewriting the roadmap, re-check it: `virtuoso_preflight --check-document <path>` prints the same state for one file.
 
-**Bookend with `/next-pointer`.** That skill opens a dispatch; this one closes it. It
+**Bookend with `/dispatch-kickoff`.** That skill opens a dispatch; this one closes it. It
 closes a held plan from `/write-plan` and an epic from `/epic` too; see *Held plans*
 below and `references/execution-paths.md`.
 
@@ -86,11 +86,11 @@ Two waves:
   each step): create the artifact, append the terminal record, persist local
   governance, close the item in the live register, verify everything.
 
-This skill never prints a next dispatch pointer — that is `/next-pointer`.
+This skill never prints a next dispatch kickoff — that is `/dispatch-kickoff`.
 
 ## Resolve roles and capabilities before Wave 1
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout provider
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor dispatch-closeout provider
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . closeout --item "<ITEM-ID>" --date "<YYYY-MM-DD>"
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --open
 
@@ -110,8 +110,8 @@ Confirm before drafting:
 
 | Step | Requires |
 |---|---|
-| append the terminal record | `terminalLedger` registered, and `policy.terminalLedger.writers` names `pointer-closeout` |
-| close the item in the live register | provider capability `record-completion` (or `write-status`), and `workRegister`'s `allowedWriters` names `pointer-closeout` |
+| append the terminal record | `terminalLedger` registered, and `policy.terminalLedger.writers` names `dispatch-closeout` |
+| close the item in the live register | provider capability `record-completion` (or `write-status`), and `workRegister`'s `allowedWriters` names `dispatch-closeout` |
 | write the close-out artifact | `closeOuts` writable by this ceremony |
 | append lessons | `lessons` writable by this ceremony |
 | persist to version control | whatever `policy.git.policy` permits |
@@ -138,9 +138,9 @@ close-out adapts in exactly these ways:
 | Step 5 — register | Deferred to the absorbing review. |
 | Then | Record the entry `executed`, once every item of the entry has closed out, with the note naming each close-out, its result, and its date: |
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout holding --record <entry> --state executed --note "HB-<n>: <close-out path>, <result>, <YYYY-MM-DD>, estimate <e>, actual <a>" --apply
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor dispatch-closeout holding --record <entry> --state executed --note "HB-<n>: <close-out path>, <result>, <YYYY-MM-DD>, estimate <e>, actual <a>" --apply
 
-Take `<e>` and `<a>` from `timing --summary --json --sprint <SPRINT-ID> --item HB-<n>`
+Take `<e>` and `<a>` from `timing --summary --json --dispatch <DISPATCH-ID> --item HB-<n>`
 (its `estimate` and `actual`). A log whose rows name no item is one item's run, and
 `--item` then takes every row. With no time log, or when the summary says
 `"complete": false`, leave them out of the note. Never type
@@ -157,7 +157,7 @@ out.
 A.4b), it creates each register item and then invokes this ceremony for **Steps 3, 5,
 and 6 only**. Those steps append the terminal record and close the item:
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout record-completion --item "<ITEM-ID>" --date "<close-out date>" --result "<result>" --evidence "<close-out path>" --estimate "<e>" --actual "<a>" --revision "<revision>" --apply
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor dispatch-closeout record-completion --item "<ITEM-ID>" --date "<close-out date>" --result "<result>" --evidence "<close-out path>" --estimate "<e>" --actual "<a>" --revision "<revision>" --apply
 
 The values come from the entry's `executed` row. The evidence was verified, and the
 lessons were recorded, when the work ran. Nothing is re-verified, and nothing is taught
@@ -184,7 +184,7 @@ once, as one crossing, and the crossing retires each item:
 A run that stopped before `done.md` is not a completion. When the user closes it anyway,
 retire only the items whose rows all pass, with their evidence. Return the rest to the
 belt, say why for each in the report, and set the charter's `status: aborted`. A charter
-left active keeps its items out of `/next-pointer`'s reach.
+left active keeps its items out of `/dispatch-kickoff`'s reach.
 
 ## Retirement records routed here
 
@@ -218,7 +218,7 @@ Every case stays idempotent: a record already in the ledger for the item is a no
 7. **Review every file the dispatch created.** Run, against the ref the
    specification's *Branch* field says the dispatch started from:
 
-       "$HOME/.virtuoso/bin/virtuoso" sprint_guards created-files --root . --base "<base ref>"
+       "$HOME/.virtuoso/bin/virtuoso" dispatch_guards created-files --root . --base "<base ref>"
 
    Draft the report's *Files Created* section from it: each **temporary** (scratch,
    backup, cache, log, anything under the registered `temp` role) proposed for
@@ -244,7 +244,7 @@ Wave 1 writes nothing.
 **Goal:** [What the dispatch set out to do — one sentence.]
 **Result:** [What actually happened — name the things, no aggregates.]
 **Learned:** [The durable lesson, by identifier: <prefix>-NNN — title. Or: No new lesson — reason.]
-**Recommend:** [Recommended next direction — prose only, no pointer.]
+**Recommend:** [Recommended next direction — prose only, no kickoff.]
 **Bottom line:** [One-sentence takeaway.]
 ```
 
@@ -285,7 +285,7 @@ apply. Every close-out produces one of two things:
   identifier**, `(<ITEM-ID>, <date>)`: that is how the gate knows this dispatch
   recorded it. A heading that describes the item in words links only by name, with a
   `lesson-linked-by-name` warning; a lesson already appended that way is linked with
-  `lessons --record-link <prefix>-NNN --item <ITEM-ID> --actor pointer-closeout
+  `lessons --record-link <prefix>-NNN --item <ITEM-ID> --actor dispatch-closeout
   --apply`, never by editing it (see `references/spec-retro-format.md`).
 - Or the line **`No new lesson — <reason>`** in the report's Lessons section. The
   reason is evidence, and it names what was examined by identifier: "followed
@@ -327,7 +327,7 @@ Before writing anything, confirm the work is actually done:
 - any mid-dispatch amendments are accounted for;
 - for an epic packet, its done.md is on the default branch:
 
-      "$HOME/.virtuoso/bin/virtuoso" sprint_guards artifacts-exist --ref <default branch> <packet directory>/done.md
+      "$HOME/.virtuoso/bin/virtuoso" dispatch_guards artifacts-exist --ref <default branch> <packet directory>/done.md
 
   exits 0. Exit 1 means the record sits only on the run branch: the crossing waits for a
   merge into the default branch — the run branch's, or, where its code is already
@@ -339,8 +339,9 @@ Before writing anything, confirm the work is actually done:
   <record merge> -- . ":(exclude)<packet directory>"` prints nothing) and reports it in
   the close-out: the run cannot record a check of its own last merge;
 - a connector-backed register's snapshot is fresh, before the Wave-1 revision read:
-  read every page and the column list with the host's connector and import them with
-  `virtuoso_registry --root . snapshot --import <page> --columns <columns>`. Report each
+  read every item with the session's connector, write the rows keyed by the register's
+  own column names and import them with `virtuoso_registry --root . snapshot --import
+  <rows.json>` (or a raw items page: `--import <page> --columns <columns>`). Report each
   `[DRIFT]` line as a finding.
 
 Evidence that does not hold **stops the crossing**. Report exactly which
@@ -467,7 +468,7 @@ After publication, verify every registered terminal operation through its source
 - item retirement or terminal status;
 - terminal-ledger entry;
 - worktree completion;
-- lane, lock, or merge-slot release;
+- workstream, lock, or merge-slot release;
 - authoritative remote publication;
 - recovery state.
 
@@ -498,7 +499,7 @@ Write the close-out report into the registered `closeOuts` directory.
 duplicate it. Update it in place, or stop and ask — never write a second one.
 
 Fill the report's `runtime:` line and its `## Time` section from the time log. Run
-`timing --summary --sprint <SPRINT-ID>` (add `--item <ITEM-ID>` for a combined epic), which prints the row table (predicted, actual,
+`timing --summary --dispatch <DISPATCH-ID>` (add `--item <ITEM-ID>` for a combined epic), which prints the row table (predicted, actual,
 wait, kind, added, flag) and the two totals, and paste it as printed. With no time log,
 write `runtime: not measured (no time log)` and leave the section out.
 
@@ -520,7 +521,7 @@ block is an open decision, not a settled one: stop and route it to
 
 Append **one** record to the registered `terminalLedger`:
 
-- Only if `policy.terminalLedger.writers` names `pointer-closeout`. If it does
+- Only if `policy.terminalLedger.writers` names `dispatch-closeout`. If it does
   not, stop and hand the record to a permitted ceremony or to the user.
 - **Append-only.** Never reorder, rewrite, or delete an existing record. A
   correction is a **new** record that names the record it corrects, appended
@@ -532,10 +533,10 @@ Append **one** record to the registered `terminalLedger`:
 appends the record, closes the item at the revision you read in Wave 1, and verifies
 both; Step 4 then persists the ledger and the register with everything else:
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout record-completion --item "<ITEM-ID>" --date "<YYYY-MM-DD>" --result "<result>" --evidence "<close-out file>" --estimate "<estimate>" --actual "<actual>" --revision "<revision>" --apply
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor dispatch-closeout record-completion --item "<ITEM-ID>" --date "<YYYY-MM-DD>" --result "<result>" --evidence "<close-out file>" --estimate "<estimate>" --actual "<actual>" --revision "<revision>" --apply
 
 `--estimate` and `--actual` are what effort calibration learns from. Take both from the
-dispatch's time log: `virtuoso_registry timing --summary --json --sprint <SPRINT-ID>`
+dispatch's time log: `virtuoso_registry timing --summary --json --dispatch <DISPATCH-ID>`
 (add `--item <ITEM-ID>` for a combined epic). `estimate` is the first listing's
 predicted total, and `actual` is the measured working total, both over the rows that ran
 one after another. When the dispatch kept no time log, or the summary says
@@ -552,7 +553,7 @@ record carrying its Effort.
 
 **For an external register**, append the record alone here; the item is closed in Step 5:
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor pointer-closeout record-completion --ledger-only --item "<ITEM-ID>" --date "<YYYY-MM-DD>" --result "<result>" --evidence "<close-out file>" --estimate "<estimate>" --actual "<actual>" --apply
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor dispatch-closeout record-completion --ledger-only --item "<ITEM-ID>" --date "<YYYY-MM-DD>" --result "<result>" --evidence "<close-out file>" --estimate "<estimate>" --actual "<actual>" --apply
 
 It records Effort from the register snapshot, so refresh the snapshot first if the item's
 size changed in the register since Wave 1. Re-running it is a no-op that still verifies.
@@ -571,7 +572,7 @@ edited — then persist per `policy.git`.
 
 **Parked rows become findings.** Each row `timing --summary --json` lists under
 `parked` — a row the run set aside and did not do — is appended to the registered
-`findings` role as its own entry: `### F-NNN — <row title> (<sprint-id> parked row,
+`findings` role as its own entry: `### F-NNN — <row title> (<dispatch-id> parked row,
 YYYY-MM-DD)`, **Source:** the dispatch, **Severity:** `info` unless Wave 1 confirmed
 otherwise, **Where:** the time log and row label, **Finding:** the park reason, and
 **Disposition:** `open`, so the roadmap review decides it. A project without the role
@@ -629,7 +630,7 @@ Re-running with the same idempotency key must not repeat the change.
 - **Retire the closed item.** It leaves the active pipeline and no longer reads as
   in flight or pending.
 - **Elevate the next item** into the vacated head position, so it becomes the
-  active target. This is a sequence change, not a dispatch pointer.
+  active target. This is a sequence change, not a dispatch kickoff.
 
 ### Step 6 — Verify every result
 
@@ -639,10 +640,10 @@ Re-read each thing you wrote, from its source:
 - the terminal ledger carries exactly one new record for this item, and prior
   records are byte-identical to before;
 - the record's Estimate and Actual equal `estimate` and `actual` from
-  `timing --summary --json --sprint <SPRINT-ID>`. This matters most on an external
+  `timing --summary --json --dispatch <DISPATCH-ID>`. This matters most on an external
   register. The summary's `flagged` rows ran
   over 3× their prediction and may hide a wait nobody saw, such as a host approval
-  prompt. Ask the owner about each one: `timing --confirm N --sprint <SPRINT-ID> --actor pointer-closeout` returns it to the history
+  prompt. Ask the owner about each one: `timing --confirm N --dispatch <DISPATCH-ID> --actor dispatch-closeout` returns it to the history
   as real work. Otherwise it stays out, and the report names it;
 - the record's Effort equals the register item's effort;
 - the roadmap and lessons changes are present, and committed if policy required it;
@@ -656,7 +657,7 @@ Re-read each thing you wrote, from its source:
 
 - the item's status in the live register, re-read through the provider, is terminal;
 - the next item is now at the head;
-- `sprint_guards created-files --base "<base ref>"` exits 0 — or lists exactly the
+- `dispatch_guards created-files --base "<base ref>"` exits 0 — or lists exactly the
   files `policy.git` leaves for someone else to commit and the ones the user chose
   to decide later, each named in the report's *Files Created* section.
 
@@ -717,7 +718,7 @@ complete on partial evidence, or a change that retires scope. Skip the offer for
 a routine close-out — a reflexive offer trains the user to decline it. If the pass
 runs, fold its blocking concerns into the findings before the crossing begins.
 
-### Next dispatch pointer — out of scope
+### Next dispatch kickoff — out of scope
 
 This skill does not print one. Wave 1's *Recommend* line names a direction in
 prose. Wave 2 ends at verification.

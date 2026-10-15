@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import os
 
-from . import (backup as backup_mod, discovery, policy as policy_mod, registry as registry_mod,
-               repostate, schema)
+from . import (backup as backup_mod, discovery, identifiers, policy as policy_mod,
+               registry as registry_mod, repostate, schema)
 from .providers import recovery as recovery_mod
 
 DOC_SUBDIRS = {
@@ -56,8 +56,33 @@ def _drop_empty_writers(meta: dict) -> None:
         meta.pop("allowedWriters", None)
 
 
-def create_registry(root: str, *, doc_root: str = "", layout: str = "plugin-only") -> registry_mod.Registry:
-    """The registry a brand-new workspace starts from. All authority is declared."""
+#: Work-register kinds ``create`` can seed as a local file, with their provider,
+#: validation and file extension.
+LOCAL_REGISTER_KINDS = {
+    "csv": ("csv", "csv-headers", ".csv"),
+    "markdown": ("markdown", "markdown", ".md"),
+    "xlsx": ("xlsx", "xlsx", ".xlsx"),
+}
+
+SNAPSHOT_RELPATH = "Virtuoso/work-register.snapshot.json"
+
+
+def create_registry(root: str, *, doc_root: str = "", layout: str = "plugin-only",
+                    register: str = "csv", mappings: dict | None = None) -> registry_mod.Registry:
+    """The registry a brand-new workspace starts from. All authority is declared.
+
+    ``register`` is a local kind (``csv``, ``markdown``, ``xlsx``) or an external
+    ``<scheme>:<opaque>`` identifier; a malformed choice raises ``ValueError``
+    before anything is built, as do mappings whose ``fieldMappings`` lack ``id``."""
+    external = ""
+    if register not in LOCAL_REGISTER_KINDS:
+        external = identifiers.parse(register).raw
+    if mappings:
+        for key in ("fieldMappings", "statusMappings"):
+            if not isinstance(mappings.get(key) or {}, dict):
+                raise ValueError("the register mappings' %s must be a JSON object" % key)
+        if "id" not in (mappings.get("fieldMappings") or {}):
+            raise ValueError("the register mappings' fieldMappings must map `id` to a column")
     docs = doc_root or DEFAULT_DOC_ROOT
     governance = _posix(docs, DOC_SUBDIRS["governance"])
     operational = _posix(docs, DOC_SUBDIRS["operational"])
@@ -86,7 +111,27 @@ def create_registry(root: str, *, doc_root: str = "", layout: str = "plugin-only
         meta.pop("generatedFrom", None)
         meta.pop("generatedBy", None)
         _drop_empty_writers(meta)
+        if name == "workRegister" and external:
+            meta.update(provider="connector", validation="external",
+                        label="Live work register (%s)" % external)
+            roles[name] = schema.RoleSpec.from_manifest(name, dict(meta, external=external))
+            continue
+        if name == "workRegister":
+            provider, validation, ext = LOCAL_REGISTER_KINDS[register]
+            meta.update(provider=provider, validation=validation)
+            targets[name] = targets[name][:-len(".csv")] + ext
         roles[name] = schema.RoleSpec.from_manifest(name, dict(meta, path=targets[name]))
+
+    policy: dict = {}
+    if external:
+        roles["workRegisterSnapshot"] = schema.RoleSpec.from_manifest("workRegisterSnapshot", {
+            "path": SNAPSHOT_RELPATH, "provider": "snapshot", "authority": "report",
+            "mutability": "generated", "validation": "exists", "classification": "active",
+            "origin": "generated", "generatedFrom": "workRegister",
+            "label": "Snapshot of the work register, refreshed by the host"})
+        policy["workRegister"] = dict(
+            {k: v for k, v in (mappings or {}).items() if k in ("fieldMappings", "statusMappings")},
+            snapshot="workRegisterSnapshot")
 
     reg = registry_mod.Registry(
         root=os.path.abspath(root),
@@ -96,7 +141,7 @@ def create_registry(root: str, *, doc_root: str = "", layout: str = "plugin-only
         adopted=False,
         documentation_root=docs,
         roles=roles,
-        policy={},
+        policy=policy,
     )
     reg.compute_presence()
     return reg
@@ -281,6 +326,10 @@ def seed_contents(reg: registry_mod.Registry) -> dict[str, str]:
     work = reg.roles.get("workRegister")
     if work and work.provider == "csv":
         seeds[work.path] = WORK_REGISTER_SEED
+    elif work and work.provider == "markdown":
+        columns = WORK_REGISTER_SEED.strip().split(",")
+        seeds[work.path] = "# Work Register\n\n| %s |\n|%s\n" % (
+            " | ".join(columns), "---|" * len(columns))
     return seeds
 
 
@@ -341,6 +390,6 @@ review reads the open ones.
 """
 
 WORK_REGISTER_SEED = (
-    "id,title,sequence,status,written_status,prerequisites,effort,lane,group,"
+    "id,title,sequence,status,written_status,prerequisites,effort,workstream,deliverable,group,"
     "spec_link,branch,started,completed,evidence,description,notes\n"
 )

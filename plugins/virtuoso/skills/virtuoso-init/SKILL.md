@@ -19,7 +19,7 @@ description: >
 - **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (its universal checks, at the version it declares, plus the project's declared extensions). No skill restates it in its own words.
 - **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
-- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
+- **Effort levels** — low / medium / high / xhigh / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 <!-- virtuoso-overlay-clause v2 -->
 **Project overlay.** If the registry declares an `overlays` role, read the overlay mirroring
@@ -97,7 +97,40 @@ exactly like `check` and says so. Repair is a separate, previewed operation.
 
 ## New project? Create, with explicit authorization
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode create --authorize
+### First: ask where the work register lives
+
+Before `create`, ask the user one question: **where should the work register — the
+live list of items, their status, order and size — live?** The roadmap is always
+created as Markdown in the repository; this question is only about the register.
+Offer the choices in this order:
+
+1. **A file in the repository** — a CSV (the default), a Markdown table, or a
+   spreadsheet (`.xlsx`, which needs the `openpyxl` package).
+2. **A task tool this session can reach** — look at the tools this session actually
+   has, and list each task or database tool it has a connector for, marked
+   "(connected)". Never list a tool you cannot see, and never mark one connected that
+   is not.
+3. **Another tool, by identifier** — a `<scheme>:<id>` the user gives (for example
+   `notion:database/<id>`, `linear:team/<key>`, `jira:project/<key>`).
+
+When the user names a tool this session has no connector for, say so: **"That tool
+is not connected in this session, so I cannot read or write it yet."** Then offer to
+record its identifier anyway, for a later session that has the connector, or to start
+with a file in the repository. Record it only if they ask.
+
+For a tool, ask how its columns map to the register's fields (at least `id`, `title`,
+`status`; also `sequence`, `effort`, `prerequisites` where it has them) and how its
+status words map to `queued`, `in-flight`, `blocked` and `completed`. Write the answer
+to a small JSON file — `{"fieldMappings": {...}, "statusMappings": {...}}` — and pass it
+with `--register-mappings`.
+
+Then create, passing the choice:
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode create --authorize --register <csv | markdown | xlsx | scheme:id> [--register-mappings <file.json>]
+
+Without `--register`, `create` lays down a CSV register, as it always has.
+
+### Then: create
 
 `create` writes new files into the project, so it requires `--authorize`. Without
 it the run reports `failed` and explains what to pass. It refuses outright if the
@@ -119,9 +152,10 @@ generated. Authority is **declared**, so you can change it — see
   region the plugin maintains and protected sections that are yours. Everything
   outside the generated region is preserved byte-for-byte forever.
 - **A roadmap** — the specification store (`live`, read-write).
-- **A work register** — the live pipeline. Created as a CSV by default; change its
-  provider to a Markdown table, a spreadsheet, a connector-backed tracker, a
-  database, or a read-only snapshot at any time.
+- **A work register** — the live pipeline, where the user chose (`--register`): a CSV
+  by default, a Markdown table, a spreadsheet, or a connected tool's identifier — then
+  registered external with a snapshot role (`Virtuoso/work-register.snapshot.json`)
+  and the mappings, and no register file is seeded.
 - **A terminal ledger** — append-only completion records (`terminal`, append-only).
 - **A lessons catalog**, close-outs, issues, reviews, outside audits, and reference
   directories.
@@ -129,6 +163,54 @@ generated. Authority is **declared**, so you can change it — see
 The local CSV is **optional** and it is **not special**. It is authoritative here
 only because `create` explicitly declared it so; a project may make it a generated
 mirror or drop it entirely.
+
+## Move the work register to another tool
+
+A project that already has a register can move it — from a CSV to a connected tool,
+or from one tool to another — without re-entering its open work. History (the terminal
+ledger, close-outs, reviews, archives) is never touched; finished items stay in the
+ledger only.
+
+1. **Ask where it should live**, exactly as in *First: ask where the work register
+   lives* above, and collect the new tool's column and status mappings into a file.
+2. **Preview** — writes nothing; show the user what it prints:
+
+       "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . move-register --to <scheme:id | csv | markdown | xlsx> --mappings <file.json>
+
+   It lists the open items that will be created and says how many finished items stay
+   in the ledger only.
+3. **Plan**, only after the user approves the preview:
+
+       "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso-init move-register --to <target> --mappings <file.json> --plan --apply
+
+   It writes one move record. For a local target it writes the rows itself. For a
+   tool it prints one create instruction per open item: execute each with the
+   session's connector, read the item back, then confirm it:
+
+       "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . move-register --confirm <ITEM-ID> --provider-id <id> --recovery-id <record id>
+
+4. **Finish**: for a tool, read the new register into a rows file (the registry
+   contract's rows contract) and hand it over; for a local target, leave `--snapshot`
+   out — the new file is read directly:
+
+       "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso-init move-register --finish --recovery-id <record id> --snapshot <rows.json> --apply
+
+   It refuses while any item is pending, and refuses — changing nothing — unless the
+   new register holds the same ids and statuses, and the same order wherever the new
+   mappings name a sequence column (a local target always does). On a match it
+   repoints the registry with a backup and prints the before/after table.
+5. **Refresh the governance readme**, which still names the old register:
+   `virtuoso_preflight --root . --mode repair` previews it; apply only with the user's
+   approval.
+
+A move interrupted part-way leaves its record; `virtuoso_registry recovery` names the
+items created and the ones still pending, and the project keeps its old register until
+`--finish` succeeds. A `--finish` interrupted after its repoint can simply be run
+again. A move that will not finish — a local move that failed while writing rows cannot
+resume — is closed with `move-register --abandon --recovery-id <id> --reason "<why>"`,
+which names the items already created at the target; remove a partly written local file
+by hand before planning again. Like `--mode repair`, the move rewrites the manifest
+on the owner's say-so: `--actor` names who ran it; no role's `allowedWriters` gates it.
 
 ## Repair — always previewed
 

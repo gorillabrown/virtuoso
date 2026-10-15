@@ -1,14 +1,14 @@
 ---
 name: mid-dispatch-decision
 description: >
-  Decision protocol for when a Virtuoso execution (Zeus) pauses mid-sprint and routes a
+  Decision protocol for when a Virtuoso execution (Zeus) pauses mid-dispatch and routes a
   structured issue. Primary input: a path to an issue file under the manifest `issues`
   directory — the 7-field
   issue document produced by the virtuoso skill. Reads the issue, produces a recommendation
   and a worker-pasteable instruction block, appends a Decision block to the issue file, and
   amends the dispatch spec. Trigger on: "mid-dispatch decision", "decision needed",
   "escalation decision", "what should I tell the implementation agent", "the implementation agent is stuck", a virtuoso
-  issue path, or any pasted execution output showing a paused sprint awaiting direction.
+  issue path, or any pasted execution output showing a paused dispatch awaiting direction.
 ---
 
 <!-- virtuoso-shared-contract v2 -->
@@ -22,7 +22,7 @@ description: >
 - **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (its universal checks, at the version it declares, plus the project's declared extensions). No skill restates it in its own words.
 - **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
-- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
+- **Effort levels** — low / medium / high / xhigh / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 <!-- virtuoso-overlay-clause v2 -->
 **Project overlay.** If the registry declares an `overlays` role, read the overlay mirroring
@@ -72,7 +72,7 @@ guess a path.
 never write to a role whose `allowedWriters` does not name this ceremony; never treat a
 `mirror`, `report`, `archive`, or `unknown` role as truth.
 
-A Virtuoso execution (Zeus) has paused mid-sprint and routed a structured issue. **Your
+A Virtuoso execution (Zeus) has paused mid-dispatch and routed a structured issue. **Your
 primary input is a path to an `Issue.*.md` file under the manifest `issues` directory** — the 7-field issue document the
 virtuoso skill produced. Read it first. Then bring the planner's planning context to the execution
 state, recommend a path, and — after user confirmation — print a worker-pasteable block,
@@ -80,7 +80,7 @@ append a `## Decision` block to the issue file, and amend the dispatch spec and 
 learned. (If handed raw pasted output instead of a path — legacy fallback — reconstruct the
 7 fields from it before deciding.)
 
-**Announce at start:** "Mid-dispatch decision engaged — loading context for [sprint ID]."
+**Announce at start:** "Mid-dispatch decision engaged — loading context for [dispatch ID]."
 
 ---
 
@@ -102,7 +102,7 @@ situation, the levers, the risks, and the decision **without opening any other
 document**. If a reader needs to look something up to follow the recommendation,
 the recommendation has failed.
 
-- **No acronyms.** No SRL-XXX, no CAL-XXX, no sprint IDs (SK-01B, FAS-1, IFG, etc.),
+- **No acronyms.** No SRL-XXX, no CAL-XXX, no dispatch IDs (SK-01B, FAS-1, IFG, etc.),
   no FP-XX, no internal codenames. Any concept currently invoked by acronym must be
   paraphrased in plain terms.
 - **No identifiers as proxies for ideas.** "Rule 100 supports re-banding" is wrong.
@@ -119,7 +119,7 @@ the recommendation has failed.
 - **File paths and line numbers go in the instruction block, not the recommendation,**
   unless the exact location is load-bearing for the decision itself.
 
-Sprint IDs, SRL numbers, file paths, and agent names belong in the **instruction block**
+Dispatch IDs, SRL numbers, file paths, and agent names belong in the **instruction block**
 (Step 6a), not the Recommendation. The implementation agent's audience knows the codes; the user, under
 time pressure, should not have to translate them.
 
@@ -128,7 +128,7 @@ time pressure, should not have to translate them.
 ## Why This Skill Exists
 
 The implementation agent has execution context (what happened, what the numbers say) but lacks planning
-context (how this connects to adjacent sprints, what lessons learned say). The planner
+context (how this connects to adjacent dispatches, what lessons learned say). The planner
 has the inverse. This skill bridges the two. The cost asymmetry is extreme:
 advancing when you should pivot wastes budget and propagates bad baselines;
 stopping when you should advance abandons 80%-done work.
@@ -162,7 +162,7 @@ Same direction, reduced scope. Budget, focus, or new information justifies
 doing less.
 
 **instruction block format:** Decision + direction + what's narrowed + where deferred
-work goes (next sprint, parking lot, dropped) + constraints.
+work goes (next dispatch, parking lot, dropped) + constraints.
 
 ### Type 3 — Pivot Advance
 
@@ -186,17 +186,17 @@ annotations. Keep task IDs and done-when unchanged.
 ### Type 4 — Pivot Stop and Regroup
 
 The implementation agent stops. Completed work preserved; remaining tasks cancelled. The planner runs a
-partial pointer-closeout, then authors a new dispatch.
+partial dispatch-closeout, then authors a new dispatch.
 
 **instruction block format:** "Stop the dispatch. Preserve completed work from tasks
 #1-N. Cancel remaining tasks. I'll send a new dispatch from the planning side."
 
-**Partial close-out contract:** When Type 4 fires, the planner invokes pointer-closeout
-with these inputs: (a) completed tasks treated as the sprint's deliverables,
+**Partial close-out contract:** When Type 4 fires, the planner invokes dispatch-closeout
+with these inputs: (a) completed tasks treated as the dispatch's deliverables,
 (b) cancelled tasks listed with reason "mid-dispatch pivot," (c) the close-out's
 findings table includes the pause-point finding that triggered the stop,
 (d) the stopped line of work goes back to `/roadmap-review` to be re-planned
-(`/next-pointer` escalates there when no head is dispatch-ready). Pointer-closeout does not need
+(`/dispatch-kickoff` escalates there when no head is dispatch-ready). Dispatch-closeout does not need
 a full pause summary — the mid-dispatch decision's Step 2 assessment serves as
 the summary input.
 
@@ -249,10 +249,10 @@ All of Fast, plus:
 
 | Source | What to Extract |
 |--------|----------------|
-| **Roadmap** | Downstream dependencies; what baseline subsequent sprints measure against |
-| **Sprint queue** | What's queued next; whether this decision affects queue order |
+| **Roadmap** | Downstream dependencies; what baseline subsequent dispatches measure against |
+| **Dispatch queue** | What's queued next; whether this decision affects queue order |
 | **Lessons learned** | Prior occurrences of this pattern; standing rules that apply |
-| **Recent close-outs** | Prior sprint's findings; constraints carried forward |
+| **Recent close-outs** | Prior dispatch's findings; constraints carried forward |
 
 **Keyword search for lessons learned** (don't read linearly):
 calibration drift → "drift", "threshold", "escalation";
@@ -296,7 +296,7 @@ prevents the most dangerous failure mode: rubber-stamping a pre-authorized respo
 because pattern-matching is comfortable. The spec's framing is the starting point
 for analysis, never its conclusion.
 
-**1. Define the objective.** State what the sprint is actually trying to achieve in
+**1. Define the objective.** State what the dispatch is actually trying to achieve in
 goal terms — independent of how the spec framed the work. Not "what the spec says
 to do," but the underlying engineering or product outcome the work is supposed to
 produce. If the goal is unclear from the spec, infer it from the roadmap or ask
@@ -456,10 +456,10 @@ Type [N]: [Name]
   What happens next: [Specific actions]
   Cost: [Time, tokens — be concrete]
   Risk: [What goes wrong if this is the wrong call]
-  Downstream impact: [Effect on next 2-3 sprints]
+  Downstream impact: [Effect on next 2-3 dispatches]
 ```
 
-If the sprint is over budget, state the position explicitly.
+If the dispatch is over budget, state the position explicitly.
 
 ### Step 5 — Recommendation
 
@@ -467,13 +467,13 @@ Present using this structure. **Plain-language rules apply** — no acronyms, no
 as proxies, self-contained, succinct, complete (see Brevity Rule above).
 
 ```
-## Mid-Dispatch Decision: [Sprint name in plain language]
+## Mid-Dispatch Decision: [Dispatch name in plain language]
 
 ### Problem / Opportunity
 
 [2-4 sentences. What the implementation agent found, why it triggered a pause, what's at stake if the
 decision goes wrong. Connect to downstream work in plain terms — "the next four
-sprints all measure against the baseline we set here," not sprint IDs.]
+dispatches all measure against the baseline we set here," not dispatch IDs.]
 
 ### Alternative Solutions
 
@@ -498,7 +498,7 @@ plainly.]
 - **What history says:** [Paraphrase the relevant pattern or precedent in plain
   terms. Do not cite by SRL ID. If no relevant pattern exists, say so.]
 - **What's downstream:** [Name the next 2-3 affected pieces of work in functional
-  terms ("the calibration baseline for the next four sprints," not "SK-18, SK-19,
+  terms ("the calibration baseline for the next four dispatches," not "SK-18, SK-19,
   SK-02").]
 - **What would change my mind:** [Specific evidence or conditions that would flip
   the recommendation to a different option.]
@@ -525,7 +525,7 @@ recommendation. Instead:
 ### Step 5.5 — Cross-Worktree Conflict Surface Check
 
 **Exemption: Type 4 (Pivot Stop) skips this step entirely.** Type 4 triggers
-partial pointer-closeout immediately, so the amendment authoring and the close-out
+partial dispatch-closeout immediately, so the amendment authoring and the close-out
 integration happen in the same workflow — no cross-worktree timing gap exists.
 Steps 5.5 and the staging-file branching in Step 6b apply only to Types 1a, 1b,
 2, 3, 3a, and 5, where the dispatch continues and the close-out happens later.
@@ -536,7 +536,7 @@ amendments, scan for foreseeable merge conflicts at close-out. Three conditions:
 1. The dispatch spec lives in a document subject to archive-forward collapse
    (e.g., a Roadmap §Active Skeletons section that converts to a one-paragraph
    Completed Work Summary row at close-out).
-2. An active execution worktree exists on the sprint's feature branch.
+2. An active execution worktree exists on the dispatch's feature branch.
 3. The close-out edit will modify the same section the amendment is being
    appended to.
 
@@ -649,24 +649,24 @@ on the strategic decision.
 This is not optional. The planner **must execute an Edit call** and confirm the edit
 landed. The workflow does not terminate until the amendment is persisted.
 
-**Where the amendment lands** depends on the sprint's execution context:
+**Where the amendment lands** depends on the dispatch's execution context:
 
-**PATH A — Worktree-resident sprint (mandatory staging file):**
+**PATH A — Worktree-resident dispatch (mandatory staging file):**
 
-Per virtuoso's Worktree Governance Staging rules, worktree-resident sprints MUST
+Per virtuoso's Worktree Governance Staging rules, worktree-resident dispatches MUST
 NOT edit main governance documents. All governance-change intent goes to the
-sprint's staging file. Mid-dispatch amendments are governance changes — they go
+dispatch's staging file. Mid-dispatch amendments are governance changes — they go
 to the staging file.
 
-1. Identify the sprint's staging file:
-   `<close-out-folder>/Memo.<sprint-id>.GovernanceStaging.<YYYY-MM-DD>.md`
+1. Identify the dispatch's staging file:
+   `<close-out-folder>/Memo.<dispatch-id>.GovernanceStaging.<YYYY-MM-DD>.md`
    (where `<close-out-folder>` is wherever the project's close-out memos live).
 2. If the staging file does not exist, create it with virtuoso's staging file
    header (see virtuoso skill §Rule 3) and the Amendment Registry (below).
 3. Append a fold-in entry under `## Target: <roadmap-document>`:
    ```markdown
    ### Fold-in N — Mid-Dispatch Amendment (<title>)
-   Section: §<sprint-id> (inline full spec)
+   Section: §<dispatch-id> (inline full spec)
    Action: Migrate
    Source: This amendment block (below)
    Destination: Close-out memo §Mid-Dispatch Decisions
@@ -680,10 +680,10 @@ to the staging file.
    ```
 4. Update the Amendment Registry table with a new row.
 5. Print confirmation: "Staged mid-dispatch amendment in
-   `Memo.<sprint-id>.GovernanceStaging.<YYYY-MM-DD>.md` (fold-in N).
-   Registry shows [N] decisions for this sprint."
+   `Memo.<dispatch-id>.GovernanceStaging.<YYYY-MM-DD>.md` (fold-in N).
+   Registry shows [N] decisions for this dispatch."
 
-At close-out, pointer-closeout processes the staging file as Wave 2 Step 0 —
+At close-out, dispatch-closeout processes the staging file as Wave 2 Step 0 —
 it migrates the amendment content to the close-out memo's §Mid-Dispatch
 Decisions section and deletes the staging file. The fold-in instruction's
 Action: Migrate tells the handler exactly what to do.
@@ -699,7 +699,7 @@ are structurally impossible.
 **PATH B — planner-side session (no worktree boundary):**
 
 When the planner is making a mid-dispatch decision outside a worktree context (e.g.,
-the sprint is running in the same session or the user is manually driving the implementation agent by hand):
+the dispatch is running in the same session or the user is manually driving the implementation agent by hand):
 
 1. Identify the specification's location through the registry (the roadmap role,
    a file under `policy.roadmap.specDirectory`, an external system, or a standalone
@@ -724,11 +724,11 @@ the sprint is running in the same session or the user is manually driving the im
 ("migrate verbatim under §Mid-Dispatch Decisions"), the timing ("before
 collapsing the inline spec to a Completed Work Summary row"), and the
 silent-loss risk if skipped ("this decision evaporates and downstream
-sprints cannot reconstruct why the spec was amended"). Required field
+dispatches cannot reconstruct why the spec was amended"). Required field
 for Path B only — Path A uses fold-in instructions instead.]
 ```
 
-**How to decide which path:** If the sprint is running in a git worktree
+**How to decide which path:** If the dispatch is running in a git worktree
 (check the dispatch spec or project configuration), use Path A. If the planner is
 operating on canonical main directly, use Path B. When in doubt, use Path A —
 it's always safe and the staging file is deleted at close-out regardless.
@@ -736,10 +736,10 @@ it's always safe and the staging file is deleted at close-out regardless.
 **Amendment Registry (both paths).** The staging file (Path A) or a standalone
 decision-trail file (Path B, for projects that want a registry even without a
 worktree) carries a registry table tracking every mid-dispatch decision for the
-sprint in chronological order:
+dispatch in chronological order:
 
 ```markdown
-## Mid-Dispatch Decisions Registry — <sprint-id>
+## Mid-Dispatch Decisions Registry — <dispatch-id>
 
 | # | Date | Pause point | Decision type | Disposition |
 |---|------|-------------|---------------|-------------|
@@ -767,7 +767,7 @@ execute the append** to the registered `lessons` role — not just describe it.
 
 **If updating:** Append an entry under the next identifier
 (`virtuoso_registry --root . closeout --item <ID> --date <date>` resolves
-`nextLessonId`) in the standard shape — pointer-closeout's
+`nextLessonId`) in the standard shape — dispatch-closeout's
 `references/spec-retro-format.md` — and check the promotion rules.
 Print confirmation: "Added <prefix>-NNN to the lessons: [one-line summary]."
 
@@ -789,7 +789,7 @@ decision on the same issue appends another block beneath it, never an edit.
 - **Lessons:** [<prefix>-NNN appended in 6c, or "No new lesson — reason"]
 ```
 
-An issue with no `## Decision` block is an open decision. `pointer-closeout` reads
+An issue with no `## Decision` block is an open decision. `dispatch-closeout` reads
 each of the item's issue files at close-out and will not treat one without a block
 as settled.
 
@@ -799,9 +799,9 @@ Print confirmation: "Recorded the decision in [issue file]."
 
 ## Integration with Other Skills
 
-### + Pointer-Closeout
+### + Dispatch-Closeout
 
-**Type 4 triggers partial pointer-closeout immediately.** Inputs: (a) completed
+**Type 4 triggers partial dispatch-closeout immediately.** Inputs: (a) completed
 tasks as deliverables, (b) cancelled tasks with reason "mid-dispatch pivot,"
 (c) pause-point finding in the findings table, (d) the stopped line of work goes
 back to `/roadmap-review` to be re-planned.
@@ -842,13 +842,13 @@ execution discipline applies to the revised plan. The instruction block should f
 this: "Virtuoso task-plan reprint required after this change."
 
 **The pause is a wait on the owner.** The paused row's clock waits with the reason
-`owner` (`timing --sprint <sprint-id> --wait N --reason owner`), so the time the
+`owner` (`timing --dispatch <dispatch-id> --wait N --reason owner`), so the time the
 decision takes stays out of its working time. The instruction block opens with
-`timing --sprint <sprint-id> --resume N` before the first action it directs.
+`timing --dispatch <dispatch-id> --resume N` before the first action it directs.
 
-**Governance Staging integration:** For worktree-resident sprints, virtuoso's
+**Governance Staging integration:** For worktree-resident dispatches, virtuoso's
 Worktree Governance Staging rules (§Rule 5) mandate that mid-dispatch amendments
-go to the sprint's staging file — not to the inline spec. This skill's Step 6b
+go to the dispatch's staging file — not to the inline spec. This skill's Step 6b
 Path A implements that mandate. The conflict-surface check (Step 5.5) becomes
 unnecessary for worktree-resident work because the conflict surface is
 structurally eliminated. Step 5.5 still applies for planner-side (Path B) sessions.
@@ -865,11 +865,11 @@ dependency chain, (d) prior patterns or standing rules if any match. If you
 can't cite evidence, you haven't done enough analysis.
 
 **In Step 5 (Recommendation):** Paraphrase the evidence in plain terms. Do not
-name SRLs or sprint IDs by identifier. The user must follow the reasoning
+name SRLs or dispatch IDs by identifier. The user must follow the reasoning
 without lookups.
 
 **In Step 6a (instruction block):** Identifiers are appropriate and efficient. The implementation agent knows
-the codes. Cite SRL-NNN, sprint IDs, and file paths directly.
+the codes. Cite SRL-NNN, dispatch IDs, and file paths directly.
 
 ### Budget Awareness
 
@@ -911,10 +911,10 @@ conflict-surface awareness. Two risk classes apply:
    accepts the worktree's older view, the planner's edit is silently discarded. This
    is the more dangerous failure mode — there is no error, just missing content.
 
-**Rule.** For worktree-resident sprints, this conflict surface is structurally
+**Rule.** For worktree-resident dispatches, this conflict surface is structurally
 eliminated by virtuoso's Worktree Governance Staging rules: the worktree never
 edits main governance documents, so conflicts are impossible. Step 6b Path A
-(staging file) is mandatory for all worktree-resident sprints. For planner-side
+(staging file) is mandatory for all worktree-resident dispatches. For planner-side
 sessions (Path B), the conflict surface still applies — run Step 5.5 before
 any inline edit to a file the in-flight worktree might also touch at close-out.
 
@@ -930,16 +930,16 @@ any inline edit to a file the in-flight worktree might also touch at close-out.
 | Producing the instruction block before confirmation | Two-step: recommend first, execute after explicit assent |
 | Vague instruction block ("continue as you see fit") | Name tasks, agents, files, metrics, thresholds |
 | Type 3 without a revised task plan | the implementation agent can't execute "do something different" without specifics |
-| Skipping 6b (spec amendment) | The amendment is not optional. For worktree sprints: append to the staging file. For planner-side: edit the spec inline. Confirm the edit either way. |
-| Using inline-spec amendments for a worktree-resident sprint | Always use Path A (staging file). Virtuoso forbids worktree edits to main governance docs — the staging file is the only valid target. |
+| Skipping 6b (spec amendment) | The amendment is not optional. For worktree dispatches: append to the staging file. For planner-side: edit the spec inline. Confirm the edit either way. |
+| Using inline-spec amendments for a worktree-resident dispatch | Always use Path A (staging file). Virtuoso forbids worktree edits to main governance docs — the staging file is the only valid target. |
 | Using Type 5 to avoid a hard decision | Only valid with a listed measurement suspicion |
 | Collapsing bundled pauses into one decision | One Problem/Alternatives/Recommendation per decision point |
-| Acronyms, sprint IDs, or SRL numbers in the Recommendation | Step 5 is plain language only. Paraphrase the idea; identifiers go in the instruction block. |
+| Acronyms, dispatch IDs, or SRL numbers in the Recommendation | Step 5 is plain language only. Paraphrase the idea; identifiers go in the instruction block. |
 | User has to open another document to follow the recommendation | Recommendation must be self-contained. If a reference is decision-relevant, paraphrase it in plain terms. |
 | Skipping Step 2's first-principles assessment | Walk all five sub-steps. Pattern-matching to the spec's framing is the failure mode this step exists to prevent. |
 | Appending amendment without a Close-Out Preservation field | Always include the field — it's the contract that prevents silent loss at close-out. The close-out handler needs to know where to migrate the amendment, how, when, and what's at risk if skipped. |
-| Persisting amendment without checking execution context | For worktree-resident sprints, always use Path A (staging file) — no conflict check needed because the surface is eliminated. For planner-side (Path B), run Step 5.5 first. |
-| Using inline-spec amendments for a sprint running in a worktree | Virtuoso's staging-file pattern makes this a hard prohibition. Use Path A unconditionally for worktree-resident work. |
+| Persisting amendment without checking execution context | For worktree-resident dispatches, always use Path A (staging file) — no conflict check needed because the surface is eliminated. For planner-side (Path B), run Step 5.5 first. |
+| Using inline-spec amendments for a dispatch running in a worktree | Virtuoso's staging-file pattern makes this a hard prohibition. Use Path A unconditionally for worktree-resident work. |
 
 ---
 

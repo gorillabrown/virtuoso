@@ -22,7 +22,7 @@ from tools.governance import registry as registry_mod, textio
 ROOT = Path(PLUGIN_ROOT)
 PREFLIGHT = str(ROOT / "scripts" / "virtuoso_preflight.py")
 REGISTRY_CLI = str(ROOT / "scripts" / "virtuoso_registry.py")
-SPRINT_GUARDS = str(ROOT / "scripts" / "sprint_guards.py")
+DISPATCH_GUARDS = str(ROOT / "scripts" / "dispatch_guards.py")
 
 
 def run(script, *args, cwd=None):
@@ -146,7 +146,7 @@ def test_session_start_reads_the_roadmap_once(workspace, monkeypatch):
 
 
 def test_the_ceremonies_read_the_line_the_preflight_prints():
-    for skill in ("next-pointer", "roadmap-status", "roadmap-review", "pointer-closeout"):
+    for skill in ("dispatch-kickoff", "roadmap-status", "roadmap-review", "dispatch-closeout"):
         text = (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
         assert "`roadmap-integrity:` line" in text, skill
         assert "exit 3" not in text and "exit 2" not in text, (
@@ -216,7 +216,7 @@ def test_the_decision_block_has_a_step_and_the_close_out_reads_it():
     decide = (ROOT / "skills" / "mid-dispatch-decision" / "SKILL.md").read_text(encoding="utf-8")
     assert "#### 6d. Record the Decision in the Issue File" in decide
     assert "## Decision — YYYY-MM-DD" in decide
-    close = (ROOT / "skills" / "pointer-closeout" / "SKILL.md").read_text(encoding="utf-8")
+    close = (ROOT / "skills" / "dispatch-closeout" / "SKILL.md").read_text(encoding="utf-8")
     assert "`## Decision`" in close and "open decision" in close
 
 
@@ -224,10 +224,10 @@ def test_the_decision_block_has_a_step_and_the_close_out_reads_it():
 
 def test_the_reference_check_catches_a_ghost():
     validate = load_script("validate")
-    skills, agents = ["roadmap-review", "next-pointer"], ["Aristotle", "Hermes"]
+    skills, agents = ["roadmap-review", "dispatch-kickoff"], ["Aristotle", "Hermes"]
     assert validate.unresolved_references(
         "escalate to athena; (→ Hermes); run `/write-spec`; Invoke `write-spec`; "
-        "`/virtuoso:next-pointer`", skills, agents) == ["/write-spec", "write-spec", "athena"]
+        "`/virtuoso:dispatch-kickoff`", skills, agents) == ["/write-spec", "write-spec", "athena"]
     assert validate.unresolved_references(
         "escalate to the planner; (→ cross-cutting); □ 3. Aristotle: go", skills, agents) == []
     # A host CLI command resolves to the host; a misspelling of one is still a ghost.
@@ -292,7 +292,7 @@ def dispatch(tmp_path):
 
 
 def created(root, *extra):
-    return run(SPRINT_GUARDS, "created-files", "--root", str(root), "--base", "main", *extra)
+    return run(DISPATCH_GUARDS, "created-files", "--root", str(root), "--base", "main", *extra)
 
 
 def test_created_files_is_clean_when_everything_is_committed(dispatch):
@@ -326,7 +326,7 @@ def test_created_files_classifies_what_a_dispatch_leaves_behind(dispatch):
 
 
 def test_created_files_refuses_an_unknown_base(dispatch):
-    completed = run(SPRINT_GUARDS, "created-files", "--root", str(dispatch), "--base", "nope")
+    completed = run(DISPATCH_GUARDS, "created-files", "--root", str(dispatch), "--base", "nope")
     assert completed.returncode == 2 and "does not resolve" in completed.stdout
 
 
@@ -372,9 +372,9 @@ def test_check_says_nothing_about_ignores_outside_a_repository(tmp_path):
 
 
 def test_the_close_out_runs_the_review_and_records_it():
-    skill = (ROOT / "skills" / "pointer-closeout" / "SKILL.md").read_text(encoding="utf-8")
-    assert skill.count("sprint_guards created-files") >= 1 and "created-files" in skill
-    template = (ROOT / "skills" / "pointer-closeout" / "assets" /
+    skill = (ROOT / "skills" / "dispatch-closeout" / "SKILL.md").read_text(encoding="utf-8")
+    assert skill.count("dispatch_guards created-files") >= 1 and "created-files" in skill
+    template = (ROOT / "skills" / "dispatch-closeout" / "assets" /
                 "CloseOut.template.md").read_text(encoding="utf-8")
     assert "## Files Created" in template
 
@@ -382,7 +382,7 @@ def test_the_close_out_runs_the_review_and_records_it():
 def test_the_virtuoso_skill_runs_the_guards_through_the_launcher():
     text = (ROOT / "skills" / "virtuoso" / "SKILL.md").read_text(encoding="utf-8")
     assert "registry:scripts" not in text
-    assert text.count('"$HOME/.virtuoso/bin/virtuoso" sprint_guards') == 4
+    assert text.count('"$HOME/.virtuoso/bin/virtuoso" dispatch_guards') == 4
 
 
 # --- D22, D11, D12, D15: hygiene, candidates, the anchored reason, loop health ---------
@@ -571,7 +571,7 @@ def test_record_status_previews_then_appends_and_reads_back(catalog):
 
 
 @pytest.mark.parametrize("lesson, status, actor, why", [
-    ("LSN-002", "Superseded -> LSN-001", "next-pointer", "may not write"),
+    ("LSN-002", "Superseded -> LSN-001", "dispatch-kickoff", "may not write"),
     ("LSN-042", "Retired — obsolete", "governance-sweep", "not a recorded lesson"),
     ("LSN-002", "Superseded -> LSN-002", "governance-sweep", "names the recorded lesson"),
     ("LSN-002", "Retired", "governance-sweep", "say where it went or why"),
@@ -806,10 +806,10 @@ def test_a_markdown_ledger_with_effort_columns_round_trips(tmp_path):
     path = tmp_path / "ledger.md"
     path.write_text("# Ledger\n\n| Record | Item | Completed | Result | Evidence | Corrects "
                     "| Estimate | Actual |\n|---|---|---|---|---|---|---|---|\n", encoding="utf-8")
-    book = ledger_mod.TerminalLedger(str(path), writers=["pointer-closeout"])
+    book = ledger_mod.TerminalLedger(str(path), writers=["dispatch-closeout"])
     book.append(ledger_mod.LedgerRecord("TR-001", "I-1", "2026-09-23", "shipped",
                                         effort_estimate="2h", effort_actual="150m"),
-                actor="pointer-closeout")
+                actor="dispatch-closeout")
     [record] = book.records()
     assert (record.effort_estimate, record.effort_actual) == ("2h", "150m")
     assert "| TR-001 | I-1 | 2026-09-23 | shipped |  |  | 2h | 150m |" in path.read_text(encoding="utf-8")
@@ -818,10 +818,10 @@ def test_a_markdown_ledger_with_effort_columns_round_trips(tmp_path):
 def test_a_six_column_markdown_ledger_is_unchanged(tmp_path):
     from tools.governance.providers import ledger as ledger_mod
     path = tmp_path / "ledger.md"
-    book = ledger_mod.TerminalLedger(str(path), writers=["pointer-closeout"])
+    book = ledger_mod.TerminalLedger(str(path), writers=["dispatch-closeout"])
     book.append(ledger_mod.LedgerRecord("TR-001", "I-1", "2026-09-23", "shipped",
                                         effort_estimate="2h", effort_actual="3h"),
-                actor="pointer-closeout")
+                actor="dispatch-closeout")
     assert "| TR-001 | I-1 | 2026-09-23 | shipped |  |  |" in path.read_text(encoding="utf-8")
     assert book.records()[0].effort_estimate == ""
 
@@ -831,7 +831,7 @@ def test_kpis_reports_effort_calibration(catalog):
         path = role_path(catalog, "workRegister")
         with open(path, "a", encoding="utf-8", newline="") as handle:
             handle.write("%s,%s,1,Queued,Full Spec,,S,,,,,,,,,\n" % (item, item))
-        completed = run(REGISTRY_CLI, "--root", str(catalog), "--actor", "pointer-closeout",
+        completed = run(REGISTRY_CLI, "--root", str(catalog), "--actor", "dispatch-closeout",
                         "record-completion", "--item", item, "--date", "2026-09-23",
                         "--result", "shipped", "--estimate", estimate, "--actual", actual,
                         "--apply")

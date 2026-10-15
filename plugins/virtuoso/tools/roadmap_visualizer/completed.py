@@ -26,7 +26,7 @@ COMPLETED_COLUMNS = (
     ("completedOn", "Completed", "text", False),
     ("closeout", "Close-out", "link", False),
     ("branch", "Branch", "mono", True),
-    ("lane", "Lane", "label", True),
+    ("workstream", "Workstream", "label", True),
     ("group", "Group", "chip", True),
     ("loe", "LOE", "label", False),
     ("estimateActual", "Est. → Actual", "estimate", False),

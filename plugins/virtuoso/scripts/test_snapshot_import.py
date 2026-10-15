@@ -396,6 +396,20 @@ def test_a_file_mixing_pages_and_rows_is_refused():
         snapshot_provider.parse_rows(json.dumps([_page(), {"Code": "A"}]))
 
 
+def test_a_markdown_reads_autolinks_are_unwrapped():
+    # Notion's rows mode and page fetch link any "<name>.md" (.md is a TLD) and any URL.
+    rows = [{"Code": "PAY-1", "Name": "Write [done.md](http://done.md) and keep [x](y)",
+             "Status": "Ready", "Spec Link": "[ROADMAP.md#a](http://ROADMAP.md#a)"},
+            {"Code": "PAY-2", "Name": "Plain", "Status": "Ready",
+             "Spec Link": {"text": "[https://e.com/s](https://e.com/s)"}}]
+    snap, _ = snapshot_provider.from_rows(rows, mapping(), source=BOARD,
+                                          taken_at="2026-10-09T00:00:00Z")
+    by_id = {i.id: i for i in snap.items}
+    assert by_id["PAY-1"].title == "Write done.md and keep [x](y)"
+    assert by_id["PAY-1"].spec_link == "ROADMAP.md#a"
+    assert by_id["PAY-2"].spec_link == "https://e.com/s"
+
+
 @pytest.mark.parametrize("cell", ["None", "none", "-", "—", "n/a"])
 def test_placeholder_prerequisites_mean_none(cell):
     rows = [{"Code": "PAY-1", "Status": "Ready", "Depends On": cell},
@@ -404,3 +418,50 @@ def test_placeholder_prerequisites_mean_none(cell):
                                           taken_at="2026-10-09T00:00:00Z")
     by_id = {i.id: i for i in snap.items}
     assert by_id["PAY-1"].prerequisites == [] and by_id["PAY-2"].prerequisites == ["VIR-001"]
+
+
+# --- one rows contract for every tool -------------------------------------------------
+
+FIXTURES = Path(PLUGIN_ROOT) / "scripts" / "fixtures"
+#: What every tool's rows must import to, whatever the tool called its columns.
+EXPECTED = {"ABC-3": (base.COMPLETED, 1, "s", []),
+            "ABC-7": (base.IN_FLIGHT, 2, "m", ["ABC-3"]),
+            "ABC-9": (base.QUEUED, 3, "l", ["ABC-7"])}
+
+
+def _import_tool_rows(name, field_mappings, status_mappings):
+    data = json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+    mapped = mapping_mod.Mapping.from_policy({"fieldMappings": field_mappings,
+                                              "statusMappings": status_mappings})
+    snap, _ = snapshot_provider.from_rows(data["rows"], mapped, source="example:register/1",
+                                          taken_at=data["takenAt"])
+    return {i.id: (i.status, i.sequence, i.effort, i.prerequisites) for i in snap.items}
+
+
+def test_rows_written_from_a_database_read_import_through_the_mappings():
+    got = _import_tool_rows(
+        "rows_from_a_database_read.json",
+        {"id": "Item ID", "title": "Name", "status": "Status", "sequence": "Sequence",
+         "effort": "Effort", "prerequisites": "Depends On"},
+        {"queued": ["Not started"], "in-flight": ["In progress"], "completed": ["Done"]})
+    assert got == EXPECTED
+
+
+def test_rows_written_from_an_issue_tracker_read_import_through_the_mappings():
+    got = _import_tool_rows(
+        "rows_from_an_issue_tracker_read.json",
+        {"id": "Key", "title": "Title", "status": "State", "sequence": "Order",
+         "effort": "Size", "prerequisites": "Blocked By"},
+        {"queued": ["Todo"], "in-flight": ["In Progress"], "completed": ["Done"]})
+    assert got == EXPECTED
+
+
+def test_every_refresh_instruction_names_the_rows_form():
+    """Each skill that names the snapshot import, and the contract, name the rows form."""
+    root = Path(PLUGIN_ROOT)
+    places = [root / "references" / "registry-contract.md"] + [
+        root / "skills" / name / "SKILL.md"
+        for name in ("dispatch-kickoff", "dispatch-closeout", "roadmap-review")]
+    for path in places:
+        text = " ".join(path.read_text(encoding="utf-8").split())
+        assert "--import <rows.json>" in text, path

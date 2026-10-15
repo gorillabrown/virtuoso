@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ..errors import ProviderError
 from . import base
 
 #: Canonical field -> the default column/property name a register is read with.
@@ -20,7 +21,8 @@ DEFAULT_FIELDS = {
     "written_status": "written_status",
     "prerequisites": "prerequisites",
     "effort": "effort",
-    "lane": "lane",
+    "workstream": "workstream",
+    "deliverable": "deliverable",
     "group": "group",
     "spec_link": "spec_link",
     "branch": "branch",
@@ -41,7 +43,9 @@ DEFAULT_ALIASES = {
     "written_status": ["written status", "written", "spec status", "specification status"],
     "prerequisites": ["dependencies", "depends on", "blocked by", "prereqs"],
     "effort": ["loe", "size", "estimate", "story points", "points"],
-    "lane": ["stage", "swimlane", "track"],
+    # "lane" is the field's name before 1.15.0: a project's own Lane column still reads.
+    "workstream": ["lane", "stage", "swimlane", "track"],
+    "deliverable": [],
     "group": ["phase", "epic", "milestone", "category"],
     "spec_link": ["spec", "spec link", "repo spec", "specification", "close-out file", "link"],
     "branch": ["branch name"],
@@ -67,6 +71,28 @@ DEFAULT_WRITTEN_VOCABULARY = {
     base.STUB: ["stub", "", "placeholder", "draft", "outline"],
     base.FULL_SPEC: ["full spec", "full-spec", "spec", "specified", "dispatch-ready", "ready"],
 }
+
+
+#: Retired canonical field names a project's fieldMappings may still use, read for one
+#: release (1.15.0) as the field that replaced them.
+RENAMED_FIELDS = {"lane": "workstream"}
+
+
+def canonical_field_mappings(configured: dict) -> dict:
+    """``fieldMappings`` with each retired key read as its new name. A mapping that
+    names both a retired key and its replacement is refused: which column wins would
+    be a guess."""
+    out = dict(configured)
+    for old, new in RENAMED_FIELDS.items():
+        if old not in out:
+            continue
+        if new in out:
+            raise ProviderError(
+                "policy.workRegister.fieldMappings names both %r and %r; %r is the old name "
+                "of %r. Keep one: %r." % (old, new, old, new, new),
+                detail={"fields": [old, new]})
+        out[new] = out.pop(old)
+    return out
 
 
 def _norm(value) -> str:
@@ -155,6 +181,7 @@ class Mapping:
         fields = FieldMapping()
         configured_fields = config.get("fieldMappings")
         if isinstance(configured_fields, dict):
+            configured_fields = canonical_field_mappings(configured_fields)
             fields.fields = dict(DEFAULT_FIELDS)
             fields.fields.update({k: v for k, v in configured_fields.items() if isinstance(v, str)})
         statuses = StatusMapping()

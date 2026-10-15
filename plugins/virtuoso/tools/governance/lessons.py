@@ -6,7 +6,7 @@ A lesson lives in the registered ``lessons`` role, which is append-only. One ent
     **Verdict:** what was learned, in a sentence or two
     **Evidence:** what happened, with numbers
     **Recommendation:** the concrete change a future specification should make
-    **Applies to:** when it bears on future work — a domain, an item kind, a lane
+    **Applies to:** when it bears on future work — a domain, an item kind, a workstream
     **Status:** Observation
 
 The prefix (``SRL``) is ``policy.lessons.idPrefix``. A status never changes in
@@ -27,10 +27,10 @@ Until then the words still link it, and the check says so (:func:`link_to`).
 
 Three ceremonies close the loop, and this module is what they check against:
 
-* ``pointer-closeout`` appends the lessons a dispatch taught — or says, with a
+* ``dispatch-closeout`` appends the lessons a dispatch taught — or says, with a
   reason, that it taught none — and records how the lessons its specification
   applied turned out;
-* ``roadmap-review`` and ``next-pointer`` fold the live lessons into every
+* ``roadmap-review`` and ``dispatch-kickoff`` fold the live lessons into every
   specification (readiness rubric U9, *Lessons applied*);
 * ``epic`` folds them into a charter's direction before a long run begins.
 """

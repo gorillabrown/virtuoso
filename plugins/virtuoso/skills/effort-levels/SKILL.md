@@ -1,11 +1,11 @@
 ---
 name: effort-levels
 description: >
-  Effort level selection framework for sprint dispatch specs. Use this skill whenever
-  authoring a dispatch spec, sizing a sprint, or reviewing whether a sprint's effort
+  Effort level selection framework for dispatch specs. Use this skill whenever
+  authoring a dispatch spec, sizing a dispatch, or reviewing whether a dispatch's effort
   allocation matches its task complexity. This skill governs how much extended thinking
   budget each task receives — a real cost lever, not just a quality preference. Trigger on:
-  "spec this sprint", "author a dispatch", "size this work", "what effort level", "review
+  "spec this dispatch", "author a dispatch", "size this work", "what effort level", "review
   effort allocation", or any dispatch authoring session where task complexity varies.
   When in doubt, use this skill — misallocated effort is invisible waste.
 ---
@@ -21,7 +21,7 @@ description: >
 - **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (its universal checks, at the version it declares, plus the project's declared extensions). No skill restates it in its own words.
 - **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
-- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
+- **Effort levels** — low / medium / high / xhigh / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 <!-- virtuoso-overlay-clause v2 -->
 **Project overlay.** If the registry declares an `overlays` role, read the overlay mirroring
@@ -35,7 +35,7 @@ issue contract), and `references/registry-contract.md` may not be overlaid at al
 `overlays` role, an absent overlays directory, and no matching overlay file all mean the
 same thing — proceed on the shipped file alone.
 
-# Effort Levels — Sprint Dispatch Sizing
+# Effort Levels — Dispatch Sizing
 
 This skill helps the planner select the right effort level when authoring dispatch specs.
 Effort level controls how deeply sub-agents reason on each task — it is the primary
@@ -44,7 +44,7 @@ than the same task at low effort. Getting this right prevents both underthinking
 (wrong answers on hard problems) and overthinking (burning tokens on trivial work).
 
 **Invoke this skill when:** authoring any dispatch spec, reviewing effort allocation
-on an existing spec, or deciding whether a sprint needs wave-splitting by effort.
+on an existing spec, or deciding whether a dispatch needs wave-splitting by effort.
 
 ---
 
@@ -212,13 +212,13 @@ Use this as a quick lookup when assigning effort to tasks in a dispatch spec.
 
 ---
 
-## Sprint-Level Effort Declaration
+## Dispatch-Level Effort Declaration
 
 <!-- rule:size-from-measured-cadence (measured-cadence) -->
 **Size from measured cadence, not from the shape of the task list.** Two sizing errors
 recur, both in the same direction:
 
-- **Analytical sprints staffed with two top-effort `{high}` agents underestimate by
+- **Analytical dispatches staffed with two top-effort `{high}` agents underestimate by
   22–36%.** This is a measured figure, not a feeling — when a plan has two such agents,
   size up a bracket rather than discovering the gap at the fix round.
 - **Prefer the project's own measurement.** When the project records estimates and
@@ -239,12 +239,12 @@ recur, both in the same direction:
   is mechanical. Above roughly ten items with multi-pattern reading, default up a tier;
   above a few hundred, decompose to parallel workers per logical section.
 
-And the corollary for planning horizons: **a buffer counted in sprints is consumed in
+And the corollary for planning horizons: **a buffer counted in dispatches is consumed in
 time.** Read a dispatch-ready buffer as days of runway — count ÷ the trailing weekly
-sprint rate — because a buffer of five at fifteen sprints a week is about two days.
+dispatch rate — because a buffer of five at fifteen dispatches a week is about two days.
 
 Every dispatch spec declares a default effort level in its header. This is the baseline
-for all tasks in the sprint. Individual tasks can override up or down.
+for all tasks in the dispatch. Individual tasks can override up or down.
 
 ### Format
 
@@ -279,7 +279,7 @@ every row either way (the virtuoso skill's row format).
 
 ## Effort-Based Wave Splitting
 
-If a sprint mixes effort levels significantly, **split into waves by effort** to avoid
+If a dispatch mixes effort levels significantly, **split into waves by effort** to avoid
 paying max-effort prices for boilerplate work.
 
 ### Wave Structure
@@ -289,14 +289,14 @@ paying max-effort prices for boilerplate work.
 
 ### When to Split
 
-Split when a sprint contains **3+ tasks at a higher effort tier than the sprint default**.
-A single High task in an otherwise Medium sprint doesn't warrant splitting. But if
+Split when a dispatch contains **3+ tasks at a higher effort tier than the dispatch default**.
+A single High task in an otherwise Medium dispatch doesn't warrant splitting. But if
 half the tasks need High and half need Low, split.
 
 ### This Is Additive
 
 Effort-based wave splitting is additive to the existing wave-splitting rules (tool
-budget ≤40, wall time ≤60 minutes). A sprint can be split for effort reasons even if
+budget ≤40, wall time ≤60 minutes). A dispatch can be split for effort reasons even if
 it fits within the tool and time budgets. The three splitting criteria are:
 
 1. Tool budget exceeded → split
@@ -316,8 +316,8 @@ If any criterion triggers, split.
 | "Low effort is fine, the agent can figure it out" | Low effort explicitly limits reasoning depth. Complex tasks at Low effort produce plausible-but-wrong output. |
 | "I'll set effort during execution when I see the task" | Effort is a spec decision, not an execution decision. The spec author knows the task complexity. The implementation agent just executes. |
 | "Effort doesn't matter, the task tier handles it" | The task tier says how wide the task reaches. Effort says how much deliberation to spend on it. The same bounded task run at `low` and at `high` produces materially different work. |
-| "This sprint is all one effort level, no need to declare it" | Declare it anyway. The explicit declaration prevents drift and enables cost forecasting. |
-| "Splitting by effort adds overhead, just run everything at High" | The cost difference between Low and High is ~5x per task. On a 10-task sprint with 6 Low tasks, that's wasting ~24x the tokens on those 6 tasks. |
+| "This dispatch is all one effort level, no need to declare it" | Declare it anyway. The explicit declaration prevents drift and enables cost forecasting. |
+| "Splitting by effort adds overhead, just run everything at High" | The cost difference between Low and High is ~5x per task. On a 10-task dispatch with 6 Low tasks, that's wasting ~24x the tokens on those 6 tasks. |
 
 ---
 
@@ -337,19 +337,19 @@ the session will use whatever effort level happens to be active.
 ### How the implementation agent uses this
 
 1. **At dispatch start:** the implementation agent reads the dispatch header's `Effort:` field and runs
-   `/effort-levels [default]` to set the baseline for the sprint.
+   `/effort-levels [default]` to set the baseline for the dispatch.
 
 2. **Per-task override:** Before dispatching a task with an effort override (e.g.,
    `{max}`), it runs `/effort-levels [override]`. After the task completes, it
-   reverts to the sprint default with `/effort-levels [default]`.
+   reverts to the dispatch default with `/effort-levels [default]`.
 
 ### Example Execution Sequence
 
 ```
-Sprint header: Effort: Medium | Override: tasks #3, #7 → High, task #5 → Max
+Dispatch header: Effort: Medium | Override: tasks #3, #7 → High, task #5 → Max
 
 Execution:
-  /effort-levels medium          ← set sprint default
+  /effort-levels medium          ← set dispatch default
   dispatch task #1               ← runs at medium (default)
   dispatch task #2               ← runs at medium (default)
   /effort-levels high            ← override for task #3
@@ -383,9 +383,9 @@ Execution:
 When authoring a dispatch spec, walk through these steps:
 
 1. **Classify each task** using the Task Type Reference Table above
-2. **Identify the sprint default** — the effort level that covers the majority of tasks
+2. **Identify the dispatch default** — the effort level that covers the majority of tasks
 3. **Mark overrides** — tasks that need higher or lower effort than the default
 4. **Check for wave-split triggers** — are 3+ tasks at a significantly different level?
 5. **Declare in header** — `Effort: [Level] | Override: tasks #X, #Y → [Level]`
-6. **Sanity check** — does the cost profile match the sprint's importance? A routine
-   cleanup sprint at Max effort is waste. A mission-critical migration at Low is risk.
+6. **Sanity check** — does the cost profile match the dispatch's importance? A routine
+   cleanup dispatch at Max effort is waste. A mission-critical migration at Low is risk.

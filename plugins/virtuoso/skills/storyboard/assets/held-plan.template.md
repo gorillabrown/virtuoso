@@ -80,7 +80,7 @@ Considered and set aside: [Alternative — why not]. [Alternative — why not].
 - **Out of scope:** [...]
 - **Edit sites (expected):** [...]
 - **Prerequisites:** [descriptive names, or none]
-- **Effort:** [low / medium / high / max]
+- **Effort:** [low / medium / high / xhigh / max]
 - **Interfaces:** [consumes … / produces … — item sets only]
 
 ### Alignment verdict
@@ -93,7 +93,7 @@ Not aligned — [the open assumptions, frames, or questions, by name].
 
 ## Plan
 
-<!-- Filled by write-plan: readiness, roadmap placement, pointer, repository
+<!-- Filled by write-plan: readiness, roadmap placement, kickoff, repository
      reconciliation, and one specification per draft-stub item, each headed
      `#### HB-<n> — Title`. Empty until then. An epic-scale entry is never planned here.
      Only the virtuoso skill executes the plan, and it records the run in the trail. -->

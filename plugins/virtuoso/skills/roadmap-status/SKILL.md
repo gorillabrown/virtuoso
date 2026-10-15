@@ -22,7 +22,7 @@ description: |
 - **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (its universal checks, at the version it declares, plus the project's declared extensions). No skill restates it in its own words.
 - **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
-- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
+- **Effort levels** — low / medium / high / xhigh / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 <!-- virtuoso-overlay-clause v2 -->
 **Project overlay.** If the registry declares an `overlays` role, read the overlay mirroring
@@ -96,8 +96,8 @@ recommendation for a ceremony that is permitted to make it.
 
 Do NOT use this for:
 - Replanning or re-sequencing — `/roadmap-review`
-- Finalizing a specification for dispatch — `/next-pointer`
-- Closing out completed work — `/pointer-closeout`
+- Finalizing a specification for dispatch — `/dispatch-kickoff`
+- Closing out completed work — `/dispatch-closeout`
 
 ## Invocation
 
@@ -106,8 +106,8 @@ Manual only: `/roadmap-status`, "roadmap status", "status update".
 ## Glossary
 
 - **Work item** — a discrete unit of work with clear acceptance criteria.
-- **Group / lane** — optional grouping levels, only if `policy.roadmap.hierarchy`
-  and `policy.roadmap.lanes` declare them.
+- **Group / workstream** — optional grouping levels, only if `policy.roadmap.hierarchy`
+  and `policy.roadmap.workstreams` declare them.
 - **Stub / specification** — an item without / with its full card.
 - **Straggler** — an item still in the roadmap's active section that has in fact
   shipped.
@@ -388,7 +388,7 @@ a hand-off to a ceremony that is permitted to make it, and say which check faile
      an *ordinary* record: it corrects nothing, so `correctionWriters` does not cover
      it. Append it here only if `policy.terminalLedger.writers` names
      `roadmap-status`. Otherwise, and by default, list it as a hand-off to
-     `/pointer-closeout`, which handles it as its section *Retirement records routed
+     `/dispatch-closeout`, which handles it as its section *Retirement records routed
      here* describes. Terminal records are append-only: a correction is a new record
      referencing the one it corrects, never an edit to history.
 

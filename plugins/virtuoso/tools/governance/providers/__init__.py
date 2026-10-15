@@ -80,7 +80,7 @@ def _creation_permission(policy, actor: str, writable: bool) -> tuple[bool, str]
     if creators is None:
         return True, ""
     names = [str(c) for c in creators] if isinstance(creators, list) else []
-    if actor in names or "*" in names:
+    if schema.actor_allowed(actor, names):
         return True, ""
     return False, ("actor %r is not named in policy.workRegister.creators (%s); creating a "
                    "work item is a separately authorized act"
@@ -91,7 +91,9 @@ def _declared_fields(policy) -> list | None:
     """The canonical fields the project's fieldMappings names, or None when it declares
     none (the default ``{}``): only a declared mapping says which columns exist."""
     declared = policy.get("workRegister.fieldMappings", {})
-    return list(declared) if isinstance(declared, dict) and declared else None
+    if not isinstance(declared, dict) or not declared:
+        return None
+    return list(mapping_mod.canonical_field_mappings(declared))
 
 
 def _snapshot_for(reg, policy) -> SnapshotWorkRegister | None:

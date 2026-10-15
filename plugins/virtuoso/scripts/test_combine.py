@@ -4,7 +4,7 @@
 that worked combined several items already specified and placed, none epic-scale
 alone, serialized where they shared a file. ``virtuoso_registry combine`` is the
 mechanical half of deciding whether a set combines: membership, prerequisites, files,
-the serial order and the lanes.
+the serial order and the workstreams.
 """
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ ROOT = Path(PLUGIN_ROOT)
 PREFLIGHT = str(ROOT / "scripts" / "virtuoso_preflight.py")
 REGISTRY_CLI = str(ROOT / "scripts" / "virtuoso_registry.py")
 
+# The register's own column is still named "lane": project data the rename never touches.
 HEADER = ("id,title,sequence,status,written_status,prerequisites,effort,lane,group,spec_link,"
           "branch,started,completed,evidence,description,notes\n")
 REGISTER = HEADER + (
@@ -167,11 +168,11 @@ def test_the_charter_frontmatter_names_the_items_and_the_status():
 def test_a_batch_serializes_shared_files_and_splits_the_rest_into_lanes(game):
     """Payment telemetry and the retry worker both edit gateway.py, so the worker
     runs after the telemetry; the refund rule and fixture custody touch nothing
-    either does, so each has a lane of its own."""
+    either does, so each has a workstream of its own."""
     code, payload = combine(game, "--items", "PAY-REFUND", "PAY-RETRY", "PAY-LOG", "PAY-FIX")
     assert code == 0 and payload["combinable"] is True, payload["findings"]
     assert payload["order"] == ["PAY-LOG", "PAY-RETRY", "PAY-REFUND", "PAY-FIX"]
-    assert payload["lanes"] == [["PAY-LOG", "PAY-RETRY"], ["PAY-REFUND"], ["PAY-FIX"]]
+    assert payload["workstreams"] == [["PAY-LOG", "PAY-RETRY"], ["PAY-REFUND"], ["PAY-FIX"]]
     assert {"before": "PAY-LOG", "after": "PAY-RETRY",
             "why": "shared files: src/payments/gateway.py"} in payload["edges"]
     assert payload["effort"] == {"computable": True, "points": 8.0,
@@ -185,7 +186,7 @@ def test_a_batch_serializes_shared_files_and_splits_the_rest_into_lanes(game):
 def test_the_text_report_leads_with_the_verdict_and_names_every_edge(game):
     completed = run("--root", str(game), "combine", "--items", "PAY-LOG,PAY-RETRY")
     assert completed.returncode == 0, completed.stderr
-    assert completed.stdout.startswith("combination: COMBINABLE (2 item(s), 1 lane(s))")
+    assert completed.stdout.startswith("combination: COMBINABLE (2 item(s), 1 workstream(s))")
     assert "1. Payment telemetry (PAY-LOG)" in completed.stdout
     assert "PAY-LOG before PAY-RETRY — shared files: src/payments/gateway.py" in completed.stdout
 
@@ -197,7 +198,7 @@ def test_a_prerequisite_in_the_set_orders_it_whatever_the_sequence(game):
     code, payload = combine(game, "--items", "PAY-LOG", "PAY-REFUND", "PAY-RETRY")
     assert code == 0, payload["findings"]
     assert payload["order"] == ["PAY-REFUND", "PAY-LOG", "PAY-RETRY"]
-    assert payload["lanes"] == [["PAY-REFUND", "PAY-LOG", "PAY-RETRY"]]
+    assert payload["workstreams"] == [["PAY-REFUND", "PAY-LOG", "PAY-RETRY"]]
 
 
 def test_a_prerequisite_outside_the_set_that_is_not_done_blocks(game):
@@ -248,7 +249,7 @@ def test_an_item_whose_files_are_unknown_runs_serially_with_everything(game):
     role_path(game, "roadmap").write_text(roadmap, encoding="utf-8", newline="\n")
     code, payload = combine(game, "--items", "PAY-REFUND", "PAY-FIX")
     assert code == 0 and codes(payload, "warning") == ["combine-files-unlisted"]
-    assert payload["lanes"] == [["PAY-REFUND", "PAY-FIX"]]
+    assert payload["workstreams"] == [["PAY-REFUND", "PAY-FIX"]]
     assert {"before": "PAY-REFUND", "after": "PAY-FIX",
             "why": "files unknown for PAY-REFUND"} in payload["edges"]
 
@@ -258,7 +259,7 @@ def test_an_unlocated_specification_is_a_warning_not_a_guess(game):
     role_path(game, "roadmap").write_text(roadmap, encoding="utf-8", newline="\n")
     code, payload = combine(game, "--items", "PAY-REFUND", "PAY-FIX")
     assert code == 0 and codes(payload, "warning") == ["combine-spec-unlocated"]
-    assert len(payload["lanes"]) == 1
+    assert len(payload["workstreams"]) == 1
 
 
 def test_an_item_an_active_charter_names_is_already_in_a_run(game):
@@ -292,14 +293,14 @@ def test_an_item_an_active_charter_names_is_already_in_a_run(game):
 
 
 def test_a_lane_and_a_range_select_the_active_items_between(game):
-    code, payload = combine(game, "--lane", "Payments", "--from", "11", "--to", "13")
+    code, payload = combine(game, "--workstream", "Payments", "--from", "11", "--to", "13")
     assert code == 0, payload["findings"]
     assert payload["order"] == ["PAY-LOG", "PAY-RETRY", "PAY-REFUND"]
-    assert payload["selection"] == {"lane": "Payments", "from": 11, "to": 13}
+    assert payload["selection"] == {"workstream": "Payments", "from": 11, "to": 13}
 
 
 def test_an_empty_lane_selection_blocks(game):
-    code, payload = combine(game, "--lane", "nowhere")
+    code, payload = combine(game, "--workstream", "nowhere")
     assert code == 1 and codes(payload) == ["combine-selection-empty"]
 
 
@@ -321,9 +322,9 @@ def test_a_stale_snapshot_blocks_the_combination(project):
 
 
 @pytest.mark.parametrize("args, message", [
-    (("--items", "PAY-LOG", "--lane", "payments"), "not both and not neither"),
+    (("--items", "PAY-LOG", "--workstream", "payments"), "not both and not neither"),
     ((), "not both and not neither"),
-    (("--items", "PAY-LOG", "PAY-RETRY", "--from", "3"), "bound a --lane selection"),
+    (("--items", "PAY-LOG", "PAY-RETRY", "--from", "3"), "bound a --workstream selection"),
 ])
 def test_a_malformed_selection_is_unanswerable(game, args, message):
     completed = run("--root", str(game), "combine", *args)
@@ -333,7 +334,7 @@ def test_a_malformed_selection_is_unanswerable(game, args, message):
 def test_combine_writes_nothing(game):
     before = snapshot_tree(str(game))
     combine(game, "--items", "PAY-REFUND", "PAY-RETRY", "PAY-LOG", "PAY-FIX")
-    run("--root", str(game), "combine", "--lane", "payments")
+    run("--root", str(game), "combine", "--workstream", "payments")
     assert snapshot_tree(str(game)) == before
 
 
@@ -352,7 +353,7 @@ def test_the_epic_skill_charters_a_combination_without_a_marker_or_a_holding_bay
     epic = skill("epic")
     assert "#### Step 1a — One item marked `Path: epic`" in epic
     assert "#### Step 1b — A combination of roadmap items" in epic
-    assert "--actor epic combine --items" in epic and "combine --lane" in epic
+    assert "--actor epic combine --items" in epic and "combine --workstream" in epic
     for code in ("combine-item-stub", "combine-prerequisite-outside", "combine-snapshot-stale"):
         assert code in epic or code.replace("combine-item-", "-") in epic, code
     assert "needs no `Path` marker and no holding bay" in flat(epic)
@@ -373,10 +374,10 @@ def test_every_ceremony_knows_an_item_in_a_combined_run():
     paths = (ROOT / "references" / "execution-paths.md").read_text(encoding="utf-8")
     assert "`/epic <ITEM-ID> <ITEM-ID> …`" in paths
     assert "A combination leaves each item's `Path` as it is." in flat(paths)
-    assert "`item:` or its `items:`" in flat(skill("next-pointer"))
+    assert "`item:` or its `items:`" in flat(skill("dispatch-kickoff"))
     assert "names (`item:` or `items:`" in flat(skill("roadmap-review"))
     assert "**Set the path of items already on the roadmap.**" in skill("roadmap-review")
-    assert "## Combined epics — one run, several items" in skill("pointer-closeout")
+    assert "## Combined epics — one run, several items" in skill("dispatch-closeout")
     assert "`/epic <ITEM-ID> <ITEM-ID> …`" in skill("storyboard")
     contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
     assert "## Combining roadmap items into one epic" in contract

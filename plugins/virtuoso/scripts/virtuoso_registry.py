@@ -5,8 +5,10 @@ Query subcommands create nothing and heal nothing as a side effect (item 86).
 The commands that write say so explicitly: `snapshot`, `closeout --prepare`,
 `create-item` (appends a new item to a LOCAL register), `mutation-plan` (opens
 durable recovery before a host connector write), `mutation-confirm` (records
-the connector result and resolves recovery only on success), and `timing`
-(appends clock-stamped events to a dispatch's time log in the closeOuts role).
+the connector result and resolves recovery only on success), `timing`
+(appends clock-stamped events to a dispatch's time log in the closeOuts role), and
+`move-register --plan --apply` / `--confirm` / `--finish --apply` (the move record, a
+local target's rows, and the repointed manifest with its backup and snapshot).
 
 Subcommands:
   roles                     list every registered role and how it resolves
@@ -18,9 +20,9 @@ Subcommands:
   items [--all]             list work items from the work register
   next                      the next eligible work item
   combine --items ID ...    whether roadmap items combine into one epic run: each
-          --lane L [--from N] [--to M]   live and specified, prerequisites done or
+          --workstream W [--from N] [--to M]   live and specified, prerequisites done or
                             in the set, shared files serialized; the serial order,
-                            the lanes, the effort (read-only)
+                            the workstreams, the effort (read-only)
   kpis                      derived metrics, each with its provenance, and pace
                             against every declared deadline
   closeout --item ID --date D   resolve close-out artifact paths (read-only)
@@ -39,7 +41,7 @@ Subcommands:
           --check PATH      check one held plan's structure and trail
           --next-id         the next provisional item identifier (HB-<n>)
           --record ENTRY --state S   append a trail row (--apply writes)
-  timing --sprint ID        a dispatch's time log (Timing.<ID>.jsonl in closeOuts):
+  timing --dispatch ID      a dispatch's time log (Timing.<ID>.jsonl in closeOuts):
           --open|--add --rows-file PATH   the first listing, or rows added mid-run
           --start|--wait|--resume|--end N  row N, stamped by the clock (a write)
           --status          each row's state and measured working minutes
@@ -63,6 +65,16 @@ Subcommands:
   mutation-confirm          durably record the host connector result (succeeded,
                             failed, or partial --written FIELDS)
   mutation-abandon          resolve a plan that will not be executed, with --reason
+  move-register --to T --mappings FILE   move the work register to another tool or
+                            file (T: <scheme>:<id>, csv, markdown, xlsx, or a path): the
+                            open items it would create and the finished items that stay
+                            in the ledger only (preview; writes nothing)
+           --plan [--apply]  the move record, every open item pending, and one create
+                            instruction per item (a local target: its rows, written)
+           --confirm ID --provider-id P --recovery-id R   one item created, read back
+           --finish --recovery-id R [--snapshot ROWS] [--apply]   compare the new
+                            register with the record; on a match, back up the manifest
+                            and repoint it, write the snapshot, resolve the record
 
 Exit codes: 0 ok; 3 the query could not be answered (unregistered role, missing
 provider, malformed configuration) — always with a message naming the fix.
@@ -80,9 +92,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools.governance import (  # noqa: E402
     backup as backup_mod, combine as combine_mod, holding as holding_mod,
     learning as learning_mod,
-    lessons as lessons_mod, overlays as overlays_mod,
+    lessons as lessons_mod, move as move_mod, overlays as overlays_mod,
     policy as policy_mod, providers,
-    registry as registry_mod, repair as repair_mod, schema, textio, timing as timing_mod,
+    registry as registry_mod, repair as repair_mod, schema, structure as structure_mod,
+    textio, timing as timing_mod,
 )
 from tools.governance.errors import CapabilityError, GovernanceError, RoleNotRegistered  # noqa: E402
 from tools.governance import dependencies, integrity, repostate  # noqa: E402
@@ -984,16 +997,16 @@ def _timing_rows_from_spec(args, directory: str) -> int:
 
 def _timing_check(path: str, args) -> int:
     """``timing --check``: exit 0 clean, 1 with findings (an unreadable log is one), 2 when
-    there is no log for the sprint to check."""
+    there is no log for the dispatch to check."""
     if not os.path.isfile(path):
-        print("error: no time log for sprint %s at %s" % (args.sprint, path), file=sys.stderr)
+        print("error: no time log for dispatch %s at %s" % (args.dispatch, path), file=sys.stderr)
         return 2
     try:
         findings = timing_mod.check_log(timing_mod.load(path))
     except GovernanceError as exc:
         findings = ["the log cannot be read: %s" % exc]
     _emit({"log": path, "findings": findings}, args.as_json,
-          lambda: "\n".join(["timing --check %s: %s" % (args.sprint, "clean" if not findings
+          lambda: "\n".join(["timing --check %s: %s" % (args.dispatch, "clean" if not findings
                                                         else "%d finding(s)" % len(findings))]
                             + ["- %s" % finding for finding in findings]))
     return EXIT_CHECK_FAILED if findings else EXIT_OK
@@ -1009,6 +1022,10 @@ def cmd_timing(args) -> int:
     ``--rows-from-spec`` reads a specification's task list (rubric U10): exit 0 prints
     the priced rows and their total line, exit 1 names what is missing.
     """
+    if args.sprint_alias:
+        print("timing --sprint is deprecated: use --dispatch; the old flag goes in the next "
+              "major release", file=sys.stderr)
+        args.dispatch = args.dispatch or args.sprint_alias
     reg = _load(args.root)
     chosen = {name: getattr(args, "do_" + name, None)
               for name in _TIMING_WRITES + ("status", "kinds", "summary", "rows_from_spec",
@@ -1025,9 +1042,9 @@ def cmd_timing(args) -> int:
             timing_mod.event_fields("check", reason=args.reason, tokens=args.tokens,
                                     model=args.model, host=args.host,
                                     evidence=args.evidence, origin=args.origin)
-            if not args.sprint:
-                raise GovernanceError("timing --check needs --sprint: the dispatch to check")
-            path = os.path.join(reg.resolve("closeOuts"), timing_mod.log_name(args.sprint))
+            if not args.dispatch:
+                raise GovernanceError("timing --check needs --dispatch: the dispatch to check")
+            path = os.path.join(reg.resolve("closeOuts"), timing_mod.log_name(args.dispatch))
         except GovernanceError as exc:
             print("error: %s" % exc, file=sys.stderr)
             return 2
@@ -1052,10 +1069,10 @@ def cmd_timing(args) -> int:
                      lambda: "\n".join(["%d kind(s) in use in %s" % (len(used), source)]
                                        + ["  %-24s %d measured run(s)" % pair
                                           for pair in used.items()]))
-    if not args.sprint:
-        raise GovernanceError("timing --%s needs --sprint: the dispatch the log belongs to"
+    if not args.dispatch:
+        raise GovernanceError("timing --%s needs --dispatch: the dispatch the log belongs to"
                               % action)
-    path = os.path.join(directory, timing_mod.log_name(args.sprint))
+    path = os.path.join(directory, timing_mod.log_name(args.dispatch))
     if action in _TIMING_WRITES:
         actor = args.actor or ""
         if not actor:
@@ -1112,8 +1129,8 @@ def cmd_timing(args) -> int:
             event["result"] = args.result
         timing_mod.append(path, event)
     elif not events:
-        raise GovernanceError("no time log for sprint %s at %s; open one with --open"
-                              % (args.sprint, path))
+        raise GovernanceError("no time log for dispatch %s at %s; open one with --open"
+                              % (args.dispatch, path))
     elif action == "summary":
         result = dict(timing_mod.summary(events, args.item or None),
                       log=os.path.relpath(path, args.root).replace(os.sep, "/"))
@@ -1134,16 +1151,20 @@ def cmd_combine(args) -> int:
     the question cannot be answered (no register, a malformed selection).
     """
     items = [i for chunk in (args.items or []) for i in re.split(r"[,\s]+", chunk) if i]
-    if bool(items) == bool(args.lane):
-        raise GovernanceError("combine takes --items ID [ID ...] or --lane LANE "
+    if args.old_lane:
+        print("virtuoso: --lane is the old name of --workstream; it works until the next "
+              "release", file=sys.stderr)
+        args.workstream = args.workstream or args.old_lane
+    if bool(items) == bool(args.workstream):
+        raise GovernanceError("combine takes --items ID [ID ...] or --workstream W "
                               "[--from SEQ] [--to SEQ], not both and not neither")
-    if (args.first is not None or args.last is not None) and not args.lane:
-        raise GovernanceError("--from and --to bound a --lane selection")
+    if (args.first is not None or args.last is not None) and not args.workstream:
+        raise GovernanceError("--from and --to bound a --workstream selection")
     reg = _load(args.root)
     project_policy = policy_mod.load(reg.policy)
     selection = providers.work_register(reg, actor=args.actor)
     snap = selection.provider.snapshot()
-    chosen, unknown, notes = combine_mod.select(snap, items=items, lane=args.lane,
+    chosen, unknown, notes = combine_mod.select(snap, items=items, workstream=args.workstream,
                                                 first=args.first, last=args.last)
     roadmap_text, roadmap_label = None, "the roadmap"
     try:
@@ -1154,7 +1175,7 @@ def cmd_combine(args) -> int:
         pass
     charters, charters_note = _active_charters(reg)
     selected = ({"items": items} if items else
-                {"lane": args.lane, "from": args.first, "to": args.last})
+                {"workstream": args.workstream, "from": args.first, "to": args.last})
     combo = combine_mod.check(
         snap, chosen, unknown=unknown, selection=selected, notes=notes,
         read=lambda item: combine_mod.read_spec(reg, project_policy, item, roadmap_text,
@@ -1166,25 +1187,26 @@ def cmd_combine(args) -> int:
         return EXIT_OK if combo.combinable else EXIT_CHECK_FAILED
     by_id = {m.item.id: m for m in combo.members}
     errors = [f for f in combo.findings if f["severity"] == "error"]
-    print("combination: %s (%d item(s), %d lane(s))"
+    print("combination: %s (%d item(s), %d workstream(s))"
           % ("COMBINABLE" if combo.combinable
              else "NOT COMBINABLE — %d blocking finding(s)" % len(errors),
-             len(combo.members), len(combo.lanes)))
+             len(combo.members), len(combo.workstreams)))
     if combo.order:
         print("  serial order:")
         for number, item_id in enumerate(combo.order, start=1):
             member = by_id[item_id]
             item = member.item
-            print("    %d. %s (%s)  seq %s · lane %s · effort %s · %s"
+            print("    %d. %s (%s)  seq %s · workstream %s · effort %s · %s"
                   % (number, item.title or "untitled", item.id,
-                     item.sequence if item.sequence is not None else "-", item.lane or "-",
+                     item.sequence if item.sequence is not None else "-",
+                     item.workstream or "-",
                      item.effort or "-",
                      "%d file(s)" % len(member.spec.files) if member.files_known
                      else "files unknown"))
-    if len(combo.lanes) > 1:
-        print("  lanes that may run side by side:")
-        for lane in combo.lanes:
-            print("    " + " -> ".join(lane))
+    if len(combo.workstreams) > 1:
+        print("  workstreams that may run side by side:")
+        for workstream in combo.workstreams:
+            print("    " + " -> ".join(workstream))
     for edge in combo.edges:
         print("  %s before %s — %s" % (edge["before"], edge["after"], edge["why"]))
     effort = combo.effort
@@ -1198,6 +1220,84 @@ def cmd_combine(args) -> int:
     print("  source: %s via %s, snapshot %s%s"
           % (snap.source, snap.provider, snap.taken_at, " (STALE)" if snap.stale else ""))
     return EXIT_OK if combo.combinable else EXIT_CHECK_FAILED
+
+
+def _roadmap_text(reg, root) -> tuple[str | None, str]:
+    try:
+        path = reg.resolve("roadmap")
+    except RoleNotRegistered:
+        return None, "the roadmap"
+    return textio.read_text(path), os.path.relpath(path, root).replace(os.sep, "/")
+
+
+def cmd_structure(args) -> int:
+    """Propose workstreams and deliverables (read-only), or apply an approved structure.
+
+    ``--propose``: exit 0. ``--apply``: exit 0 when written (or nothing was approved), 1
+    when it stopped before any write (a missing register column, an approved file that
+    does not fit the register)."""
+    reg = _load(args.root)
+    project_policy = policy_mod.load(reg.policy)
+    selection = providers.work_register(reg, actor=args.actor)
+    provider = selection.provider
+    snap = provider.snapshot()
+    if args.propose:
+        roadmap_text, roadmap_label = _roadmap_text(reg, args.root)
+        result = structure_mod.propose(
+            snap, project_policy.workstreams, roadmap_text=roadmap_text,
+            read=lambda item: combine_mod.read_spec(reg, project_policy, item, roadmap_text,
+                                                    roadmap_label))
+        # The same column check --apply runs, so the review can fix the register first.
+        try:
+            provider.require_columns(*structure_mod.FIELDS)
+            result["registerColumns"] = {"ready": True, "missing": []}
+        except CapabilityError as error:
+            result["registerColumns"] = {"ready": False,
+                                         "missing": error.detail.get("missing", []),
+                                         "fix": str(error)}
+        return _emit(result, args.as_json, lambda: json.dumps(result, indent=2,
+                                                              ensure_ascii=True))
+
+    text = textio.read_text(args.file) if args.file else None
+    if text is None:
+        raise GovernanceError("--apply needs --file <approved.json>, and %s cannot be read"
+                              % (args.file or "no file was named"))
+    # An empty file is a rejected proposal: nothing is written.
+    approved = _json_object(text, "--file") if text.strip() else {}
+    writes, untouched, problems = structure_mod.assignments(approved, snap)
+    stop = {"applied": False, "untouched": untouched, "provenance": snap.provenance()}
+    if problems:
+        _emit(dict(stop, problems=problems), args.as_json,
+              lambda: "nothing written:\n  " + "\n  ".join(problems))
+        return EXIT_CHECK_FAILED
+    if not approved.get("workstreams") and not writes:
+        return _emit(dict(stop, note="nothing approved; nothing written"),
+                     args.as_json, lambda: "nothing approved; nothing written")
+    if approved.get("assignments"):
+        try:   # every check that can refuse runs before the first write
+            provider.require(providers.base.WRITE_STATUS)
+            provider.require_columns(*structure_mod.FIELDS)
+        except CapabilityError as error:
+            _emit(dict(stop, problems=[str(error)], missing=error.detail.get("missing", [])),
+                  args.as_json, lambda: "nothing written: %s" % error)
+            return EXIT_CHECK_FAILED
+    for key, value in (("roadmap.workstreams", approved["workstreams"]),
+                       ("roadmap.hierarchy", list(structure_mod.FIELDS))):
+        _set_policy(args.root, args.actor, key, value, apply=False)
+    policy = [_set_policy(args.root, args.actor, key, value, apply=True)[0]
+              for key, value in (("roadmap.workstreams", approved["workstreams"]),
+                                 ("roadmap.hierarchy", list(structure_mod.FIELDS)))]
+    written, plans = [], []
+    for item, workstream, deliverable in writes:
+        if hasattr(provider, "plan_mutation"):
+            plans.append(provider.plan_mutation(
+                "set-status", item.id, {"workstream": workstream, "deliverable": deliverable},
+                revision=item.revision).as_dict())
+        else:
+            provider.assign(item.id, workstream, deliverable, revision=item.revision)
+            written.append(item.id)
+    result = dict(stop, applied=True, policy=policy, written=written, plans=plans)
+    return _emit(result, args.as_json, lambda: json.dumps(result, indent=2, ensure_ascii=True))
 
 
 DEFAULT_SNAPSHOT_OUT = "Virtuoso/work-register.snapshot.json"
@@ -1270,7 +1370,8 @@ def _import_snapshot(args) -> int:
     drift = {"missingColumns": [], "unmappedColumns": []}
     if is_page:
         rows, drift = _page_rows(args, rows, source, mapping,
-                                 project_policy.get("workRegister.fieldMappings") or {})
+                                 provider_mapping.canonical_field_mappings(
+                                     project_policy.get("workRegister.fieldMappings") or {}))
     try:
         snap, report = snapshot_provider.from_rows(rows, mapping, source=source,
                                                    taken_at=taken_at,
@@ -1418,6 +1519,10 @@ def cmd_recovery(args) -> int:
         print("%s  %s/%s" % (
             record.get("id"), record.get("operation"),
             record.get("item_id") or record.get("itemId")))
+        if record.get("operation") == move_mod.OPERATION:
+            created, pending = move_mod.item_states(record)
+            print("    created: %s; pending: %s"
+                  % (", ".join(created) or "none", ", ".join(pending) or "none"))
         for step in record.get("remaining_steps", []):
             print("    remaining: %s" % step)
         partial = (record.get("detail") or {}).get("partial") \
@@ -1488,7 +1593,7 @@ def cmd_record_completion(args) -> int:
         raise ledger_mod.LedgerError(
             "%s may not append an ordinary terminal record: policy.terminalLedger.writers "
             "names %s. A completion or a retirement corrects no record, so "
-            "correctionWriters does not cover it. Route the record to /pointer-closeout."
+            "correctionWriters does not cover it. Route the record to /dispatch-closeout."
             % (actor, ", ".join(book.writers) or "nobody"),
             detail={"actor": actor, "writers": list(book.writers)})
     record = ledger_mod.LedgerRecord(record_id=book.next_record_id(), item_id=args.item,
@@ -1699,6 +1804,103 @@ def cmd_create_item(args) -> int:
     return EXIT_OK
 
 
+def cmd_move_register(args) -> int:
+    """Move the work register to another tool or file: preview (writes nothing),
+    ``--plan [--apply]`` (the move record and the copies), ``--confirm`` (one copy)."""
+    if args.confirm:
+        if not args.recovery_id:
+            raise GovernanceError("--confirm needs --recovery-id, the move record's id")
+        outcome = move_mod.confirm(os.path.abspath(args.root), args.recovery_id, args.confirm,
+                                   args.provider_id)
+        return _emit(outcome, args.as_json, lambda: "%s %s as %s; pending: %s" % (
+            "confirmed" if outcome["changed"] else "already confirmed:", outcome["item"],
+            outcome["providerId"], ", ".join(outcome["pending"]) or "none — run --finish"))
+    if args.abandon:
+        if not args.recovery_id:
+            raise GovernanceError("--abandon needs --recovery-id, the move record's id")
+        outcome = move_mod.abandon(os.path.abspath(args.root), args.recovery_id, args.reason)
+        return _emit(outcome, args.as_json, lambda: "abandoned move %s to %s: %s%s" % (
+            outcome["recoveryId"], outcome["to"], outcome["reason"],
+            "; already created there: " + ", ".join(outcome["created"])
+            if outcome["created"] else ""))
+    if args.finish:
+        if not args.recovery_id:
+            raise GovernanceError("--finish needs --recovery-id, the move record's id")
+        return _print_move_finish(move_mod.finish(
+            _load(args.root), args.recovery_id, rows_path=args.snapshot, apply=args.apply,
+            actor=args.actor), args.as_json)
+    if not (args.to and args.mappings):
+        raise GovernanceError("move-register needs --to and --mappings (or --confirm, "
+                              "--finish, --abandon)")
+    reg = _load(args.root)
+    mappings = move_mod.read_mappings(args.root, args.mappings)
+    if args.plan:
+        return _print_move_plan(move_mod.plan(reg, args.to, mappings, apply=args.apply,
+                                              actor=args.actor), args.as_json)
+    if args.apply:
+        raise GovernanceError("--apply applies a --plan; a preview writes nothing")
+    payload = move_mod.preview(reg, args.to, mappings)
+    if args.as_json:
+        return _emit(payload, True)
+    print("move the work register: %s -> %s (%s)"
+          % (payload["from"], payload["to"], payload["toProvider"]))
+    for item in payload["open"]:
+        print("  %-12s %s" % (item["id"], item["title"]))
+    print("%d open items will be created; %d finished items stay in the ledger only"
+          % (len(payload["open"]), payload["finished"]))
+    print("read from %s, snapshot %s%s" % (payload["source"], payload["takenAt"],
+                                           " (STALE)" if payload["stale"] else ""))
+    print("Nothing was written.")
+    return EXIT_OK
+
+
+def _print_move_finish(payload: dict, as_json: bool) -> int:
+    if as_json:
+        return _emit(payload, True)
+    print("move %s: %s -> %s — the new register matches the record"
+          % (payload["recoveryId"], payload["from"], payload["to"]))
+    print("  %-12s %-24s %s" % ("id", "status (before -> after)", "sequence (before -> after)"))
+    for row in payload["table"]:
+        print("  %-12s %-24s %s -> %s" % (
+            row["id"], "%s -> %s" % (row["before"]["status"], row["after"]["status"]),
+            row["before"]["sequence"], row["after"]["sequence"]))
+    if not payload["applied"]:
+        print("Nothing was written. Re-run with --apply to back up and repoint %s%s, and "
+              "resolve the move record." % (payload["manifest"], " and write the snapshot "
+                                            + payload["snapshot"] if payload["snapshot"] else ""))
+        return EXIT_OK
+    print("wrote:  %s" % ", ".join(payload["filesWritten"]))
+    print("backup: %s" % payload["backup"])
+    print("move record %s resolved" % payload["recoveryId"])
+    for note in payload["notes"]:
+        print("  note: %s" % note)
+    return EXIT_OK
+
+
+def _print_move_plan(payload: dict, as_json: bool) -> int:
+    if as_json:
+        return _emit(payload, True)
+    record = payload["record"]
+    print("move the work register: %s -> %s (%s)"
+          % (payload["from"], payload["to"], payload["toProvider"]))
+    for entry in record["items"]:
+        if "instruction" in entry:
+            print(json.dumps(entry["instruction"], indent=2, ensure_ascii=True))
+        else:
+            print("  %-10s %-12s %s" % (entry["state"], entry["id"], entry["title"]))
+    if not payload["applied"]:
+        print("%d open item(s) in the plan. Nothing was written. Re-run with --apply to write "
+              "the move record%s." % (len(record["items"]), "" if payload["external"]
+                                      else " and the new register's rows"))
+        return EXIT_OK
+    print("move record: %s (approved %s)" % (payload["recoveryId"], record["approvedAt"]))
+    if payload["external"]:
+        print("Execute each instruction with the host's connector, read the item back, then "
+              "`move-register --confirm <ITEM-ID> --provider-id <id> --recovery-id %s`."
+              % payload["recoveryId"])
+    return EXIT_OK
+
+
 def _json_value(raw: str, label: str):
     """Any JSON value. A policy value may be a list, string, number, or object, so
     this deliberately does not require an object the way ``_json_object`` does."""
@@ -1730,84 +1932,95 @@ def cmd_policy_set(args) -> int:
     through the same transaction repair uses, so the ceremony that documents a
     previewed, backed-up write actually performs one.
     """
-    if not args.actor:
+    if not args.actor:      # before the value, as it always was
         raise CapabilityError(
             "an explicit ceremony actor is required to set a policy value, for example "
             "--actor project-profile")
-    reg = _load(args.root)
+    value = _json_value(args.value_json, "--value-json")
+    payload, plan, backup_set = _set_policy(args.root, args.actor, args.key, value,
+                                            apply=args.apply)
+    if args.as_json:
+        return _emit(payload, True)
+    if not args.apply:
+        print(plan.render())
+        print("Nothing was written. Re-run with --apply to write it.")
+        return EXIT_OK
+    withdrawing = payload["withdrawn"]
+    print("policy.%s %s" % (args.key, "withdrawn" if withdrawing else "set"))
+    print("  was:    %s" % json.dumps(payload["current"], ensure_ascii=True))
+    print("  now:    %s" % ("(withdrawn)" if withdrawing
+                            else json.dumps(value, ensure_ascii=True)))
+    print("  wrote:  %s" % (", ".join(payload["filesWritten"]) or "(already that value)"))
+    print("  backup: %s" % backup_set.relative_directory)
+    print("  verified: read back from disk")
+    return EXIT_OK
+
+
+def _set_policy(root: str, actor: str, key: str, value, *, apply: bool):
+    """Validate one policy value and, with ``apply``, write it backed up and read it
+    back. Returns ``(payload, plan, backup set or None)``; a refusal raises before any
+    write. ``policy-set`` and ``structure --apply`` share it."""
+    if not actor:
+        raise CapabilityError(
+            "an explicit ceremony actor is required to set a policy value, for example "
+            "--actor project-profile")
+    reg = _load(root)
     if [f for f in reg.findings if f.severity == "error"]:
         raise GovernanceError(
             "this registry reports errors; run `virtuoso_preflight.py --mode repair` first. "
             "Writing policy onto an invalid registry buries the invalidity under a change "
             "that looks successful.")
-    if not policy_mod.is_documented(args.key):
+    if not policy_mod.is_documented(key):
         raise GovernanceError(
             "policy.%s is not a documented key, so no ceremony reads it. Project-owned "
-            "configuration belongs under an `x-` extension key." % args.key)
+            "configuration belongs under an `x-` extension key." % key)
 
-    value = _json_value(args.value_json, "--value-json")
-    before = policy_mod.load(reg.policy).get(args.key)
+    before = policy_mod.load(reg.policy).get(key)
     # `null` on a project-named entry (a deadline) withdraws it. Anywhere else it
     # is a value like any other, and the type gate judges it.
-    withdrawing = value is None and policy_mod.open_child(args.key)
+    withdrawing = value is None and policy_mod.open_child(key)
     if withdrawing:
         if before is None:
             raise GovernanceError("policy.%s is not declared, so there is nothing to withdraw. "
-                                  "Nothing was written." % args.key)
-        candidate = policy_mod.withdraw(reg.policy, args.key)
+                                  "Nothing was written." % key)
+        candidate = policy_mod.withdraw(reg.policy, key)
     else:
-        mismatch = policy_mod.type_problem(args.key, value)
+        mismatch = policy_mod.type_problem(key, value)
         if mismatch:
             raise GovernanceError("%s Nothing was written." % mismatch)
-        candidate = policy_mod.assign(reg.policy, args.key, value)
+        candidate = policy_mod.assign(reg.policy, key, value)
     problems = policy_mod.load(candidate).validate()
     if problems:
         raise GovernanceError("the resulting policy is not valid; nothing was written:\n  %s"
                               % "\n  ".join(problems))
 
     reg.policy = candidate
-    plan = repair_mod.policy_plan(reg, args.key, before, value, withdraw=withdrawing)
+    plan = repair_mod.policy_plan(reg, key, before, value, withdraw=withdrawing)
 
-    if not args.apply:
-        payload = {"key": args.key, "current": before, "proposed": value,
-                   "applied": False, "plan": plan.as_dict()}
-        if args.as_json:
-            return _emit(payload, True)
-        print(plan.render())
-        print("Nothing was written. Re-run with --apply to write it.")
-        return EXIT_OK
+    if not apply:
+        return ({"key": key, "current": before, "proposed": value, "applied": False,
+                 "plan": plan.as_dict()}, plan, None)
 
-    written, backup_set = repair_mod.apply_plan(reg, plan, label="policy-set",
-                                                actor=args.actor)
+    written, backup_set = repair_mod.apply_plan(reg, plan, label="policy-set", actor=actor)
     # Read the value back from disk. apply_plan re-validates what it wrote, but
     # "valid" is not "what was asked for", and a ceremony that is about to cite
     # this value — a deadline most of all — should know it landed. The raw block
     # is compared, not the merged policy: merging would fold defaults into a
     # partial mapping and report a correct write as a wrong one.
-    landed = _raw_policy_value(registry_mod.load(args.root).policy, args.key)
+    landed = _raw_policy_value(registry_mod.load(root).policy, key)
     expected = _ABSENT if withdrawing else value
     if landed != expected:
         raise GovernanceError(
             "policy.%s was written, but the manifest on disk now reads %s instead of %s. "
             "The previous manifest is backed up in %s."
-            % (args.key, "(absent)" if landed is _ABSENT else json.dumps(landed, ensure_ascii=True),
+            % (key, "(absent)" if landed is _ABSENT else json.dumps(landed, ensure_ascii=True),
                "(absent)" if expected is _ABSENT else json.dumps(expected, ensure_ascii=True),
                backup_set.relative_directory))
-    backup_mod.prune(args.root, keep=int(
+    backup_mod.prune(root, keep=int(
         policy_mod.load(reg.policy).get("sweep.backupRetention", 10)))
-    payload = {"key": args.key, "current": before, "proposed": value, "applied": True,
-               "withdrawn": withdrawing, "verified": True,
-               "filesWritten": written, "backup": backup_set.as_dict()}
-    if args.as_json:
-        return _emit(payload, True)
-    print("policy.%s %s" % (args.key, "withdrawn" if withdrawing else "set"))
-    print("  was:    %s" % json.dumps(before, ensure_ascii=True))
-    print("  now:    %s" % ("(withdrawn)" if withdrawing
-                            else json.dumps(value, ensure_ascii=True)))
-    print("  wrote:  %s" % (", ".join(written) or "(already that value)"))
-    print("  backup: %s" % backup_set.relative_directory)
-    print("  verified: read back from disk")
-    return EXIT_OK
+    return ({"key": key, "current": before, "proposed": value, "applied": True,
+             "withdrawn": withdrawing, "verified": True,
+             "filesWritten": written, "backup": backup_set.as_dict()}, plan, backup_set)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1865,12 +2078,25 @@ def build_parser() -> argparse.ArgumentParser:
     combine = sub.add_parser("combine", parents=[common])
     combine.add_argument("--items", nargs="+", default=[], metavar="ID",
                          help="the roadmap items to combine (space- or comma-separated)")
-    combine.add_argument("--lane", default="", help="combine the active items of one lane")
+    combine.add_argument("--workstream", default="",
+                         help="combine the active items of one workstream")
+    # The pre-1.15.0 spelling, read for one release (cmd_combine warns).
+    combine.add_argument("--lane", dest="old_lane", default="", help=argparse.SUPPRESS)
     combine.add_argument("--from", dest="first", type=int, default=None, metavar="SEQ",
-                         help="with --lane: the first sequence number to include")
+                         help="with --workstream: the first sequence number to include")
     combine.add_argument("--to", dest="last", type=int, default=None, metavar="SEQ",
-                         help="with --lane: the last sequence number to include")
+                         help="with --workstream: the last sequence number to include")
     combine.set_defaults(func=cmd_combine)
+
+    structure = sub.add_parser("structure", parents=[common])
+    mode = structure.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--propose", action="store_true",
+                      help="propose workstreams and deliverables from the active items "
+                           "(read-only)")
+    mode.add_argument("--apply", action="store_true",
+                      help="write the approved structure: policy, then the register")
+    structure.add_argument("--file", default="", help="with --apply: the approved JSON")
+    structure.set_defaults(func=cmd_structure)
     sub.add_parser("kpis", parents=[common]).set_defaults(func=cmd_kpis)
 
     closeout = sub.add_parser("closeout", parents=[common])
@@ -1938,8 +2164,10 @@ def build_parser() -> argparse.ArgumentParser:
     holding.set_defaults(func=cmd_holding)
 
     timing = sub.add_parser("timing", parents=[common])
-    timing.add_argument("--sprint", default="",
+    timing.add_argument("--dispatch", default="",
                         help="the dispatch the log belongs to (every action but --kinds)")
+    timing.add_argument("--sprint", dest="sprint_alias", default="",
+                        help=argparse.SUPPRESS)   # 1.14 name, kept for one release
     timing_action = timing.add_mutually_exclusive_group(required=True)
     timing_action.add_argument("--open", dest="do_open", action="store_true",
                                help="open the log from the first task listing (--rows-file)")
@@ -2113,6 +2341,37 @@ def build_parser() -> argparse.ArgumentParser:
     mutation_abandon.add_argument("--reason", required=True,
                                   help="why the plan will not be executed")
     mutation_abandon.set_defaults(func=cmd_mutation_abandon)
+
+    move_register = sub.add_parser("move-register", parents=[common])
+    move_register.add_argument("--to", default="",
+                               help="the new register: <scheme>:<id>, csv, markdown, xlsx, or "
+                                    "a .csv, .md or .xlsx path in the project")
+    move_register.add_argument("--mappings", default="", metavar="FILE",
+                               help="JSON {fieldMappings, statusMappings} for the new register; "
+                                    "fieldMappings must name id, title and status")
+    move_register.add_argument("--plan", action="store_true",
+                               help="the move record and one create instruction per open item "
+                                    "(a local target: its rows); writes only with --apply")
+    move_register.add_argument("--apply", action="store_true",
+                               help="with --plan: write the move record (and a local target's "
+                                    "rows)")
+    move_register.add_argument("--confirm", default="", metavar="ITEM-ID",
+                               help="mark one item created after reading it back (with "
+                                    "--provider-id, --recovery-id)")
+    move_register.add_argument("--provider-id", default="",
+                               help="with --confirm: the identifier the new register gave it")
+    move_register.add_argument("--recovery-id", default="",
+                               help="with --confirm or --finish: the move record")
+    move_register.add_argument("--finish", action="store_true",
+                               help="compare the new register with the record, then repoint "
+                                    "(writes only with --apply)")
+    move_register.add_argument("--snapshot", default="", metavar="ROWS",
+                               help="with --finish: the rows the session read back from the new "
+                                    "register (optional for a local target)")
+    move_register.add_argument("--abandon", action="store_true",
+                               help="close a move that will not finish (--recovery-id, --reason)")
+    move_register.add_argument("--reason", default="", help="with --abandon: why")
+    move_register.set_defaults(func=cmd_move_register)
     return parser
 
 

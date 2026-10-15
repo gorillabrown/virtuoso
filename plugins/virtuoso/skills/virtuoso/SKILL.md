@@ -2,14 +2,14 @@
 name: virtuoso
 description: >
   Structural execution discipline for multi-step tasks in one parent conversation. Use this
-  skill whenever running a sprint, executing a checklist, or performing any work that involves
+  skill whenever running a dispatch, executing a checklist, or performing any work that involves
   3+ sequential tool calls. This skill enforces task planning, narration, progress tracking, and
-  optional child-agent swarms while preserving each sprint as a clearly named dispatch record.
-  Trigger on: "execute this plan", "run this sprint", "implement these changes", any dispatch
+  optional child-agent swarms while preserving each dispatch as a clearly named dispatch record.
+  Trigger on: "execute this plan", "run this dispatch", "implement these changes", any dispatch
   prompt with multiple steps, or any task where completion quality depends on maintaining focus
   across many tool calls. When in doubt, use this skill — the overhead is minimal and the
   discipline prevents regressions. It is the only skill in the plugin that executes:
-  storyboard scopes, write-plan and roadmap-review plan, next-pointer and epic prepare,
+  storyboard scopes, write-plan and roadmap-review plan, dispatch-kickoff and epic prepare,
   and all of them hand off here. Before the first edit on a written plan it checks for
   upstream, downstream, in-flight, and roadmap-order conflicts.
 ---
@@ -25,7 +25,7 @@ description: >
 - **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (its universal checks, at the version it declares, plus the project's declared extensions). No skill restates it in its own words.
 - **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
-- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
+- **Effort levels** — low / medium / high / xhigh / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 <!-- virtuoso-overlay-clause v2 -->
 **Project overlay.** If the registry declares an `overlays` role, read the overlay mirroring
@@ -50,58 +50,58 @@ This skill stays in active context because you reference it at every step bounda
 
 **The only skill that executes.** Every path to execution ends here
 (`references/execution-paths.md`). `/storyboard` scopes work to a draft stub.
-`/write-plan` and `/roadmap-review` write the full plan. `/next-pointer` gates it, and
+`/write-plan` and `/roadmap-review` write the full plan. `/dispatch-kickoff` gates it, and
 `/epic` prepares a packet. None of them edits an edit site, creates the work branch, or
 runs the change. This skill does, and only from a written plan: a draft stub or an idea
 goes back to `/storyboard` and `/write-plan` first.
 
-## Sprint Record Naming
+## Dispatch Record Naming
 
-When Virtuoso starts a sprint, the visible record must be named for the work, not for
+When Virtuoso starts a dispatch, the visible record must be named for the work, not for
 the trigger token. If the implementation agent's host creates a new chat/thread/record for the run,
 the desired title is:
 
-`[SPRINT-ID] — [short dispatch name]`
+`[DISPATCH-ID] — [short dispatch name]`
 
 Examples:
 - `NARR-DEEPEN-2 — Chunk Timing Narration`
 - `POSTV2-REVIEW-1 — Review Closeout`
-- `SPRINT-QUEUE-MIGRATE — Workbook Queue Transition`
+- `DISPATCH-QUEUE-MIGRATE — Workbook Queue Transition`
 
-If an explicit title-setting mechanism is available, set the sprint record title to
+If an explicit title-setting mechanism is available, set the dispatch record title to
 that value before implementation begins. If no title-setting mechanism is available,
 make the first substantive visible line after the short Virtuoso announcement:
 
-`[SPRINT-ID] — [short dispatch name]`
+`[DISPATCH-ID] — [short dispatch name]`
 
 Do not let the record remain titled `$virtuoso`, `/virtuoso`, "Virtuoso", or any
-other skill-trigger-only name when the sprint or dispatch name is knowable. If the
-sprint ID is unknown at intake, use a temporary descriptive title and update the
+other skill-trigger-only name when the dispatch or dispatch name is knowable. If the
+dispatch ID is unknown at intake, use a temporary descriptive title and update the
 first plan heading once the ID is discovered.
 
 ## Architecture: Parent Chat + Optional Swarm
 
 Virtuoso runs inside the active parent conversation or the implementation agent's parent
-record. It is acceptable for the implementation agent to preserve a separate record per sprint run, but
-that record must be named for the sprint, not for the skill invocation. Do not create,
+record. It is acceptable for the implementation agent to preserve a separate record per dispatch run, but
+that record must be named for the dispatch, not for the skill invocation. Do not create,
 request, or suggest an additional top-level chat just to re-run Virtuoso inside a
-sprint record that already exists.
+dispatch record that already exists.
 
 Agent swarms are allowed when the user or dispatch spec authorizes parallel
-implementation. Child agents are workers attached to the current sprint plan, not
+implementation. Child agents are workers attached to the current dispatch plan, not
 new `$virtuoso` parent chats. The parent thread reads the dispatch spec, builds the
 task plan, launches child agents only for concrete independent tasks, integrates
 their results, runs verification, and keeps the human oriented.
 
 **No orphan-chat rule:** Virtuoso may use `Agent()` / `spawn_agent` for bounded
-worker tasks, but never as a way to start a new parent chat, restart the sprint in
+worker tasks, but never as a way to start a new parent chat, restart the dispatch in
 another conversation, or invoke `$virtuoso` recursively. If a legacy workflow says
 "open a new Virtuoso chat," ignore that instruction and continue in the current
 parent conversation.
 
 **The boundary that matters is parent vs worker.** The parent owns the plan,
 scope, narration, integration, and close-out. Workers own bounded task execution.
-All worker output returns to the one visible sprint plan in the parent chat.
+All worker output returns to the one visible dispatch plan in the parent chat.
 
 ## Effort Levels
 
@@ -124,9 +124,9 @@ to know during execution.
 
 ### How Virtuoso Uses Effort Levels
 
-1. **Read the sprint's declared effort** from the dispatch header (e.g., `Effort: Medium`).
+1. **Read the dispatch's declared effort** from the dispatch header (e.g., `Effort: Medium`).
 2. **Check for task-level overrides** — individual tasks may annotate `{high}`, `{xhigh}`
-   or `{max}` to override the sprint default.
+   or `{max}` to override the dispatch default.
 3. **Record effort on the task plan** and pass it through to any child worker prompt.
 4. **Effort ↔ task-tier defaults** — when effort is not explicitly annotated on a task, it
    inherits from the task tier: mechanical→low, bounded→medium, cross-cutting→high.
@@ -147,7 +147,7 @@ Before touching any file or running any command:
 
 1. **Read the full task specification.** If the task references external docs, read those too.
    When the task is a governed dispatch, read its **origin line** as well
-   (`references/execution-paths.md`). The spec may be a roadmap item from `/next-pointer`, a
+   (`references/execution-paths.md`). The spec may be a roadmap item from `/dispatch-kickoff`, a
    held plan handed off by `/write-plan`, or an epic packet from `/epic`. All three arrive
    meeting the same destination contract. The origin tells the intake below which checks
    to run, and tells Phase 6 how the close-out runs.
@@ -159,8 +159,8 @@ Before touching any file or running any command:
    (a file changed, a test passing, a document updated, a commit made).
 4. **Flag anything unclear.** If a step is ambiguous, a file path might be wrong, or a dependency
    might not exist — stop and ask NOW. Guessing wastes 10x more time than asking.
-5. **Declare the lane and its surface manifest** when the project runs lane-based
-   concurrency. Read the lane assignment from the dispatch spec; if the spec does not
+5. **Declare the workstream and its surface manifest** when the project runs workstream-based
+   concurrency. Read the workstream assignment from the dispatch spec; if the spec does not
    name one, ask before touching a file.
 6. **Run the conflict check** (below) for a governed dispatch, and the **held-plan
    intake** when the origin is a held plan. Both come before the first edit and before
@@ -177,9 +177,9 @@ safe now, against the roadmap and the work around it. It is read-only: lock-free
 |---|---|---|
 | **Upstream** | Every prerequisite is terminal through the provider. A prerequisite in a held entry reads `executed` (`holding --check`). | A prerequisite that is still queued, in flight, or blocked |
 | **In flight** | Nothing else in flight touches these edit sites: in-flight register items, in-flight held entries, and other open branches and worktrees (`git worktree list`, then `git log --oneline <default>..<branch> -- <edit sites>` for each) | Another run changing the same files now |
-| **Roadmap order** | Where the plan sits against the current order: its pointer's *Placement* line, or its sequence. Any item ahead of it that is not terminal and touches the same edit sites, or that it depends on. | Landing underneath work the roadmap put first, or jumping ahead of the head without a recorded reason |
+| **Roadmap order** | Where the plan sits against the current order: its kickoff's *Placement* line, or its sequence. Any item ahead of it that is not terminal and touches the same edit sites, or that it depends on. | Landing underneath work the roadmap put first, or jumping ahead of the head without a recorded reason |
 | **Downstream** | The items the plan's impact map and placement name as downstream, and any dispatch-ready specification that cites a location this plan moves (search the specification store for the edit sites' anchors) | A specification this run will make stale |
-| **Drift** | Commits at the edit sites since the base the pointer names (`git log --oneline <pointer's sha>..<default branch> -- <edit sites>`), and live lessons recorded since the plan was written | Code that moved under the plan |
+| **Drift** | Commits at the edit sites since the base the kickoff names (`git log --oneline <kickoff's sha>..<default branch> -- <edit sites>`), and live lessons recorded since the plan was written | Code that moved under the plan |
 
 Straight from the ceremony that just gated the plan, in this session, the check is quick:
 it confirms what that ceremony read. From another session, or on a later day, it is the
@@ -194,7 +194,7 @@ What a conflict does:
 - **Roadmap order** → ask one bounded question: wait for the earlier item, run now with
   the user's reason recorded in the plan, or send it back to be planned again.
 - **Drift, or a plan that no longer matches the code** → stop. A held plan goes back to
-  `/write-plan <entry>`, and a roadmap item to `/next-pointer`. Never re-plan here.
+  `/write-plan <entry>`, and a roadmap item to `/dispatch-kickoff`. Never re-plan here.
 - **Downstream staleness** → not a stop. Name each affected item in Task #1's notes and
   in the close-out, so the review acts on it. Another item's specification is not this
   run's to edit.
@@ -212,9 +212,9 @@ it. Neither executed anything. As part of Task #1:
    - `planned` → continue.
    - `in-flight` → another run holds it. Stop and ask. Never run it twice.
    - `storyboarded` → there is only a draft stub, and no plan. Route to `/write-plan <entry>`.
-   - `absorbed` → it is a roadmap item now. Route to `/next-pointer`.
+   - `absorbed` → it is a roadmap item now. Route to `/dispatch-kickoff`.
    - `executed` or `withdrawn` → there is nothing to run. Say so and stop.
-2. **Run the conflict check** above, against the entry's pointer, placement, and impact map.
+2. **Run the conflict check** above, against the entry's kickoff, placement, and impact map.
 3. **Record the start of execution.** Preview first, then run it with `--apply`:
 
        "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso holding --record <entry> --state in-flight --note "executing: <branch>" --apply
@@ -223,9 +223,9 @@ it. Neither executed anything. As part of Task #1:
    project registered the role before this skill recorded there. Show the user the fix,
    which is adding `virtuoso` to the role's `allowedWriters`, and stop until they make
    it. Never record under another ceremony's name.
-4. **Run the pointer's repository-reconciliation recipe first**, before the first edit.
+4. **Run the kickoff's repository-reconciliation recipe first**, before the first edit.
    Halt on any STOP it contains, and report the git output.
-5. The sprint identifier is the `HB-<n>`. An item set runs every item, in prerequisite
+5. The dispatch identifier is the `HB-<n>`. An item set runs every item, in prerequisite
    order, in this one run.
 
 **If the run ends without completing**, and will not resume from `/mid-dispatch-decision`
@@ -235,37 +235,37 @@ in this run, hand the entry back to the bay:
 
 Name any item of a set that did close out, so the review absorbs it as completed. The
 holding bay lets this skill record `planned` only out of `in-flight`: it hands a run
-back, and it never plans. A finished run goes to `/pointer-closeout`, which records the
+back, and it never plans. A finished run goes to `/dispatch-closeout`, which records the
 entry `executed`.
 
 <!-- rule:lane-declaration (lane-concurrency) -->
-**Lane discipline.** Under lane-based concurrency the sprint declares, at Phase 1 and
+**Workstream discipline.** Under workstream-based concurrency the dispatch declares, at Phase 1 and
 before any edit:
 
 | Declaration | What it is |
 |---|---|
-| **Lane** | Which lane this sprint occupies. A project with an exclusive engine lane admits exactly one engine sprint at a time. |
-| **Surface manifest** | The explicit set of paths this sprint may write. Anything outside it is another lane's surface. |
-| **Merge slot** | The per-lane serialization token claimed at integration, not at dispatch. |
+| **Workstream** | Which workstream this dispatch occupies. A project with an exclusive engine workstream admits exactly one engine dispatch at a time. |
+| **Surface manifest** | The explicit set of paths this dispatch may write. Anything outside it is another workstream's surface. |
+| **Merge slot** | The per-workstream serialization token claimed at integration, not at dispatch. |
 
 The manifest is what makes a dirty file someone else's problem rather than a blocker:
-dirt inside the manifest stops the sprint, dirt outside it is disclosed and ignored.
-A sprint that cannot state its lane and manifest is not ready to dispatch — stop and
+dirt inside the manifest stops the dispatch, dirt outside it is disclosed and ignored.
+A dispatch that cannot state its workstream and manifest is not ready to dispatch — stop and
 ask, do not infer one from the files the spec happens to mention.
 
 **Resolve the concurrency cap from the project's own gate; never assume one, and never
-restate a number here.** The cap and the lane set are project configuration, enforced by
-the project's worktree/lane tooling. Read them from that tool at dispatch time. A cap
+restate a number here.** The cap and the workstream set are project configuration, enforced by
+the project's worktree/workstream tooling. Read them from that tool at dispatch time. A cap
 written into this skill body would be a restatement that goes stale the moment a project
-changes its lane count — which is the failure this skill's own citation discipline exists
+changes its workstream count — which is the failure this skill's own citation discipline exists
 to prevent.
 
 **Concurrency supersedes serialization — do not re-introduce "one dispatch at a time."**
-Lane-based concurrency with serialized *integration* replaced the older
-one-sprint-in-flight rule. A project that has adopted lanes has retired serialization-first
+Workstream-based concurrency with serialized *integration* replaced the older
+one-dispatch-in-flight rule. A project that has adopted workstreams has retired serialization-first
 deliberately; re-adding it contradicts both that project's governance and its shipped
 tooling. Serialized mode survives only as the **default for a dispatch that declares no
-lane**, which is a different rule.
+workstream**, which is a different rule.
 
 <!-- rule:mechanical-acceptance-criteria (mechanical-criteria) -->
 **Every acceptance criterion and stop gate must be mechanical.** A criterion is
@@ -291,12 +291,12 @@ Capture the base branch's suite result as its own step, before the first edit, s
 attribution is unambiguous later. Then:
 
 - **Base green** → proceed; any new failure is yours.
-- **Base red** → do **not** diagnose it in-sprint. File it as an issue via the Phase 5
+- **Base red** → do **not** diagnose it in-dispatch. File it as an issue via the Phase 5
   contract, escalate, and continue only against the pre-existing-failure list. Verify
   each suspected pre-existing failure against the base before spending a single debug
   cycle on it.
 
-A sprint that discovers a red base halfway through cannot tell its own breakage from
+A dispatch that discovers a red base halfway through cannot tell its own breakage from
 the base's, and every hour after that point is spent on the wrong question.
 
 ### Verification integrity — how you know a check is telling the truth
@@ -331,7 +331,7 @@ coincidence that has been argued for.
   node-ID set measured against the base.
 - A numeric carve-out ("up to N failures allowed") is a licence that widens silently as
   its baseline goes stale. Enumerate instead.
-- **Name the tested tree by hash.** When lanes stay unsynchronised during implementation,
+- **Name the tested tree by hash.** When workstreams stay unsynchronised during implementation,
   "the combined tree" describes nothing; a result whose tested-tree hash differs from the
   tree proposed for merge is a result about a different tree.
 
@@ -423,10 +423,10 @@ Every task line follows this format: `□ N. owner-label: Task description [tier
      the entry `in-flight`
   6. Printed the final assignment table
   Task #1 is the parent thread's setup work. Everything after Task #1 is either
-  executed by the parent or delegated to child workers under this same sprint plan.
+  executed by the parent or delegated to child workers under this same dispatch plan.
 - Every subsequent task starts with `unassigned:` as a placeholder — Phase 3 replaces
   these with owner labels.
-- The sprint's declared effort level is the default. Task-level annotations override it.
+- The dispatch's declared effort level is the default. Task-level annotations override it.
 
 ### Task tiers
 
@@ -487,8 +487,8 @@ and analyzing profiler output across subsystems are genuinely hard analytical pr
 where getting it wrong has real downstream consequences. All other tasks use their
 task-tier defaults (mechanical→low, bounded→medium, cross-cutting→high).
 
-**Governance task rewrite (worktree-resident sprints):** Task #9 targets CLAUDE.md,
-which is a protected governance document. In a worktree-resident sprint, the lead rewrites
+**Governance task rewrite (worktree-resident dispatches):** Task #9 targets CLAUDE.md,
+which is a protected governance document. In a worktree-resident dispatch, the lead rewrites
 this task at plan time:
 ```
 □ 9. unassigned: Write staging fold-ins for CLAUDE.md (constants + cal results) [bounded]
@@ -512,12 +512,12 @@ human readability; TodoWrite is for persistent tracking.
   delegated, tracked, and reported on independently.
 - If the spec says to do it, it gets a line. Don't silently absorb steps.
 - If you discover a new required step during execution, ADD it to the plan with
-  `timing --kinds`, then `timing --sprint <SPRINT-ID> --add --rows-file <row.json>`, and reprint. It takes the next number and shows as
+  `timing --kinds`, then `timing --dispatch <DISPATCH-ID> --add --rows-file <row.json>`, and reprint. It takes the next number and shows as
   `+N`, the mark of a row the first listing missed. A row a review or an audit raised says
   so: `--add --origin review` shows `RN`, `--origin audit` shows `AN` (the default origin
   is `added`). Plan review and fix rounds as rows from the start (they are priced from
   history), so they are not the ones added later.
-- **A row the run will not do is parked, not deleted:** `timing --sprint <SPRINT-ID>
+- **A row the run will not do is parked, not deleted:** `timing --dispatch <DISPATCH-ID>
   --park N --reason "<why>"`, for a row not yet started (a started row ends `--result
   cancelled`). It shows `◇` under *Parked* in `--status` and `--summary`, and at the
   close-out each parked row becomes a `findings` entry with Disposition `open`.
@@ -539,27 +539,27 @@ and `group` (the parallel group's id). A frontier row is never estimated: it car
 `timebox` in minutes and `onTimebox`, the action when the budget runs out, and is
 priced at its timebox (`timeboxed`). Then run:
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing --sprint <SPRINT-ID> --open --rows-file <rows.json>
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing --dispatch <DISPATCH-ID> --open --rows-file <rows.json>
 
 When the specification carries a `##### Task list` (`references/task-rows.md`), open
 from it instead, so its rows keep their numbers and the specification's price stays
 beside the launch-time one:
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing --sprint <SPRINT-ID> --open --from-spec <spec> --item <ITEM-ID>
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing --dispatch <DISPATCH-ID> --open --from-spec <spec> --item <ITEM-ID>
 
 The specification's numbers are the plan's numbers. Rows it does not list, Task #1's
 setup row among them, go in with `--add`, take the next numbers, and are measured like
 any other row.
 
-The log is `Timing.<SPRINT-ID>.jsonl` in the registry's `closeOuts` role. The row
+The log is `Timing.<DISPATCH-ID>.jsonl` in the registry's `closeOuts` role. The row
 numbers it holds are the plan's numbers from here through close-out. `--open` refuses a
 row it cannot price, naming it. Give that row an `estimate` and open again. Print the
 plan with the predictions `timing --status` shows, so they are not retyped. No flag takes a
 time or a duration: every stamp comes from the clock, so never write the log by hand.
 The `closeOuts` directory must exist. In a project with no close-out yet, create it
-first with `closeout --item <SPRINT-ID> --date <YYYY-MM-DD> --prepare`. A step
+first with `closeout --item <DISPATCH-ID> --date <YYYY-MM-DD> --prepare`. A step
 discovered mid-run is registered before its first `--start` with
-`timing --sprint <SPRINT-ID> --add --rows-file <row.json>`. It takes the next number.
+`timing --dispatch <DISPATCH-ID> --add --rows-file <row.json>`. It takes the next number.
 If `timing` refuses (no `closeOuts` role, no open log, an unknown row), stop and report
 the message.
 
@@ -569,7 +569,7 @@ the message.
 
 With the task plan built, the parent thread decides which tasks it should do locally
 and which tasks are good child-worker candidates. This gives the human a clear
-execution map without creating a fresh parent chat for the sprint.
+execution map without creating a fresh parent chat for the dispatch.
 
 ### The Owner Hierarchy
 
@@ -585,7 +585,7 @@ Zeus — owns plan, scope, integration, verification, close-out [cross-cutting]
         └── [Project specialists as available]
 ```
 
-Workers are child agents under the current sprint run when delegation is authorized.
+Workers are child agents under the current dispatch run when delegation is authorized.
 They are not standalone `$virtuoso` chats and they do not own the parent plan.
 
 ### Step 1: Scan for available workers
@@ -690,7 +690,7 @@ data flow redesigns)
 **hercules-worker** for independent implementation work with bounded scope.
 
 The parent may execute any task directly when that keeps the critical path moving.
-Use workers for bounded sidecar tasks that materially advance the sprint.
+Use workers for bounded sidecar tasks that materially advance the dispatch.
 
 ### Step 4: Print the assignment table
 
@@ -729,7 +729,7 @@ For each task, the parent:
 1. Takes the next task from the plan
 2. **Set effort level** — if this task has an effort override (e.g., `{max}`),
    note the override before starting and pass it through to any worker prompt.
-3. **Starts the row's clock:** `timing --sprint <SPRINT-ID> --start N --model <model id>
+3. **Starts the row's clock:** `timing --dispatch <DISPATCH-ID> --start N --model <model id>
    --host <host>`, naming the model and host that run the row.
 4. Decides whether to execute locally or launch a child worker.
 5. If launching a worker, gives it a bounded task, explicit file/module ownership,
@@ -737,7 +737,7 @@ For each task, the parent:
 6. Verifies the result meets the task spec — mechanically, per the rule below.
 7. If the result includes information needed by downstream tasks, records the relevant
    summary for later steps.
-8. **Ends the row's clock:** `timing --sprint <SPRINT-ID> --end N --evidence "<what
+8. **Ends the row's clock:** `timing --dispatch <DISPATCH-ID> --end N --evidence "<what
    proves it>"` — the test, the command output or the commit step 6 checked (add
    `--result blocked` or `--result cancelled` when it did not complete, and
    `--tokens <count>` when the host reported the row's token usage), and marks the
@@ -747,7 +747,7 @@ For each task, the parent:
 
 Every `timing` call runs as `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root .
 --actor virtuoso timing …`. **A question to the owner is a wait, not work.** Run
-`timing --sprint <SPRINT-ID> --wait N --reason owner` when you ask, and `--resume N`
+`timing --dispatch <DISPATCH-ID> --wait N --reason owner` when you ask, and `--resume N`
 when the answer arrives. Every wait names its reason: `owner` (a question or decision),
 `approval` (a host permission prompt), `blocked` (an external dependency), or
 `session-ended` (the session stopped mid-row). A wait without one is refused. The wait
@@ -760,7 +760,7 @@ out to be two pieces of work is split, not stretched: `timing --split N --rows-f
 <parts.json>` ends it as `split` and adds the parts, each carrying `splitFrom: N`.
 `--status` reads back every row's state and measured minutes, so after a context
 compaction, read it back rather than reconstructing times. The time log is the plan:
-run `timing --sprint <SPRINT-ID> --check` after a compaction and again before the
+run `timing --dispatch <DISPATCH-ID> --check` after a compaction and again before the
 close-out, and read its exit code — 0 clean, 1 findings (a number used twice, a row
 ended `done` without evidence, a parked row without a reason, a row still running), 2
 for a usage error or no log to check. After a compaction, the row in progress is
@@ -781,7 +781,7 @@ that was never produced.
 
 <!-- rule:re-derive-dont-restate (re-derivation) -->
 **An agent that restates an upstream number inherits its errors; one that re-derives it
-catches them.** When a worker's deliverable is a figure the sprint will act on — a
+catches them.** When a worker's deliverable is a figure the dispatch will act on — a
 count, a rate, a pass/fail tally — do not accept it restated from another tool's summary.
 Have it re-derived from the underlying data, or re-run independently.
 
@@ -823,11 +823,11 @@ Owning the run does not make the parent an implementer: it still does not read s
 edit code, or decide the fix. It holds a handle, which is coordination work.
 
 **Effort level management:** Effort controls how deeply the parent and child workers
-reason. Set the sprint's default effort at the start of Phase 4 (read from the dispatch
+reason. Set the dispatch's default effort at the start of Phase 4 (read from the dispatch
 header's `Effort:` field), then note before/after any task with a `{curly brace}`
 override. The five levels are: `low`, `medium`, `high`, `xhigh`, `max`.
 ```
-/effort-levels medium          ← set sprint default at start of Phase 4
+/effort-levels medium          ← set dispatch default at start of Phase 4
 /effort-levels max             ← before a {max} override task
   [execute locally or launch bounded child worker]
 /effort-levels medium          ← revert after override task completes
@@ -866,7 +866,7 @@ is what gets violated:
 These three are additive to the task text, not a substitute for it. They cost a few
 lines and they are the difference between a worker that stops and one that forces.
 
-**Governance-task dispatch gate (worktree-resident sprints only).** Before dispatching
+**Governance-task dispatch gate (worktree-resident dispatches only).** Before dispatching
 any task that updates a document listed in CLAUDE.md §Main Governance Documents:
 
 1. The implementation agent rewrites the task description to target the staging file instead of the
@@ -874,10 +874,10 @@ any task that updates a document listed in CLAUDE.md §Main Governance Documents
    becomes "Write fold-in entries to the staging file for CLAUDE.md updates (constants,
    cal results, phase status)."
 2. The parent includes the staging file path in the task note or worker prompt:
-   `"Write fold-ins to <closeOuts>/Memo.<sprint-id>.GovernanceStaging.<date>.md"` —
+   `"Write fold-ins to <closeOuts>/Memo.<dispatch-id>.GovernanceStaging.<date>.md"` —
    `<closeOuts>` resolved through the registry
 3. The parent records the constraint:
-   `"Do NOT edit CLAUDE.md directly — this sprint runs in a worktree. All governance
+   `"Do NOT edit CLAUDE.md directly — this dispatch runs in a worktree. All governance
    updates go to the staging file as fold-in entries."`
 
 If the task plan includes a governance-update task and the implementation agent is in a worktree, the task
@@ -927,14 +927,14 @@ don't context-switch. Scope creep is how 30-minute tasks become 90-minute tasks.
 
 <!-- rule:checkpoint-commits (task-boundary-commit) -->
 **A task boundary is a commit boundary.** Commit when a task completes, and push at
-burst end — do not carry a whole sprint's work to one terminal commit at the end of the
+burst end — do not carry a whole dispatch's work to one terminal commit at the end of the
 plan. An uncommitted working tree is not a git-verified state: a crashed session, a
 reverted edit, or a worktree removed early takes everything that was never committed,
 and no amount of correct work survives that.
 
-This applies to the worked examples in this skill as much as to real sprints. A plan
+This applies to the worked examples in this skill as much as to real dispatches. A plan
 whose only commit is its last task teaches the failure — the example's final task is the
-*merge*, not the sprint's first save.
+*merge*, not the dispatch's first save.
 
 Two consequences worth stating, because both have been observed:
 
@@ -942,10 +942,10 @@ Two consequences worth stating, because both have been observed:
   landed before a suite runs against them; a green suite on an uncommitted tree proves
   nothing about what will merge.
 - **Committed is not the same as pushed.** Commits sitting on one machine are invisible
-  to every other lane and to the merge slot. Count them at burst end:
+  to every other workstream and to the merge slot. Count them at burst end:
 
 ```bash
-"$HOME/.virtuoso/bin/virtuoso" sprint_guards unpushed --root <project-root>
+"$HOME/.virtuoso/bin/virtuoso" dispatch_guards unpushed --root <project-root>
 ```
 
 This is the most important habit. Reprinting the plan after each task:
@@ -965,7 +965,7 @@ you reprint, you are reprinting THE plan — the same one, updated in place.
 If the human sees two plans on screen with different completion states, one
 of them is wrong.
 
-**Status bar format:** the header `timing --sprint <SPRINT-ID> --status` prints, then one
+**Status bar format:** the header `timing --dispatch <DISPATCH-ID> --status` prints, then one
 sentence on the current state. Reprint its output. Never sum the minutes yourself:
 
 `[D/N ✓ · R ■ · X ✗ · O □ · P ◇] Remaining M (sequential rows a, b, c; row p parallel, excluded) → est. finish HH:MM local (±HH:MM) · HH:MM UTC. Now: row r running.`
@@ -999,12 +999,12 @@ Silent chains of tool calls are where plans go off the rails.
 **At the end of every burst, count what has not left the machine.**
 
 ```bash
-"$HOME/.virtuoso/bin/virtuoso" sprint_guards unpushed --root <project-root>
+"$HOME/.virtuoso/bin/virtuoso" dispatch_guards unpushed --root <project-root>
 ```
 
-A non-zero count is not automatically wrong — a sprint mid-flight legitimately holds
+A non-zero count is not automatically wrong — a dispatch mid-flight legitimately holds
 local commits. It is wrong to *not know*. Exit 2 means there is no upstream at all,
-which makes every commit on this branch invisible to other lanes and to the merge slot.
+which makes every commit on this branch invisible to other workstreams and to the merge slot.
 
 ---
 
@@ -1051,14 +1051,14 @@ never writes `.git/index.lock` or races a concurrent mutation.
 - **Feature branches are created by the orchestrator**, never inside a worker's transient
   worktree.
 - **Committed is not pushed**, and a long-lived branch that becomes the de-facto trunk
-  leaves `main` stale — check what a new sprint would actually branch from.
+  leaves `main` stale — check what a new dispatch would actually branch from.
 
 **What to do when stopped:**
 1. Mark the current task ✗ (blocked).
 2. Reprint the full task plan showing current state.
 3. **Render the issue in the 7-field format below** and **save an identical `.md`** to
    the `issues` directory from `Virtuoso/workspace-layout.json` as
-   `Issue.<SPRINT-ID>.<YYYY-MM-DD>.md` (append `-N` if more than one on a date).
+   `Issue.<DISPATCH-ID>.<YYYY-MM-DD>.md` (append `-N` if more than one on a date).
 4. Hand the saved path to **`/mid-dispatch-decision`** — it reads the file and returns the
    call. Do not pick a path yourself without approval.
 
@@ -1086,11 +1086,11 @@ The saved file IS the handoff token — `/mid-dispatch-decision` expects a path 
 
 ## Phase 6: Close Out
 
-After all tasks show ✓ (or the sprint reaches a defined stop condition), print the
-close-out. The close-out begins with the sprint ID and follows this exact structure:
+After all tasks show ✓ (or the dispatch reaches a defined stop condition), print the
+close-out. The close-out begins with the dispatch ID and follows this exact structure:
 
 ```
-[SPRINT-ID]   Phase 6: Close-Out — SPRINT-NAME (Outcome Type)
+[DISPATCH-ID]   Phase 6: Close-Out — DISPATCH-NAME (Outcome Type)
 
 Problem: 1-2 sentences — what was broken, missing, or inadequate before this work
 started, or what opportunity/goal motivated it. Restate from the dispatch spec in
@@ -1101,7 +1101,7 @@ Result: 1-2 sentences — what was done and what happened. Name the specific cha
 outcome was success, partial, or pivot stop. If the work was empirically falsified
 or a gate triggered early stop, say so directly.
 ---
-Task Plan — SPRINT-NAME | [X% of authorized scope] Outcome summary.
+Task Plan — DISPATCH-NAME | [X% of authorized scope] Outcome summary.
 ✓ 1.   Zeus:   Load spec, build plan, assign owners                  [cross-cutting] — 20 → 24 min
 ✓ 2.   hercules:       Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0 [bounded] — 25 → 31 min
 ...
@@ -1125,19 +1125,19 @@ role/effort level than planned, etc.]
 ---
 Repository state: [commit hash, merge/push status, notable remaining changes]
 Key engineering finding for the planner: [the single most important technical insight
-from this sprint that affects future work — not a summary of what was done, but
+from this dispatch that affects future work — not a summary of what was done, but
 what was learned]
 ```
 
-**Outcome types** (use in the header after the sprint name):
+**Outcome types** (use in the header after the dispatch name):
 - **(Complete)** — all tasks ✓, tests pass, merged to main
 - **(Partial)** — some tasks complete, changes preserved for later integration
 - **(Pivot Stop)** — work empirically falsified or gate triggered early stop
 - **(Blocked)** — escalated to user, awaiting direction
 
 **Close-out rules:**
-- The sprint ID appears first, before "Phase 6" — it anchors the entire block
-- Task Plan uses the sprint name (not generic), with the percentage reflecting
+- The dispatch ID appears first, before "Phase 6" — it anchors the entire block
+- Task Plan uses the dispatch name (not generic), with the percentage reflecting
   authorized scope completed (100% is valid even with cancelled tasks if the
   cancellation was the authorized response to a gate trigger)
 - Worker Utilization uses a compact summary table (owner → tasks → key output),
@@ -1161,19 +1161,19 @@ what was learned]
      referenced deliverable has been found never to have existed in git.
      Run:
      ```bash
-     "$HOME/.virtuoso/bin/virtuoso" sprint_guards artifacts-exist --ref <merged-branch> <path> [<path> ...]
+     "$HOME/.virtuoso/bin/virtuoso" dispatch_guards artifacts-exist --ref <merged-branch> <path> [<path> ...]
      ```
      Removing the worktree before this check passes destroys the evidence that would
      have caught the gap.
 
-     Name the dispatch's time log among those paths: `<closeOuts>/Timing.<SPRINT-ID>.jsonl`.
+     Name the dispatch's time log among those paths: `<closeOuts>/Timing.<DISPATCH-ID>.jsonl`.
      Before close-out, end every row that never ran with `timing --end N --result
      cancelled`: a log with a row still open never counts as closed in `kpis`.
      A log left behind in a worktree never becomes history, so no later dispatch can
      price from it. The close-out's Task Plan shows each row's predicted → actual
      minutes, as `timing --status` prints them.
 
-- **For a held plan, the ledger row waits on purpose.** `/pointer-closeout` records the
+- **For a held plan, the ledger row waits on purpose.** `/dispatch-closeout` records the
   held entry `executed`, and the `/roadmap-review` that absorbs it runs the recording
   crossing (`references/execution-paths.md`). The close-out file and the
   deliverable-existence check above still happen now.
@@ -1182,35 +1182,35 @@ what was learned]
 - **A verification task that finds more than a handful of issues stops and spawns a
   remediation task.** It does not quietly become an implementation task. Silent
   conversion is how a minimal-effort verification once consumed more tool calls than
-  any maximum-effort task in its sprint — and the plan showed one ✓ line for it. If
+  any maximum-effort task in its dispatch — and the plan showed one ✓ line for it. If
   verification turns up substantive work, mark the verification ✓ with its findings,
   add a numbered remediation task, and reprint.
 
 <!-- rule:merge-through-slot (lane-concurrency) -->
 - **Integration runs through the merge slot, in this order.** A worktree-resident
-  sprint is not done when its tasks are ✓ — it is done when it has merged. Serialized
-  integration exists because two lanes that each pass their own gate can still break
+  dispatch is not done when its tasks are ✓ — it is done when it has merged. Serialized
+  integration exists because two workstreams that each pass their own gate can still break
   the combined tree:
 
-  1. **Claim the merge slot** for this lane. Block until it is free; never merge without it.
+  1. **Claim the merge slot** for this workstream. Block until it is free; never merge without it.
   2. **Merge the base branch into the feature branch** — not the other direction.
   3. **Re-run the full gate on the combined tree.** The pre-merge gate result is stale
      the moment the base moves; a gate that ran only on the feature branch has not
      tested what is about to land.
   4. **Merge** to base.
-  5. **Push.** An unpushed merge is invisible to every other lane and to the slot.
+  5. **Push.** An unpushed merge is invisible to every other workstream and to the slot.
   6. **Remove the worktree** — only after the artifact-existence check has passed.
   7. **Release the merge slot.**
 
   If any step fails, release the slot before escalating. A held slot blocks every other
-  lane on a sprint that is no longer progressing.
+  workstream on a dispatch that is no longer progressing.
 
 - Git state and Key engineering finding close the block — these are what the planner
-  reads first when processing a close-out into a Pointer Close-Out Report. Run
-  **`/pointer-closeout`** on this block to fold the result into the roadmap, sprint queue,
+  reads first when processing a close-out into a Dispatch Close-Out Report. Run
+  **`/dispatch-closeout`** on this block to fold the result into the roadmap, dispatch queue,
   and retrospective. (The spec arrived through one of the three paths in
-  `references/execution-paths.md`: `/next-pointer`'s pointer, `/write-plan`'s held plan,
-  or `/epic`'s packet. `/pointer-closeout` reads the origin line to close each one
+  `references/execution-paths.md`: `/dispatch-kickoff`'s kickoff, `/write-plan`'s held plan,
+  or `/epic`'s packet. `/dispatch-closeout` reads the origin line to close each one
   correctly.)
 
 **Performance Recommendations** (append after the close-out block when warranted):
@@ -1281,16 +1281,16 @@ re-pasted into every brief.
 
 ## Worktree Governance Staging
 
-Worktree-resident sprints (any virtuoso-executed work running in a `git worktree`-
-isolated directory) have a structural conflict surface: if the sprint edits main
+Worktree-resident dispatches (any virtuoso-executed work running in a `git worktree`-
+isolated directory) have a structural conflict surface: if the dispatch edits main
 governance documents directly, those edits conflict with any concurrent planner-side
 governance work on canonical main. The conflict either surfaces at pre-merge rebase
 (friction) or produces silent-revert behavior (governance content lost undetected).
 
-This section eliminates that conflict surface by making worktree-resident sprints
+This section eliminates that conflict surface by making worktree-resident dispatches
 structurally incapable of editing main governance documents.
 
-### Rule 1 — Worktree-Resident Sprints MUST NOT Edit Main Governance Documents
+### Rule 1 — Worktree-Resident Dispatches MUST NOT Edit Main Governance Documents
 
 During worktree-resident execution, virtuoso's task plan must not include direct
 edits to documents classified as "main governance." The classification is
@@ -1299,27 +1299,27 @@ for a **worktree edit prohibition** section and reading its list of protected
 documents — do not match on a section title verbatim, because titles drift and a
 restated title silently reads as "no such section, no prohibition."
 
-Virtuoso reads that list at sprint start (Phase 1). If no such section exists in
+Virtuoso reads that list at dispatch start (Phase 1). If no such section exists in
 CLAUDE.md, the prohibition still applies to any document that:
-- Spans multiple sprints (roadmaps, sprint queues, constitutions)
-- Is edited by the planner between sprints (SRL catalogs, debt logs, technical references)
-- Contains the dispatch spec for the currently-running sprint (the inline full spec)
+- Spans multiple dispatches (roadmaps, dispatch queues, constitutions)
+- Is edited by the planner between dispatches (SRL catalogs, debt logs, technical references)
+- Contains the dispatch spec for the currently-running dispatch (the inline full spec)
 - Defines how agents work: the plugin's agent files (`agents/<Agent>.md`), their
   registered overlays (`<overlays>/agents/<Agent>.md`), and project copies of agent
   briefs (`.claude/agents/`), unless the dispatch's own specification
-  names the file as an edit site. A correction found mid-sprint is a staging fold-in
-  (Rule 2), which the planner applies between sprints.
+  names the file as an edit site. A correction found mid-dispatch is a staging fold-in
+  (Rule 2), which the planner applies between dispatches.
 
 If a task in the task plan would edit a main governance document, virtuoso rewrites
 that task to write to the staging file instead (see Rule 2).
 
 ### Rule 2 — All Governance-Change Intent Goes to a Staging File
 
-For every governance change the sprint would otherwise make to a main governance
+For every governance change the dispatch would otherwise make to a main governance
 document, virtuoso writes the change-intent to a staging file in the worktree:
 
 ```
-<close-out-directory>/Memo.<sprint-id>.GovernanceStaging.<YYYY-MM-DD>.md
+<close-out-directory>/Memo.<dispatch-id>.GovernanceStaging.<YYYY-MM-DD>.md
 ```
 
 <!-- rule:registry-resolved-staging (AMEND-THE-RESTATEMENTS) -->
@@ -1332,21 +1332,21 @@ where memos happen to sit, and do not hardcode a conventional path — a guessed
 location writes an open obligation somewhere close-out will never sweep.
 
 The staging file is created on first governance-change-intent and appended to
-throughout the sprint. It contains all the changes that would normally land in
+throughout the dispatch. It contains all the changes that would normally land in
 main governance docs — formatted as **fold-in instructions**, not as raw edits.
 
 ### Rule 3 — Staging File Structure
 
-The staging file is organized so pointer-closeout can mechanically apply each entry.
+The staging file is organized so dispatch-closeout can mechanically apply each entry.
 Section headers name the target document; entries within name the target section
 and the fold-in action.
 
 ```markdown
-# Sprint Close-Out Governance Staging — <sprint-id>
+# Dispatch Close-Out Governance Staging — <dispatch-id>
 
-This file enumerates every governance change the sprint would have made to
+This file enumerates every governance change the dispatch would have made to
 main governance documents during execution, but staged here per virtuoso's
-worktree-edit prohibition. pointer-closeout processes this file at sprint
+worktree-edit prohibition. dispatch-closeout processes this file at dispatch
 close to apply the fold-ins to canonical main.
 
 ## Target: <document-name>
@@ -1379,14 +1379,14 @@ subsection and destination = close-out memo §Mid-Dispatch Decisions. These must
 be processed BEFORE inline spec collapse fold-ins (so amendment content is
 preserved before the spec containing it gets collapsed).
 
-### Rule 4 — pointer-closeout Processes the Staging File as Wave 2 Step 0
+### Rule 4 — dispatch-closeout Processes the Staging File as Wave 2 Step 0
 
-pointer-closeout's existing Wave 2 procedure gains a new first step:
+dispatch-closeout's existing Wave 2 procedure gains a new first step:
 
-**Step 0 (NEW): Read and process the sprint's staging file.**
+**Step 0 (NEW): Read and process the dispatch's staging file.**
 
-If `Memo.<sprint-id>.GovernanceStaging.<date>.md` exists in the worktree (or has
-already merged from the worktree), pointer-closeout:
+If `Memo.<dispatch-id>.GovernanceStaging.<date>.md` exists in the worktree (or has
+already merged from the worktree), dispatch-closeout:
 
 1. Parses all fold-in instructions
 2. Applies them to canonical main as Edit calls against the named target documents
@@ -1397,7 +1397,7 @@ The close-out memo is the durable record. The staging file is transient infrastr
 
 **Discrepancy handling:** If a fold-in instruction conflicts with current canonical
 main state (e.g., the target section no longer exists, or content has changed since
-the fold-in was staged), pointer-closeout surfaces the discrepancy as a reconciliation
+the fold-in was staged), dispatch-closeout surfaces the discrepancy as a reconciliation
 prompt to the user rather than silently overwriting or failing.
 
 ### Rule 5 — Mid-Dispatch Amendments Use the Staging File
@@ -1413,7 +1413,7 @@ under a fold-in entry, NOT to the inline spec. Specifically:
 ## Target: <roadmap-document>
 
 ### Fold-in N — Mid-Dispatch Amendment (<amendment title>)
-Section: §<sprint-id> (inline full spec)
+Section: §<dispatch-id> (inline full spec)
 Action: Migrate
 Source: This amendment block (below)
 Destination: Close-out memo §Mid-Dispatch Decisions
@@ -1425,14 +1425,14 @@ Decision: <what was decided>
 Rationale: <why>
 ```
 
-The mid-dispatch-decision skill's Step 6b becomes: "Append amendment to the sprint's
+The mid-dispatch-decision skill's Step 6b becomes: "Append amendment to the dispatch's
 staging file under the appropriate target document section." The Close-Out Preservation
 field becomes implicit — the staging file IS the preservation contract. The conflict-
 surface check becomes unnecessary because the conflict surface no longer exists.
 
-### Rule 6 — Planner-Side Sprints Follow the Same Pattern by Default
+### Rule 6 — Planner-Side Dispatches Follow the Same Pattern by Default
 
-planner-side governance work that runs in a single session (e.g., /pointer-closeout,
+planner-side governance work that runs in a single session (e.g., /dispatch-closeout,
 /roadmap-review, /governance-sweep) doesn't have a worktree boundary, so the conflict
 surface doesn't apply in the same way. But the staging-file pattern still has value:
 
@@ -1460,7 +1460,7 @@ and the failure mode is that nobody ever looks. Four lifecycle hazards:
   says its fold-ins were applied is a claim; the target document containing them is
   the evidence. Run:
   ```bash
-  "$HOME/.virtuoso/bin/virtuoso" sprint_guards staging-sweep --root <project-root>
+  "$HOME/.virtuoso/bin/virtuoso" dispatch_guards staging-sweep --root <project-root>
   ```
   A non-zero exit means resident memos exist. Report them; do not delete a memo you
   did not verify against its targets.
@@ -1477,17 +1477,17 @@ and the failure mode is that nobody ever looks. Four lifecycle hazards:
   for the above: an agent that is told the tip proposes from it instead of from a
   stale snapshot.
 
-### Migration — Sprints Already in Flight
+### Migration — Dispatches Already in Flight
 
-Sprints dispatched before this pattern was introduced continue under the old pattern
+Dispatches started before this pattern was introduced continue under the old pattern
 (mid-dispatch-decision writes amendments inline to the roadmap). The new staging-file
-pattern starts with the next sprint dispatched after this skill update.
+pattern starts with the next dispatch started after this skill update.
 
-When processing a close-out for a grandfathered sprint, pointer-closeout checks for
+When processing a close-out for a grandfathered dispatch, dispatch-closeout checks for
 BOTH: a staging file (new pattern) and inline Mid-Dispatch Amendment blocks with
 Close-Out Preservation instructions (old pattern). If both exist, surface as a
 reconciliation prompt. The transition point should be noted in CLAUDE.md so it's
-clear which sprints used which pattern.
+clear which dispatches used which pattern.
 
 ### What This Prevents
 
@@ -1499,9 +1499,9 @@ The pattern of:
 
 Under the new pattern: the worktree NEVER edits canonical main governance documents.
 Conflicts on those files between the worktree and the planner are structurally impossible.
-The staging file consolidates intent; pointer-closeout applies it once at close-out,
+The staging file consolidates intent; dispatch-closeout applies it once at close-out,
 with full visibility of any concurrent planner edits at that moment.
 
-**Trade-off:** pointer-closeout becomes mechanically heavier (more fold-ins to process)
-and the staging file is one more artifact per sprint. Both are small costs for the
+**Trade-off:** dispatch-closeout becomes mechanically heavier (more fold-ins to process)
+and the staging file is one more artifact per dispatch. Both are small costs for the
 structural elimination of a recurring failure mode.

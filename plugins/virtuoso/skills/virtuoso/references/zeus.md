@@ -20,7 +20,7 @@ description: "Behavioral reference for Zeus-as-orchestrator execution. The top-l
 
 Sub-agents spawned via `Agent()` cannot spawn further sub-agents. A spawned "Zeus" agent
 would have to do all implementation work directly in its own tool budget, hitting the
-ceiling on non-trivial sprints. The top-level session has the `Agent()` tool, the largest
+ceiling on non-trivial dispatches. The top-level session has the `Agent()` tool, the largest
 tool budget, and full filesystem access; each sub-agent it spawns gets its own independent
 budget. So the orchestrator must be the top-level session itself — which plays the Zeus
 role by reading this protocol.
@@ -197,7 +197,7 @@ This is the behavioral pause mechanism — Zeus does not auto-advance between ph
   the two differ, the registered source wins and the difference is an issue to route
 - Read this `zeus.md` (coordination protocol, routing tree, escalation rules)
 - Scan the agent roster (plugin `agents/` + project `.claude/agents/`) — discover all available agents + their exact `name:` fields
-- Read the sprint spec referenced by the dispatch pointer (the pointer printed by **`/next-pointer`**)
+- Read the dispatch spec referenced by the dispatch kickoff (the kickoff printed by **`/dispatch-kickoff`**)
 - Read any governance docs referenced by the spec
 
 **Agent Name Resolution:**
@@ -208,7 +208,7 @@ must pass to `Agent()`. Example: `Hermes.md` has `name: Hermes` — pass `"Herme
 **Gate output:**
 ```
 ===== PHASE 1: READ COMPLETE =====
-Sprint: <sprint-id>
+Dispatch: <dispatch-id>
 Spec location: <path>
 Agents discovered: <list of name: fields>
 Key constraints from spec: <summary>
@@ -222,23 +222,23 @@ Proceeding to PLAN phase.
 
 **Actions:**
 - Decompose spec into numbered tasks (one per deliverable)
-- Annotate each task with: agent assignment, task tier [mechanical/bounded/cross-cutting] and effort level [low/medium/high/max]
+- Annotate each task with: agent assignment, task tier [mechanical/bounded/cross-cutting] and effort level [low/medium/high/xhigh/max]
 - Identify sequential dependencies vs. parallelizable tasks
 - Read the dispatch header's Effort field and any per-task overrides
-- Set the default effort level via `/effort-levels [low|medium|high|max]` (see the `effort-levels` skill)
+- Set the default effort level via `/effort-levels [low|medium|high|xhigh|max]` (see the `effort-levels` skill)
 - Open the time log, which prices every row (see the virtuoso skill, *Open the time log*):
   `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . timing --kinds` to reuse the kind
   names in use, then
-  `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing --sprint <sprint-id> --open --rows-file <rows.json>`.
+  `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing --dispatch <dispatch-id> --open --rows-file <rows.json>`.
   Each row carries its `class` (`calculable`, `repeat`, `frontier`), `specRevision` and
   `group`; a frontier row carries a `timebox` (minutes) and `onTimebox` instead of an estimate.
-- Print the full task plan with the predictions `timing --sprint <sprint-id> --status` shows
+- Print the full task plan with the predictions `timing --dispatch <dispatch-id> --status` shows
 
 **Gate output:**
 ```
 ===== PHASE 2: PLAN COMPLETE =====
 
-TASK PLAN (<sprint-id>):
+TASK PLAN (<dispatch-id>):
   Task 1: [Zeus/cross-cutting] Setup — load spec, build plan, assign owners; prepare the isolated workspace (if the project's Git Workflow uses one)  <M> min (<basis>)
   Task 2: [<Agent>/<tier>] <description> @<kind>  <M> min (median of <N> runs | estimated)
   ...
@@ -257,20 +257,20 @@ Estimated agent spawns: <N>
 
 **Actions:**
 - Row 1, the setup row (as the virtuoso skill numbers it): when the project's Git
-  Workflow uses isolated workspaces, it also creates the per-sprint workspace (e.g., a
+  Workflow uses isolated workspaces, it also creates the per-dispatch workspace (e.g., a
   git worktree or feature branch) per that workflow. A project that works directly on a
   branch skips that part. There is no row 0: the plan and the time log share one
   numbering from 1.
 - Every `timing` call below runs as
   `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing …`.
 - For each subsequent task sequentially:
-  a. Check for an effort override on this task, then `timing --sprint <sprint-id> --start N
+  a. Check for an effort override on this task, then `timing --dispatch <dispatch-id> --start N
      --model <model id> --host <host>`
   b. Spawn the assigned agent: `Agent("<name>", prompt=<self-contained task spec>)`
   c. Await return (COMPLETE / BLOCKED / FAILED)
   d. Extract results needed for downstream tasks
   e. Verify output matches the task spec
-  f. Mark task status, and `timing --sprint <sprint-id> --end N` (with `--result blocked`
+  f. Mark task status, and `timing --dispatch <dispatch-id> --end N` (with `--result blocked`
      or `--result cancelled` when it did not complete, and `--tokens <count>` when the
      host reported the row's usage)
   g. Reprint the task plan with updated checkmarks
@@ -280,7 +280,7 @@ Estimated agent spawns: <N>
 - A frontier row that works its timebox: `timing --timebox-reached N`, then its
   `onTimebox` action. A row that proves to be two: `timing --split N --rows-file <parts.json>`.
 - A task added mid-run is registered before it starts: `timing --kinds`, then
-  `timing --sprint <sprint-id> --add --rows-file <row.json>`. It takes the next number.
+  `timing --dispatch <dispatch-id> --add --rows-file <row.json>`. It takes the next number.
 
 **On BLOCKED/FAILED:** do not improvise. Render the blocker as a structured issue (the
 7-field format) and route it to **`/mid-dispatch-decision`** — see *Blocker Handling* below.
@@ -346,7 +346,7 @@ Awaiting user direction.
 
 ### Phase 4b — DOMAIN VALIDATION (conditional)
 
-**Trigger:** only for sprints that require domain-specific validation *beyond* unit tests —
+**Trigger:** only for dispatches that require domain-specific validation *beyond* unit tests —
 e.g., simulation calibration, benchmark thresholds, model/eval gates, performance budgets.
 Inserts between TEST and VERIFY. Skip entirely if the project has no such gate.
 
@@ -382,7 +382,7 @@ On FAILED: report the band breach, the delta from baseline, a recommended action
 **Actions (two sequential sub-phases):**
 
 5a — Spec Compliance:
-- Dispatch MarcusAurelius with: sprint spec + all changed files + test results
+- Dispatch MarcusAurelius with: dispatch spec + all changed files + test results
 - Await: APPROVED / WITH_CONCERNS / REJECTED
 - If REJECTED: loop back to Phase 3 (max 2 loops, then escalate)
 
@@ -450,7 +450,7 @@ Contents:
   - Roadmap fold-ins: <summary>
   - Other: <if any>
 
-These will be applied to canonical docs by the planner at close-out (/pointer-closeout).
+These will be applied to canonical docs by the planner at close-out (/dispatch-closeout).
 =====
 ```
 
@@ -490,8 +490,8 @@ Awaiting user direction.
 
 **Actions:**
 - Print the full session summary (see §Session Summary Format).
-- The close-out is processed by **`/pointer-closeout`** (Zeus's report is its input).
-- Sprint is terminal — no further phases.
+- The close-out is processed by **`/dispatch-closeout`** (Zeus's report is its input).
+- Dispatch is terminal — no further phases.
 
 **Gate output:**
 ```
@@ -506,7 +506,7 @@ Followed by the session summary block.
 When a task is BLOCKED/FAILED, or any stop / hold / elevation arises that Zeus cannot
 resolve alone, do NOT improvise a fix. Render the issue in the fixed **7-field format**,
 save an identical `.md` to the manifest `issues` directory as
-`Issue.<sprint-id>.<YYYY-MM-DD>.md`, and route
+`Issue.<dispatch-id>.<YYYY-MM-DD>.md`, and route
 that path to **`/mid-dispatch-decision`**:
 
 1. **tl;dr** — one line.
@@ -567,7 +567,7 @@ that path to **`/mid-dispatch-decision`**:
 ## Progress Reporting
 
 The progress line is the time log's header, never a count kept by hand. Print what
-`timing --sprint <sprint-id> --status` prints (past 12 rows, `--status --compact`), then
+`timing --dispatch <dispatch-id> --status` prints (past 12 rows, `--status --compact`), then
 one sentence with the key result of the step that just ended:
 
 ```
@@ -587,7 +587,7 @@ Print at the end of every dispatch:
 
 ```
 === SESSION SUMMARY ===
-Sprint: [ID]
+Dispatch: [ID]
 Branch: [name]
 
 AGENT DISPATCHES:
@@ -625,7 +625,7 @@ never typed.
 
 With proper delegation, Zeus's tool budget is spent on coordination, not implementation.
 Each sub-agent spawn costs Zeus ~1–2 tool uses. The sub-agent's work runs in a separate
-budget. A well-delegated sprint of 11 tasks costs Zeus ~25–30 tool uses (spawns + reprints
+budget. A well-delegated dispatch of 11 tasks costs Zeus ~25–30 tool uses (spawns + reprints
 + narration), well within typical ceilings.
 
 **If you are approaching your tool ceiling, something is wrong.** The most likely cause:
@@ -658,8 +658,8 @@ regardless of strategy:
 - **Never force-push.**
 - **Main must always pass tests.**
 
-*Illustrative strategy (one option, not required):* a **worktree-per-sprint** model — the
-setup row (row 1) creates a per-sprint worktree on a feature branch from main; sub-agents commit inside it;
+*Illustrative strategy (one option, not required):* a **worktree-per-dispatch** model — the
+setup row (row 1) creates a per-dispatch worktree on a feature branch from main; sub-agents commit inside it;
 at the end, merge `--no-ff` to main from the canonical root, push, and remove the worktree;
 on failure, commit WIP to the feature branch and leave the worktree for inspection. Use
 whatever isolation your project's workflow prescribes.
@@ -700,5 +700,5 @@ prompt should specify WHAT to change and WHERE, not HOW (the sub-agent figures o
 reading the code in its own context).
 
 Every tool call Zeus spends on source files is a tool call stolen from coordination. A
-sprint that needs 11 spawns + reprints + narration costs ~25–30 tool calls. A sprint where
+dispatch that needs 11 spawns + reprints + narration costs ~25–30 tool calls. A dispatch where
 Zeus reads source files before each spawn costs 50+ and hits the ceiling.

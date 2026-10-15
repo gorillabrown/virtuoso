@@ -1,0 +1,5 @@
+{"takenAt": "2026-10-13T12:00:00Z", "rows": [
+ {"Key": "ABC-3", "Title": "Import contacts", "State": "Done", "Order": 1, "Size": {"value": "s"}, "Blocked By": "None"},
+ {"Key": "ABC-7", "Title": "Export to CSV", "State": "In Progress", "Order": 2, "Size": {"value": "m"}, "Blocked By": ["ABC-3"]},
+ {"Key": "ABC-9", "Title": "Scheduled exports", "State": "Todo", "Order": 3, "Size": {"value": "l"}, "Blocked By": ["ABC-7"]}
+]}

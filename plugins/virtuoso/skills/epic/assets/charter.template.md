@@ -22,10 +22,10 @@ storyboard's alignment record. For a combination: what the items deliver togethe
 <!-- A combination only: the items, in the serial order `virtuoso_registry combine`
      returned, and why each sits where it does. Delete for a single item. -->
 
-| # | Item | Lane | Runs after | Because |
+| # | Item | Workstream | Runs after | Because |
 |---|------|------|------------|---------|
-| 1 | [Title] ([ITEM-ID]) | [lane] | — | [first in sequence] |
-| 2 | [Title] ([ITEM-ID]) | [lane] | [ITEM-ID] | [prerequisite / shared files: path] |
+| 1 | [Title] ([ITEM-ID]) | [workstream] | — | [first in sequence] |
+| 2 | [Title] ([ITEM-ID]) | [workstream] | [ITEM-ID] | [prerequisite / shared files: path] |
 
 ## Definition of Done — all rows must pass
 

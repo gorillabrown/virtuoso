@@ -3,12 +3,12 @@ name: write-plan
 description: |
   MANUAL INVOCATION ONLY. PLANNING ONLY, never execution. Step two of the ad hoc path:
   Storyboard scopes, Write-Plan writes the full plan, and only the virtuoso skill
-  executes. It turns storyboard's approved draft stub into full specifications, ready
-  for implementation. It always starts from the storyboard: with none, it runs
+  executes. It turns storyboard's approved draft stub into full, ready specifications.
+  It always starts from the storyboard: with none, it runs
   /storyboard first; with one, it re-anchors, checks for drift, and returns there
   whenever something agreed is in question. It writes each item in roadmap-review's
   D.5.2 format against the shared readiness rubric and the live lessons, runs
-  next-pointer's readiness audit and pre-flight, fills in the reconciliation recipe,
+  dispatch-kickoff's readiness audit and pre-flight, fills in the reconciliation recipe,
   and works out each item's exact slot in roadmap order. It holds the plan in the
   registered holding bay, never the roadmap or the register; the next /roadmap-review
   applies the slot. It never executes: it hands the plan to the virtuoso skill, here or
@@ -27,7 +27,7 @@ description: |
 - **Readiness** — one shared, versioned rubric: `references/readiness-rubric.md` (its universal checks, at the version it declares, plus the project's declared extensions). No skill restates it in its own words.
 - **Actors** — roles from `policy.actors`: planner, implementation agent, reviewer, repository operator. Never a product, vendor, or model name. See `references/actors-and-interaction.md`.
 - **Issue contract** — any stop, hold, block, or elevation becomes an issue document, routed per `policy.issues.targets` (local file, external tracker, or both).
-- **Effort levels** — low / medium / high / max. A property of the task's difficulty, never a ranking of whoever performs it.
+- **Effort levels** — low / medium / high / xhigh / max. A property of the task's difficulty, never a ranking of whoever performs it.
 
 <!-- virtuoso-overlay-clause v2 -->
 **Project overlay.** If the registry declares an `overlays` role, read the overlay mirroring
@@ -62,7 +62,7 @@ hand-off in Step 8.
 
 It applies the same standards as the roadmap path. Specifications are written in
 roadmap-review's D.5.2 format, walk the shared rubric, apply the live lessons, pass
-next-pointer's readiness audit and pre-flight, and carry a filled
+dispatch-kickoff's readiness audit and pre-flight, and carry a filled
 repository-reconciliation recipe. What reaches the executor is the same thing a
 roadmap dispatch delivers. The one difference is **where the plan waits**: in the
 registered holding bay, not on the roadmap. Nothing here is roadmapping. The next
@@ -130,8 +130,8 @@ one of those writes, it belongs to `/roadmap-review`.
 |---|---|
 | No approved storyboard for this work | `/storyboard`. This skill runs it for you (Step 0). |
 | The entry is epic-scale | It stays held. The next `/roadmap-review` places it as `Path: epic`, then `/epic` charters it. |
-| The entry reads `absorbed` | It is a roadmap item now. Use `/next-pointer`. |
-| The work is already a roadmap item | `/next-pointer` if it is the head, otherwise `/roadmap-review` |
+| The entry reads `absorbed` | It is a roadmap item now. Use `/dispatch-kickoff`. |
+| The work is already a roadmap item | `/dispatch-kickoff` if it is the head, otherwise `/roadmap-review` |
 | The entry reads `in-flight` | The `virtuoso` skill is executing it, in this session or another. Do not plan over it. |
 | The user wants the planned work built | The `virtuoso` skill, from the held entry (Step 8). This skill does not build. |
 
@@ -143,7 +143,7 @@ one of those writes, it belongs to `/roadmap-review`.
    way round.
 2. **Same bar as the roadmap path.** The rubric lives in
    `references/readiness-rubric.md`, and the format is roadmap-review's D.5.2. Readiness
-   is next-pointer's five findings and its pre-flight resolution. No part of this skill
+   is dispatch-kickoff's five findings and its pre-flight resolution. No part of this skill
    restates or relaxes any of them.
 3. **No roadmapping.** The holding bay only. The item's exact slot in roadmap order,
    its sequencing, and the stale downstream items go in the held entry, for the review
@@ -240,7 +240,7 @@ and launch-time pricing covers only the item in flight (2026-10-03).
 ## Step 3 — Walk the shared rubric
 
 Walk `references/readiness-rubric.md` at its current version, plus the project's
-declared extensions, exactly as roadmap-review's D.3.2 and next-pointer's Phase 2 do:
+declared extensions, exactly as roadmap-review's D.3.2 and dispatch-kickoff's Phase 2 do:
 
 - **PASS** → record it.
 - **CLOSABLE GAP** → close it by investigation, using the gap table those two share:
@@ -271,9 +271,9 @@ Fix what you find in place:
 4. **Ambiguity.** No requirement a reader could reasonably take two ways. Pick one
    reading and state it.
 
-## Step 5 — Readiness, pre-flight, roadmap placement, and the pointer
+## Step 5 — Readiness, pre-flight, roadmap placement, and the kickoff
 
-Run next-pointer's readiness audit (its Phase 2), its pre-flight resolution (its Phase
+Run dispatch-kickoff's readiness audit (its Phase 2), its pre-flight resolution (its Phase
 3.6), and its repository reconciliation against this held plan. Report readiness as the
 five separate findings, never blended:
 
@@ -298,22 +298,22 @@ it without re-deriving it and the `virtuoso` skill can see what it would run ahe
   of it that changes the same edit sites.
 - **Before:** the first item that must follow it. That is any item that depends on it,
   or whose specification cites a location this will move.
-- **Group, lane, and finish line**, where the project uses them, and whether it counts
+- **Group, workstream, and finish line**, where the project uses them, and whether it counts
   toward a declared deadline (the `pace` block of `kpis --json`).
 - **Against the head:** whether it has to run before the current head, and why. Running
   ahead of roadmap order is allowed only for a stated reason.
 
 Write it as one line per item:
-`Placement: after [Title] ([ID]), before [Title] ([ID]) — [group / lane]; [deadline or none]; [why]`.
+`Placement: after [Title] ([ID]), before [Title] ([ID]) — [group / workstream]; [deadline or none]; [why]`.
 When two orders are both defensible, ask a bounded question. The line is a decision for
 the review to apply in its C.3 and C.4. This skill still writes nothing to the roadmap,
 the register, or the sequence.
 
-Fill next-pointer's reconciliation recipe with detected values: the remote, the default
+Fill dispatch-kickoff's reconciliation recipe with detected values: the remote, the default
 branch, and the branch name from `policy.git.branchNameTemplate`. Include only steps
 the project's git policy permits, and leave no placeholders. The recipe is text for the
 executor. This skill never runs it, because creating the work branch is the first act of
-execution. Then compose the pointer. It carries the origin line:
+execution. Then compose the kickoff. It carries the origin line:
 
 ```
 [Item title]  (HB-<n>)
@@ -329,14 +329,14 @@ Readiness: specification ✓ · prerequisites ✓ · repository ✓ · register 
 ## Step 6 — The plan gate
 
 Show the user the plan: a two-line summary per item, the five findings, the roadmap
-placement, and the pointer. Ask them to **approve**, **revise**, or **stop**. A revision
+placement, and the kickoff. Ask them to **approve**, **revise**, or **stop**. A revision
 that changes what was agreed goes back to the storyboard first. Approval covers the plan
 and its hand-off. It does not start the work.
 
 ## Step 7 — Hold the plan
 
 1. Write the `## Plan` section into the held entry: **Readiness** (the five findings),
-   **Roadmap placement**, **Pointer**, **Repository reconciliation — run this FIRST**
+   **Roadmap placement**, **Kickoff**, **Repository reconciliation — run this FIRST**
    (for the `virtuoso` skill to run), then the **Specifications**, one
    `#### HB-<n> — Title` per item.
 2. Check the entry, then record it (preview first, then `--apply`):
@@ -345,9 +345,9 @@ and its hand-off. It does not start the work.
        "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor write-plan holding --record <entry> --state planned --note "<HB ids; rubric passed>" --apply
 
 3. Persist the file as `policy.git` permits, using the five-level table from
-   next-pointer's Phase 3.5, with the exact path staged. If the work will run on a
+   dispatch-kickoff's Phase 3.5, with the exact path staged. If the work will run on a
    branch cut from the default branch, and the held plan is not yet on that base,
-   repository readiness is **BLOCKED** until it is. State that, as next-pointer does.
+   repository readiness is **BLOCKED** until it is. State that, as dispatch-kickoff does.
 
 ## Step 8 — Hand off to Virtuoso
 
@@ -366,7 +366,7 @@ blocked. Otherwise, name the blocker by its descriptive name, and hold the plan.
 >   session, a fresh session, or a cloud session. I'll print a kickoff prompt, and the
 >   plan stays held until that session picks it up.
 > - **(c) Hold for roadmap review.** The next `/roadmap-review` places it at the slot
->   this plan records, and `/next-pointer` dispatches it from there.
+>   this plan records, and `/dispatch-kickoff` dispatches it from there.
 > - **(d) Withdraw it**, with a reason.
 
 Recommend (b) over (a) when this session is heavy with context the executor does not
@@ -379,11 +379,11 @@ now, hold HB-4" would split one entry across two paths.
 ### (a) Hand off here
 
 Print the summary (below), which ends this skill. Then load the **virtuoso** skill and
-give it the held entry: its pointer, its placement, its reconciliation recipe, and its
+give it the held entry: its kickoff, its placement, its reconciliation recipe, and its
 specifications, as the dispatch spec. From that moment the run belongs to the virtuoso
 skill. It checks the plan against upstream, downstream, and in-flight work, records the
 entry `in-flight`, runs the recipe, executes, returns the entry to `planned` if the run
-stops, and hands a finished run to `/pointer-closeout`. This skill records nothing more.
+stops, and hands a finished run to `/dispatch-closeout`. This skill records nothing more.
 
 ### (b) Another session
 
@@ -392,15 +392,15 @@ this one:
 
 ```
 Use the virtuoso skill to execute the held plan [entry] ([HB ids]) at
-[holding bay path]/[entry].md. Its Plan section carries the pointer, the roadmap
+[holding bay path]/[entry].md. Its Plan section carries the kickoff, the roadmap
 placement, the repository-reconciliation recipe, and the specifications.
 Before the first edit, run the skill's written-plan intake: the conflict check against
 upstream, downstream, and in-flight work, then record the entry in-flight, then run the
-recipe. Close out with /pointer-closeout.
+recipe. Close out with /dispatch-closeout.
 If the conflict check finds that the code or the roadmap has moved since the plan was
 recorded, stop and run /write-plan [entry] to re-verify it.
 If a roadmap review has absorbed the entry in the meantime, it is a roadmap item now:
-use /next-pointer instead.
+use /dispatch-kickoff instead.
 ```
 
 The entry stays `planned`. The virtuoso skill records `in-flight` when that session
@@ -443,7 +443,7 @@ next `/roadmap-review` places it at the recorded slot.
 |---|---|
 | "The storyboard is from yesterday, so I'll just write the plan" | Re-anchor first. Code moves, and so do lessons. |
 | "This gap is small, so I'll decide it in the spec" | A decision nobody made is an alignment question. It goes back to the storyboard. |
-| "I'll add the item to the register so next-pointer can see it" | That is roadmapping. The review absorbs the held entry. |
+| "I'll add the item to the register so dispatch-kickoff can see it" | That is roadmapping. The review absorbs the held entry. |
 | "The downstream spec is stale, so I'll fix it" | Another item's specification is not yours to edit. The held entry records it for the review. |
 | "Ad hoc work doesn't need lessons applied" | U9 applies to every specification. The ad hoc path has the same bar. |
 | "It passed, so I'll start executing" | This skill never executes. The plan goes to the `virtuoso` skill (Step 8), and that skill records `in-flight` itself. |
@@ -454,9 +454,9 @@ next `/roadmap-review` places it at the recorded slot.
 ## Integration
 
 - `references/execution-paths.md` — the destination this plan must reach, shared with
-  `/next-pointer` and `/epic`.
+  `/dispatch-kickoff` and `/epic`.
 - `/storyboard` — where every plan starts, and where every alignment question returns.
 - `virtuoso` — the only skill that executes. It takes the plan from Step 8's hand-off,
   checks it for conflicts, records `in-flight`, and runs it.
-- `/pointer-closeout` — closes the run in held-plan mode.
+- `/dispatch-closeout` — closes the run in held-plan mode.
 - `/roadmap-review` — absorbs the held entry onto the master roadmap, or withdraws it.

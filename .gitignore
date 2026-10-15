@@ -20,7 +20,9 @@ skills.zip
 # clean-tree gate on every dev clone that had one.
 /.codex-plugin/
 .superpowers/
-.claude/
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 
 # JetBrains IDE project files are per machine. /Virtuoso/.gitignore is the IDE's
 # boilerplate dropped into the workspace folder, not a Virtuoso file.

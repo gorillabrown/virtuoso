@@ -2,11 +2,11 @@
 
 An epic is not always one epic-scale item. The run that works is often several items
 a roadmap review already specified and placed, none epic-scale alone, run together
-unattended: serialized where they touch the same files, in parallel lanes where they
+unattended: serialized where they touch the same files, in parallel workstreams where they
 do not, under one Definition of Done. Deciding what combines is the valuable judgement,
 and this module does the mechanical half of it. ``epic`` does the rest.
 
-For a selection (item identifiers, or a lane and an optional sequence range) it
+For a selection (item identifiers, or a workstream and an optional sequence range) it
 answers, from the live register and the specifications, with provenance:
 
 * **membership** — each item is in the register, not terminal, not blocked, not already
@@ -16,8 +16,8 @@ answers, from the live register and the specifications, with provenance:
 * **files** — the files each specification's *Edit sites* and *Staging plan* name. Two
   items that share a file are serialized; an item whose files cannot be read is
   serialized with everything, because an unknown overlap is not a known absence;
-* **order and lanes** — a serial order that honours every prerequisite and shared
-  file, and the lanes: groups with no prerequisite and no file between them, which
+* **order and workstreams** — a serial order that honours every prerequisite and shared
+  file, and the workstreams: groups with no prerequisite and no file between them, which
   may run side by side;
 * **size** — the item count and effort points, for the epic-scale verdict ``epic``
   states.
@@ -50,11 +50,11 @@ SELECTION_EMPTY = "combine-selection-empty"
 SNAPSHOT_STALE = "combine-snapshot-stale"
 SPEC_UNLOCATED = "combine-spec-unlocated"
 FILES_UNLISTED = "combine-files-unlisted"
-LANE_UNMAPPED = "combine-lane-unmapped"
+WORKSTREAM_UNMAPPED = "combine-workstream-unmapped"
 FINDING_CODES = (ITEM_UNKNOWN, ITEM_TERMINAL, ITEM_BLOCKED, ITEM_IN_FLIGHT, ITEM_STUB,
                  ITEM_EPIC, ITEM_CHARTERED, PREREQUISITE_OUTSIDE, CYCLE, SINGLE,
                  SELECTION_EMPTY, SNAPSHOT_STALE, SPEC_UNLOCATED, FILES_UNLISTED,
-                 LANE_UNMAPPED)
+                 WORKSTREAM_UNMAPPED)
 
 #: The specification fields (the D.5.2 format) whose paths are the files an item touches.
 FILE_FIELDS = ("edit sites", "staging plan")
@@ -252,7 +252,7 @@ class Member:
         item = self.item
         return {"id": item.id, "title": item.title, "sequence": item.sequence,
                 "status": item.status, "specification": item.written_status or "unknown",
-                "lane": item.lane, "group": item.group, "effort": item.effort,
+                "workstream": item.workstream, "group": item.group, "effort": item.effort,
                 "prerequisites": list(item.prerequisites), "spec": self.spec.source,
                 "specUnlocated": self.spec.unlocated, "files": list(self.spec.files),
                 "filesKnown": self.files_known}
@@ -263,7 +263,7 @@ class Combination:
     selection: dict
     members: list = field(default_factory=list)
     order: list = field(default_factory=list)
-    lanes: list = field(default_factory=list)
+    workstreams: list = field(default_factory=list)
     edges: list = field(default_factory=list)       # {"before", "after", "why"}
     findings: list = field(default_factory=list)
     effort: dict = field(default_factory=dict)
@@ -282,15 +282,16 @@ class Combination:
     def as_dict(self) -> dict:
         return {"combinable": self.combinable, "selection": dict(self.selection),
                 "items": [m.as_dict() for m in self.members], "order": list(self.order),
-                "lanes": [list(lane) for lane in self.lanes], "edges": list(self.edges),
+                "workstreams": [list(w) for w in self.workstreams],
+                "edges": list(self.edges),
                 "effort": dict(self.effort), "findings": list(self.findings),
                 "provenance": dict(self.provenance)}
 
 
-def select(snapshot: base.Snapshot, *, items=(), lane: str = "", first=None,
+def select(snapshot: base.Snapshot, *, items=(), workstream: str = "", first=None,
            last=None) -> tuple[list, list[str], list[str]]:
-    """``(work items, unknown ids, notes)`` for a selection by identifier, or by lane and
-    an inclusive sequence range. A lane selection takes the active items only."""
+    """``(work items, unknown ids, notes)`` for a selection by identifier, or by workstream
+    and an inclusive sequence range. A workstream selection takes the active items only."""
     by_id = {item.id: item for item in snapshot.items}
     if items:
         chosen, unknown = [], []
@@ -301,15 +302,16 @@ def select(snapshot: base.Snapshot, *, items=(), lane: str = "", first=None,
             elif item_id not in unknown:
                 unknown.append(item_id)
         return chosen, unknown, []
-    wanted = lane.strip().lower()
+    wanted = workstream.strip().lower()
     chosen = [i for i in snapshot.items if not i.is_terminal
-              and (i.lane or "").strip().lower() == wanted
+              and (i.workstream or "").strip().lower() == wanted
               and (first is None or (i.sequence is not None and i.sequence >= first))
               and (last is None or (i.sequence is not None and i.sequence <= last))]
     chosen.sort(key=lambda i: (i.sequence is None, i.sequence or 0, i.id))
     notes = []
-    if "lane" not in snapshot.fields and not any(i.lane for i in snapshot.items):
-        notes.append("the register serves no lane field (policy.workRegister.fieldMappings.lane)")
+    if "workstream" not in snapshot.fields and not any(i.workstream for i in snapshot.items):
+        notes.append("the register serves no workstream field "
+                     "(policy.workRegister.fieldMappings.workstream)")
     return chosen, [], notes
 
 
@@ -373,7 +375,7 @@ def check(snapshot: base.Snapshot, chosen: list, *, unknown=(), selection: dict 
     """
     combo = Combination(selection=dict(selection or {}), provenance=snapshot.provenance())
     for note in notes:
-        combo.add(LANE_UNMAPPED, "warning", note)
+        combo.add(WORKSTREAM_UNMAPPED, "warning", note)
     if snapshot.stale:
         combo.add(SNAPSHOT_STALE, "error",
                   "the register snapshot is stale (%s); refresh it before combining — a "
@@ -436,7 +438,7 @@ def check(snapshot: base.Snapshot, chosen: list, *, unknown=(), selection: dict 
                       % (member.item.id, ", ".join(outside)), member.item.id)
     if len(members) == 1 and not unknown:
         combo.add(SINGLE, "error",
-                  "one item is not a combination: /next-pointer dispatches it, or a roadmap "
+                  "one item is not a combination: /dispatch-kickoff dispatches it, or a roadmap "
                   "review marks it Path: epic when it is epic-scale on its own")
 
     _order(combo, members, effort_scale)
@@ -444,7 +446,7 @@ def check(snapshot: base.Snapshot, chosen: list, *, unknown=(), selection: dict 
 
 
 def _order(combo: Combination, members: list, effort_scale) -> None:
-    """Order the members and group them into lanes, recording why each edge exists."""
+    """Order the members and group them into workstreams, recording why each edge exists."""
     ids = [m.item.id for m in members]
     by_id = {m.item.id: m for m in members}
     graph: dict[str, set] = {i: set() for i in ids}      # before -> {after}
@@ -499,7 +501,7 @@ def _order(combo: Combination, members: list, effort_scale) -> None:
         order.extend(sorted(stuck, key=lambda i: rank(by_id[i])))
     combo.order = order
 
-    # Lanes: the groups with no edge between them.
+    # Workstreams: the groups with no edge between them.
     neighbours: dict[str, set] = {i: set() for i in ids}
     for before, afters in graph.items():
         for after in afters:
@@ -509,13 +511,13 @@ def _order(combo: Combination, members: list, effort_scale) -> None:
     for item_id in order:
         if item_id in placed:
             continue
-        lane, stack = set(), [item_id]
+        workstream, stack = set(), [item_id]
         while stack:
             node = stack.pop()
-            if node in lane:
+            if node in workstream:
                 continue
-            lane.add(node)
+            workstream.add(node)
             stack.extend(neighbours[node])
-        placed |= lane
-        combo.lanes.append([i for i in order if i in lane])
+        placed |= workstream
+        combo.workstreams.append([i for i in order if i in workstream])
     combo.effort = _effort(members, effort_scale)

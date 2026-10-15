@@ -4,19 +4,19 @@ Use this reference when drafting the project-facing close-out report.
 
 ## Report Flow
 
-1. **Lead with the 5-line Sprint Brief** (*Goal*, *Result*, *Learned*, *Recommend*,
+1. **Lead with the 5-line Dispatch Brief** (*Goal*, *Result*, *Learned*, *Recommend*,
    *Bottom line* — one sentence each). See SKILL.md → "The five-line brief".
 2. Findings table.
 3. Interpret each non-pass result.
 4. Propose dispositions for user confirmation.
 5. Migrate any **Mid-Dispatch Decisions** into their own section — amendment blocks
-   moved verbatim from the sprint's staging file, one block per decision. This is the
+   moved verbatim from the dispatch's staging file, one block per decision. This is the
    destination the `virtuoso` and `mid-dispatch-decision` skills name when they migrate
    an amendment; the section must exist here or that migration has nowhere to land.
    "None" is a complete entry.
 6. Draft governance updates still needed.
-7. Name the recommended next direction in prose (no pointer code box — that is
-   `/next-pointer`'s job).
+7. Name the recommended next direction in prose (no kickoff code box — that is
+   `/dispatch-kickoff`'s job).
 8. Check audit / milestone / merge gates.
 
 ## Findings Table
@@ -63,12 +63,12 @@ Only draft the net-new updates still required.
 Typical destinations:
 
 - roadmap
-- sprint queue
+- dispatch queue
 - lessons learned
 - known traps
 - technical reference
 
-If the sprint already updated the docs fully, say so directly and do not invent additional work.
+If the dispatch already updated the docs fully, say so directly and do not invent additional work.
 
 ## Lessons
 
@@ -83,7 +83,7 @@ fails it is not a finished close-out.
 
 Three cases:
 
-1. **Already scoped and valid**: print the sprint pointer.
+1. **Already scoped and valid**: print the dispatch kickoff.
 2. **Already scoped but stale**: revise the scope based on close-out data.
 3. **Not scoped**: draft a rough follow-on problem statement and task shape.
 

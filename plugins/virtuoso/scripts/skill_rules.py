@@ -37,7 +37,7 @@ REQUIRED_RULE_ANCHORS = {
     "governance-sweep": [
         ("grep-registry-before-moving", "registry-before-move"),
     ],
-    "pointer-closeout": [
+    "dispatch-closeout": [
         ("closeout-never-amends-acceptance", "acceptance-amendment"),
         ("classify-before-completion", "failure-classification"),
         ("proportional-evidence", "evidence-proportionality"),
@@ -79,12 +79,12 @@ REQUIRED_RULE_ANCHORS = {
 #: values with ``python scripts/skill_rules.py --hashes``.
 RULE_TEXT_HASHES = {
     "calibration-routing": "f006ee821e45",
-    "checkpoint-commits": "8156cf3c75a1",
+    "checkpoint-commits": "791eeb2ecf5d",
     "cite-searchable-anchor": "1f5d7cabc7d5",
     "claim-no-broader-than-evidence": "df173ed70539",
     "classify-before-completion": "fe08b2b84fe3",
     "close-only-what-was-verified": "896ce336280c",
-    "closeout-is-an-artifact": "9d77bc91469b",
+    "closeout-is-an-artifact": "d784171faca7",
     "closeout-never-amends-acceptance": "2ac31fcda313",
     "enforcement-not-disclosure": "c2177feff664",
     "git-separation-of-duties": "207f4a172087",
@@ -92,15 +92,15 @@ RULE_TEXT_HASHES = {
     "identity-not-counts": "8e75546390be",
     "inline-safety-into-worker-prompts": "953facc922b3",
     "instrument-positive-control": "3302ba204495",
-    "lane-declaration": "4cbcf8cd28f8",
+    "lane-declaration": "8e06511e5317",
     "mechanical-acceptance-criteria": "6335de01c689",
-    "merge-through-slot": "0d1ffba327e5",
+    "merge-through-slot": "ba69a6289d8a",
     "name-populations-not-aggregates": "a0322ec0c04b",
     "name-the-fork-under-test": "aa7d0012d8e7",
     "orchestrator-owns-long-runs": "f5bbd311aa2a",
     "proportional-evidence": "db329b8d695d",
     "protected-state-over-test-result": "e48441114ad8",
-    "re-derive-dont-restate": "dbd2c4afda6e",
+    "re-derive-dont-restate": "6f430ee2b30a",
     "red-base-procedure": "1f4b177bd08d",
     "registry-resolved-staging": "44be2a2a34e8",
     "reviewer-independence": "a02876417e80",
@@ -110,7 +110,7 @@ RULE_TEXT_HASHES = {
     "tested-tree-is-the-published-tree": "f36229bc44f5",
     "tier-by-blast-radius": "1a46c1baed3c",
     "user-gate-is-success": "ab8095430a12",
-    "verification-spawns-remediation": "fc9b598f84bd",
+    "verification-spawns-remediation": "395d5672e73a",
     "worker-output-validation": "1ee26c9bab74",
 }
 

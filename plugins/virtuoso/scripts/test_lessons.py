@@ -225,7 +225,7 @@ def test_an_item_the_document_does_not_name_fails():
 
 
 def closeout(body):
-    return "# ARCH-4 Close-Out\n\n## Sprint Brief\n**Learned:** see below\n\n" + body
+    return "# ARCH-4 Close-Out\n\n## Dispatch Brief\n**Learned:** see below\n\n" + body
 
 
 def test_a_closeout_naming_a_lesson_recorded_from_its_item_passes():
@@ -424,32 +424,32 @@ def test_a_missing_document_is_unanswerable(workspace):
 
 def test_the_unfilled_closeout_template_does_not_pass_the_gate():
     """"No new lesson — [reason]" is a placeholder, not a reason."""
-    template = (ROOT / "skills" / "pointer-closeout" / "assets" / "CloseOut.template.md")
+    template = (ROOT / "skills" / "dispatch-closeout" / "assets" / "CloseOut.template.md")
     result = lessons_mod.check(template.read_text(encoding="utf-8"), LESSONS, "LSN",
-                               item="SPRINT-1", closeout=True)
+                               item="DISPATCH-1", closeout=True)
     assert result.passed is False
 
 
 def test_the_shipped_templates_carry_the_lessons_sections():
-    closeout_template = (ROOT / "skills" / "pointer-closeout" / "assets"
+    closeout_template = (ROOT / "skills" / "dispatch-closeout" / "assets"
                          / "CloseOut.template.md").read_text(encoding="utf-8")
     assert "\n## Lessons\n" in closeout_template
     charter = (ROOT / "skills" / "epic" / "assets" / "charter.template.md").read_text(
         encoding="utf-8")
     assert "## Lessons applied" in charter
-    entry = (ROOT / "skills" / "pointer-closeout" / "assets"
+    entry = (ROOT / "skills" / "dispatch-closeout" / "assets"
              / "SpecRetro.entry.template.md").read_text(encoding="utf-8")
     [lesson] = lessons_mod.parse(entry.replace("<prefix>-NNN", "LSN-001"), "LSN")
     assert lesson.status == "Observation" and "applies to" in lesson.fields
 
 
 @pytest.mark.parametrize("skill, fragment", [
-    ("pointer-closeout", "lessons --check"),
-    ("pointer-closeout", "--closeout --item"),
+    ("dispatch-closeout", "lessons --check"),
+    ("dispatch-closeout", "--closeout --item"),
     ("roadmap-review", "lessons --open"),
     ("roadmap-review", "lessons --check <spec> --item"),
-    ("next-pointer", "lessons --open"),
-    ("next-pointer", "lessons --check <spec> --item"),
+    ("dispatch-kickoff", "lessons --open"),
+    ("dispatch-kickoff", "lessons --check <spec> --item"),
     ("epic", "lessons --open"),
     ("mid-dispatch-decision", "lessons --open"),
 ])
@@ -585,7 +585,7 @@ def test_a_combined_epic_closeout_counts_a_lesson_from_any_item_it_closes():
 def test_record_link_previews_appends_reads_back_and_is_idempotent(workspace):
     catalog = CATALOG + "\n" + BY_NAME
     lessons_file(workspace).write_text(catalog, encoding="utf-8", newline="\n")
-    args = ("--actor", "pointer-closeout", "--record-link", "LSN-010", "--item", EPIC)
+    args = ("--actor", "dispatch-closeout", "--record-link", "LSN-010", "--item", EPIC)
 
     preview = lessons_cli(workspace, *args)
     assert preview.returncode == 0, preview.stderr
@@ -608,13 +608,13 @@ def test_record_link_previews_appends_reads_back_and_is_idempotent(workspace):
 
 
 @pytest.mark.parametrize("args, message", [
-    (("--actor", "pointer-closeout", "--record-link", "LSN-404", "--item", EPIC),
+    (("--actor", "dispatch-closeout", "--record-link", "LSN-404", "--item", EPIC),
      "not a recorded lesson"),
-    (("--actor", "next-pointer", "--record-link", "LSN-010", "--item", EPIC),
+    (("--actor", "dispatch-kickoff", "--record-link", "LSN-010", "--item", EPIC),
      "may not write the lessons role"),
     (("--record-link", "LSN-010", "--item", EPIC), "needs --actor"),
-    (("--actor", "pointer-closeout", "--record-link", "LSN-010"), "needs --item"),
-    (("--actor", "pointer-closeout", "--record-link", "LSN-010", "--item", "A, B"),
+    (("--actor", "dispatch-closeout", "--record-link", "LSN-010"), "needs --item"),
+    (("--actor", "dispatch-closeout", "--record-link", "LSN-010", "--item", "A, B"),
      "not one identifier"),
 ])
 def test_record_link_refusals_write_nothing(workspace, args, message):
@@ -654,7 +654,7 @@ SRL_003 = ("### SRL-003 — Ground byte-identity fixtures in real artifacts (REG
            """**Verdict:** A convergence test written to match the code's own template was circular; grounding against live data inverted the fix.
 **Evidence:** The shortened readme template "converged" against a fixture authored from itself; the consumer's live readme was byte-identical to the ORIGINAL template, so the correct fix was restoration, not shortening.
 **Recommendation:** Fixtures asserting byte-identity must be sourced from real curated files, never authored to match the implementation.
-**Applies to:** All sprints with byte-identity or round-trip acceptance criteria.
+**Applies to:** All dispatches with byte-identity or round-trip acceptance criteria.
 **Status:** Observation
 """)
 SRL_006 = ("### SRL-006 — Verify characterizations against the archived artifact at claim time (REG-FIX-01, 2026-07-18)\n"  # validate-ok: the default lesson prefix, verbatim

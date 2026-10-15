@@ -58,7 +58,7 @@ registered role carries its full metadata:
                                         // reference unknown
   "mutability": "read-write",           // read-write append-only generated read-only immutable
   "owner": "roadmap-review",
-  "allowedWriters": ["roadmap-review", "pointer-closeout"],
+  "allowedWriters": ["roadmap-review", "dispatch-closeout"],
   "validation": "csv-headers",
   "classification": "active",           // active | historical | unknown
   "origin": "authored",                 // authored | generated | unknown
@@ -231,14 +231,14 @@ Windows shell that pipes or redirects the output needs no `PYTHONIOENCODING`.
 | Path | Opens | May start |
 |---|---|---|
 | **Ad hoc** | `/storyboard` (scope) → `/write-plan` (plan) → the `virtuoso` skill (execute) | any time, for work that is not on the roadmap |
-| **Roadmap dispatch** | `/next-pointer` → the `virtuoso` skill | after a roadmap review has placed the item |
+| **Roadmap dispatch** | `/dispatch-kickoff` → the `virtuoso` skill | after a roadmap review has placed the item |
 | **Roadmap epic** | `/epic` → the `virtuoso` skill, every session | after a roadmap review has placed the item as `Path: epic`, or on a combination of specified roadmap items that `/epic` checks and charters as one run |
 
 Every path delivers the same thing to execution. That means work aligned with you, a
 specification that passes the shared readiness rubric, and awareness of the project and
 codebase around it (verified edit sites, impact on other work, lessons applied). The work
 runs under the `virtuoso` skill, the only skill that executes, and closes through
-`/pointer-closeout`. `/storyboard` only scopes, and `/write-plan` only plans. Neither
+`/dispatch-closeout`. `/storyboard` only scopes, and `/write-plan` only plans. Neither
 starts the work. The ad hoc path never writes the roadmap. Its plans wait in an opt-in `holdingBay` role until the next
 `/roadmap-review` absorbs them onto the master roadmap, whether they ran or not. The contract:
 [`execution-paths.md`](plugins/virtuoso/references/execution-paths.md).
@@ -255,8 +255,8 @@ Invoked through the plugin namespace, e.g. `/virtuoso:roadmap-review`.
 | `epic` | `/virtuoso:epic` | Launch materials for a multi-session run: an epic-scale roadmap item, or a combination of roadmap items serialized where they share files |
 | `roadmap-review` | `/virtuoso:roadmap-review` | Heavyweight roadmap recalibration |
 | `roadmap-status` | `/virtuoso:roadmap-status` | Read-only status briefing |
-| `next-pointer` | `/virtuoso:next-pointer` | Finalize and dispatch the next item |
-| `pointer-closeout` | `/virtuoso:pointer-closeout` | The transactional close-out crossing |
+| `dispatch-kickoff` | `/virtuoso:dispatch-kickoff` | Finalize and dispatch the next item |
+| `dispatch-closeout` | `/virtuoso:dispatch-closeout` | The transactional close-out crossing |
 | `mid-dispatch-decision` | `/virtuoso:mid-dispatch-decision` | Decide when a dispatch pauses mid-run |
 | `governance-sweep` | `/virtuoso:governance-sweep` | 3-phase doc hygiene: discover → approve → fix |
 | `3rd-party-audit` | `/virtuoso:3rd-party-audit` | External audit lifecycle |
@@ -326,6 +326,13 @@ thresholds of their own.
 - `openpyxl` only for the spreadsheet provider and the generated report. It is a **declared**
   dependency: when it is absent, those capabilities are withdrawn with a message naming it,
   never an import error mid-ceremony.
+
+## Upgrading from 1.14
+
+Virtuoso 1.15 renames the dispatch vocabulary: the skills `dispatch-kickoff` and
+`dispatch-closeout`, `dispatch_guards`, and `timing --dispatch`. The old names keep working
+for this release, with a warning that names the fix. See
+[`docs/MIGRATION-1.15.md`](docs/MIGRATION-1.15.md).
 
 ## Upgrading from 1.3.x
 

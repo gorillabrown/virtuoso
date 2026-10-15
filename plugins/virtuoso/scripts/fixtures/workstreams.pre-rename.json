@@ -1,0 +1,354 @@
+{
+ "items": {
+  "items": [
+   {
+    "branch": "",
+    "completed": "",
+    "description": "",
+    "effort": "M",
+    "evidence": "",
+    "extra": {},
+    "group": "G1",
+    "id": "A-1",
+    "lane": "ENGINE",
+    "notes": "",
+    "prerequisites": [],
+    "raw_status": "Done",
+    "raw_written_status": "Full Spec",
+    "revision": "979c305714d60f944e216952fe7686174a0a37b530d62175baa7ae9c5c97f12b",
+    "sequence": 1,
+    "spec_link": "",
+    "started": "",
+    "status": "completed",
+    "title": "Engine core",
+    "written_status": "full-spec"
+   },
+   {
+    "branch": "",
+    "completed": "",
+    "description": "",
+    "effort": "S",
+    "evidence": "",
+    "extra": {},
+    "group": "G1",
+    "id": "A-2",
+    "lane": "ENGINE",
+    "notes": "",
+    "prerequisites": [
+     "A-1"
+    ],
+    "raw_status": "In Progress",
+    "raw_written_status": "Full Spec",
+    "revision": "aa458ea6473dda1b4947950f6d5d949386dac44048c02393b90f4cf37b3add0d",
+    "sequence": 2,
+    "spec_link": "",
+    "started": "",
+    "status": "in-flight",
+    "title": "Engine tick",
+    "written_status": "full-spec"
+   },
+   {
+    "branch": "",
+    "completed": "",
+    "description": "",
+    "effort": "L",
+    "evidence": "",
+    "extra": {},
+    "group": "G2",
+    "id": "A-3",
+    "lane": "UI",
+    "notes": "",
+    "prerequisites": [],
+    "raw_status": "Queued",
+    "raw_written_status": "Full Spec",
+    "revision": "6b4f2d2d09234330c92ff6bad4be8ba9d1ec12a80458a56369a514f985ab591c",
+    "sequence": 3,
+    "spec_link": "",
+    "started": "",
+    "status": "queued",
+    "title": "Menu",
+    "written_status": "full-spec"
+   },
+   {
+    "branch": "",
+    "completed": "",
+    "description": "",
+    "effort": "",
+    "evidence": "",
+    "extra": {},
+    "group": "G2",
+    "id": "A-4",
+    "lane": "",
+    "notes": "",
+    "prerequisites": [],
+    "raw_status": "Queued",
+    "raw_written_status": "Stub",
+    "revision": "224afbfacf98d47d98278d6742a876a4eec5f3e32d6c7d90b7c07cf7b6a52223",
+    "sequence": 4,
+    "spec_link": "",
+    "started": "",
+    "status": "queued",
+    "title": "Unplaced",
+    "written_status": "stub"
+   }
+  ],
+  "provenance": {
+   "fields": [
+    "effort",
+    "group",
+    "id",
+    "lane",
+    "prerequisites",
+    "sequence",
+    "status",
+    "title",
+    "written_status"
+   ],
+   "provider": "csv",
+   "stale": false
+  },
+  "selection": {
+   "authority": "live",
+   "capabilities": [
+    "create-item",
+    "list-active",
+    "next-eligible",
+    "read-effort",
+    "read-prerequisites",
+    "read-sequence",
+    "read-status",
+    "record-completion",
+    "store-spec-link",
+    "write-status"
+   ],
+   "compatibilityAdapter": false,
+   "mayCreate": false,
+   "notes": [
+    "served read-only: no actor supplied"
+   ],
+   "provider": "csv",
+   "readOnly": true,
+   "role": "workRegister"
+  }
+ },
+ "kpis": {
+  "invalidDeadlines": [],
+  "learning": {
+   "metrics": [
+    {
+     "computable": false,
+     "missingInputs": [
+      "a recorded lesson"
+     ],
+     "name": "live-count",
+     "note": "not computable",
+     "value": null
+    },
+    {
+     "computable": false,
+     "missingInputs": [
+      "a close-out report in the closeOuts role"
+     ],
+     "name": "lesson-yield",
+     "note": "not computable",
+     "value": null
+    },
+    {
+     "computable": false,
+     "missingInputs": [
+      "a close-out recording whether an applied lesson held"
+     ],
+     "name": "held-rate",
+     "note": "not computable",
+     "value": null
+    },
+    {
+     "computable": false,
+     "missingInputs": [
+      "a recorded lesson"
+     ],
+     "name": "promotion-rate",
+     "note": "not computable",
+     "value": null
+    },
+    {
+     "computable": false,
+     "missingInputs": [
+      "a dated lesson applied in a dated close-out"
+     ],
+     "name": "time-to-apply",
+     "note": "not computable",
+     "value": null
+    },
+    {
+     "computable": false,
+     "missingInputs": [
+      "two or more recorded lessons"
+     ],
+     "name": "repeated-trap-rate",
+     "note": "not computable",
+     "value": null
+    },
+    {
+     "computable": false,
+     "missingInputs": [
+      "3 terminal records with effortEstimate and effortActual as durations (0 have both)"
+     ],
+     "name": "effort-calibration",
+     "note": "not computable",
+     "value": null
+    },
+    {
+     "computable": false,
+     "missingInputs": [
+      "3 closed time logs in the closeOuts role (0 found)"
+     ],
+     "name": "row-error",
+     "note": "not computable",
+     "value": null
+    },
+    {
+     "computable": false,
+     "missingInputs": [
+      "3 closed time logs in the closeOuts role (0 found)"
+     ],
+     "name": "total-error",
+     "note": "not computable",
+     "value": null
+    },
+    {
+     "computable": false,
+     "missingInputs": [
+      "3 closed time logs in the closeOuts role (0 found)"
+     ],
+     "name": "added-share",
+     "note": "not computable",
+     "value": null
+    },
+    {
+     "computable": false,
+     "missingInputs": [
+      "3 measured rows for one model and effort (0 pairs below it)"
+     ],
+     "name": "row-error-by-model-effort",
+     "note": "not computable",
+     "value": null
+    }
+   ],
+   "provenance": {
+    "asOf": "2026-10-13",
+    "closeOutsRead": 0,
+    "timeLogsClosed": 0
+   }
+  },
+  "metrics": [
+   {
+    "name": "total-items",
+    "unit": "items",
+    "value": 4
+   },
+   {
+    "name": "count-queued",
+    "unit": "items",
+    "value": 2
+   },
+   {
+    "name": "count-in-flight",
+    "unit": "items",
+    "value": 1
+   },
+   {
+    "name": "count-blocked",
+    "unit": "items",
+    "value": 0
+   },
+   {
+    "name": "count-completed",
+    "unit": "items",
+    "value": 1
+   },
+   {
+    "name": "count-dissolved",
+    "unit": "items",
+    "value": 0
+   },
+   {
+    "name": "count-superseded",
+    "unit": "items",
+    "value": 0
+   },
+   {
+    "name": "count-unknown",
+    "unit": "items",
+    "value": 0
+   },
+   {
+    "name": "percent-complete-by-count",
+    "unit": "%",
+    "value": 25.0
+   },
+   {
+    "computable": false,
+    "missingInputs": [
+     "effort for 1 item(s): A-4"
+    ],
+    "name": "total-effort",
+    "note": "not computable",
+    "value": null
+   },
+   {
+    "computable": false,
+    "missingInputs": [
+     "effort for 1 item(s): A-4"
+    ],
+    "name": "completed-effort",
+    "note": "not computable",
+    "value": null
+   },
+   {
+    "computable": false,
+    "missingInputs": [
+     "effort for 1 item(s): A-4"
+    ],
+    "name": "percent-complete-by-effort",
+    "note": "not computable",
+    "value": null
+   },
+   {
+    "name": "dispatch-buffer-target",
+    "unit": "items",
+    "value": 5
+   },
+   {
+    "name": "dispatch-buffer-filled",
+    "unit": "items",
+    "value": 2
+   },
+   {
+    "computable": false,
+    "missingInputs": [
+     "a locatable specification for A-2, A-3"
+    ],
+    "name": "dispatch-buffer-ready",
+    "note": "not computable",
+    "value": null
+   }
+  ],
+  "pace": [],
+  "provenance": {
+   "fields": [
+    "effort",
+    "group",
+    "id",
+    "lane",
+    "prerequisites",
+    "sequence",
+    "status",
+    "title",
+    "written_status"
+   ],
+   "provider": "csv",
+   "stale": false
+  }
+ }
+}

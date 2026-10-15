@@ -220,7 +220,7 @@ def test_external_live_register_local_ledger_and_legacy_catalog_coexist(project)
                              "classification": "active", "origin": "authored"},
             "terminalLedger": {"path": "docs/Ledger.md", "provider": "markdown",
                                "authority": "terminal", "mutability": "append-only",
-                               "allowedWriters": ["pointer-closeout"],
+                               "allowedWriters": ["dispatch-closeout"],
                                "validation": "markdown", "classification": "active",
                                "origin": "authored"},
             "sprintCatalog": {"path": "docs/catalog.csv", "provider": "csv",
@@ -248,7 +248,7 @@ def test_external_live_register_local_ledger_and_legacy_catalog_coexist(project)
     # ...and the mirror is not writable by anyone, whatever allowedWriters says.
     assert reg.roles["sprintCatalog"].mutability == "generated"
     assert reg.writable("terminalLedger", "roadmap-review") is False
-    assert reg.writable("terminalLedger", "pointer-closeout") is True
+    assert reg.writable("terminalLedger", "dispatch-closeout") is True
 
 
 def test_two_live_registers_is_an_error(project):
@@ -381,14 +381,14 @@ def test_an_append_only_terminal_ledger_may_live_beneath_an_archive_directory(pr
         "terminalLedger": {
             "path": "docs/archives/CompletedLedger.csv", "provider": "csv",
             "authority": "terminal", "mutability": "append-only",
-            "allowedWriters": ["pointer-closeout"], "validation": "csv-headers",
+            "allowedWriters": ["dispatch-closeout"], "validation": "csv-headers",
             "classification": "historical", "origin": "authored",
         }}}
     (project / "Virtuoso" / "workspace-layout.json").write_text(
         json.dumps(manifest), encoding="utf-8")
     reg = registry_mod.load(str(project))
     assert [f for f in reg.findings if f.severity == "error"] == []
-    assert reg.writable("terminalLedger", "pointer-closeout") is True
+    assert reg.writable("terminalLedger", "dispatch-closeout") is True
 
 
 def test_terminal_authority_requires_append_only_mutability(project):
@@ -400,7 +400,7 @@ def test_terminal_authority_requires_append_only_mutability(project):
         "terminalLedger": {
             "path": "docs/ledger.csv", "provider": "csv",
             "authority": "terminal", "mutability": "read-write",
-            "allowedWriters": ["pointer-closeout"], "validation": "csv-headers",
+            "allowedWriters": ["dispatch-closeout"], "validation": "csv-headers",
             "classification": "historical", "origin": "authored",
         }}}
     (project / "Virtuoso" / "workspace-layout.json").write_text(
@@ -419,7 +419,7 @@ def test_terminal_authority_is_rejected_beneath_transient_storage(project, segme
         "terminalLedger": {
             "path": "docs/%s/ledger.csv" % segment, "provider": "csv",
             "authority": "terminal", "mutability": "append-only",
-            "allowedWriters": ["pointer-closeout"], "validation": "csv-headers",
+            "allowedWriters": ["dispatch-closeout"], "validation": "csv-headers",
             "classification": "historical", "origin": "authored",
         }}}
     (project / "Virtuoso" / "workspace-layout.json").write_text(

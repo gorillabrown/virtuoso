@@ -7,31 +7,38 @@ and for any field holding two or more distinct values, never for a hard-coded li
 from __future__ import annotations
 
 from tools.governance.providers import base, kpi
+from tools.roadmap_visualizer.board import UNASSIGNED, approved_structure
 
 #: Mapped fields offered as slicers, in this order, when the data varies.
 SLICER_FIELDS = (
     ("status", "Status"),
-    ("lane", "Lane"),
+    ("workstream", "Workstream"),
+    ("deliverable", "Deliverable"),
     ("written_status", "Written"),
     ("effort", "Effort"),
     ("group", "Group"),
 )
 #: An unmapped column becomes a slicer only when it reads like a category.
 MAX_EXTRA_VALUES = 10
+#: A deliverable longer than this is shortened on its slicer, as the workstream chart does.
+FACET_WIDTH = 14
 WRITTEN_ORDER = (base.FULL_SPEC, base.STUB)
 WRITTEN_LABELS = {base.FULL_SPEC: "Full Spec", base.STUB: "Stub"}
 
 
-def facets(item) -> dict:
-    """The values a row is sliced by: canonical where a vocabulary exists."""
+def facets(item, structured: bool = False) -> dict:
+    """The values a row is sliced by: canonical where a vocabulary exists. A deliverable
+    is one only under an approved structure (``structured``)."""
     out = {
         "complete": "complete" if item.is_terminal else "incomplete",
         "status": item.status,
-        "lane": item.lane,
+        "workstream": item.workstream,
         "written_status": item.written_status,
         "effort": item.effort,
         "group": item.group,
     }
+    if structured and item.deliverable:     # absent, not blank: a page without is unchanged
+        out["deliverable"] = item.deliverable
     for header, value in item.extra.items():
         out["extra:" + header] = "" if value is None else str(value).strip()
     return out
@@ -53,7 +60,10 @@ def policy_orders(project_policy) -> dict:
         "status": list(base.CANONICAL_STATUSES),
         "written_status": list(WRITTEN_ORDER),
         "effort": [str(k) for k in scale],
-        "lane": _names(project_policy.get("roadmap.lanes")),
+        "workstream": _names(project_policy.workstreams),
+        # Workstreams read the pre-1.15.0 lanes too; deliverables exist only in a valid structure.
+        "deliverable": _names(d for w in approved_structure(project_policy)
+                              for d in w.get("deliverables") or []),
     }
 
 
@@ -64,12 +74,15 @@ def _ordered(values: list[str], order: list[str]) -> list[str]:
     return known + [v for v in values if v.lower() not in rank]
 
 
-def slicers(items, columns, orders: dict, headers: dict | None = None) -> list[dict]:
-    """The slicers the data supports, each with its values in display order."""
+def slicers(items, columns, orders: dict, headers: dict | None = None, *,
+            structured: bool = False) -> list[dict]:
+    """The slicers the data supports, each with its values in display order.
+    ``structured``: a structure is approved, so a blank workstream or deliverable is
+    "Unassigned" rather than "(none)"."""
     out = [{"key": "complete", "label": "Complete / Incomplete",
             "values": ["complete", "incomplete"],
             "labels": {"complete": "Complete", "incomplete": "Incomplete"}}]
-    rows = [facets(item) for item in items]
+    rows = [facets(item, structured) for item in items]
 
     def distinct(key):
         seen: list[str] = []
@@ -86,7 +99,8 @@ def slicers(items, columns, orders: dict, headers: dict | None = None) -> list[d
         """Rows with no value stay selectable, as "(none)"."""
         if has_blank(key):
             entry["values"].append("")
-            entry.setdefault("labels", {})[""] = "(none)"
+            entry.setdefault("labels", {})[""] = (
+                UNASSIGNED if structured and key in ("workstream", "deliverable") else "(none)")
         return entry
 
     for key, label in SLICER_FIELDS:
@@ -97,6 +111,9 @@ def slicers(items, columns, orders: dict, headers: dict | None = None) -> list[d
                  "values": _ordered(values, orders.get(key, []))}
         if key == "written_status":
             entry["labels"] = dict(WRITTEN_LABELS)
+        long = {v: v[:FACET_WIDTH - 1] + "…" for v in values if len(v) > FACET_WIDTH}
+        if key == "deliverable" and long:
+            entry["labels"] = long
         out.append(blanks(key, entry))
     for column in columns:
         if not column["key"].startswith("extra:"):

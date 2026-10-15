@@ -98,6 +98,21 @@ NON_WRITABLE_AUTHORITIES = frozenset({"archive", "unknown"})
 #: Mutability values no ceremony may write to directly.
 NON_WRITABLE_MUTABILITIES = frozenset({"read-only", "immutable"})
 
+#: Skill names an earlier release used, and the names that replaced them in 1.15.
+#: For one release every actor check reads them as the new names, so a project's
+#: workspace-layout.json keeps working unedited. Removed in the next major.
+ACTOR_ALIASES = {"next-pointer": "dispatch-kickoff", "pointer-closeout": "dispatch-closeout"}
+
+
+def canonical_actor(name: str) -> str:
+    return ACTOR_ALIASES.get(name, name)
+
+
+def actor_allowed(actor: str, names) -> bool:
+    """Whether ``names`` (a writer list) admits ``actor``, either side by an old name."""
+    return "*" in names or canonical_actor(actor) in {
+        canonical_actor(n) for n in names if isinstance(n, str)}   # hand-edited JSON may hold anything
+
 #: Prefix reserved for project-defined roles and metadata. A key under this
 #: prefix is round-tripped verbatim and never relabeled or discarded by an
 #: upgrade (item 18).
@@ -180,7 +195,7 @@ class RoleSpec:
             return False
         if not self.allowed_writers:
             return False
-        return actor in self.allowed_writers or "*" in self.allowed_writers
+        return actor_allowed(actor, self.allowed_writers)
 
     # -- serialization -------------------------------------------------------
 
@@ -259,8 +274,8 @@ DEFAULT_ROLES: dict[str, dict] = {
         "authority": "live",
         "mutability": "read-write",
         "owner": "roadmap-review",
-        "allowedWriters": ["roadmap-review", "next-pointer", "mid-dispatch-decision",
-                           "pointer-closeout", "3rd-party-audit"],
+        "allowedWriters": ["roadmap-review", "dispatch-kickoff", "mid-dispatch-decision",
+                           "dispatch-closeout", "3rd-party-audit"],
         "validation": "markdown",
         "classification": "active",
         "origin": "authored",
@@ -271,7 +286,7 @@ DEFAULT_ROLES: dict[str, dict] = {
         "authority": "live",
         "mutability": "read-write",
         "owner": "roadmap-review",
-        "allowedWriters": ["roadmap-review", "next-pointer", "pointer-closeout"],
+        "allowedWriters": ["roadmap-review", "dispatch-kickoff", "dispatch-closeout"],
         "validation": "csv-headers",
         "classification": "active",
         "origin": "authored",
@@ -281,8 +296,8 @@ DEFAULT_ROLES: dict[str, dict] = {
         "provider": "markdown",
         "authority": "terminal",
         "mutability": "append-only",
-        "owner": "pointer-closeout",
-        "allowedWriters": ["pointer-closeout"],
+        "owner": "dispatch-closeout",
+        "allowedWriters": ["dispatch-closeout"],
         "validation": "markdown",
         "classification": "active",
         "origin": "authored",
@@ -292,8 +307,8 @@ DEFAULT_ROLES: dict[str, dict] = {
         "provider": "markdown",
         "authority": "reference",
         "mutability": "append-only",
-        "owner": "pointer-closeout",
-        "allowedWriters": ["pointer-closeout", "roadmap-review", "mid-dispatch-decision",
+        "owner": "dispatch-closeout",
+        "allowedWriters": ["dispatch-closeout", "roadmap-review", "mid-dispatch-decision",
                            "3rd-party-audit", "governance-sweep"],
         "validation": "markdown",
         "classification": "active",
@@ -310,7 +325,7 @@ DEFAULT_ROLES: dict[str, dict] = {
         "mutability": "append-only",
         "owner": "governance-sweep",
         "allowedWriters": ["governance-sweep", "adversarial-review", "virtuoso",
-                           "pointer-closeout", "roadmap-review", "3rd-party-audit"],
+                           "dispatch-closeout", "roadmap-review", "3rd-party-audit"],
         "validation": "markdown",
         "classification": "active",
         "origin": "authored",
@@ -320,10 +335,10 @@ DEFAULT_ROLES: dict[str, dict] = {
         "provider": "directory",
         "authority": "evidence",
         "mutability": "append-only",
-        "owner": "pointer-closeout",
+        "owner": "dispatch-closeout",
         # virtuoso writes the burst's close-out block and staging memos here, and
         # mid-dispatch-decision folds amendments into those staging memos.
-        "allowedWriters": ["pointer-closeout", "virtuoso", "mid-dispatch-decision"],
+        "allowedWriters": ["dispatch-closeout", "virtuoso", "mid-dispatch-decision"],
         "validation": "exists",
         "classification": "active",
         "origin": "authored",
@@ -334,7 +349,7 @@ DEFAULT_ROLES: dict[str, dict] = {
         "authority": "reference",
         "mutability": "read-write",
         "owner": "mid-dispatch-decision",
-        "allowedWriters": ["mid-dispatch-decision", "next-pointer", "pointer-closeout",
+        "allowedWriters": ["mid-dispatch-decision", "dispatch-kickoff", "dispatch-closeout",
                            "roadmap-review", "virtuoso"],
         "validation": "exists",
         "classification": "active",
@@ -417,7 +432,7 @@ DEFAULT_ROLES: dict[str, dict] = {
         "authority": "reference",
         "mutability": "read-write",
         "owner": "write-plan",
-        "allowedWriters": ["storyboard", "write-plan", "virtuoso", "pointer-closeout",
+        "allowedWriters": ["storyboard", "write-plan", "virtuoso", "dispatch-closeout",
                            "roadmap-review"],
         "validation": "exists",
         "classification": "active",
@@ -433,7 +448,7 @@ DEFAULT_ROLES: dict[str, dict] = {
         "authority": "report",
         "mutability": "generated",
         "owner": "roadmap-review",
-        "allowedWriters": ["roadmap-review", "pointer-closeout", "next-pointer"],
+        "allowedWriters": ["roadmap-review", "dispatch-closeout", "dispatch-kickoff"],
         "validation": "exists",
         "classification": "active",
         "origin": "generated",

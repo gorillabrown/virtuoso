@@ -16,7 +16,7 @@ becomes a standing workflow rule.
 3. If it already exists:
    - append a status record under the earlier identifier, citing this second
      occurrence; never edit the earlier entry:
-     `virtuoso_registry --root . lessons --record-status <ID> --status "Promoted -> <destination>" --actor pointer-closeout --item <ITEM-ID> --apply`
+     `virtuoso_registry --root . lessons --record-status <ID> --status "Promoted -> <destination>" --actor dispatch-closeout --item <ITEM-ID> --apply`
    - write the promoted rule into the destination document
    `lessons --candidates` computes the same second occurrences across every close-out;
    `roadmap-review` works through it at each review, and `governance-sweep` merges

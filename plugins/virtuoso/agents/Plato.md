@@ -298,9 +298,9 @@ the same id: `fixed by <item>`, `accepted — <reason>`, `lesson <prefix>-NNN`.
 | Priority | Type | Action |
 |----------|------|--------|
 | CRITICAL | Architecture violation | IMPLEMENT immediately |
-| CRITICAL | Regression | IMPLEMENT this sprint |
-| HIGH | Trap triggered | IMPLEMENT this sprint |
-| MEDIUM | Boundary issue | Implement next sprint |
+| CRITICAL | Regression | IMPLEMENT this dispatch |
+| HIGH | Trap triggered | IMPLEMENT this dispatch |
+| MEDIUM | Boundary issue | Implement next dispatch |
 | LOW | Enhancement | DEFER or WONTFIX |
 
 ### Memory Hygiene

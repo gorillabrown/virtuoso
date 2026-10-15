@@ -224,8 +224,8 @@ def test_no_ceremony_restates_the_rubrics_version_or_count():
 def test_the_specification_finding_matches_the_rubric():
     rubric = (ROOT / "references" / "readiness-rubric.md").read_text(encoding="utf-8")
     wanted = re.search(r"\*\*Specification readiness\*\* — ([^.]+?) plus", rubric).group(1)
-    pointer = (ROOT / "skills" / "next-pointer" / "SKILL.md").read_text(encoding="utf-8")
-    assert "| **Specification readiness** | %s plus" % wanted in pointer
+    kickoff = (ROOT / "skills" / "dispatch-kickoff" / "SKILL.md").read_text(encoding="utf-8")
+    assert "| **Specification readiness** | %s plus" % wanted in kickoff
 
 
 def added_since(rubric: str, pinned: str) -> dict:
@@ -288,7 +288,7 @@ def test_the_rubric_reports_five_separate_findings():
 
 
 def test_the_ceremonies_defer_to_the_shared_rubric():
-    for name in ("roadmap-review", "next-pointer", "write-plan"):
+    for name in ("roadmap-review", "dispatch-kickoff", "write-plan"):
         text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
         assert "references/readiness-rubric.md" in text, (
             "%s does not point at the shared rubric" % name)
@@ -342,7 +342,7 @@ def test_the_registry_contract_documents_every_lessons_finding():
 
 
 def test_the_ceremonies_read_pace_rather_than_derive_it():
-    for name in ("roadmap-review", "roadmap-status", "next-pointer"):
+    for name in ("roadmap-review", "roadmap-status", "dispatch-kickoff"):
         text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
         assert "`pace` block" in text, "%s does not read the pace block" % name
     review = (ROOT / "skills" / "roadmap-review" / "SKILL.md").read_text(encoding="utf-8")
@@ -364,8 +364,20 @@ def test_every_skill_carries_the_shared_contract_block():
         assert "<!-- virtuoso-shared-contract v2 -->" in text, path.name
 
 
+def test_every_skill_names_five_effort_levels():
+    for path in SKILLS:
+        text = path.read_text(encoding="utf-8")
+        contract = text[text.index("<!-- virtuoso-shared-contract v2 -->"):]
+        line = next((l for l in contract.splitlines() if l.startswith("- **Effort levels** —")), "")
+        assert "low / medium / high / xhigh / max" in line, path.parent.name
+    four = re.compile(r"low\s*[/|,]\s*medium\s*[/|,]\s*high\s*[/|,]\s*max", re.I)
+    for path in sorted((ROOT / "skills").rglob("*.md")) + sorted((ROOT / "references").rglob("*.md")):
+        assert not four.search(path.read_text(encoding="utf-8")), \
+            "%s still lists four effort levels" % path.relative_to(ROOT)
+
+
 def test_ceremony_skills_run_the_read_only_preflight():
-    ceremonies = ["roadmap-review", "roadmap-status", "next-pointer", "pointer-closeout",
+    ceremonies = ["roadmap-review", "roadmap-status", "dispatch-kickoff", "dispatch-closeout",
                   "mid-dispatch-decision", "3rd-party-audit", "storyboard", "write-plan"]
     for name in ceremonies:
         text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
@@ -374,11 +386,13 @@ def test_ceremony_skills_run_the_read_only_preflight():
             "%s runs adopt from its preflight" % name)
 
 
-def test_every_sprint_guard_is_documented():
+def test_every_dispatch_guard_is_documented():
     contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
-    source = (ROOT / "scripts" / "sprint_guards.py").read_text(encoding="utf-8")
-    for name in re.findall(r'add_parser\(\s*"([a-z-]+)"', source):
-        assert "| `%s" % name in contract, "sprint guard %s is undocumented" % name
+    source = (ROOT / "scripts" / "dispatch_guards.py").read_text(encoding="utf-8")
+    names = re.findall(r'add_parser\(\s*"([a-z-]+)"', source)
+    assert len(names) == 4, names                  # an empty list would check nothing
+    for name in names:
+        assert "| `%s" % name in contract, "dispatch guard %s is undocumented" % name
 
 
 def test_every_standing_rules_finding_is_documented():
@@ -418,11 +432,11 @@ def skill_text(name: str) -> str:
 
 
 def test_every_path_points_at_the_one_destination_contract():
-    """Storyboard -> write-plan, next-pointer and epic must arrive at the same place;
+    """Storyboard -> write-plan, dispatch-kickoff and epic must arrive at the same place;
     the contract has one home, and every ceremony on a path reads it."""
     assert (ROOT / "references" / "execution-paths.md").is_file()
-    for name in ("storyboard", "write-plan", "next-pointer", "epic", "virtuoso",
-                 "pointer-closeout", "roadmap-review"):
+    for name in ("storyboard", "write-plan", "dispatch-kickoff", "epic", "virtuoso",
+                 "dispatch-closeout", "roadmap-review"):
         assert "references/execution-paths.md" in skill_text(name), name
 
 
@@ -474,9 +488,9 @@ def test_the_roadmap_paths_open_only_on_the_master_roadmap():
     assert "#### Step 1a — One item marked `Path: epic`" in epic
     assert "#### Step 1b — A combination of roadmap items" in epic
     assert "`/storyboard`" in epic
-    pointer = skill_text("next-pointer")
-    assert "`Path: epic`" in pointer and "## Edge case: Epic at head" in pointer
-    assert "Origin: roadmap — [ITEM-ID]" in pointer
+    kickoff = skill_text("dispatch-kickoff")
+    assert "`Path: epic`" in kickoff and "## Edge case: Epic at head" in kickoff
+    assert "Origin: roadmap — [ITEM-ID]" in kickoff
 
 
 def test_the_epic_packet_carries_its_git_work_and_a_goal_line():
@@ -523,8 +537,8 @@ def test_the_holding_bay_is_reconciled_at_review_and_closed_out_in_held_plan_mod
     review = skill_text("roadmap-review")
     assert "holding --open" in review
     assert "--actor roadmap-review holding --record <entry> --state absorbed" in review
-    closeout = skill_text("pointer-closeout")
-    assert "--actor pointer-closeout holding --record <entry> --state executed" in closeout
+    closeout = skill_text("dispatch-closeout")
+    assert "--actor dispatch-closeout holding --record <entry> --state executed" in closeout
     assert "**The recording crossing.**" in closeout
 
 
@@ -536,7 +550,7 @@ def test_retirement_records_are_gated_on_writers_and_routed_to_the_close_out():
     `terminalLedger.writers` append one, and `correctionWriters` only a record that
     names the record it corrects. The two ceremonies that retire items say the same,
     and route the record to the close-out, which says how it handles it."""
-    assert policy_mod.DEFAULTS["terminalLedger"]["writers"] == ["pointer-closeout"]
+    assert policy_mod.DEFAULTS["terminalLedger"]["writers"] == ["dispatch-closeout"]
     review = skill_text("roadmap-review")
     a4 = review.split("### A.4 Apply changes", 1)[1].split("### A.4b", 1)[0]
     status = skill_text("roadmap-status")
@@ -546,9 +560,9 @@ def test_retirement_records_are_gated_on_writers_and_routed_to_the_close_out():
                                ("roadmap-status 2.1", straggler, "roadmap-status")):
         text = " ".join(text.split())                       # prose wraps anywhere
         assert "`policy.terminalLedger.writers`" in text, where
-        assert "`/pointer-closeout`" in text and "*Retirement records routed here*" in text, where
+        assert "`/dispatch-closeout`" in text and "*Retirement records routed here*" in text, where
         assert "`policy.terminalLedger.correctionWriters` names `%s`" % actor not in text, where
-    assert "## Retirement records routed here" in skill_text("pointer-closeout")
+    assert "## Retirement records routed here" in skill_text("dispatch-closeout")
     contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
     assert "**Who may append what.**" in contract
 
@@ -589,10 +603,10 @@ def test_an_epics_completion_record_reaches_the_default_branch():
     assert "docs-only merge after the code merge" in epic
     assert "Completion only lines commit the record after the code merge" in epic
 
-    closeout = skill_text("pointer-closeout")
+    closeout = skill_text("dispatch-closeout")
     step1 = flat(_between(closeout, "### Step 1 — Verify completion evidence",
                           "### Acceptance and evidence reconciliation"))
-    assert ("sprint_guards artifacts-exist --ref <default branch> <packet directory>/done.md"
+    assert ("dispatch_guards artifacts-exist --ref <default branch> <packet directory>/done.md"
             in step1)
     assert "docs-only completion commit" in step1
     [row] = [line for line in closeout.splitlines() if line.startswith("| Step 1 — evidence |")
@@ -625,7 +639,7 @@ def test_the_record_merge_is_scope_checked_before_it_lands():
     protocol = flat(_between(launch, "## Completion protocol", "## Monitoring"))
     assert "record only checks that run before the record commit" in protocol
 
-    step1 = flat(_between(skill_text("pointer-closeout"),
+    step1 = flat(_between(skill_text("dispatch-closeout"),
                           "### Step 1 — Verify completion evidence",
                           "### Acceptance and evidence reconciliation"))
     assert "runs the record merge's scope check itself" in step1
@@ -635,7 +649,7 @@ def test_the_plan_is_the_time_log():
     """The virtuoso skill runs `timing --check`, reprints compactly past 12 rows, parks
     what it will not do; zeus numbers setup as row 1; the close-out files parked rows."""
     skill = " ".join(skill_text("virtuoso").split())
-    for fragment in ("timing --sprint <SPRINT-ID> --check", "after a compaction and again "
+    for fragment in ("timing --dispatch <DISPATCH-ID> --check", "after a compaction and again "
                      "before the close-out", "`timing --status --compact`", "Past 12 rows",
                      "the last 3 done", "every fifth task", "**A row the run will not do is "
                      "parked, not deleted:**", "--park N --reason", "--origin review",
@@ -644,7 +658,7 @@ def test_the_plan_is_the_time_log():
     assert "rows done = " not in skill
     zeus = (ROOT / "skills" / "virtuoso" / "references" / "zeus.md").read_text(encoding="utf-8")
     assert "Task 0" not in zeus and "There is no row 0" in " ".join(zeus.split())
-    closeout = " ".join(_between(skill_text("pointer-closeout"), "### Step 4",
+    closeout = " ".join(_between(skill_text("dispatch-closeout"), "### Step 4",
                                  "### Step 5").split())
     assert "**Parked rows become findings.**" in closeout and "**Disposition:** `open`" in closeout
 

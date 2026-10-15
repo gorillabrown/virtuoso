@@ -32,7 +32,7 @@ Paste into any session — first or fiftieth; it self-orients either way. It car
 run's git work, so one paste carries both the git work and the epic's instructions.
 
 <!-- Fill the GIT WORK block at scaffold time from policy.git and the detected repository,
-     as /next-pointer fills its reconciliation recipe. Keep only the lines the policy
+     as /dispatch-kickoff fills its reconciliation recipe. Keep only the lines the policy
      permits (read-only: no add, commit, or branch creation, so the operator creates the
      branch before launch and the first session only verifies it; prepare-no-stage: no
      add; explicit-path-stage: add, no commit; explicit-path-commit: commit, no push;
@@ -105,7 +105,7 @@ Completion only — after the code merge, once done.md is written:
 Never: force-push, rebase, reset --hard, stash, clean, or delete a lock file.
 
 Run this session under the virtuoso skill when it is available: this packet is your
-dispatch spec, and your sprint identifier is [PACKET-ID]-S<n>, where n is the next session
+dispatch spec, and your dispatch identifier is [PACKET-ID]-S<n>, where n is the next session
 number in journal.md.
 ```
 
@@ -132,14 +132,14 @@ achieve, and how completion is proven.
    at the code merge stays the tree the DoD rows tested. When the run merged its code
    into `[DEFAULT]`, merge this commit too, with `--no-ff`, and check, before and after
    the merge, that it touches only this directory (GIT WORK → Completion only). When someone else merges,
-   the record rides on that merge. `/pointer-closeout` checks that done.md is on
+   the record rides on that merge. `/dispatch-closeout` checks that done.md is on
    `[DEFAULT]` before it crosses. The final journal entry and state.md record only
    checks that run before the record commit; the record merge's own check is run and
-   reported by `/pointer-closeout`, not written back into this directory.
+   reported by `/dispatch-closeout`, not written back into this directory.
 5. Stop. **`done.md` existing is the stop signal** for any loop or scheduler driving
    sessions: check it before launching another session. Never create it under any other
    circumstances.
-6. Close the epic through `/pointer-closeout [PACKET-ID]`, with journal.md and done.md as
+6. Close the epic through `/dispatch-closeout [PACKET-ID]`, with journal.md and done.md as
    its evidence. A combination's close-out retires every item the charter's `items:`
    names. That ceremony records what the epic taught in the registered `lessons`
    role — where the next charter reads it — or says why it taught nothing. An epic

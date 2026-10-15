@@ -1,5 +1,62 @@
 # Virtuoso Release Notes
 
+## v1.15.0 (2026-10-15) — dispatch vocabulary, workstreams and deliverables, any-tool registers
+
+**Upgrading from 1.14.0.** Follow [`docs/MIGRATION-1.15.md`](docs/MIGRATION-1.15.md): rename
+the skills your workspace layout names, then start a new session. Old names (`next-pointer`,
+`pointer-closeout`, `lane`, `sprint_guards`, `timing --sprint`) keep working for this
+release, each with a warning naming the fix.
+
+- **The dispatch vocabulary.** `next-pointer` is now `dispatch-kickoff`, `pointer-closeout`
+  is `dispatch-closeout`, and "sprint" is "dispatch" across skills, references, agents and
+  templates; the printed block that starts a dispatch is its *kickoff*. `sprint_guards` is
+  `dispatch_guards`, and `timing --sprint` is `timing --dispatch`. For this release a
+  workspace layout that names the old skills keeps working, with a preflight warning naming
+  the fix, and `sprint_guards` and `--sprint` keep working with one deprecation line. The
+  slash commands do not: run `/dispatch-kickoff` and `/dispatch-closeout`, in a new session
+  after upgrading. The registry roles `sprintQueue` and `sprintCatalog` keep their names.
+  **Upgrading from 1.14.0:** follow [`docs/MIGRATION-1.15.md`](docs/MIGRATION-1.15.md).
+  (VIR-004)
+- Every skill, reference and template that lists the effort levels now names all five —
+  `low / medium / high / xhigh / max` — matching the time log and the effort-levels skill.
+  A contract test keeps a four-level list from coming back. (VIR-032)
+- **Workstreams and deliverables.** `lane` is now `workstream`, and an item may also carry a
+  `deliverable`; `policy.roadmap.workstreams` lists each workstream with its deliverables.
+  For this release the old names keep working: a `Lane` column reads as `workstream` and is
+  never renamed in your file, a `lane` mapping key maps across, `roadmap.lanes` is read with
+  a warning, and `combine --lane` works with one deprecation line. See
+  [`docs/MIGRATION-1.15.md`](docs/MIGRATION-1.15.md). (VIR-041)
+- **The review proposes a structure, and you approve it.** `structure --propose` groups the
+  active items into workstreams and deliverables and names the items it cannot place. It is
+  read-only. `structure --apply` writes the approved structure to policy, then to the register:
+  directly for a local register, or as a planned change for an external one. Roadmap review
+  step C.2 proposes first and asks before writing anything. (VIR-042) The proposal also reports
+  whether the register has columns to hold the structure (`registerColumns`), and the
+  registry contract gives the steps to add and map them. (VIR-047)
+- **The board shows the structure.** Once a structure is approved, the Roadmap tab opens
+  grouped by workstream, then deliverable, with "Unassigned" last; grouping by pipeline state
+  is still a click away. The Dashboard gains a Deliverable slicer, and blank values read
+  "Unassigned" there and in the Completed tab. A project with no approved structure sees the
+  same board as before. (VIR-043)
+- **Any tool can hold the work register.** `/virtuoso-init` asks where the register lives
+  before anything else, and preflight's `--mode create --register` takes a
+  `--register-mappings` file for an external one. Every tool reads through one plain-rows
+  contract, with worked conversions in the registry contract. The new `move-register` moves
+  a register between tools in guided steps (a preview, `--plan`, `--confirm` per item,
+  `--finish`), and `--abandon` backs out of a move. (VIR-037, VIR-038, VIR-039, VIR-040)
+- **The terminal ledger is append-only to the byte.** Adding a record inserts one line and
+  changes nothing else. Before, it rewrote the whole file: a UTF-8 byte-order mark was dropped,
+  and every line was re-ended in the file's most common style, so a ledger with mixed line
+  endings had older records rewritten. The records' content was never lost. (F-016)
+- A development checkout's preflight no longer records itself as your installed plugin.
+  Before, running a dev tree's preflight without `VIRTUOSO_HOME` re-pointed the launcher at
+  unreleased code. (VIR-035, F-007)
+- `validate_classes.py` reports whether the time log's task classes predict actual time,
+  against fixed gates. Its first verdict was **no-go**, so class-aware forecasts were
+  withdrawn. It runs any time as a report. (VIR-022)
+- The release preflight gives the test suite 30 minutes, up from 10, which the suite had
+  outgrown. (VIR-034, F-006)
+
 ## v1.14.0 (2026-10-10) — the board replaces the cockpit, and every step is sized and tracked
 
 **Upgrading from 1.13.0.** Nothing is required. `Virtuoso/reports/planning-cockpit.html` is

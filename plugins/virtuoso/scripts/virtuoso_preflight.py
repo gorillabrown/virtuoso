@@ -41,6 +41,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 
@@ -77,6 +78,23 @@ def _say(quiet: bool, message: str) -> None:
         print(message)
 
 
+def _is_dev_checkout(path: str) -> bool:
+    """True when `path` or any parent holds a `.git` entry: a development checkout.
+
+    An installed plugin lives in a host's plugin cache, which is not a git repository.
+    shortcut: a host cache placed inside a git repository would read as a checkout; check
+    the host's cache location if an install stops being recorded.
+    """
+    path = os.path.abspath(path)
+    while True:
+        if os.path.exists(os.path.join(path, ".git")):
+            return True
+        parent = os.path.dirname(path)
+        if parent == path:
+            return False
+        path = parent
+
+
 def _record_install() -> None:
     """Record this version's install root and refresh the launchers.
 
@@ -84,7 +102,13 @@ def _record_install() -> None:
     project write and never affects the `writes:` count. The record is keyed by
     plugin version, so two installed versions cannot overwrite each other's
     discovery state (item 12).
+
+    A development checkout run without an isolated home records nothing: it reports
+    the installed version's number, so its record would point the user's launcher at
+    unreleased code (F-007).
     """
+    if not os.environ.get("VIRTUOSO_HOME") and _is_dev_checkout(PLUGIN_ROOT):
+        return
     install.record(PLUGIN_ROOT, plugin_version())
     install.ensure_launchers()
 
@@ -269,7 +293,14 @@ def run_adopt(root: str) -> result_mod.Result:
         schema_version=reloaded.schema_version, plugin_version=plugin_version())
 
 
-def run_create(root: str, *, authorized: bool, layout: str = "plugin-only") -> result_mod.Result:
+def _create_refused(root: str, code: str, message: str) -> result_mod.Result:
+    return result_mod.Result(
+        status=result_mod.FAILED, mode="create", root=root, message=message,
+        error={"code": code, "message": message}, plugin_version=plugin_version())
+
+
+def run_create(root: str, *, authorized: bool, layout: str = "plugin-only",
+               register: str = "csv", register_mappings: str = "") -> result_mod.Result:
     """Initialize a new workspace. Explicit authorization required (item 3)."""
     if not authorized:
         return result_mod.Result(
@@ -288,10 +319,39 @@ def run_create(root: str, *, authorized: bool, layout: str = "plugin-only") -> r
             error={"code": "already-registered", "message": schema.MANIFEST_RELPATH},
             plugin_version=plugin_version())
 
-    reg = workspace.create_registry(root, layout=layout)
+    # Everything that can refuse does so here, before anything is written.
+    mappings = None
+    try:
+        if register_mappings:
+            with open(register_mappings, encoding="utf-8") as handle:
+                mappings = json.load(handle)
+            if not isinstance(mappings, dict):
+                raise ValueError("the register mappings file must hold a JSON object")
+            if register in workspace.LOCAL_REGISTER_KINDS:
+                raise ValueError("--register-mappings applies to a tool identifier, not a "
+                                 "local %s register" % register)
+        if register == "xlsx":
+            available, reason = providers.xlsx_provider.dependency_available()
+            if not available:
+                return _create_refused(
+                    root, "dependency-missing",
+                    "a spreadsheet register needs openpyxl, which is not installed (%s)" % reason)
+        reg = workspace.create_registry(root, layout=layout, register=register,
+                                        mappings=mappings)
+    except (OSError, ValueError) as exc:
+        return _create_refused(root, "invalid-register", "--register: %s" % exc)
     written: list[str] = []
     for directory in workspace.scaffold_paths(reg):
         os.makedirs(directory, exist_ok=True)
+    work = reg.roles["workRegister"]
+    if register == "xlsx":
+        import openpyxl
+        target = os.path.join(root, *work.path.split("/"))
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        sheet = openpyxl.Workbook()
+        sheet.active.append(workspace.WORK_REGISTER_SEED.strip().split(","))
+        sheet.save(target)
+        written.append(work.path)
     for relative, content in workspace.seed_contents(reg).items():
         target = os.path.join(root, *relative.split("/"))
         if os.path.exists(target):
@@ -416,7 +476,8 @@ def check_document(path: str, *, oversize_bytes: int = DEFAULT_OVERSIZE_BYTES) -
 
 def preflight(root: str, mode: str = "check", *, quiet: bool = False,
               authorized: bool = False, apply: bool = False,
-              layout: str = "plugin-only") -> result_mod.Result:
+              layout: str = "plugin-only", register: str = "csv",
+              register_mappings: str = "") -> result_mod.Result:
     root = os.path.abspath(root)
     _record_install()
     try:
@@ -425,7 +486,8 @@ def preflight(root: str, mode: str = "check", *, quiet: bool = False,
         elif mode == "adopt":
             outcome = run_adopt(root)
         elif mode == "create":
-            outcome = run_create(root, authorized=authorized, layout=layout)
+            outcome = run_create(root, authorized=authorized, layout=layout,
+                                 register=register, register_mappings=register_mappings)
         elif mode == "repair":
             outcome = run_repair(root, apply=apply)
         else:
@@ -473,6 +535,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--layout", default="plugin-only")
     parser.add_argument("--authorize", action="store_true",
                         help="authorize `create` to write new files into the project")
+    parser.add_argument("--register", default="csv",
+                        help="`create` only: where the work register lives — csv, markdown, "
+                             "xlsx, or an external <scheme>:<opaque> identifier")
+    parser.add_argument("--register-mappings", dest="register_mappings", default="",
+                        help="`create` only: JSON file with fieldMappings/statusMappings "
+                             "for an external register")
     parser.add_argument("--apply", action="store_true",
                         help="apply an approved repair (without it, repair only previews)")
     parser.add_argument("--json", dest="as_json", action="store_true",
@@ -490,7 +558,8 @@ def main(argv: list[str] | None = None) -> int:
         return check_document(args.check_document)
 
     outcome = preflight(args.root, args.mode, quiet=args.quiet, authorized=args.authorize,
-                        apply=args.apply, layout=args.layout)
+                        apply=args.apply, layout=args.layout, register=args.register,
+                        register_mappings=args.register_mappings)
     emit(outcome, quiet=args.quiet, as_json=args.as_json)
     return outcome.strict_exit_code() if args.strict else outcome.exit_code
 

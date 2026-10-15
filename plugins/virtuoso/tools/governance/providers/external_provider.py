@@ -211,6 +211,17 @@ class ExternalWorkRegister(base.WorkRegisterProvider):
             self._supersede_partial(item_id, fields, record.id)
         return plan
 
+    def require_columns(self, *names: str) -> None:
+        """The snapshot must serve each field and the declared mapping must name it:
+        :meth:`plan_mutation` refuses an unmapped field, so refuse it before any write."""
+        super().require_columns(*names)
+        missing = [n for n in names if self._declared is not None and n not in self._declared]
+        if missing:
+            raise base.CapabilityError(
+                "work register %s has no column for %s; configure "
+                "policy.workRegister.fieldMappings" % (self.source, ", ".join(missing)),
+                detail={"register": self.source, "missing": missing})
+
     def _refuse_unmapped(self, fields: dict) -> None:
         """A canonical field the declared mapping does not name has no column to land in:
         the write would fail on the board, or vanish. ``id`` is always the key."""

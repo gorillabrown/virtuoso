@@ -143,7 +143,7 @@ def test_the_trail_decides_the_state():
 def test_an_illegal_move_is_named():
     entry = parsed(with_trail(ALIGNED + PLAN,
                               ("2026-09-24", "storyboarded", "storyboard", ""),
-                              ("2026-09-24", "executed", "pointer-closeout", "close-out x")))
+                              ("2026-09-24", "executed", "dispatch-closeout", "close-out x")))
     assert holding_mod.TRANSITION_ILLEGAL in codes(entry)
 
 
@@ -160,7 +160,7 @@ def test_only_the_virtuoso_skill_records_a_run():
     planned = parsed(with_trail(ALIGNED + PLAN,
                                 ("2026-09-24", "storyboarded", "storyboard", ""),
                                 ("2026-09-24", "planned", "write-plan", "HB-3 passed")))
-    for actor in ("storyboard", "write-plan", "pointer-closeout", "roadmap-review"):
+    for actor in ("storyboard", "write-plan", "dispatch-closeout", "roadmap-review"):
         problems = holding_mod.record_problems(planned, "in-flight", actor, "", "2026-09-24")
         assert holding_mod.RECORDER_WRONG in [p["code"] for p in problems], actor
     assert holding_mod.record_problems(planned, "in-flight", "virtuoso", "executing: hb-3",
@@ -198,8 +198,10 @@ def test_a_run_write_plan_recorded_under_1_11_stays_valid_history():
                               ("2026-09-24", "planned", "write-plan", ""),
                               ("2026-09-24", "in-flight", "write-plan", "executing here")))
     assert entry.problems == []
-    assert holding_mod.record_problems(entry, "executed", "pointer-closeout",
-                                       "HB-3: close-out x, complete", "2026-09-25") == []
+    old = {new: old for old, new in schema.ACTOR_ALIASES.items()}["dispatch-closeout"]
+    for closer in ("dispatch-closeout", old):                    # the 1.14 name, one release
+        assert holding_mod.record_problems(entry, "executed", closer,
+                                           "HB-3: close-out x, complete", "2026-09-25") == []
 
 
 def test_a_storyboard_that_is_not_aligned_is_not_held():
@@ -246,7 +248,7 @@ def test_every_recorder_is_a_default_writer_of_the_role():
 def test_the_role_is_opt_in():
     assert "holdingBay" not in schema.CREATE_ROLE_ORDER
     assert schema.DEFAULT_ROLES["holdingBay"]["allowedWriters"] == [
-        "storyboard", "write-plan", "virtuoso", "pointer-closeout", "roadmap-review"]
+        "storyboard", "write-plan", "virtuoso", "dispatch-closeout", "roadmap-review"]
 
 
 def test_provisional_identifiers_are_never_reused():
@@ -319,7 +321,7 @@ def test_the_whole_lifecycle_moves_only_through_its_owners(workspace):
              ("in-flight", "virtuoso", "executing: hb-3"),
              ("planned", "virtuoso", "stopped: red base; branch hb-3 kept"),
              ("in-flight", "virtuoso", "executing: hb-3"),
-             ("executed", "pointer-closeout", "close-out: Virtuoso/closeouts/HB-3.md; complete"),
+             ("executed", "dispatch-closeout", "close-out: Virtuoso/closeouts/HB-3.md; complete"),
              ("absorbed", "roadmap-review", "as ADD-051, completed")]
     for state, actor, note in moves:
         completed = record(workspace, ENTRY, state, actor, "--note", note, "--apply")
@@ -351,7 +353,7 @@ def test_the_planner_cannot_start_the_run(workspace):
 def test_a_role_registered_without_the_executor_refuses_it(workspace):
     """A project that registered the role under 1.11.0 lacks `virtuoso`: the write is
     refused by the role, not recorded under another ceremony's name."""
-    bay = register(workspace, writers=["storyboard", "write-plan", "pointer-closeout",
+    bay = register(workspace, writers=["storyboard", "write-plan", "dispatch-closeout",
                                        "roadmap-review"])
     path = bay / ("%s.md" % ENTRY)
     path.write_text(with_trail(ALIGNED + PLAN,
@@ -367,7 +369,7 @@ def test_a_role_registered_without_the_executor_refuses_it(workspace):
 @pytest.mark.parametrize("state, actor, why", [
     ("planned", "write-plan", "held-transition-illegal"),        # unrecorded → planned
     ("storyboarded", "roadmap-review", "held-recorder-wrong"),
-    ("storyboarded", "next-pointer", "may not write the holdingBay role"),
+    ("storyboarded", "dispatch-kickoff", "may not write the holdingBay role"),
 ])
 def test_a_move_the_rules_forbid_is_refused(workspace, state, actor, why):
     bay = register(workspace)
@@ -446,7 +448,7 @@ def test_every_holding_output_survives_a_legacy_code_page(workspace):
     (bay / ("%s.md" % forged)).write_text(with_trail(
         ALIGNED.replace(ENTRY, forged) + PLAN,
         ("2026-09-24", "storyboarded", "storyboard", ""),
-        ("2026-09-24", "executed", "pointer-closeout", "x")), encoding="utf-8")  # illegal
+        ("2026-09-24", "executed", "dispatch-closeout", "x")), encoding="utf-8")  # illegal
     root = str(workspace)
     recorded = run_cp1252("--root", root, "--actor", "storyboard", "holding", "--record",
                           ENTRY, "--state", "storyboarded", "--apply")

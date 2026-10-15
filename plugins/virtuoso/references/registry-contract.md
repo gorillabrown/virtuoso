@@ -19,7 +19,7 @@ Each entry under `roles` carries the full metadata set (item 15):
 
 ```jsonc
 "workRegister": {
-  "path": "docs/work-register.csv",      // OR "external": "monday:board/1234567890"
+  "path": "docs/work-register.csv",      // OR "external": "notion:database/<id>" | "monday:board/1234567890"
   "provider": "csv",                     // markdown csv xlsx jsonl json directory
                                          // snapshot connector issue-tracker database
                                          // external none
@@ -28,7 +28,7 @@ Each entry under `roles` carries the full metadata set (item 15):
   "mutability": "read-write",            // read-write append-only generated
                                          // read-only immutable
   "owner": "roadmap-review",             // owning ceremony
-  "allowedWriters": ["roadmap-review", "pointer-closeout"],
+  "allowedWriters": ["roadmap-review", "dispatch-closeout"],
   "validation": "csv-headers",
   "classification": "active",            // active | historical | unknown
   "origin": "authored",                  // authored | generated | unknown
@@ -84,7 +84,7 @@ project registers each by adding its entry to the manifest when it first needs i
 |---|---|---|---|
 | `overlays` | project additions to shipped skills and agents (see *Project overlays*) | none (read-only) | when the project has something to overlay |
 | `epics` | one directory per epic packet, `<yyyy-mm-dd>-<slug>/` | `epic` | when the project runs its first epic |
-| `holdingBay` | one held plan per piece of ad hoc work, `<yyyy-mm-dd>-<slug>.md` (see *The holding bay*) | `storyboard`, `write-plan`, `virtuoso`, `pointer-closeout`, `roadmap-review` | when the project storyboards its first piece of ad hoc work |
+| `holdingBay` | one held plan per piece of ad hoc work, `<yyyy-mm-dd>-<slug>.md` (see *The holding bay*) | `storyboard`, `write-plan`, `virtuoso`, `dispatch-closeout`, `roadmap-review` | when the project storyboards its first piece of ad hoc work |
 
 A ceremony that needs an opt-in role the project has not registered stops and shows the
 entry to add; it never falls back to a conventional path.
@@ -134,7 +134,7 @@ Pace converts it through `policy.roadmap.effortScale`. A ledger without the colu
 
 ### The time log
 
-A dispatch's rows and their measured working time: `Timing.<sprint-id>.jsonl` in the
+A dispatch's rows and their measured working time: `Timing.<dispatch-id>.jsonl` in the
 `closeOuts` role, one JSON object per line, append-only, written only through
 `virtuoso_registry timing` by an actor that may write `closeOuts`. Every event has `event`
 and `at` (UTC, `YYYY-MM-DDTHH:MM:SSZ`, from the machine clock; no flag accepts a time or a
@@ -184,8 +184,8 @@ rows, prints the header, every row not done and the last 3 done. `timing --check
 log against its own promises and is read by its exit code: 0 clean; 1 with findings — a
 row number used twice, a row ended `done` whose end carries `evidence: null`, a parked row
 without a reason, a row still running or waiting, or a log that cannot be read; 2 for a
-usage error (no `--sprint`, no `closeOuts` role, a flag `--check` does not take) or no log
-for the sprint. A log whose rows have all ended or been parked counts as closed.
+usage error (no `--dispatch`, no `closeOuts` role, a flag `--check` does not take) or no log
+for the dispatch. A log whose rows have all ended or been parked counts as closed.
 
 Every other column is kept, untouched. A mapped field is found by its mapped header and nowhere
 else. An append lays its row out under the file's own header and is refused, naming the missing
@@ -246,6 +246,50 @@ in are `queued`, `in-flight`, `blocked`, `completed`, `dissolved`, `superseded`,
 `unknown`; the literal words "Queued", "In Flight", "Full Spec" are defaults, not
 requirements.
 
+**Migration note (1.15.0): `lane` is now `workstream`.** Each item may also carry a
+`deliverable`, and `policy.roadmap.workstreams` lists
+`{id, name, purpose, deliverables: [{id, name, purpose}]}`. A deliverable id under two
+workstreams is a policy problem. For one release the old names still work. A
+register column named `Lane` reads as `workstream` and is never renamed in the
+project's file. A `fieldMappings` key `lane` maps to `workstream`, and one that names both
+`lane` and `workstream` is refused. `roadmap.lanes` is read with a `policy-renamed` warning,
+and `combine --lane` works with one deprecation line on stderr. The rule anchor ids
+`lane-declaration`, `merge-through-slot` and `lane-concurrency` are unchanged, so an
+overlay that cites them still resolves.
+
+**Proposing and applying a structure (1.15.0).** `structure --propose [--json]` is
+read-only. It proposes workstreams and deliverables from the active items, or, once a
+structure is approved, a place for each unassigned item plus split and merge suggestions.
+`structure --apply --file <approved.json>` writes the owner-approved structure. It writes
+`roadmap.workstreams` and `roadmap.hierarchy` through `policy-set`, then each assigned
+active item's `workstream` and `deliverable`, as ids. A local register is written through
+the provider's `assign(item_id, workstream, deliverable, *, revision)`, which needs
+`write-status`, checks the revision, and is idempotent. For an external register it
+returns one `set-status` mutation plan per item. When the approved file assigns items
+and the register serves no column for either field, it stops before any write, policy
+included, and names the missing columns. For an external register that means a field
+the snapshot lacks or `policy.workRegister.fieldMappings` does not name. Finished items
+are never touched. `structure --propose` runs the same check, read-only, and reports it as
+`registerColumns`: `ready`, the `missing` fields, and the `fix`.
+
+**Adding the workstream and deliverable columns.** Run this once per project, before the
+first structure is approved:
+
+1. Add two plain-text columns, `Workstream` and `Deliverable`. Existing rows may stay
+   empty.
+   - CSV or Markdown table: add both to the header row.
+   - Spreadsheet: add two header cells on the register's sheet.
+   - Connected tool (a database, board or tracker): add two text properties or fields,
+     in the tool or through its connector.
+2. Map them. A local register whose headers read `Workstream` and `Deliverable` needs no
+   mapping. An external register needs both named. Write the current
+   `policy.workRegister.fieldMappings` with the two added
+   (`"workstream": "Workstream", "deliverable": "Deliverable"`):
+   `virtuoso_registry --root . policy-set workRegister.fieldMappings --value-json '<mappings>' --apply`.
+3. For a connected tool, refresh the snapshot: read every row, with both new columns, and
+   import it (*Refreshing a connector-backed register's snapshot*).
+4. Run `structure --propose` again. `registerColumns.ready` is now `true`.
+
 ### Provenance and honesty
 
 - Every derived metric states the provider, source, snapshot time, and fields it
@@ -259,9 +303,9 @@ requirements.
 
 A board, tracker, or database register is read through the snapshot role
 `policy.workRegister.snapshot` names, stale after `policy.workRegister.staleAfterHours`
-(24 by default). The host refreshes it; the plugin builds it. Read the register with
-the host's connector and write the rows to a file, keyed by the register's **own**
-column names, then import them:
+(24 by default). The host refreshes it; the plugin builds it. **One contract serves
+every tool:** read the register with whatever connector the session has, write the rows
+to a file keyed by the register's **own** column names, then import them:
 
 ```sh
 python <plugin>/scripts/virtuoso_registry.py --root . snapshot --import <rows.json> \
@@ -270,7 +314,20 @@ python <plugin>/scripts/virtuoso_registry.py --root . snapshot --import <rows.js
 
 The rows file is a JSON list of row objects, or `{"takenAt": "<ISO time>", "rows": [...]}`.
 A cell may be text, a number, a list (prerequisites), or an object with a `text`,
-`name`, `id`, or `value` field. The import:
+`name`, `id`, or `value` field; anything nested deeper, the session flattens to one of
+those. Two conversions, for illustration:
+
+- A **database** read (a page per item, a property per column): write
+  `{"Item ID": "ABC-7", "Name": "Export to CSV", "Status": {"name": "In progress"},
+  "Depends On": ["ABC-3"]}` — the status select keeps its `name`, the relation becomes a list.
+- An **issue-tracker** read (an issue per item, fields by name): write
+  `{"Key": "ENG-12", "Title": "Retry webhooks", "State": "Todo", "Order": 4,
+  "Size": {"value": "m"}}` — each field under the column name the mappings use.
+
+An item with no prerequisites gets `[]`, an empty cell, or a placeholder (see *Depends
+On* below).
+
+The import:
 
 - maps each row through `policy.workRegister.fieldMappings` and `statusMappings`,
   exactly as a local CSV row is read;
@@ -289,8 +346,9 @@ A cell may be text, a number, a list (prerequisites), or an object with a `text`
 A snapshot's reader applies the same subitem rule to a snapshot another builder
 wrote: an item carrying `parent` is not a card.
 
-**A connector's raw page imports as it came.** A connector that keys cells by column
-**id** (an items page whose `items[]` carry `column_values`) needs no hand-built rows:
+**A convenience: a connector's raw page imports as it came.** The rows file above is
+the way for every tool. A connector that keys cells by column **id** (an items page
+whose `items[]` carry `column_values`) can skip the conversion:
 save the page (or a list of every page) and the board's column list, and import both:
 
 ```sh
@@ -312,6 +370,13 @@ field. Title-keyed rows remain the fallback for any other shape.
 
 A *Depends On* placeholder cell (`None`, `-`, `—`, `n/a`, in any case) means no
 prerequisite, for imported rows and local CSV rows alike.
+
+**Moving the register to another tool** is `virtuoso_registry move-register`: a preview
+that writes nothing, `--plan --apply` (one move record; create instructions for a tool,
+rows written for a local target), `--confirm` per created item, and `--finish`, which
+compares the new register's rows with the record and only then repoints `workRegister`
+(the last write, with a manifest backup). History is never touched; an interrupted move
+stays listed by `recovery`. The `virtuoso-init` skill walks it.
 
 Refresh at three points: before `mutation-plan --operation create-item`, at roadmap
 review, and at close-out.
@@ -590,7 +655,7 @@ labelled `policy-set` that names the ceremony which asked.
 its other figures. It is computed as of the **snapshot's** date, never the reader's clock.
 
 - **Scope** — every item in the register, or the items whose `scope.field` (canonical `id`,
-  `title`, `lane`, `group`, `effort`, `branch`, or a register column) holds one of
+  `title`, `workstream`, `deliverable`, `group`, `effort`, `branch`, or a register column) holds one of
   `scope.values`, in any case. A scope that matches nothing is **not computable** — never met.
 - **Remaining** — non-terminal items in scope, and their points through
   `policy.roadmap.effortScale`. **Blocked** — the canonical `blocked` share of what remains.
@@ -687,7 +752,7 @@ more links count, in this order:
 
 **Three links, each checked.**
 
-1. **Close-out records.** `pointer-closeout` appends what the dispatch taught — or its
+1. **Close-out records.** `dispatch-closeout` appends what the dispatch taught — or its
    report says `No new lesson — <reason>` — and records how the lessons its specification
    applied turned out. The crossing's verify step runs
    `lessons --check <report> --closeout --item <ID>`: a lesson the report names must be in
@@ -697,11 +762,11 @@ more links count, in this order:
    a specification names each live lesson that bears on it and the change it made, or
    states that no live lesson applies. `roadmap-review` reads the live lessons before it
    drafts and re-checks every existing dispatch-ready specification against lessons
-   recorded since; `next-pointer` checks the head item before it prints.
+   recorded since; `dispatch-kickoff` checks the head item before it prints.
    `lessons --check <spec> --item <ID>` is the mechanical half; a live lesson the section
    leaves uncited is listed, so the author's judgement is made rather than skipped.
 3. **Direction applies.** An `epic` charter carries *Lessons applied* before an unattended
-   run begins, and an epic ends through `pointer-closeout`, so its lessons reach the role.
+   run begins, and an epic ends through `dispatch-closeout`, so its lessons reach the role.
 
 `lessons --check` exits 0 when the check passes, 1 when it fails, 3 when there is no
 `lessons` role to read. Its findings:
@@ -814,7 +879,7 @@ add and says the findings exist only in its report.
 A disposition changes only by appending a record under the same id —
 `**Disposition:** fixed by <item or commit>`, `accepted — <reason>`, `lesson <prefix>-NNN`.
 Writers by default: `governance-sweep`, `adversarial-review`, `virtuoso` (for the agents it
-dispatches), `pointer-closeout`, `roadmap-review`, `3rd-party-audit`. **Reader:**
+dispatches), `dispatch-closeout`, `roadmap-review`, `3rd-party-audit`. **Reader:**
 `roadmap-review` B.3 reads every finding whose latest disposition is `open`, with the
 previous review's lessons-applied — the set `virtuoso_registry review --date <YYYY-MM-DD>`
 names as `previous`, latest by date, then run — and carries each into the plan.
@@ -839,7 +904,7 @@ assumed:
 
 ```sh
 python <plugin>/scripts/virtuoso_registry.py --root . combine --items <ID> <ID> ... [--json]
-python <plugin>/scripts/virtuoso_registry.py --root . combine --lane <lane> [--from <seq>] [--to <seq>] [--json]
+python <plugin>/scripts/virtuoso_registry.py --root . combine --workstream <workstream> [--from <seq>] [--to <seq>] [--json]
 ```
 
 It is read-only. It reads the register through its provider and each item's
@@ -853,7 +918,7 @@ returns:
 - the **serial order**: every prerequisite in the set first, then, for two items that
   share a file, the one earlier in the register's sequence. Ties go to sequence, then to
   the order the items were named;
-- the **lanes**: groups with no prerequisite and no shared file between them, which may
+- the **workstreams**: groups with no prerequisite and no shared file between them, which may
   run side by side;
 - every ordering **edge** with its reason, the **effort** in points (or *not computable*,
   naming the missing effort or scale entries), and the snapshot's provenance.
@@ -877,7 +942,7 @@ cannot be answered.
 | `combine-snapshot-stale` | error | the register snapshot is stale; refresh it first |
 | `combine-spec-unlocated` | warning | the specification could not be read; the item runs serially with every other |
 | `combine-files-unlisted` | warning | the specification names no file; the item runs serially with every other |
-| `combine-lane-unmapped` | warning | a lane selection, and the register serves no lane field |
+| `combine-workstream-unmapped` | warning | a workstream selection, and the register serves no workstream field |
 
 An item whose files are unknown is never assumed to touch nothing: an unknown overlap is
 not a known absence. The judgement the command cannot make, such as two items changing
@@ -886,8 +951,8 @@ adds, with the reason, in the packet's plan.
 
 A combination's charter lists its items under `items:`, in serial order, and its packet
 identifier is `EPIC-` plus the slug in capitals. While the charter is active,
-`next-pointer` does not dispatch those items separately and `roadmap-review` does not
-re-specify them. The close-out retires each one (`pointer-closeout`, *Combined epics*).
+`dispatch-kickoff` does not dispatch those items separately and `roadmap-review` does not
+re-specify them. The close-out retires each one (`dispatch-closeout`, *Combined epics*).
 
 ## The holding bay
 
@@ -910,7 +975,7 @@ and never edited. The last row is the current state.
 | `storyboarded` | `storyboard`, `write-plan` | an alignment record whose verdict reads *Aligned* | `storyboarded`, `planned`, `absorbed`, `withdrawn` |
 | `planned` | `write-plan`; `virtuoso` only out of `in-flight` | a `## Plan` with at least one `HB-<n>` specification; never epic-scale | `storyboarded`, `planned`, `in-flight`, `absorbed`, `withdrawn` |
 | `in-flight` | `virtuoso` | as `planned` | `planned`, `executed` |
-| `executed` | `pointer-closeout` | as `planned`; the note names the close-out and its result | `absorbed` |
+| `executed` | `dispatch-closeout` | as `planned`; the note names the close-out and its result | `absorbed` |
 | `absorbed` | `roadmap-review` | a note naming the register item(s) it became | — |
 | `withdrawn` | `storyboard`, `write-plan`, `roadmap-review` | a note giving the reason | — |
 
@@ -975,7 +1040,7 @@ roadmap, and every ceremony and agent reads the rules from that one source.
 The close-out crossing's two record-keeping writes are one governed command for a
 local register and ledger:
 
-    virtuoso_registry --root . --actor pointer-closeout record-completion --item <ID> \
+    virtuoso_registry --root . --actor dispatch-closeout record-completion --item <ID> \
         --date <YYYY-MM-DD> --result <word> --evidence <close-out> [--revision R] [--apply]
 
 It appends the terminal record (`TR-NNN`, under `policy.terminalLedger.writers`), then
@@ -1005,18 +1070,18 @@ checked against its own list:
 
 | Record | What it is | Who may append | Default |
 |---|---|---|---|
-| ordinary | a completion, or a retirement (`dissolved`, `superseded`) | `policy.terminalLedger.writers` | `pointer-closeout` |
-| correction | a new record that names the record it corrects, in `corrects` | `policy.terminalLedger.correctionWriters` | `pointer-closeout`, `roadmap-review` |
+| ordinary | a completion, or a retirement (`dissolved`, `superseded`) | `policy.terminalLedger.writers` | `dispatch-closeout` |
+| correction | a new record that names the record it corrects, in `corrects` | `policy.terminalLedger.correctionWriters` | `dispatch-closeout`, `roadmap-review` |
 
 A retirement corrects nothing, so it is an ordinary record. A ceremony that is not a
-writer routes it to `/pointer-closeout` (its section *Retirement records routed here*)
+writer routes it to `/dispatch-closeout` (its section *Retirement records routed here*)
 and never relabels it as a correction. `record-completion` refuses a non-writer before
 it previews, so a preview never promises an append the apply would refuse.
 
-## Sprint guards
+## Dispatch guards
 
-`scripts/sprint_guards.py` holds the executable halves of the execution rules, run
-through the launcher: `"$HOME/.virtuoso/bin/virtuoso" sprint_guards <subcommand>`.
+`scripts/dispatch_guards.py` holds the executable halves of the execution rules, run
+through the launcher: `"$HOME/.virtuoso/bin/virtuoso" dispatch_guards <subcommand>`.
 Paths resolve through the manifest's v2 `roles` (a v1 `paths` map, then the readme's
 machine block, for older workspaces); an external role has no path to inspect. Every
 subcommand is read-only and exits **0** clean, **1** on a finding, **2** when a ref or
@@ -1029,7 +1094,7 @@ role does not resolve.
 | `staging-sweep` | governance staging memos still resident in the `closeOuts` directory |
 | `created-files --base <ref> [--json]` | every file the dispatch created or left changed since `<ref>`: `committed`, `temporary` (scratch, backup, cache and log names, anything under the registered `temp` role — committed ones included), `untracked` (not ignored), `uncommitted` |
 
-`pointer-closeout` runs `created-files` in Wave 1 to draft the report's *Files Created*
+`dispatch-closeout` runs `created-files` in Wave 1 to draft the report's *Files Created*
 dispositions and again at Step 6: a close-out ends with nothing temporary and nothing
 unreconciled beyond the files the report names.
 An untracked file under `Virtuoso/.recovery/` carries its own verdict, `commit: a

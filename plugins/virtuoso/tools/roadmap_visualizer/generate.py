@@ -102,11 +102,14 @@ def build_board(reading: Reading, sources: list | None = None) -> dict:
     # A column's header is the register's own: the one the provider read, else the one
     # the project mapped (a snapshot import records no headers), else a generic label.
     configured = register_policy.get("fieldMappings")
+    if isinstance(configured, dict):
+        configured = mapping_mod.canonical_field_mappings(configured)
     headers = dict({k: v for k, v in configured.items() if isinstance(v, str)}
                    if isinstance(configured, dict) else {}, **snapshot.headers)
     columns = board_mod.roadmap_columns(snapshot.fields, headers, items, name_key)
-    rows = [dict(board_mod.row(item, name_key), facets=dashboard_mod.facets(item))
-            for item in items]
+    structure = board_mod.approved_structure(reading.policy)
+    rows = [dict(board_mod.row(item, name_key),
+                 facets=dashboard_mod.facets(item, bool(structure))) for item in items]
 
     records, has_ledger, ledger_problems = _ledger(reading.reg)
     done, record_problems = completed_mod.completed_rows(items, records, statuses, name_key,
@@ -115,8 +118,13 @@ def build_board(reading: Reading, sources: list | None = None) -> dict:
     for row in done:
         # A ledger-only row is sliced by what the ledger says it became.
         row["facets"] = dashboard_mod.facets(register.get(row["id"])
-                                             or base.WorkItem(id=row["id"], status=row["result"]))
+                                             or base.WorkItem(id=row["id"], status=row["result"]),
+                                             bool(structure))
     comments, comment_problems, comments_file = _comments(reading.reg)
+    roadmap ={"groups": board_mod.roadmap_groups(items),
+               "live": [item.id for item in board_mod.live(items)]}
+    if structure:                       # absent, not empty: a page without one is unchanged
+        roadmap["structure"] = board_mod.structure_groups(items, structure)
     return to_jsonable({
         "version": 1,
         "project": reading.context.root.name,
@@ -129,8 +137,7 @@ def build_board(reading: Reading, sources: list | None = None) -> dict:
         "sources": sources if sources is not None else freshness.source_times(reading.reg),
         "columns": columns,
         "rows": rows,
-        "roadmap": {"groups": board_mod.roadmap_groups(items),
-                    "live": [item.id for item in board_mod.live(items)]},
+        "roadmap": roadmap,
         "completed": {
             "columns": completed_mod.completed_columns(snapshot.fields, headers, done,
                                                        items, name_key),
@@ -143,7 +150,7 @@ def build_board(reading: Reading, sources: list | None = None) -> dict:
                                          snapshot.provenance()),
             "slicers": dashboard_mod.slicers(items, columns,
                                              dashboard_mod.policy_orders(reading.policy),
-                                             headers),
+                                             headers, structured=bool(structure)),
         },
         "comments": comments,
         "commentsFile": comments_file,
