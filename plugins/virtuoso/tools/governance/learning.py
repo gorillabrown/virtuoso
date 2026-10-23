@@ -27,7 +27,7 @@ import statistics
 from dataclasses import dataclass, field
 
 from . import lessons as lessons_mod, overlays as overlays_mod, textio
-from .providers.kpi import Metric
+from .providers.kpi import INFERRED, MEASURED, Metric, confidence_for
 
 #: A close-out report's file name; the date is its last ``YYYY-MM-DD``.
 CLOSEOUT_NAME_RE = re.compile(r"^CloseOut\..+\.md$", re.IGNORECASE)
@@ -322,7 +322,8 @@ def effort_calibration(records) -> Metric:
             "%d terminal records with effortEstimate and effortActual as durations (%d have both)"
             % (CALIBRATION_MINIMUM, len(ratios))])
     return Metric("effort-calibration", round(statistics.median(ratios), 2),
-                  unit="actual ÷ estimate, median of %d records" % len(ratios))
+                  basis="actual ÷ estimate, median of %d records" % len(ratios),
+                  confidence=confidence_for(MEASURED, len(ratios)))
 
 
 # --- loop-health metrics ---------------------------------------------------------------------
@@ -340,20 +341,23 @@ def metrics(lessons: list[lessons_mod.Lesson], outcomes: Outcomes) -> list[Metri
                  else Metric("live-count", computable=False, missing_inputs=[no_catalog]))
     if outcomes.closeouts:
         found.append(Metric("lesson-yield", round(total / outcomes.closeouts, 2),
-                            unit="lessons per close-out (%d of %d said no new lesson)"
-                                 % (outcomes.no_lesson, outcomes.closeouts)))
+                            unit="lessons per close-out",
+                            basis="recorded lessons ÷ close-outs (%d of %d said no new lesson)"
+                                  % (outcomes.no_lesson, outcomes.closeouts)))
     else:
         found.append(Metric("lesson-yield", computable=False, missing_inputs=[no_closeouts]))
     held = sum(outcomes.held.values())
     tried = held + sum(outcomes.not_held.values())
-    found.append(Metric("held-rate", round(held / tried, 2), unit="of applied lessons held")
+    found.append(Metric("held-rate", round(held / tried, 2),
+                        basis="applied lessons that held ÷ applied lessons (%d)" % tried,
+                        confidence=confidence_for(MEASURED, tried))
                  if tried else Metric("held-rate", computable=False, missing_inputs=[
                      "a close-out recording whether an applied lesson held"]))
     if total:
         promoted = sum(1 for lesson in lessons
                        if lesson.status.strip().lower().startswith("promoted"))
         found.append(Metric("promotion-rate", round(promoted / total, 2),
-                            unit="of lessons promoted to a standing rule"))
+                            basis="lessons promoted to a standing rule ÷ lessons (%d)" % total))
     else:
         found.append(Metric("promotion-rate", computable=False, missing_inputs=[no_catalog]))
     delays = []
@@ -362,13 +366,20 @@ def metrics(lessons: list[lessons_mod.Lesson], outcomes: Outcomes) -> list[Metri
         if lesson.date and applied:
             delays.append((applied[0] - lesson.date).days)
     found.append(Metric("time-to-apply", statistics.median(delays),
-                        unit="days, median, recorded to first applied (%d lessons)" % len(delays))
+                        unit="days",
+                        basis="median days from recorded to first applied, %d lessons"
+                              % len(delays),
+                        confidence=confidence_for(MEASURED, len(delays)))
                  if delays else Metric("time-to-apply", computable=False, missing_inputs=[
                      "a dated lesson applied in a dated close-out"]))
     if total >= 2:
         recurring = sum(1 + len(g["supersede"]) for g in duplicate_groups(lessons))
         found.append(Metric("repeated-trap-rate", round(recurring / total, 2),
-                            unit="of lessons recording a pattern already recorded"))
+                            kind=INFERRED,
+                            basis="lessons recording a pattern already recorded ÷ lessons (%d)"
+                                  % total,
+                            assumptions=["two lessons record one pattern when the duplicate "
+                                         "rule groups them"]))
     else:
         found.append(Metric("repeated-trap-rate", computable=False,
                             missing_inputs=["two or more recorded lessons"]))

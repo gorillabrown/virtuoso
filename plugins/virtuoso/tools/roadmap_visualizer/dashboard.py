@@ -7,6 +7,7 @@ and for any field holding two or more distinct values, never for a hard-coded li
 from __future__ import annotations
 
 from tools.governance.providers import base, kpi
+from tools.governance.structure import _approved_index
 from tools.roadmap_visualizer.board import UNASSIGNED, approved_structure
 
 #: Mapped fields offered as slicers, in this order, when the data varies.
@@ -26,19 +27,33 @@ WRITTEN_ORDER = (base.FULL_SPEC, base.STUB)
 WRITTEN_LABELS = {base.FULL_SPEC: "Full Spec", base.STUB: "Stub"}
 
 
-def facets(item, structured: bool = False) -> dict:
+def structure_index(structure) -> dict | None:
+    """``{spelling: id}`` for an approved structure (``structure._approved_index``), or
+    ``None`` without one."""
+    return _approved_index(structure)[1] if structure else None
+
+
+def facets(item, structured: bool = False, index: dict | None = None) -> dict:
     """The values a row is sliced by: canonical where a vocabulary exists. A deliverable
-    is one only under an approved structure (``structured``)."""
+    is one only under an approved structure (``structured``). With that structure's
+    ``index`` (:func:`structure_index`), a stored name reads as its id, so one workstream
+    is one value; a value the structure does not know stays as stored."""
+    workstream, deliverable = item.workstream, item.deliverable
+    if index:
+        spelled = (workstream or "").strip().lower()
+        if not spelled.startswith("d:"):   # "d:" keys are deliverables
+            workstream = index.get(spelled, workstream)
+        deliverable = index.get("d:" + (deliverable or "").strip().lower(), deliverable)
     out = {
         "complete": "complete" if item.is_terminal else "incomplete",
         "status": item.status,
-        "workstream": item.workstream,
+        "workstream": workstream,
         "written_status": item.written_status,
         "effort": item.effort,
         "group": item.group,
     }
-    if structured and item.deliverable:     # absent, not blank: a page without is unchanged
-        out["deliverable"] = item.deliverable
+    if structured and deliverable:          # absent, not blank: a page without is unchanged
+        out["deliverable"] = deliverable
     for header, value in item.extra.items():
         out["extra:" + header] = "" if value is None else str(value).strip()
     return out
@@ -64,14 +79,27 @@ def policy_orders(project_policy) -> dict:
         # Workstreams read the pre-1.15.0 lanes too; deliverables exist only in a valid structure.
         "deliverable": _names(d for w in approved_structure(project_policy)
                               for d in w.get("deliverables") or []),
+        # Not a slicer: the approved structure the workstream and deliverable values resolve by.
+        "structure": approved_structure(project_policy),
     }
 
 
-def _ordered(values: list[str], order: list[str]) -> list[str]:
-    """Policy order first (matched without case), then first appearance."""
+def _ordered(values: list[str], order: list[str], names: dict | None = None) -> list[str]:
+    """Policy order first (matched without case, by a value or its ``names`` entry), then
+    first appearance."""
     rank = {str(v).lower(): i for i, v in enumerate(order or [])}
-    known = sorted((v for v in values if v.lower() in rank), key=lambda v: rank[v.lower()])
-    return known + [v for v in values if v.lower() not in rank]
+
+    def key(v):
+        return v.lower() if v.lower() in rank else str((names or {}).get(v, "")).lower()
+    known = sorted((v for v in values if key(v) in rank), key=lambda v: rank[key(v)])
+    return known + [v for v in values if key(v) not in rank]
+
+
+def _structure_names(structure) -> dict:
+    """``{key: {id: name}}`` for the workstream and deliverable slicers."""
+    return {"workstream": {w.get("id"): w.get("name") or w.get("id") for w in structure},
+            "deliverable": {d.get("id"): d.get("name") or d.get("id") for w in structure
+                            for d in w.get("deliverables") or []}}
 
 
 def slicers(items, columns, orders: dict, headers: dict | None = None, *,
@@ -82,7 +110,9 @@ def slicers(items, columns, orders: dict, headers: dict | None = None, *,
     out = [{"key": "complete", "label": "Complete / Incomplete",
             "values": ["complete", "incomplete"],
             "labels": {"complete": "Complete", "incomplete": "Incomplete"}}]
-    rows = [facets(item, structured) for item in items]
+    structure = (orders.get("structure") or []) if structured else []
+    named = _structure_names(structure)
+    rows = [facets(item, structured, structure_index(structure)) for item in items]
 
     def distinct(key):
         seen: list[str] = []
@@ -107,13 +137,19 @@ def slicers(items, columns, orders: dict, headers: dict | None = None, *,
         values = distinct(key)
         if len(values) + has_blank(key) < 2:       # one value and blanks is still a choice
             continue
+        names = named.get(key, {})
         entry = {"key": key, "label": (headers or {}).get(key) or label,
-                 "values": _ordered(values, orders.get(key, []))}
+                 "values": _ordered(values, orders.get(key, []), names)}
         if key == "written_status":
             entry["labels"] = dict(WRITTEN_LABELS)
-        long = {v: v[:FACET_WIDTH - 1] + "…" for v in values if len(v) > FACET_WIDTH}
-        if key == "deliverable" and long:
-            entry["labels"] = long
+        shown = {v: str(names[v]) for v in values if v in names and names[v] != v}
+        if shown:                           # an id is labelled by its name
+            entry["labels"] = shown
+        if key == "deliverable":
+            long = {v: shown.get(v, v)[:FACET_WIDTH - 1] + "…" for v in values
+                    if len(shown.get(v, v)) > FACET_WIDTH}
+            if long:
+                entry["labels"] = dict(entry.get("labels", {}), **long)
         out.append(blanks(key, entry))
     for column in columns:
         if not column["key"].startswith("extra:"):

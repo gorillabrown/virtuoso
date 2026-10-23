@@ -232,6 +232,33 @@ def test_a_deliverable_in_two_workstreams_is_refused(shop):
     assert layout_path(shop).read_bytes() == before
 
 
+def test_a_workstream_named_like_another_ones_id_is_refused(shop):
+    structure = [{"id": "a", "name": "Alpha"}, {"id": "b", "name": "a"}]
+    problems = policy_mod.load({"roadmap": {"workstreams": structure}}).validate()
+    assert ("policy.roadmap.workstreams: workstream 'b' is named 'a', which is workstream "
+            "'a''s id; rename one") in problems
+    before = layout_path(shop).read_bytes()
+    refused = run("--root", str(shop), "--actor", "roadmap-review", "policy-set",
+                  "roadmap.workstreams", "--value-json", json.dumps(structure), "--apply")
+    assert refused.returncode != 0 and "workstream 'b' is named 'a'" in refused.stderr
+    assert layout_path(shop).read_bytes() == before                # nothing re-written
+
+
+def test_a_deliverable_named_like_another_ones_id_is_refused():
+    structure = [{"id": "w", "name": "W", "deliverables": [{"id": "d1", "name": "One"}]},
+                 {"id": "v", "name": "V", "deliverables": [{"id": "d2", "name": "D1"}]}]
+    problems = policy_mod.load({"roadmap": {"workstreams": structure}}).validate()
+    assert ("policy.roadmap.workstreams: deliverable 'd2' is named 'D1', which is deliverable "
+            "'d1''s id; rename one") in problems
+
+
+def test_a_name_equal_to_its_own_id_is_allowed():
+    structure = [{"id": "docs", "name": "Docs",
+                  "deliverables": [{"id": "guide", "name": "GUIDE"}]}]
+    assert policy_mod.load({"roadmap": {"workstreams": structure}}).validate() == []
+    assert policy_mod.load({"roadmap": {"lanes": ["Core", "core"]}}).validate() == []
+
+
 CSV_TEXT = ("id,title,status,workstream,deliverable\n"
             "D-1,First,Queued,engine,core\n")
 MARKDOWN_TEXT = """# Work

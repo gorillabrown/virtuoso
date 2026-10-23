@@ -545,9 +545,10 @@ def test_ledger_only_appends_to_this_projects_ledger(external_workspace):
 
 # --- the 1.15 rename: old skill names keep working for one release ------------------
 
-#: The 1.14 name of each renamed skill, read from the alias table itself.
-OLD = {new: old for old, new in schema.ACTOR_ALIASES.items()}
-OLD_KICKOFF, OLD_CLOSEOUT = OLD["dispatch-kickoff"], OLD["dispatch-closeout"]
+#: Every earlier name of the kickoff skill (1.14's and 1.15's), read from the alias table
+#: itself, and the closeout skill's 1.14 name.
+OLD_KICKOFFS = sorted(old for old, new in schema.ACTOR_ALIASES.items() if new == "next-dispatch")
+OLD_CLOSEOUT = "pointer-closeout"
 
 
 def _check(root):
@@ -570,8 +571,12 @@ def _rename_in_manifest(root, mapping):
 
 @pytest.mark.parametrize("actor, names, allowed", [
     (OLD_CLOSEOUT, ["dispatch-closeout"], True),           # old actor, new list
-    ("dispatch-kickoff", [OLD_KICKOFF], True),             # new actor, old list
-    ("dispatch-closeout", ["dispatch-kickoff"], False),    # the aliases stay distinct
+    ("next-dispatch", ["next-pointer"], True),             # new actor, old list
+    ("next-dispatch", ["dispatch-kickoff"], True),
+    ("dispatch-kickoff", ["next-dispatch"], True),         # old actor, new list
+    ("next-pointer", ["dispatch-kickoff"], True),          # two old names, one skill
+    ("dispatch-closeout", ["next-dispatch"], False),       # the aliases stay distinct
+    ("dispatch-closeout", ["dispatch-kickoff"], False),
     ("anyone", ["*"], True),
     ("", ["dispatch-closeout"], False),
     (OLD_CLOSEOUT, [], False),
@@ -581,21 +586,54 @@ def test_actor_allowed_reads_both_names(actor, names, allowed):
     assert schema.actor_allowed(actor, names) is allowed
 
 
-def test_old_actor_names_are_accepted_for_one_release(workspace, tmp_path):
-    assert set(OLD) == {"dispatch-kickoff", "dispatch-closeout"}
-    # A project the plugin creates writes only the new names, so it never warns.
+def _fresh(tmp_path):
+    """A project the plugin creates now, which writes only the current names."""
     fresh = tmp_path / "fresh"
     fresh.mkdir()
     made = subprocess.run([sys.executable, PREFLIGHT, "--root", str(fresh), "--mode", "create",
                            "--authorize"], capture_output=True, text=True, encoding="utf-8")
     assert made.returncode == 0, made.stdout + made.stderr
-    assert _renamed(fresh) == []
+    return fresh
 
-    # A 1.14 project: its manifest names both old skills.
-    _rename_in_manifest(workspace, OLD)
+
+#: Written out, not read from the alias table, so a dropped alias fails its case
+#: rather than removing it.
+EARLIER_KICKOFFS = ("dispatch-kickoff", "next-pointer")
+
+
+def test_the_kickoff_has_two_earlier_names():
+    assert OLD_KICKOFFS == list(EARLIER_KICKOFFS)
+    assert not set(schema.ACTOR_ALIASES.values()) & set(schema.ACTOR_ALIASES)   # no chain
+
+
+@pytest.mark.parametrize("old", EARLIER_KICKOFFS)
+def test_a_layout_naming_an_earlier_kickoff_name_warns_and_still_writes(workspace, tmp_path, old):
+    fresh = _fresh(tmp_path)
+    assert _renamed(fresh) == []
+    assert "virtuoso-status: ready" in _check(fresh).stdout
+
     path = workspace / "Virtuoso" / "workspace-layout.json"
     manifest = json.loads(path.read_text(encoding="utf-8"))
-    manifest["roles"]["workRegister"]["allowedWriters"].append(OLD_KICKOFF)
+    manifest["roles"]["workRegister"]["allowedWriters"] = [old]
+    path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    [finding] = _renamed(workspace)
+    assert "%s -> next-dispatch" % old in finding.message
+    assert schema.actor_allowed("next-dispatch", [old])
+    assert schema.actor_allowed(old, ["next-dispatch"])
+    assert registry_mod.load(str(workspace)).writable("workRegister", "next-dispatch")
+
+
+@pytest.mark.parametrize("old_kickoff", OLD_KICKOFFS)
+def test_old_actor_names_are_accepted_for_one_release(workspace, tmp_path, old_kickoff):
+    # A project the plugin creates writes only the new names, so it never warns.
+    assert _renamed(_fresh(tmp_path)) == []
+
+    # An earlier project: its manifest names both old skills.
+    _rename_in_manifest(workspace, {"next-dispatch": old_kickoff,
+                                    "dispatch-closeout": OLD_CLOSEOUT})
+    path = workspace / "Virtuoso" / "workspace-layout.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["roles"]["workRegister"]["allowedWriters"].append(old_kickoff)
     path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     assert "dispatch-closeout" not in path.read_text(encoding="utf-8")
 
@@ -603,12 +641,12 @@ def test_old_actor_names_are_accepted_for_one_release(workspace, tmp_path):
     assert "virtuoso-status: warning" in checked.stdout, checked.stdout + checked.stderr
     [finding] = _renamed(workspace)
     assert finding.severity == "warning"
-    for fragment in ("%s -> dispatch-kickoff" % OLD_KICKOFF,
+    for fragment in ("%s -> next-dispatch" % old_kickoff,
                      "%s -> dispatch-closeout" % OLD_CLOSEOUT, "Fix:"):
         assert fragment in finding.message
 
     reg = registry_mod.load(str(workspace))
-    assert reg.writable("workRegister", "dispatch-kickoff")      # a new name, an old manifest
+    assert reg.writable("workRegister", "next-dispatch")         # a new name, an old manifest
     assert providers.terminal_ledger(reg).may_append("dispatch-closeout")
     completed = record_completion(workspace, "--apply", "--json", actor=OLD_CLOSEOUT)
     assert completed.returncode == 0, completed.stdout + completed.stderr
@@ -618,4 +656,4 @@ def test_old_actor_names_are_accepted_for_one_release(workspace, tmp_path):
     # The control: the same project on the new names carries no rename warning.
     _rename_in_manifest(workspace, schema.ACTOR_ALIASES)
     assert _renamed(workspace) == []
-    assert registry_mod.load(str(workspace)).writable("workRegister", OLD_KICKOFF)  # reverse
+    assert registry_mod.load(str(workspace)).writable("workRegister", old_kickoff)  # reverse

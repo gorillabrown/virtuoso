@@ -108,8 +108,9 @@ def build_board(reading: Reading, sources: list | None = None) -> dict:
                    if isinstance(configured, dict) else {}, **snapshot.headers)
     columns = board_mod.roadmap_columns(snapshot.fields, headers, items, name_key)
     structure = board_mod.approved_structure(reading.policy)
+    index = dashboard_mod.structure_index(structure)
     rows = [dict(board_mod.row(item, name_key),
-                 facets=dashboard_mod.facets(item, bool(structure))) for item in items]
+                 facets=dashboard_mod.facets(item, bool(structure), index)) for item in items]
 
     records, has_ledger, ledger_problems = _ledger(reading.reg)
     done, record_problems = completed_mod.completed_rows(items, records, statuses, name_key,
@@ -119,7 +120,7 @@ def build_board(reading: Reading, sources: list | None = None) -> dict:
         # A ledger-only row is sliced by what the ledger says it became.
         row["facets"] = dashboard_mod.facets(register.get(row["id"])
                                              or base.WorkItem(id=row["id"], status=row["result"]),
-                                             bool(structure))
+                                             bool(structure), index)
     comments, comment_problems, comments_file = _comments(reading.reg)
     roadmap ={"groups": board_mod.roadmap_groups(items),
                "live": [item.id for item in board_mod.live(items)]}

@@ -30,7 +30,7 @@ Three ceremonies close the loop, and this module is what they check against:
 * ``dispatch-closeout`` appends the lessons a dispatch taught — or says, with a
   reason, that it taught none — and records how the lessons its specification
   applied turned out;
-* ``roadmap-review`` and ``dispatch-kickoff`` fold the live lessons into every
+* ``roadmap-review`` and ``next-dispatch`` fold the live lessons into every
   specification (readiness rubric U9, *Lessons applied*);
 * ``epic`` folds them into a charter's direction before a long run begins.
 """
@@ -55,6 +55,8 @@ _HEADING_RE = re.compile(r"^(?P<hashes>#{1,6})[ \t]+(?P<text>.+?)[ \t]*$")
 #: A heading's leading section number (``7.``, ``4.2)``), which never decides its kind.
 _NUMBER_RE = re.compile(r"^\d+(?:\.\d+)*[.)]?[ \t]+")
 _SOURCE_RE = re.compile(r"^(?P<title>.*?)[ \t]*\((?P<source>[^()]*)\)[ \t]*$")
+#: A status record's heading names the item and the date: ``— status (X-1, 2026-10-22)``.
+_STATUS_DATE_RE = re.compile(r"\bstatus\b[^()]*\([^()]*?(\d{4}-\d{2}-\d{2})[^()]*\)")
 _DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 #: The fields a complete lesson carries besides its status.
 LESSON_FIELDS = ("verdict", "evidence", "recommendation", "applies to")
@@ -89,6 +91,9 @@ class Lesson:
     source: str = ""
     fields: dict = field(default_factory=dict)
     history: list = field(default_factory=list)      # every status recorded, in order
+    #: The date each status in ``history`` was recorded, from its record's heading
+    #: (``"" `` for the entry's own status or a record that names none).
+    status_dates: list = field(default_factory=list)
     #: Items the entry's own ``**Item:**`` field names.
     items: list = field(default_factory=list)
     #: Items named by link records appended later under the same id.
@@ -192,6 +197,7 @@ def parse(text: str, prefix: str) -> list[Lesson]:
     order: list[str] = []
     current: Lesson | None = None
     first_entry = False
+    heading_date = ""
     for line in body.splitlines():
         line = line.rstrip("\r")
         match = heading_re.match(line)
@@ -199,6 +205,8 @@ def parse(text: str, prefix: str) -> list[Lesson]:
             lesson_id, heading = match.group(1), match.group(2)
             current = lessons.get(lesson_id)
             first_entry = current is None
+            dated = _STATUS_DATE_RE.search(heading)
+            heading_date = dated.group(1) if dated and not first_entry else ""
             if first_entry:
                 title, source = heading, ""
                 split = _SOURCE_RE.match(heading)
@@ -223,6 +231,7 @@ def parse(text: str, prefix: str) -> list[Lesson]:
         value = field_match.group("value").strip()
         if name == "status":
             current.history.append(value or DEFAULT_STATUS)
+            current.status_dates.append(heading_date)
         elif name == "item":
             into = current.items if first_entry else current.links
             into.extend(v for v in re.split(r"[,;\s]+", value) if v and v not in into)

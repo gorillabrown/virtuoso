@@ -147,7 +147,38 @@ DEFAULTS: dict = {
     "dependencies": {
         "openpyxl": ">=3.1",
     },
+    # --- cost figures --------------------------------------------------------
+    "cost": {
+        # "both" shows $1.30 (162K tokens); "tokens" or "dollars" shows one. A user default
+        # may be set in ~/.virtuoso/config.json ({"cost": {"units": ...}}); this overrides it.
+        "units": "both",
+    },
+    # --- cost guards (hooks; act only where a Virtuoso registry exists) ----------
+    "guards": {
+        "enabled": True,
+        # G1: a typed message after the cache has expired, on a large conversation
+        "coldReturn": {"enabled": True, "minContextTokens": 50000, "minRewrite": 0.50,
+                       "minRewriteTokens": 50000, "idleMinutes": 5},
+        # G5: the same failing command, again, with nothing changed since
+        "retry": {"enabled": True, "limit": 2, "withinMinutes": 30},
+        # G6: a whole-file read in the top-level session larger than this
+        "bigRead": {"enabled": True, "bytes": 65536},
+        # G8: the phase-gate /compact line, above this share of the context window
+        "compactNudge": {"enabled": True, "share": 0.75, "windowTokens": 200000},
+        # the once-a-week line: the last 7 days against the 7 before
+        "weekly": {"enabled": True},
+    },
+    # --- did a change work? (`results`) -----------------------------------------
+    "results": {
+        # no verdict before this much work has run after the change
+        "minimum": {"activeDays": 3, "closedLogs": 3, "measuredRows": 30},
+        # a move smaller than this share, either way, is "no clear effect"
+        "noEffect": 0.10,
+    },
 }
+
+#: The ways a cost figure may be shown.
+COST_UNITS = ("both", "tokens", "dollars")
 
 #: The terminal ledger's fields, in the order the documented format lays them out.
 TERMINAL_LEDGER_FIELDS = ("recordId", "itemId", "completed", "result", "evidence", "corrects",
@@ -568,7 +599,57 @@ class Policy:
         problems.extend(lessons_problems(self.get("lessons", {})))
         problems.extend(deadline_problems(self.get("roadmap.deadlines", {})))
         problems.extend(pace_problems(self.get("roadmap.pace", {})))
+        units = self.get("cost.units", "both")
+        if units not in COST_UNITS:
+            problems.append("policy.cost.units=%r is not one of %s" % (units, ", ".join(COST_UNITS)))
+        minimum = self.get("results.minimum", {})
+        if not isinstance(minimum, dict) or any(
+                k not in ("activeDays", "closedLogs", "measuredRows")
+                or not isinstance(v, int) or isinstance(v, bool) or v < 1
+                for k, v in minimum.items()):
+            problems.append("policy.results.minimum holds whole numbers of 1 or more "
+                            "(activeDays, closedLogs, measuredRows)")
+        problems.extend(guard_problems(self.get("guards", {})))
+        no_effect = self.get("results.noEffect", 0.10)
+        if isinstance(no_effect, bool) or not isinstance(no_effect, (int, float)) \
+                or not 0 <= no_effect < 1:
+            problems.append("policy.results.noEffect=%r is a share from 0 up to, not "
+                            "including, 1" % (no_effect,))
         return problems
+
+
+def guard_problems(guards) -> list[str]:
+    """Every reason ``policy.guards`` is not usable: switches are booleans, thresholds
+    non-negative numbers, shares from 0 up to 1, and only the guards the plugin has."""
+    if not isinstance(guards, dict):
+        return ["policy.guards is a mapping of switches and thresholds"]
+    known = DEFAULTS["guards"]
+    problems = []
+    for name, value in guards.items():
+        if name == "enabled":
+            if not isinstance(value, bool):
+                problems.append("policy.guards.enabled is true or false")
+            continue
+        if name not in known:
+            problems.append("policy.guards.%s is not a guard (%s)"
+                            % (name, ", ".join(k for k in known if k != "enabled")))
+            continue
+        if not isinstance(value, dict):
+            problems.append("policy.guards.%s is a mapping" % name)
+            continue
+        for key, setting in value.items():
+            where = "policy.guards.%s.%s" % (name, key)
+            if key not in known[name]:
+                problems.append("%s is not a setting of this guard" % where)
+            elif key == "enabled":
+                if not isinstance(setting, bool):
+                    problems.append("%s is true or false" % where)
+            elif isinstance(setting, bool) or not isinstance(setting, (int, float)) \
+                    or setting < 0:
+                problems.append("%s is a number of 0 or more" % where)
+            elif key == "share" and not setting < 1:
+                problems.append("%s is a share below 1" % where)
+    return problems
 
 
 def workstream_problems(workstreams: list) -> list[str]:
@@ -598,6 +679,29 @@ def workstream_problems(workstreams: list) -> list[str]:
                                 % (did, owner[did], entry["id"]))
             else:
                 owner[did] = entry["id"]
+    problems.extend(_name_collisions(workstreams))
+    return problems
+
+
+def _name_collisions(workstreams: list) -> list[str]:
+    """A workstream (or deliverable) named, without case, like **another** one's id: the
+    two would resolve to one spelling, and the last would silently win. A name equal to
+    its own id is allowed."""
+    entries = [e for e in workstreams if isinstance(e, dict) and str(e.get("id") or "").strip()]
+    deliverables = [d for e in entries if isinstance(e.get("deliverables"), list)
+                    for d in e["deliverables"]
+                    if isinstance(d, dict) and str(d.get("id") or "").strip()]
+    problems = []
+    for kind, group in (("workstream", entries), ("deliverable", deliverables)):
+        ids = {str(e["id"]).lower(): e["id"] for e in group}
+        for e in group:
+            name = str(e.get("name") or "").strip().lower()
+            other = ids.get(name)
+            # Its own id, in any case: a lane read as {id, name} (Policy.workstreams) is one.
+            if other is not None and name != str(e["id"]).lower():
+                problems.append("policy.roadmap.workstreams: %s %r is named %r, which is "
+                                "%s %r's id; rename one"
+                                % (kind, e["id"], e.get("name"), kind, other))
     return problems
 
 

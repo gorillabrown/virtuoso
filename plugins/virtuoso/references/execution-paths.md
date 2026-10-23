@@ -8,7 +8,7 @@ executed under the `virtuoso` skill, closed out by `/dispatch-closeout`, and rec
 the master roadmap by `/roadmap-review`.
 
 This file is the one home for that contract. The ceremonies that open a path —
-`storyboard`, `write-plan`, `dispatch-kickoff`, `epic` — and the one that executes every
+`storyboard`, `write-plan`, `next-dispatch`, `epic` — and the one that executes every
 path, `virtuoso`, point here. None of them restates the contract in its own words.
 
 ## Only the virtuoso skill executes
@@ -22,7 +22,7 @@ On the ad hoc path:
 | 2. Plan | `write-plan` | the full specification, ready for implementation, with its exact slot in roadmap order for the review to apply | records `in-flight`, runs the reconciliation recipe, creates the work branch, edits an edit site |
 | 3. Execute | `virtuoso` | the work, after a conflict check against upstream, downstream, in-flight work, and roadmap order | re-plans; a plan that no longer fits goes back to `write-plan` |
 
-The roadmap paths keep the same split. `roadmap-review` plans, `dispatch-kickoff` gates and
+The roadmap paths keep the same split. `roadmap-review` plans, `next-dispatch` gates and
 prints a kickoff, and `epic` prepares a packet. Each hands off to `virtuoso`, and none
 of them runs the work. A skill that is not `virtuoso` never edits an edit site, creates
 the work branch, runs a reconciliation recipe, or records a run as started. Those are
@@ -34,14 +34,14 @@ itself, in a chat of its own, still ends at its draft stub.
 | Path | Opened by | Draws from | May start | Who specifies it | The gate before execution |
 |---|---|---|---|---|---|
 | **Ad hoc** | `/storyboard`, then `/write-plan` | an idea the user brings now | any time | `storyboard` scopes it to a draft stub; `write-plan` specifies it | `write-plan`'s readiness gate, then the `virtuoso` skill's conflict check |
-| **Roadmap dispatch** | `/dispatch-kickoff` | the head of the master roadmap | only after a roadmap review has put the item there | `roadmap-review` (section D.3) | `dispatch-kickoff`'s readiness gate |
+| **Roadmap dispatch** | `/next-dispatch` | the head of the master roadmap | only after a roadmap review has put the item there | `roadmap-review` (section D.3) | `next-dispatch`'s readiness gate |
 | **Roadmap epic** | `/epic` | an item on the master roadmap marked `Path: epic`, or a combination of specified roadmap items run together | only after a roadmap review has put the items there | `roadmap-review` places and specifies the items; `epic` decides what combines and charters it | `epic`'s combination check (`combine`) and walk-away preflight |
 
 **The one asymmetry is timing.** The ad hoc path can open at any moment, because work
 really does arrive between reviews. The two roadmap paths open only on items a roadmap
 review has already placed on the master roadmap. Everything that follows from that:
 
-- `dispatch-kickoff` and `epic` never start from an idea. An idea goes to `/storyboard`.
+- `next-dispatch` and `epic` never start from an idea. An idea goes to `/storyboard`.
 - `storyboard` and `write-plan` never write the roadmap or the live work register. They
   write one entry in the registered `holdingBay` role, and the next `/roadmap-review`
   reconciles it (see *The holding bay* in `registry-contract.md`).
@@ -59,7 +59,7 @@ review has already placed on the master roadmap. Everything that follows from th
 Every path meets every row below before execution starts. The rows are the standard;
 the columns are how each path meets it.
 
-| # | The destination requires | Ad hoc (`storyboard` → `write-plan`) | Roadmap dispatch (`dispatch-kickoff`) | Roadmap epic (`epic`) |
+| # | The destination requires | Ad hoc (`storyboard` → `write-plan`) | Roadmap dispatch (`next-dispatch`) | Roadmap epic (`epic`) |
 |---|---|---|---|---|
 | D1 | **Alignment.** The user and the agent agree on the outcome, the scope, and what done looks like, and that agreement is written down. | The storyboard's alignment record and its *Aligned* verdict | The roadmap review's phase checkpoints; the item's *What*, *Why*, and *Done when* | The charter, sharpened with the user before launch; the absorbed storyboard where there is one |
 | D2 | **A specification in the shared format.** | Roadmap-review's D.5.2 format, one per item, in the held plan | D.5.2, where `policy.roadmap.specStorage` puts it | The five-file epic packet; the charter's Definition of Done rows are verifiable. A combination builds on its items' own D.5.2 specifications |
@@ -104,12 +104,12 @@ An item on the master roadmap carries its path in its roadmap entry's structural
 A missing field means `dispatch`. `roadmap-review` sets `epic` when it places an
 epic-scale item, including when it absorbs an epic-scale held storyboard, and when it
 finds an item already on the roadmap that is epic-scale on its own. Roadmaps written
-before 1.11 carry no `Path` field at all. When `dispatch-kickoff` finds `Path: epic` at the
+before 1.11 carry no `Path` field at all. When `next-dispatch` finds `Path: epic` at the
 head of the belt, it routes the item to `/epic` instead of the dispatch rubric.
 
 A combination leaves each item's `Path` as it is. Its items are dispatch-sized, and
 they run together because `/epic` chartered them as a set, not because a marker says
-so. An item a charter names (`item:` or `items:`) is in that run: `dispatch-kickoff`
+so. An item a charter names (`item:` or `items:`) is in that run: `next-dispatch`
 points to the packet, and `roadmap-review` does not re-specify it.
 
 ## Routing
@@ -117,13 +117,13 @@ points to the packet, and `roadmap-review` does not re-specify it.
 | The situation | Where it goes |
 |---|---|
 | A new idea, request, or bug the user wants handled now | `/storyboard` |
-| The idea is already an item on the roadmap | That item: `/dispatch-kickoff` when it is the head, otherwise `/roadmap-review` |
+| The idea is already an item on the roadmap | That item: `/next-dispatch` when it is the head, otherwise `/roadmap-review` |
 | Several specified roadmap items should run together, unattended | `/epic <ITEM-ID> <ITEM-ID> …`, or `/epic --workstream <workstream> <from>-<to>` |
 | The idea is already a held entry, `storyboarded` | Plan it with `/write-plan <entry>` |
 | A held entry is `planned`, and the user wants it run | The `virtuoso` skill, from the entry's kickoff |
 | The `virtuoso` skill's conflict check finds the code or the roadmap moved | `/write-plan <entry>` re-verifies the plan and hands it back |
 | The storyboard is epic-scale | Hold it; the next `/roadmap-review` places it as `Path: epic`; then `/epic` |
-| A held plan is not executed now | It stays in the holding bay; the next `/roadmap-review` absorbs it into the roadmap, where `/dispatch-kickoff` dispatches it |
+| A held plan is not executed now | It stays in the holding bay; the next `/roadmap-review` absorbs it into the roadmap, where `/next-dispatch` dispatches it |
 | The head of the belt says `Path: epic` | `/epic` |
 | Execution stops on a decision | `/mid-dispatch-decision` |
 | Execution is done | `/dispatch-closeout` |

@@ -204,7 +204,7 @@ Stub  →  Specification  →  Dispatch-ready  →  Close-out
 **Do not restate the rubric here.** There is exactly one rubric, versioned, in
 the plugin's `references/readiness-rubric.md` — its universal checks, at the version
 it declares at its top, plus whatever the project declares in
-`policy.rubric.extensions`. Open it and apply it. `/dispatch-kickoff` applies the same
+`policy.rubric.extensions`. Open it and apply it. `/next-dispatch` applies the same
 file — that is the point.
 
 Report readiness as the five separate findings the rubric defines
@@ -612,7 +612,7 @@ bounded-question protocol. Nothing is carried past the review.
 |---|---|
 | `planned` | Each `HB-<n>` becomes an item. Its specification moves into `policy.roadmap.specStorage`, with the provisional id replaced by the register's id. It is re-audited in D.3/D.4.5 before it counts as dispatch-ready, because code moves between planning and review. |
 | `storyboarded`, dispatch-sized | A stub per item in its draft stub, with the entry's alignment record and frames cited as its source |
-| `storyboarded`, epic-scale | One item whose structural fields carry `Path: epic`, with the entry cited as the source its charter is built from. `/dispatch-kickoff` routes it to `/epic` when it reaches the head. |
+| `storyboarded`, epic-scale | One item whose structural fields carry `Path: epic`, with the entry cited as the source its charter is built from. `/next-dispatch` routes it to `/epic` when it reaches the head. |
 
 Create each item through `create-item`, with `notes` reading
 `origin: held plan <entry> (HB-<n>)`. Add the entry's downstream flags to the
@@ -632,7 +632,7 @@ A withdrawn entry records `--state withdrawn --note "<the user's reason>"`.
 roadmap carries none, and a missing field means `dispatch`. Walk the active items. One
 that is epic-scale on its own (outcome-stated, multi-phase, multi-session or walk-away)
 gets `- **Path:** epic — <why it cannot be one dispatch>` in its entry, so
-`/dispatch-kickoff` routes it to `/epic`. Dispatch-sized items that belong together keep
+`/next-dispatch` routes it to `/epic`. Dispatch-sized items that belong together keep
 their own path: `/epic` combines them when the user wants them run as one
 (`references/execution-paths.md`). Name each item this review marks, with the reason,
 in the plan.

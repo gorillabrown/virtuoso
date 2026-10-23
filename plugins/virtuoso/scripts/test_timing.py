@@ -628,7 +628,8 @@ def test_by_model_effort_is_not_computable_below_three_rows(tmp_path):
     found = {m.name: m for m in timing.figures(str(tmp_path))}
     pair = found[timing.PAIR_METRIC]                       # read at one closed log
     assert pair.computable and pair.value == {"model-a {not recorded}": 1.0}   # |1|, |2|, |0|
-    assert "1 rows with no model recorded skipped" in pair.unit
+    assert "1 rows with no model recorded skipped" in pair.basis and pair.unit == ""
+    assert pair.kind == "measured"
     assert not found["row-error"].computable
     write_log(tmp_path, "R-1", events[:3])                 # an open log is not read
     assert not {m.name: m for m in timing.figures(str(tmp_path))}[timing.PAIR_METRIC].computable
@@ -1226,6 +1227,102 @@ def test_open_from_spec_keeps_ids_and_both_prices(workspace):
     assert (by_id[8]["predicted"], by_id[8]["basis"]) == (120, "timeboxed")
     assert by_id[8]["writtenPredicted"] == "not recorded"
     assert by_id[3]["group"] == "a" and by_id[1]["item"] == "VIR-X"
+
+
+#: FRAME_1 with task 2's Kind cell blanked as "—", which reads as no kind.
+KINDLESS = FRAME_1.replace("| 2 | The open-from-spec subcommand | repeat | registry subcommand + tests |",
+                           "| 2 | The open-from-spec subcommand | repeat | — |")
+
+
+def test_a_kindless_repeat_row_is_warned_from_a_spec(workspace):
+    nine_runs(workspace)
+    completed = from_spec(workspace, KINDLESS)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stderr.count("no kind") == 1
+    note = next(line for line in completed.stderr.splitlines() if "no kind" in line)
+    assert note.startswith('note: task 2 ("The open-from-spec subcommand") is a repeat task')
+    assert "registry-subcommand-tests" in note
+
+
+def test_open_and_add_warn_on_a_kindless_repeat_row(workspace):
+    nine_runs(workspace)
+    opened = timing_cli(workspace, "--open", "--from-spec", spec_file(workspace, KINDLESS),
+                        "--item", "VIR-X")
+    assert opened.returncode == 0, opened.stderr
+    assert opened.stderr.count("no kind") == 1 and "task 2 " in opened.stderr
+    added = timing_cli(workspace, "--add", "--rows-file", rows_file(
+        workspace, [{"title": "Another review", "class": "repeat", "estimate": 5}]))
+    assert added.returncode == 0, added.stderr
+    assert added.stderr.count("no kind") == 1
+    assert 'task 9 ("Another review")' in added.stderr and "task 2 " not in added.stderr
+
+
+def split_row_2(workspace, parts, *flags):
+    """Open two kinded rows, start row 2, and split it into ``parts``."""
+    listing = rows_file(workspace, [
+        {"id": 1, "title": "a", "class": "calculable", "estimate": 5},
+        {"id": 2, "title": "b", "class": "repeat", "kind": "review", "estimate": 5}])
+    for args in (("--open", "--rows-file", listing), ("--start", "2")):
+        assert timing_cli(workspace, *args).returncode == 0, args
+    return timing_cli(workspace, "--split", "2", "--rows-file", rows_file(workspace, parts),
+                      *flags)
+
+
+def test_a_split_warns_on_a_kindless_repeat_part(workspace):
+    nine_runs(workspace)
+    completed = split_row_2(workspace, [
+        {"title": "Review, part 1", "class": "repeat", "kind": "review", "estimate": 5},
+        {"title": "Review, part 2", "class": "repeat", "estimate": 5}])
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stderr.count("no kind") == 1
+    assert 'note: task 4 ("Review, part 2") is a repeat task' in completed.stderr
+
+
+def test_a_split_with_kinded_parts_is_not_warned(workspace):
+    nine_runs(workspace)
+    completed = split_row_2(workspace, [
+        {"title": "part 1", "class": "repeat", "kind": "review", "estimate": 5},
+        {"title": "part 2", "class": "calculable", "estimate": 5}])
+    assert completed.returncode == 0, completed.stderr
+    assert "no kind" not in completed.stderr
+
+
+def test_a_split_warning_reaches_json(workspace):
+    nine_runs(workspace)
+    completed = split_row_2(workspace, [
+        {"title": "part 1", "class": "repeat", "estimate": 5}], "--json")
+    assert completed.returncode == 0, completed.stderr
+    assert [w[:7] for w in json.loads(completed.stdout)["warnings"]] == ["task 3 "]
+    assert "no kind" not in completed.stderr
+
+
+def test_a_kindless_repeat_row_with_no_history_says_no_kind_is_in_use(workspace):
+    completed = from_spec(workspace, KINDLESS)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "task 2 " in completed.stderr and "no kind is in use yet" in completed.stderr
+
+
+def test_kinded_and_unrepeated_rows_are_not_warned(workspace):
+    nine_runs(workspace)
+    completed = from_spec(workspace, FRAME_1)
+    assert completed.returncode == 0 and "no kind" not in completed.stderr
+    opened = timing_cli(workspace, "--open", "--rows-file", rows_file(
+        workspace, [{"id": 1, "title": "a", "class": "calculable", "estimate": 5}]))
+    assert opened.returncode == 0 and "no kind" not in opened.stderr
+
+
+def test_the_kindless_warning_reaches_json(workspace):
+    nine_runs(workspace)
+    completed = from_spec(workspace, KINDLESS, "--json")
+    assert completed.returncode == 0, completed.stderr
+    warnings = json.loads(completed.stdout)["warnings"]
+    assert len(warnings) == 1 and "task 2" in warnings[0]
+    assert "no kind" not in completed.stderr
+    opened = timing_cli(workspace, "--open", "--from-spec", spec_file(workspace, KINDLESS),
+                        "--item", "VIR-X", "--json")
+    assert opened.returncode == 0, opened.stderr
+    assert [w[:7] for w in json.loads(opened.stdout)["warnings"]] == ["task 2 "]
+    assert "warnings" not in json.loads(from_spec(workspace, FRAME_1, "--json").stdout)
 
 
 def test_from_spec_goes_only_with_open_and_in_place_of_rows(workspace):

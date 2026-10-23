@@ -276,6 +276,10 @@ The auditor produces their report externally. When the user returns with it:
 1. Save as `AuditReport.N.YYYY-MM-DD.md` in the audit subfolder
 2. Read the full report
 3. Summarize key findings for the user before proceeding to Step 4
+4. Record each finding in the registered `findings` role as an `F-NNN` entry (this skill is
+   one of its writers; see `references/registry-contract.md`, *Findings*), with
+   `**Source:** 3rd-party-audit`. A finding that prices something adds its **Tier**,
+   **Confidence**, **Kind** and **Figure** lines, in the one finding format.
 
 The report should cover:
 - Executive verdict (sound / partially flawed / structurally unsound)

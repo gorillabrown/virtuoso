@@ -344,7 +344,7 @@ def test_external_mutation_cli_rejects_stale_revision(external_workspace):
 
 def test_external_mutation_cli_rejects_an_unauthorized_actor(external_workspace):
     completed = run(
-        REGISTRY_CLI, "--root", str(external_workspace), "--actor", "dispatch-kickoff",
+        REGISTRY_CLI, "--root", str(external_workspace), "--actor", "next-dispatch",
         "mutation-plan", "--operation", "set-status", "--item", "123",
         "--fields-json", json.dumps({"status": "In Flight"}),
         "--revision", "rev-1", "--json")

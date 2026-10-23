@@ -610,9 +610,9 @@ def test_the_local_csv_catalog_is_optional(project):
     (project / "docs" / "register.md").write_text(MARKDOWN_TEXT, encoding="utf-8")
     reg = _registry(project, {"workRegister": {
         "path": "docs/register.md", "provider": "markdown", "authority": "live",
-        "mutability": "read-write", "allowedWriters": ["dispatch-kickoff"],
+        "mutability": "read-write", "allowedWriters": ["next-dispatch"],
         "validation": "markdown", "classification": "active", "origin": "authored"}})
-    selection = providers.work_register(reg, actor="dispatch-kickoff")
+    selection = providers.work_register(reg, actor="next-dispatch")
     assert selection.provider.name == "markdown"
     assert selection.provider.next_eligible().id == "ITEM-2"
 

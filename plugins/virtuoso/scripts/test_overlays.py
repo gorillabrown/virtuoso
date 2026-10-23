@@ -192,7 +192,7 @@ def test_create_lays_down_no_overlays_directory(project):
         (project / "Virtuoso" / "workspace-layout.json").read_text(encoding="utf-8"))["roles"]
 
 
-@pytest.mark.parametrize("actor", ["roadmap-review", "dispatch-closeout", "dispatch-kickoff", "*"])
+@pytest.mark.parametrize("actor", ["roadmap-review", "dispatch-closeout", "next-dispatch", "*"])
 def test_no_ceremony_may_write_the_overlays_role(registered, actor):
     # The read-only guard already in the plugin is what enforces this; the role
     # earns that protection by being registered read-only, not by new code.
@@ -2133,10 +2133,14 @@ def test_every_shipped_hook_file_runs_a_read_only_session_start():
         data = json.loads(path.read_text(encoding="utf-8"))
         commands = [h["command"] for entry in data["hooks"]["SessionStart"]
                     for h in entry["hooks"]]
-        assert commands, path.name
-        for command in commands:
+        preflight = [c for c in commands if "virtuoso_preflight" in c]
+        assert preflight, path.name
+        for command in preflight:
             assert "--mode check" in command or "--mode detect" in command, path.name
             assert "--mode create" not in command, path.name
+        # The only other SessionStart command is the cost-guard entry, which writes nothing
+        # in the project (test_guards: zero project writes at session start).
+        assert all("scripts/virtuoso_guard.py" in c for c in commands if c not in preflight)
 
 
 # =============================================================================

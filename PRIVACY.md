@@ -15,6 +15,11 @@ stays in your project, and in the repository you keep it in.
   - the registry, `Virtuoso/workspace-layout.json`;
   - your roadmap, completion ledger, lessons, findings, close-out reports and review
     records, at the paths the registry declares;
+  - the change ledger (when each change took effect) and, if you register one, the guard
+    log (the cost guards' receipts, copied in at close-out), at the paths the registry
+    declares;
+  - token and dollar figures added to your time logs (a dispatch's cost, worked out from
+    your AI host's own transcripts);
   - agent memory, under `.claude/agent-memory/`.
 
   They are ordinary files. You decide whether to commit them, and your repository's
@@ -24,7 +29,24 @@ stays in your project, and in the repository you keep it in.
   small launcher scripts that read it. The record holds file paths, version numbers and
   timestamps, and nothing from your project.
 
-Virtuoso stores nothing anywhere else.
+  The cost guards keep their state in `~/.virtuoso/guard/`: which session runs which
+  dispatch (`bindings/`), which steps were held once (`marks.json`, dropped after 7 days),
+  their receipts (`receipts.jsonl`), the notices already shown, and — only after a cold
+  conversation was held — a **handoff note** (`handoffs/`) that holds a clip of your last
+  prompt and the last reply. A handoff note is deleted when the next session in the same
+  project uses it, or once 30 minutes pass, whichever comes first. An optional
+  `~/.virtuoso/prices.json` and `~/.virtuoso/config.json` are files you write yourself.
+
+## What Virtuoso reads
+
+- **Your AI host's own transcripts**, on your machine — Claude Code's under
+  `~/.claude/projects/` (or `CLAUDE_CONFIG_DIR`), Codex's under `~/.codex/sessions/` (or
+  `CODEX_HOME`) — to price the work and to notice waste. Only in a project that has a
+  Virtuoso registry; only the sessions that ran its dispatches; read in place, never
+  copied, and nothing from them leaves your machine.
+- Your host's settings are not read.
+
+Virtuoso stores nothing anywhere else, and sends nothing anywhere.
 
 ## Network
 

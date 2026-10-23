@@ -218,7 +218,8 @@ located rather than guessing a path.
 | Script | Purpose |
 |---|---|
 | `virtuoso_preflight.py` | check / adopt / create / repair, plus `--check-document` |
-| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `overlays` (incl. `--scaffold`), `provider`, `items`, `next`, `combine`, `kpis`, `closeout`, `lessons`, `holding`, `repo`, `recovery`; and the explicit writers `snapshot` (incl. `--import`), `closeout --prepare`, `lessons --record-status` / `--record-link`, `holding --record`, `create-item`, `mutation-plan`, `mutation-confirm`, `mutation-abandon` |
+| `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `overlays` (incl. `--scaffold`), `provider`, `items`, `next`, `combine`, `kpis` (`--why`), `cost` (`--dispatch`, `--last`, `--why`), `results` (`--why`), `changes`, `guards` (`--tried`), `closeout`, `lessons`, `holding`, `repo`, `recovery`; and the explicit writers `snapshot` (incl. `--import`), `closeout --prepare`, `lessons --record-status` / `--record-link`, `holding --record`, `changes --record` / `--undo`, `guards --copy`, `create-item`, `mutation-plan`, `mutation-confirm`, `mutation-abandon` |
+| `virtuoso_guard.py` | the cost-guard hook entry (the plugin's hooks run it; it acts only in a Virtuoso project) |
 | `generate_board.py` | the roadmap board (--create registers and creates it), read from the configured provider |
 | `build_register_report.py` | the generated spreadsheet report (declared generated roles only) |
 | `validate.py` | structural validation of the plugin itself |
@@ -226,12 +227,47 @@ located rather than guessing a path.
 Every command writes UTF-8 to stdout and stderr, whatever the console's code page, so a
 Windows shell that pipes or redirects the output needs no `PYTHONIOENCODING`.
 
+## Cost guards
+
+In a project with a Virtuoso registry, the plugin's hooks catch waste as it happens. Each
+guard holds a costly step **once**, says what it costs and the ways on, and lets the
+identical step through when you send it again. Any error, missing capability or headless
+run lets the step through; a cost hold never replaces an issue-document stop, a git-safety
+rule or a write permission. Guard state lives in your own `~/.virtuoso/guard/`; the project
+is never written by a hook.
+
+| Guard | What it does |
+|---|---|
+| Cold return | Holds a typed message once after the conversation's cache has expired on a large context, with its re-read price. Mid-dispatch it offers a ready-to-paste `/compact keep …` line, never a fresh start; outside one, a handoff note for `/clear` |
+| Retry | Denies once the same failing command after it failed twice with nothing changed, in workers too |
+| Big read | Denies once a whole-file read over 64 KB in the top-level session: read a range, or read again |
+| Waits and resumes | `timing --resume` records what a wait past the cache lifetime costs; `--end` fills the row's tokens |
+| Tried and failed | What was tried and dropped, read from the transcript, carried into the issue document, epic state and git hand-off (`guards --tried`) |
+| Model changes | `cost` prices a top-level model change; the skill rule is to change models at worker boundaries |
+| Compaction | Phase gates print a `/compact keep …` line above 75% of the context |
+
+`cost --dispatch <id>` prices a dispatch — orchestration apart, each row beside its time —
+in tokens and dollars at API prices (`policy.cost.units`: `both`, `tokens` or `dollars`).
+Every figure says what kind of number it is (`measured`, `inferred`, `estimated`); a model
+with no price card is *not computable*, never approximated. Turn any guard off with
+`policy-set guards.<name>.enabled --value-json false` (or all of them, `guards.enabled`).
+
+## Did it work?
+
+Every change that matters is dated in the **change ledger** — a policy set, a lesson's
+status, a new plugin version, or one recorded by hand (`changes --record`, `--undo`).
+`results [CH-NNN]` puts the work after a change against the work before it: cost per
+measured row (or, for a lesson, the share of time on rows the plan missed), a minimum
+sample before any verdict, the range when baselines disagree, trade-offs and confounders
+named. Time logs that predate this release get their cost **backfilled** automatically
+from the transcripts your host still keeps, so there is a baseline from the start.
+
 ## Three paths to execution, one destination
 
 | Path | Opens | May start |
 |---|---|---|
 | **Ad hoc** | `/storyboard` (scope) → `/write-plan` (plan) → the `virtuoso` skill (execute) | any time, for work that is not on the roadmap |
-| **Roadmap dispatch** | `/dispatch-kickoff` → the `virtuoso` skill | after a roadmap review has placed the item |
+| **Roadmap dispatch** | `/next-dispatch` → the `virtuoso` skill | after a roadmap review has placed the item |
 | **Roadmap epic** | `/epic` → the `virtuoso` skill, every session | after a roadmap review has placed the item as `Path: epic`, or on a combination of specified roadmap items that `/epic` checks and charters as one run |
 
 Every path delivers the same thing to execution. That means work aligned with you, a
@@ -255,7 +291,7 @@ Invoked through the plugin namespace, e.g. `/virtuoso:roadmap-review`.
 | `epic` | `/virtuoso:epic` | Launch materials for a multi-session run: an epic-scale roadmap item, or a combination of roadmap items serialized where they share files |
 | `roadmap-review` | `/virtuoso:roadmap-review` | Heavyweight roadmap recalibration |
 | `roadmap-status` | `/virtuoso:roadmap-status` | Read-only status briefing |
-| `dispatch-kickoff` | `/virtuoso:dispatch-kickoff` | Finalize and dispatch the next item |
+| `next-dispatch` | `/virtuoso:next-dispatch` | Finalize and dispatch the next item |
 | `dispatch-closeout` | `/virtuoso:dispatch-closeout` | The transactional close-out crossing |
 | `mid-dispatch-decision` | `/virtuoso:mid-dispatch-decision` | Decide when a dispatch pauses mid-run |
 | `governance-sweep` | `/virtuoso:governance-sweep` | 3-phase doc hygiene: discover → approve → fix |
@@ -327,12 +363,26 @@ thresholds of their own.
   dependency: when it is absent, those capabilities are withdrawn with a message naming it,
   never an import error mid-ceremony.
 
+## Upgrading from 1.15
+
+Virtuoso 1.16 renames the skill that starts the next roadmap item: `dispatch-kickoff` is now
+`next-dispatch` (`/next-dispatch`). `/dispatch-kickoff` and a workspace layout naming
+`dispatch-kickoff` keep working for this release, with a warning that names the fix. See
+[`docs/MIGRATION-1.16.md`](docs/MIGRATION-1.16.md).
+
+1.16 also adds the cost guards, on by default (turn them off with
+`policy-set guards.enabled --value-json false`), and two roles: `changeLedger`, created for
+new workspaces and offered to existing ones by `changes` / `results` with the entry to add,
+and the opt-in `guardLog`. Closed time logs are backfilled with their cost on the first
+ceremony write after a 24-hour settle.
+
 ## Upgrading from 1.14
 
 Virtuoso 1.15 renames the dispatch vocabulary: the skills `dispatch-kickoff` and
 `dispatch-closeout`, `dispatch_guards`, and `timing --dispatch`. The old names keep working
 for this release, with a warning that names the fix. See
-[`docs/MIGRATION-1.15.md`](docs/MIGRATION-1.15.md).
+[`docs/MIGRATION-1.15.md`](docs/MIGRATION-1.15.md). (`dispatch-kickoff` is itself
+`next-dispatch` from 1.16; see *Upgrading from 1.15*.)
 
 ## Upgrading from 1.3.x
 

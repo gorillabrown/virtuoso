@@ -16,7 +16,7 @@ Use this reference when drafting the project-facing close-out report.
    "None" is a complete entry.
 6. Draft governance updates still needed.
 7. Name the recommended next direction in prose (no kickoff code box — that is
-   `/dispatch-kickoff`'s job).
+   `/next-dispatch`'s job).
 8. Check audit / milestone / merge gates.
 
 ## Findings Table

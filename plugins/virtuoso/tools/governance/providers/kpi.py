@@ -18,23 +18,66 @@ DEFAULT_EFFORT_SCALE = {
 }
 
 
+#: What kind of number a figure is: read from the log, transcript or host-reported usage
+#: (``measured``); a pattern derived from measured data by a stated rule (``inferred``); or
+#: an assumption about how something would behave (``estimated``).
+MEASURED, INFERRED, ESTIMATED = "measured", "inferred", "estimated"
+KINDS = (MEASURED, INFERRED, ESTIMATED)
+#: How sure a figure is — a level, never a percentage.
+CONFIDENCE = ("high", "likely", "possible")
+
+
+def confidence_for(kind: str, records: int, changes_tokens: bool = False) -> str:
+    """A figure's confidence: by what kind of number it is, how many records it averages
+    over, and whether acting on it would change the work's token counts."""
+    if kind == MEASURED and records >= 10 and not changes_tokens:
+        return "high"
+    if (kind == MEASURED and records >= 3) or (kind == INFERRED and records >= 10):
+        return "likely"
+    return "possible"
+
+
 @dataclass
 class Metric:
     name: str
     value: object = None
     computable: bool = True
     missing_inputs: list[str] = field(default_factory=list)
+    #: The unit alone (``items``, ``days``); empty for a ratio.
     unit: str = ""
+    kind: str = MEASURED
+    #: The calculation, in one line.
+    basis: str = ""
+    #: What the figure takes for granted, printed under ``--why``.
+    assumptions: list[str] = field(default_factory=list)
+    confidence: str = ""
 
     def as_dict(self) -> dict:
         if self.computable:
-            data = {"name": self.name, "value": self.value}
-            if self.unit:
-                data["unit"] = self.unit
+            data = {"name": self.name, "value": self.value, "kind": self.kind}
+            for key, value in (("unit", self.unit), ("basis", self.basis),
+                               ("assumptions", list(self.assumptions)),
+                               ("confidence", self.confidence)):
+                if value:
+                    data[key] = value
             return data
         return {"name": self.name, "value": None, "computable": False,
                 "missingInputs": list(self.missing_inputs),
                 "note": "not computable"}
+
+    def line(self, why: bool = False) -> str:
+        """The figure as one text line, its kind beside it; with ``why``, the calculation
+        and every assumption under it."""
+        if not self.computable:
+            return "  %-28s not computable (missing: %s)" % (
+                self.name, ", ".join(self.missing_inputs))
+        text = "  %-28s %s%s  %s%s" % (self.name, self.value,
+                                         (" " + self.unit) if self.unit else "", self.kind,
+                                         (", %s" % self.confidence) if self.confidence else "")
+        if why:
+            text += "\n      How this was calculated: %s" % (self.basis or "read directly")
+            text += "".join("\n      Assumption: %s" % a for a in self.assumptions)
+        return text
 
 
 @dataclass
@@ -66,15 +109,8 @@ class MetricSet:
                 return metric
         return None
 
-    def render(self) -> str:
-        lines = []
-        for metric in self.metrics:
-            if metric.computable:
-                lines.append("  %-28s %s%s" % (metric.name, metric.value,
-                                               (" " + metric.unit) if metric.unit else ""))
-            else:
-                lines.append("  %-28s not computable (missing: %s)"
-                             % (metric.name, ", ".join(metric.missing_inputs)))
+    def render(self, why: bool = False) -> str:
+        lines = [metric.line(why) for metric in self.metrics]
         lines.append("")
         lines.append("pace")
         if not self.pace and not self.invalid_deadlines:
@@ -87,13 +123,7 @@ class MetricSet:
         if self.learning:
             lines.append("")
             lines.append("learning")
-            for metric in self.learning:
-                if metric.computable:
-                    lines.append("  %-28s %s%s" % (metric.name, metric.value,
-                                                   (" " + metric.unit) if metric.unit else ""))
-                else:
-                    lines.append("  %-28s not computable (missing: %s)"
-                                 % (metric.name, ", ".join(metric.missing_inputs)))
+            lines += [metric.line(why) for metric in self.learning]
             source = self.learning_provenance
             if source:
                 lines.append("  source: %s; %d close-out(s) in %s; as of %s" % (
@@ -198,4 +228,4 @@ def _buffer_ready(head, spec_ready) -> Metric:
         return Metric("dispatch-buffer-ready", computable=False, missing_inputs=[
             "a locatable specification for %s" % ", ".join(unlocated)])
     return Metric("dispatch-buffer-ready", sum(1 for v in verdicts.values() if v),
-                  unit="items whose specification passes U9")
+                  unit="items", basis="dispatch-ready items whose specification passes U9")

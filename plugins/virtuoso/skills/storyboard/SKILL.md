@@ -52,7 +52,7 @@ Step one of the ad hoc path (`references/execution-paths.md`):
 | 3. Execute | the `virtuoso` skill | the work, checked first against upstream, downstream, and in-flight work |
 
 Work that arrives between roadmap reviews comes in here. The roadmap paths,
-`/dispatch-kickoff` and `/epic`, open only on items a review has already placed.
+`/next-dispatch` and `/epic`, open only on items a review has already placed.
 
 This skill has one job: **make sure the agent and the user want the same thing before a
 plan exists.** An agent that misunderstands the work will build the wrong thing, and do
@@ -118,7 +118,7 @@ but Step 10 cannot run until the role exists.
 
 | Signal | Route |
 |---|---|
-| The work is already an item on the master roadmap | That item: `/dispatch-kickoff` if it is the head, otherwise `/roadmap-review` |
+| The work is already an item on the master roadmap | That item: `/next-dispatch` if it is the head, otherwise `/roadmap-review` |
 | The work is several items already on the roadmap, to run together unattended | `/epic <ITEM-ID> <ITEM-ID> …`: it checks whether they combine and charters them. Nothing needs aligning here, because every piece is already placed |
 | The work is already a held entry | Reopen that entry (`/storyboard <entry>`) or plan it (`/write-plan <entry>`); never a second entry for the same work |
 | A question whose answer is information, not shipped work | Answer it directly |
@@ -326,7 +326,7 @@ earliest step that affects them.
 
    The record is refused unless the verdict reads *Aligned*. That refusal is the gate
    working, not an obstacle to route around.
-4. Persist the file as `policy.git` permits, using the same five-level table dispatch-kickoff's
+4. Persist the file as `policy.git` permits, using the same five-level table next-dispatch's
    Phase 3.5 applies: report it, leave it, stage it, commit it, or push it. Stage the exact
    path only.
 

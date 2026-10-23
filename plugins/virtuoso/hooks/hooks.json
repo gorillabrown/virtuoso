@@ -8,6 +8,45 @@
             "type": "command",
             "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/virtuoso_preflight.py\" --root \"${CLAUDE_PROJECT_DIR}\" --mode check --quiet",
             "async": false
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/virtuoso_guard.py\" --host claude-code",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/virtuoso_guard.py\" --host claude-code",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/virtuoso_guard.py\" --host claude-code",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/virtuoso_guard.py\" --host claude-code",
+            "timeout": 10
           }
         ]
       }

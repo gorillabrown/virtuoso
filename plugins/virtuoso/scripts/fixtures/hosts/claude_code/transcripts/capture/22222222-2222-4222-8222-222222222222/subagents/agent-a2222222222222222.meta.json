@@ -1,0 +1,9 @@
+{
+ "agentType": "general-purpose",
+ "description": "row 7 - capture probe",
+ "toolUseId": "toolu_FX000000000000000005",
+ "spawnDepth": 1,
+ "requestShape": "foreground",
+ "requestNonInteractive": true,
+ "finished": true
+}

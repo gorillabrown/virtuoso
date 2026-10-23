@@ -132,6 +132,7 @@
   }
  },
  "kpis": {
+  "applied": [],
   "invalidDeadlines": [],
   "learning": {
    "metrics": [
@@ -233,6 +234,15 @@
      "name": "row-error-by-model-effort",
      "note": "not computable",
      "value": null
+    },
+    {
+     "computable": false,
+     "missingInputs": [
+      "a time log opened by a bound session (its open event carries startingLoad)"
+     ],
+     "name": "starting-load",
+     "note": "not computable",
+     "value": null
     }
    ],
    "provenance": {
@@ -243,46 +253,55 @@
   },
   "metrics": [
    {
+    "kind": "measured",
     "name": "total-items",
     "unit": "items",
     "value": 4
    },
    {
+    "kind": "measured",
     "name": "count-queued",
     "unit": "items",
     "value": 2
    },
    {
+    "kind": "measured",
     "name": "count-in-flight",
     "unit": "items",
     "value": 1
    },
    {
+    "kind": "measured",
     "name": "count-blocked",
     "unit": "items",
     "value": 0
    },
    {
+    "kind": "measured",
     "name": "count-completed",
     "unit": "items",
     "value": 1
    },
    {
+    "kind": "measured",
     "name": "count-dissolved",
     "unit": "items",
     "value": 0
    },
    {
+    "kind": "measured",
     "name": "count-superseded",
     "unit": "items",
     "value": 0
    },
    {
+    "kind": "measured",
     "name": "count-unknown",
     "unit": "items",
     "value": 0
    },
    {
+    "kind": "measured",
     "name": "percent-complete-by-count",
     "unit": "%",
     "value": 25.0
@@ -315,11 +334,13 @@
     "value": null
    },
    {
+    "kind": "measured",
     "name": "dispatch-buffer-target",
     "unit": "items",
     "value": 5
    },
    {
+    "kind": "measured",
     "name": "dispatch-buffer-filled",
     "unit": "items",
     "value": 2

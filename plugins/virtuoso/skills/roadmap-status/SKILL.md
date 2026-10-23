@@ -96,7 +96,7 @@ recommendation for a ceremony that is permitted to make it.
 
 Do NOT use this for:
 - Replanning or re-sequencing — `/roadmap-review`
-- Finalizing a specification for dispatch — `/dispatch-kickoff`
+- Finalizing a specification for dispatch — `/next-dispatch`
 - Closing out completed work — `/dispatch-closeout`
 
 ## Invocation
@@ -234,7 +234,11 @@ Only if `policy.roadmap.hierarchy` declares grouping. A flat project has no
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . kpis --json
 
 The provider returns each metric with its provenance and marks anything it cannot
-compute. Report them as returned:
+compute. Report them as returned, each with its kind (`measured`, `inferred`,
+`estimated`). The payload's `applied` list names every change in force with its `results`
+verdict so far: a finding or lesson whose subject has a change in force leaves the open
+items you report and appears instead in an **Applied** block, with that verdict (an undo
+puts it back):
 
 | Figure | Notes |
 |---|---|

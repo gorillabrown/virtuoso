@@ -374,7 +374,7 @@ def test_every_ceremony_knows_an_item_in_a_combined_run():
     paths = (ROOT / "references" / "execution-paths.md").read_text(encoding="utf-8")
     assert "`/epic <ITEM-ID> <ITEM-ID> …`" in paths
     assert "A combination leaves each item's `Path` as it is." in flat(paths)
-    assert "`item:` or its `items:`" in flat(skill("dispatch-kickoff"))
+    assert "`item:` or its `items:`" in flat(skill("next-dispatch"))
     assert "names (`item:` or `items:`" in flat(skill("roadmap-review"))
     assert "**Set the path of items already on the roadmap.**" in skill("roadmap-review")
     assert "## Combined epics — one run, several items" in skill("dispatch-closeout")

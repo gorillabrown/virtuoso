@@ -35,12 +35,12 @@ from dataclasses import dataclass, field
 
 from .errors import GovernanceError
 from .learning import CALIBRATION_MINIMUM
-from .providers.kpi import Metric
+from .providers.kpi import MEASURED, Metric, confidence_for
 
 LOG_PREFIX = "Timing."
 LOG_SUFFIX = ".jsonl"
 EVENTS = ("open", "add", "start", "wait", "resume", "end", "confirm", "timebox-reached",
-          "park")
+          "park", "cost")
 #: Where an added row came from, stored on its ``add`` event, and its label's prefix. A
 #: log written before origins existed reads every added row as ``added``.
 ORIGINS = {"added": "+", "review": "R", "audit": "A"}
@@ -767,6 +767,16 @@ def spec_rows(text: str, item: str = "") -> list[dict]:
     return found
 
 
+def kindless_warnings(rows, used: dict) -> list[str]:
+    """One sentence per ``repeat`` row with no kind, naming the kinds in use: such a row
+    prices from its estimate alone, since no history of its kind can be found."""
+    reuse = ("reuse one of: %s" % ", ".join(used)) if used else "no kind is in use yet"
+    return ['task %s ("%s") is a repeat task with no kind, so no history can price it; %s'
+            % (row.get("id"), row.get("title"), reuse)
+            for row in rows
+            if row.get("class") == "repeat" and not normal_kind(row.get("kind"))]
+
+
 def _span(minutes: float) -> str:
     """``duration``, with whole hours shortened: ``2h``, ``4h10m``, ``45m``."""
     text = duration(minutes)
@@ -909,8 +919,8 @@ def by_model_effort(found: list[Row], figure) -> dict:
     return {"pairs": found_pairs, "skippedNoModel": skipped}
 
 
-def summary_markdown(result: dict) -> str:
-    """The close-out's ``## Time`` table."""
+def summary_markdown(result: dict, why: bool = False) -> str:
+    """The close-out's ``## Time`` table; with ``why``, how each total was worked out."""
     lines = ["| Row | Task | Kind | Model | Effort | Predicted | Actual | Waited | Added | Flag "
              "| Evidence |",
              "|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -943,6 +953,14 @@ def summary_markdown(result: dict) -> str:
     if not result["complete"]:
         lines.append("Partial: rows %s ran without a measured time, so neither total goes "
                      "to the ledger." % ", ".join(str(i) for i in result["notMeasured"]))
+    if why:
+        lines += ["", "How this was calculated:",
+                  "- Estimate (estimated): the sum of the predictions the first listing gave "
+                  "its sequential rows; rows added later and parallel rows are left out.",
+                  "- Actual (measured): the sum of the machine-clock working minutes (end − "
+                  "start − waits) of the same sequential rows.",
+                  "Assumptions: a parallel row overlaps the sequential work; a row added "
+                  "after the first listing was not part of the plan being estimated."]
     return "\n".join(lines)
 
 
@@ -966,6 +984,33 @@ def closed_logs(directory: str) -> list[list[Row]]:
         if logged and all(row.ended is not None or row.parked for row in logged):
             found.append(logged)
     return found
+
+
+def starting_load(directory: str) -> Metric:
+    """The median context a dispatch's top-level session carried when its time log opened
+    (``startingLoad`` on the ``open`` event, recorded for a bound dispatch)."""
+    loads = []
+    try:
+        names = sorted(os.listdir(directory))
+    except OSError:
+        names = []
+    for name in names:
+        if not (name.startswith(LOG_PREFIX) and name.endswith(LOG_SUFFIX)):
+            continue
+        try:
+            events = load(os.path.join(directory, name))
+        except GovernanceError:
+            continue
+        opened = next((e for e in events if e.get("event") == "open"), {})
+        tokens = (opened.get("startingLoad") or {}).get("tokens")
+        if isinstance(tokens, int):
+            loads.append(tokens)
+    if not loads:
+        return Metric("starting-load", computable=False, missing_inputs=[
+            "a time log opened by a bound session (its open event carries startingLoad)"])
+    return Metric("starting-load", statistics.median(loads), unit="tokens",
+                  basis="median context at dispatch open, %d logs" % len(loads),
+                  confidence=confidence_for(MEASURED, len(loads)))
 
 
 def figures(directory: str) -> list[Metric]:
@@ -997,15 +1042,18 @@ def figures(directory: str) -> list[Metric]:
                 if row.measured and row.added)
     return [
         Metric("row-error", round(statistics.median(row_errors), 2),
-               unit="median |actual - predicted| / predicted, %d rows" % len(row_errors))
+               basis="median |actual - predicted| / predicted, %d rows" % len(row_errors),
+               confidence=confidence_for(MEASURED, len(row_errors)))
         if row_errors else Metric("row-error", computable=False,
                                   missing_inputs=["a measured, priced row in a closed log"]),
         Metric("total-error", round(statistics.median(totals), 2),
-               unit="median |actual - estimate| / estimate, %d runs" % len(totals))
+               basis="median |actual - estimate| / estimate, %d runs" % len(totals),
+               confidence=confidence_for(MEASURED, len(totals)))
         if totals else Metric("total-error", computable=False,
                               missing_inputs=["a closed log with a priced first listing"]),
         Metric("added-share", round(added / worked, 2),
-               unit="of working minutes spent on rows added after the first listing")
+               basis="working minutes on rows added after the first listing ÷ all working "
+                     "minutes")
         if worked else Metric("added-share", computable=False,
                               missing_inputs=["a measured row in a closed log"]),
         _row_error_by_model_effort([row for logged in logs for row in logged]),
@@ -1025,7 +1073,7 @@ def _row_error_by_model_effort(found: list[Row]) -> Metric:
             "%d measured rows for one model and effort (%d pairs below it%s)"
             % (CALIBRATION_MINIMUM, len(split["pairs"]), skipped)])
     return Metric(PAIR_METRIC, values,
-                  unit="median |actual - predicted| / predicted per model {effort}, %d pairs%s"
+                  basis="median |actual - predicted| / predicted per model {effort}, %d pairs%s"
                   % (len(values), skipped))
 
 

@@ -250,6 +250,17 @@ def test_propose_reports_missing_register_columns_and_writes_nothing(project):
     assert snapshot_tree(str(root)) == before
 
 
+def test_propose_refuses_a_colliding_structure(game):
+    colliding = [APPROVED["workstreams"][0], dict(APPROVED["workstreams"][1], name="eng")]
+    set_policy(game, roadmap={"workstreams": colliding})
+    before = snapshot_tree(str(game))
+    completed = run("--root", str(game), "structure", "--propose", "--json")
+    assert completed.returncode == 1, completed.stdout + completed.stderr
+    problems = json.loads(completed.stdout)["problems"]
+    assert "workstream 'ui' is named 'eng', which is workstream 'eng''s id" in problems[0]
+    assert snapshot_tree(str(game)) == before
+
+
 def test_the_review_checks_the_register_columns_before_asking():
     text = SKILL.read_text(encoding="utf-8")
     c2 = " ".join(text[text.index("### C.2"):text.index("### C.3")].split())

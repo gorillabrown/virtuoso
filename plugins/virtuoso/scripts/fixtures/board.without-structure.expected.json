@@ -354,71 +354,85 @@
   },
   "metrics": [
    {
+    "kind": "measured",
     "name": "total-items",
     "unit": "items",
     "value": 4
    },
    {
+    "kind": "measured",
     "name": "count-queued",
     "unit": "items",
     "value": 1
    },
    {
+    "kind": "measured",
     "name": "count-in-flight",
     "unit": "items",
     "value": 1
    },
    {
+    "kind": "measured",
     "name": "count-blocked",
     "unit": "items",
     "value": 1
    },
    {
+    "kind": "measured",
     "name": "count-completed",
     "unit": "items",
     "value": 1
    },
    {
+    "kind": "measured",
     "name": "count-dissolved",
     "unit": "items",
     "value": 0
    },
    {
+    "kind": "measured",
     "name": "count-superseded",
     "unit": "items",
     "value": 0
    },
    {
+    "kind": "measured",
     "name": "count-unknown",
     "unit": "items",
     "value": 0
    },
    {
+    "kind": "measured",
     "name": "percent-complete-by-count",
     "unit": "%",
     "value": 25.0
    },
    {
+    "kind": "measured",
     "name": "total-effort",
     "unit": "points",
     "value": 13
    },
    {
+    "kind": "measured",
     "name": "completed-effort",
     "unit": "points",
     "value": 1
    },
    {
+    "kind": "measured",
     "name": "percent-complete-by-effort",
     "unit": "%",
     "value": 7.7
    },
    {
+    "kind": "measured",
     "name": "dispatch-buffer-target",
     "unit": "items",
     "value": 5
    },
    {
+    "kind": "measured",
     "name": "dispatch-buffer-filled",
     "unit": "items",
     "value": 1

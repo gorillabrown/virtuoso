@@ -448,8 +448,8 @@ def test_the_shipped_templates_carry_the_lessons_sections():
     ("dispatch-closeout", "--closeout --item"),
     ("roadmap-review", "lessons --open"),
     ("roadmap-review", "lessons --check <spec> --item"),
-    ("dispatch-kickoff", "lessons --open"),
-    ("dispatch-kickoff", "lessons --check <spec> --item"),
+    ("next-dispatch", "lessons --open"),
+    ("next-dispatch", "lessons --check <spec> --item"),
     ("epic", "lessons --open"),
     ("mid-dispatch-decision", "lessons --open"),
 ])
@@ -610,7 +610,7 @@ def test_record_link_previews_appends_reads_back_and_is_idempotent(workspace):
 @pytest.mark.parametrize("args, message", [
     (("--actor", "dispatch-closeout", "--record-link", "LSN-404", "--item", EPIC),
      "not a recorded lesson"),
-    (("--actor", "dispatch-kickoff", "--record-link", "LSN-010", "--item", EPIC),
+    (("--actor", "next-dispatch", "--record-link", "LSN-010", "--item", EPIC),
      "may not write the lessons role"),
     (("--record-link", "LSN-010", "--item", EPIC), "needs --actor"),
     (("--actor", "dispatch-closeout", "--record-link", "LSN-010"), "needs --item"),

@@ -18,10 +18,13 @@ PLUGIN_ROOT = str(Path(__file__).resolve().parent)
 
 @pytest.fixture(autouse=True)
 def isolated_home(tmp_path_factory, monkeypatch):
-    """Every test gets its own VIRTUOSO_HOME, outside any project root under test."""
+    """Every test gets its own VIRTUOSO_HOME, outside any project root under test, and
+    empty host folders, so no test reads this machine's real transcripts."""
     home = tmp_path_factory.mktemp("virtuoso-home")
     monkeypatch.setenv("VIRTUOSO_HOME", str(home))
     monkeypatch.delenv("VIRTUOSO_PLUGIN_ROOT", raising=False)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home / "host-a"))
+    monkeypatch.setenv("CODEX_HOME", str(home / "host-b"))
     return home
 
 

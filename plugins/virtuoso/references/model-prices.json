@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "about": "API list prices in USD per million tokens, by model. A call is priced at the card in force on the day it was made; a call before a model's first card is priced at that card and labelled estimated. An announced change is not a card until it takes effect. Override or extend any model in ~/.virtuoso/prices.json (same shape; a model given there replaces this file's entry).",
+  "sources": {
+    "anthropic": {"url": "https://platform.claude.com/docs/en/about-claude/pricing", "fetched": "2026-10-22"},
+    "openai": {"url": "https://developers.openai.com/api/docs/pricing", "fetched": "2026-10-22"}
+  },
+  "providers": {
+    "anthropic": {"cacheWrite": "by-lifetime", "note": "a 5-minute write is 1.25x input, a 1-hour write 2x input; reads are 0.1x input except where a card says otherwise"},
+    "openai": {"cacheWrite": "input", "note": "the page lists no cache-write charge: a cache write is billed as input; standard tier, prompts up to 272K tokens"}
+  },
+  "models": {
+    "claude-fable-5-1":   {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 10, "output": 50, "cacheRead": 0.25, "cacheWrite5m": 12.5, "cacheWrite1h": 20}]},
+    "claude-mythos-5-1":  {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 10, "output": 50, "cacheRead": 0.25, "cacheWrite5m": 12.5, "cacheWrite1h": 20}]},
+    "claude-fable-5":     {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 10, "output": 50, "cacheRead": 1, "cacheWrite5m": 12.5, "cacheWrite1h": 20}]},
+    "claude-mythos-5":    {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 10, "output": 50, "cacheRead": 1, "cacheWrite5m": 12.5, "cacheWrite1h": 20}]},
+    "claude-opus-5-5":    {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 4, "output": 20, "cacheRead": 0.2, "cacheWrite5m": 5, "cacheWrite1h": 8}]},
+    "claude-opus-5":      {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 5, "output": 25, "cacheRead": 0.5, "cacheWrite5m": 6.25, "cacheWrite1h": 10}]},
+    "claude-opus-4-8":    {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 5, "output": 25, "cacheRead": 0.5, "cacheWrite5m": 6.25, "cacheWrite1h": 10}]},
+    "claude-opus-4-7":    {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 5, "output": 25, "cacheRead": 0.5, "cacheWrite5m": 6.25, "cacheWrite1h": 10}]},
+    "claude-opus-4-6":    {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 5, "output": 25, "cacheRead": 0.5, "cacheWrite5m": 6.25, "cacheWrite1h": 10}]},
+    "claude-opus-4-5":    {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 5, "output": 25, "cacheRead": 0.5, "cacheWrite5m": 6.25, "cacheWrite1h": 10}]},
+    "claude-opus-4-1":    {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 15, "output": 75, "cacheRead": 1.5, "cacheWrite5m": 18.75, "cacheWrite1h": 30}]},
+    "claude-opus-4":      {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 15, "output": 75, "cacheRead": 1.5, "cacheWrite5m": 18.75, "cacheWrite1h": 30}]},
+    "claude-sonnet-5-5":  {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 2, "output": 10, "cacheRead": 0.1, "cacheWrite5m": 2.5, "cacheWrite1h": 4}]},
+    "claude-sonnet-5":    {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 2, "output": 10, "cacheRead": 0.2, "cacheWrite5m": 2.5, "cacheWrite1h": 4}]},
+    "claude-sonnet-4-6":  {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite5m": 3.75, "cacheWrite1h": 6}]},
+    "claude-sonnet-4-5":  {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite5m": 3.75, "cacheWrite1h": 6}]},
+    "claude-sonnet-4":    {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite5m": 3.75, "cacheWrite1h": 6}]},
+    "claude-haiku-5-5":   {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 0.1, "output": 0.5, "cacheRead": 0.01, "cacheWrite5m": 0.125, "cacheWrite1h": 0.2,
+                            "longPrompt": {"over": 100000, "input": 0.5, "output": 2.5, "cacheRead": 0.05, "cacheWrite5m": 0.625, "cacheWrite1h": 1}}]},
+    "claude-haiku-4-5":   {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 1, "output": 5, "cacheRead": 0.1, "cacheWrite5m": 1.25, "cacheWrite1h": 2}]},
+    "claude-haiku-3-5":   {"provider": "anthropic", "cards": [{"from": "2026-10-22", "input": 0.8, "output": 4, "cacheRead": 0.08, "cacheWrite5m": 1, "cacheWrite1h": 1.6}]},
+    "gpt-6-astra":        {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 10, "output": 50, "cacheRead": 1}]},
+    "gpt-6.1-sol":        {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 2, "output": 10, "cacheRead": 0.1}]},
+    "gpt-6-luna":         {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 0.1, "output": 0.5, "cacheRead": 0.01}]},
+    "gpt-6-sol":          {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 2, "output": 10, "cacheRead": 0.2}]},
+    "gpt-5.6-sol":        {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "reviewBy": "2026-11-21", "note": "promotional price, published as holding through at least 2026-11-21", "input": 4, "output": 20, "cacheRead": 0.4}]},
+    "gpt-5.6-terra":      {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 2, "output": 12, "cacheRead": 0.2}]},
+    "gpt-5.6-luna":       {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 0.2, "output": 1.2, "cacheRead": 0.02}]},
+    "gpt-5.5":            {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 5, "output": 30, "cacheRead": 0.5}]},
+    "gpt-5.4":            {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 2.5, "output": 15, "cacheRead": 0.25}]},
+    "gpt-5.4-mini":       {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 0.75, "output": 4.5, "cacheRead": 0.075}]},
+    "gpt-5.4-nano":       {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 0.2, "output": 1.25, "cacheRead": 0.02}]},
+    "gpt-5.3-codex":      {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 1.75, "output": 14, "cacheRead": 0.175}]},
+    "gpt-5.2":            {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 1.75, "output": 14, "cacheRead": 0.175}]},
+    "gpt-5.1":            {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 1.25, "output": 10, "cacheRead": 0.125}]},
+    "gpt-5":              {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 1.25, "output": 10, "cacheRead": 0.125}]},
+    "gpt-5-mini":         {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 0.25, "output": 2, "cacheRead": 0.025}]},
+    "gpt-5-nano":         {"provider": "openai", "cards": [{"from": "2026-10-22", "contextLimit": 272000, "input": 0.05, "output": 0.4, "cacheRead": 0.005}]}
+  }
+}

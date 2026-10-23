@@ -32,7 +32,7 @@ Paste into any session — first or fiftieth; it self-orients either way. It car
 run's git work, so one paste carries both the git work and the epic's instructions.
 
 <!-- Fill the GIT WORK block at scaffold time from policy.git and the detected repository,
-     as /dispatch-kickoff fills its reconciliation recipe. Keep only the lines the policy
+     as /next-dispatch fills its reconciliation recipe. Keep only the lines the policy
      permits (read-only: no add, commit, or branch creation, so the operator creates the
      branch before launch and the first session only verifies it; prepare-no-stage: no
      add; explicit-path-stage: add, no commit; explicit-path-commit: commit, no push;
@@ -106,7 +106,14 @@ Never: force-push, rebase, reset --hard, stash, clean, or delete a lock file.
 
 Run this session under the virtuoso skill when it is available: this packet is your
 dispatch spec, and your dispatch identifier is [PACKET-ID]-S<n>, where n is the next session
-number in journal.md.
+number in journal.md. Before the first edit, title this session
+[PACKET-ID]-S<n> — [phase name], the name of the phase state.md names as current (the text
+after `P1 — `, without the phase id), by the first means
+the host offers: a session-title tool, else a title command printed for the user to run,
+else that title as your first visible line. Then say whether Remote Control is on for this
+session. When it is off, print the one step that turns it on (the host's switch or
+command); call a Remote Control tool only when the user asked for it; never turn it off.
+A host with no switch gets one line saying so.
 ```
 
 ## Goal line — for `/goal`

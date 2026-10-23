@@ -31,7 +31,7 @@ steps. Columns, every one present; `—` or an empty cell means none:
 | `#` | The task's number, a positive whole number used once. The time log keeps it from launch to close-out. |
 | `Task` | The outcome, in words. |
 | `Class` | `calculable` (a formula over cited inputs), `repeat` (the history of its kind prices it) or `frontier` (not estimated: timeboxed). |
-| `Kind` | Optional. A name for work that recurs across dispatches; reuse one `timing --kinds` lists. |
+| `Kind` | Optional, except on a `repeat` row: the time log warns on one with none. A name for work that recurs across dispatches; reuse one `timing --kinds` lists. |
 | `Tier` | Optional. `mechanical`, `bounded` or `cross-cutting`. |
 | `Effort` | Optional. The difficulty level — `low`, `medium`, `high`, `xhigh` or `max` — and never a duration. A list written with four levels stays valid. |
 | `Estimate` | Every task but a frontier one: its price as a duration — `45m`, `1h30m`, `2h` — with its basis in brackets: `35m (median of 9 runs)`. No bracket reads `estimated`. A frontier task has none: **a frontier task receives no single-number estimate.** |

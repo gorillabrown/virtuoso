@@ -73,7 +73,7 @@ never write to a role whose `allowedWriters` does not name this ceremony; never 
 
 Read the `roadmap-integrity:` line the preflight printed (it follows the `deadlines:` line; `--json` carries it as `roadmapIntegrity`). On `fail` (missing, not text, or null bytes), STOP and report the corruption to the user; do not migrate or rewrite a corrupt roadmap. On `warn` (empty or unusually large), surface it and confirm with the user before proceeding. On `ok`, or `external` (a roadmap the preflight does not read), continue. Before rewriting the roadmap, re-check it: `virtuoso_preflight --check-document <path>` prints the same state for one file.
 
-**Bookend with `/dispatch-kickoff`.** That skill opens a dispatch; this one closes it. It
+**Bookend with `/next-dispatch`.** That skill opens a dispatch; this one closes it. It
 closes a held plan from `/write-plan` and an epic from `/epic` too; see *Held plans*
 below and `references/execution-paths.md`.
 
@@ -86,7 +86,7 @@ Two waves:
   each step): create the artifact, append the terminal record, persist local
   governance, close the item in the live register, verify everything.
 
-This skill never prints a next dispatch kickoff — that is `/dispatch-kickoff`.
+This skill never prints a next dispatch kickoff — that is `/next-dispatch`.
 
 ## Resolve roles and capabilities before Wave 1
 
@@ -184,7 +184,7 @@ once, as one crossing, and the crossing retires each item:
 A run that stopped before `done.md` is not a completion. When the user closes it anyway,
 retire only the items whose rows all pass, with their evidence. Return the rest to the
 belt, say why for each in the report, and set the charter's `status: aborted`. A charter
-left active keeps its items out of `/dispatch-kickoff`'s reach.
+left active keeps its items out of `/next-dispatch`'s reach.
 
 ## Retirement records routed here
 
@@ -269,11 +269,21 @@ registered `closeOuts` directory.
 - Template: [assets/CloseOut.template.md](assets/CloseOut.template.md)
 - Structure and the finding/disposition model:
   [references/closeout-report-format.md](references/closeout-report-format.md)
+- **Cost and guards.** Report the dispatch's cost from `virtuoso_registry cost --dispatch
+  <ITEM-ID>` — orchestration apart, each row beside its time, cold returns and model changes,
+  every figure with its kind (*not computable* when the dispatch has no binding, naming it).
+  Copy the guards' receipts into the project with `virtuoso_registry --actor
+  dispatch-closeout guards --dispatch <ITEM-ID> --copy --apply` when a `guardLog` role is
+  registered (hooks never write the project; this does, in this tree). A finding that
+  carries a cost or a saving uses the one finding format (tier, confidence, what happened,
+  why it matters, what to do, now → after, kind).
 
 ### 2. Lessons
 
 What this dispatch taught, recorded where the next specification will read it: the
-registered `lessons` role. This is not optional, and it is not prose in the report
+registered `lessons` role. Offer what it tried and dropped
+(`virtuoso_registry guards --dispatch <ITEM-ID> --tried`) as lesson candidates — offered,
+never recorded without the owner's yes. This is not optional, and it is not prose in the report
 alone — a lesson that exists only in a close-out is one no specification will ever
 apply. Every close-out produces one of two things:
 

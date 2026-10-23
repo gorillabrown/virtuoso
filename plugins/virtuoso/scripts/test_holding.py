@@ -369,7 +369,7 @@ def test_a_role_registered_without_the_executor_refuses_it(workspace):
 @pytest.mark.parametrize("state, actor, why", [
     ("planned", "write-plan", "held-transition-illegal"),        # unrecorded → planned
     ("storyboarded", "roadmap-review", "held-recorder-wrong"),
-    ("storyboarded", "dispatch-kickoff", "may not write the holdingBay role"),
+    ("storyboarded", "next-dispatch", "may not write the holdingBay role"),
 ])
 def test_a_move_the_rules_forbid_is_refused(workspace, state, actor, why):
     bay = register(workspace)

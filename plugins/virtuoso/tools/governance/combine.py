@@ -438,7 +438,7 @@ def check(snapshot: base.Snapshot, chosen: list, *, unknown=(), selection: dict 
                       % (member.item.id, ", ".join(outside)), member.item.id)
     if len(members) == 1 and not unknown:
         combo.add(SINGLE, "error",
-                  "one item is not a combination: /dispatch-kickoff dispatches it, or a roadmap "
+                  "one item is not a combination: /next-dispatch dispatches it, or a roadmap "
                   "review marks it Path: epic when it is epic-scale on its own")
 
     _order(combo, members, effort_scale)

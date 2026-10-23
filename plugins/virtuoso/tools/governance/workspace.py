@@ -34,6 +34,7 @@ CREATE_FILENAMES = {
     "terminalLedger": "CompletedWork.Ledger.md",
     "lessons": "Retrospective.Lessons.md",
     "findings": "Findings.md",
+    "changeLedger": "Change.Ledger.jsonl",
     "workflowReference": "WORKFLOW_REFERENCE.md",
 }
 
@@ -93,6 +94,7 @@ def create_registry(root: str, *, doc_root: str = "", layout: str = "plugin-only
         "terminalLedger": _posix(governance, CREATE_FILENAMES["terminalLedger"]),
         "lessons": _posix(governance, CREATE_FILENAMES["lessons"]),
         "findings": _posix(governance, CREATE_FILENAMES["findings"]),
+        "changeLedger": _posix(governance, CREATE_FILENAMES["changeLedger"]),
         "closeOuts": _posix(operational, "Close-Outs"),
         "issues": _posix(operational, "Issues"),
         "roadmapReviews": _posix(operational, "roadmap-reviews"),
@@ -323,6 +325,9 @@ def seed_contents(reg: registry_mod.Registry) -> dict[str, str]:
     findings = reg.roles.get("findings")
     if findings:
         seeds[findings.path] = FINDINGS_SEED
+    changes = reg.roles.get("changeLedger")
+    if changes:
+        seeds[changes.path] = ""                      # one JSON line per change, none yet
     work = reg.roles.get("workRegister")
     if work and work.provider == "csv":
         seeds[work.path] = WORK_REGISTER_SEED

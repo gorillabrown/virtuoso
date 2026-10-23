@@ -146,7 +146,7 @@ def test_session_start_reads_the_roadmap_once(workspace, monkeypatch):
 
 
 def test_the_ceremonies_read_the_line_the_preflight_prints():
-    for skill in ("dispatch-kickoff", "roadmap-status", "roadmap-review", "dispatch-closeout"):
+    for skill in ("next-dispatch", "roadmap-status", "roadmap-review", "dispatch-closeout"):
         text = (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
         assert "`roadmap-integrity:` line" in text, skill
         assert "exit 3" not in text and "exit 2" not in text, (
@@ -224,10 +224,10 @@ def test_the_decision_block_has_a_step_and_the_close_out_reads_it():
 
 def test_the_reference_check_catches_a_ghost():
     validate = load_script("validate")
-    skills, agents = ["roadmap-review", "dispatch-kickoff"], ["Aristotle", "Hermes"]
+    skills, agents = ["roadmap-review", "next-dispatch"], ["Aristotle", "Hermes"]
     assert validate.unresolved_references(
         "escalate to athena; (→ Hermes); run `/write-spec`; Invoke `write-spec`; "
-        "`/virtuoso:dispatch-kickoff`", skills, agents) == ["/write-spec", "write-spec", "athena"]
+        "`/virtuoso:next-dispatch`", skills, agents) == ["/write-spec", "write-spec", "athena"]
     assert validate.unresolved_references(
         "escalate to the planner; (→ cross-cutting); □ 3. Aristotle: go", skills, agents) == []
     # A host CLI command resolves to the host; a misspelling of one is still a ghost.
@@ -571,7 +571,7 @@ def test_record_status_previews_then_appends_and_reads_back(catalog):
 
 
 @pytest.mark.parametrize("lesson, status, actor, why", [
-    ("LSN-002", "Superseded -> LSN-001", "dispatch-kickoff", "may not write"),
+    ("LSN-002", "Superseded -> LSN-001", "next-dispatch", "may not write"),
     ("LSN-042", "Retired — obsolete", "governance-sweep", "not a recorded lesson"),
     ("LSN-002", "Superseded -> LSN-002", "governance-sweep", "names the recorded lesson"),
     ("LSN-002", "Retired", "governance-sweep", "say where it went or why"),

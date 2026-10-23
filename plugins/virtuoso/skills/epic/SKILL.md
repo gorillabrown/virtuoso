@@ -5,12 +5,12 @@ description: >
   multi-phase epic spanning hours or days of Claude working alone, across context loss and
   sessions, until a completion condition is verifiably met. Epics start only from the
   roadmap: one item a review placed with Path: epic ("/epic ITEM-ID", or routed here by
-  dispatch-kickoff), or a combination of dispatch-ready roadmap items run together, serialized
+  next-dispatch), or a combination of dispatch-ready roadmap items run together, serialized
   where they share files ("/epic ID ID ID", "/epic --workstream checkout 11-15"). An outcome stated
   ad hoc ("keep working until it's done", "run this overnight") goes to /storyboard first.
   Every session runs under the virtuoso skill, and the run closes through /dispatch-closeout.
   Trigger on: "epic", "/epic", "run the epic", "batch these items", "long-running goal",
-  "autonomous run", "keep going until done". NOT for one dispatch-sized item (dispatch-kickoff),
+  "autonomous run", "keep going until done". NOT for one dispatch-sized item (next-dispatch),
   single-session tasks (virtuoso skill), or interval jobs (loop/schedule).
 ---
 
@@ -57,7 +57,7 @@ The work is one of two shapes, and both are already on the roadmap:
   `Path` marker and no holding bay, because every piece is already placed.
 
 **One of three paths, one destination.** This is the roadmap-epic path. Like
-`/dispatch-kickoff`, it opens only on items a roadmap review has placed on the master
+`/next-dispatch`, it opens only on items a roadmap review has placed on the master
 roadmap. The ad hoc path, `/storyboard` then `/write-plan`, is the only one that may
 start from an idea. All three deliver the same thing to execution, under the contract in
 `references/execution-paths.md`: aligned, verifiable, aware of the project, executed
@@ -73,15 +73,15 @@ the files are the memory. You are producing the materials, not executing the goa
 | Signal | Route |
 |--------|-------|
 | An outcome that is not on the master roadmap yet | `/virtuoso:storyboard`: it aligns the idea and holds it, and the next roadmap review places it as `Path: epic` |
-| One dispatch-sized item on the roadmap | `/virtuoso:dispatch-kickoff` |
+| One dispatch-sized item on the roadmap | `/virtuoso:next-dispatch` |
 | Fits in one sitting | Just do it (virtuoso skill if 3+ tool calls) |
 | Recurring job on an interval ("check every 5 minutes") | loop / schedule tooling |
 | An epic-scale item on the master roadmap (`Path: epic`) | **This skill**, Step 1a |
 | Several roadmap items to run together, unattended, as one run | **This skill**, Step 1b |
 
 When the work turns out not to be epic-scale, say so in one sentence. Route a single item
-to `/dispatch-kickoff`, or to `/roadmap-review` when it needs a path or a specification, and
-route a combination that is really one sitting to `/dispatch-kickoff`, one item at a time.
+to `/next-dispatch`, or to `/roadmap-review` when it needs a path or a specification, and
+route a combination that is really one sitting to `/next-dispatch`, one item at a time.
 This skill does not edit the roadmap. Do not scaffold a packet for an afternoon task.
 
 ## The packet
@@ -143,7 +143,7 @@ overnight, and the two cards it waits on"), it is Step 1b with those items.
 
 #### Step 1a — One item marked `Path: epic`
 
-`/epic <ITEM-ID>`, or the head item `/dispatch-kickoff` routed here.
+`/epic <ITEM-ID>`, or the head item `/next-dispatch` routed here.
 
 - The item is in the live register and not terminal. Every prerequisite is terminal,
   resolved through the provider. Its roadmap entry declares `Path: epic`.
@@ -152,7 +152,7 @@ overnight, and the two cards it waits on"), it is Step 1b with those items.
   frames, and decisions are the charter's first draft, and a question they already
   answer is not asked again.
 - No such item: route the user to `/storyboard`. `Path` is dispatch, or absent: the item
-  is one dispatch, so route it to `/dispatch-kickoff`, or run it in a combination (Step 1b)
+  is one dispatch, so route it to `/next-dispatch`, or run it in a combination (Step 1b)
   with the items it belongs with. A prerequisite is pending: name it and stop.
 - A charter whose `item:` or `items:` already names this item means the run exists. Point
   to its launch file, and do not scaffold a second packet.
@@ -189,7 +189,7 @@ Then make the judgement the command cannot:
 - **Readiness.** Each item's specification already passed the rubric when a review made
   it dispatch-ready. Re-run its mechanical half now, because lessons may have been
   recorded since: `lessons --check <spec> --item <ITEM-ID>` for each. Walk the rest of
-  `references/readiness-rubric.md` against each specification as `/dispatch-kickoff` would.
+  `references/readiness-rubric.md` against each specification as `/next-dispatch` would.
   A structural gap stops the combination, just as it stops a dispatch.
 - **Hidden overlap.** The files come from the specifications. Read each item's edit
   sites against the code. Two items that change the same interface, schema, or fixture
@@ -247,7 +247,7 @@ otherwise dead-end on unattended:
 - remotes/services in the DoD are reachable
 - the runtime can act unattended — permission mode / allowlist covers the run's tool
   needs, so no approval prompt stalls the run at hour two
-- the repository, detected rather than assumed, as dispatch-kickoff's *Repository
+- the repository, detected rather than assumed, as next-dispatch's *Repository
   reconciliation* detects it: the remote (or that there is none), the default branch,
   the worktrees, the dirty paths, and `policy.git`. Settle network operations now. Under
   `networkOperations: ask`, the user grants or denies fetch and push for the whole run,
@@ -279,7 +279,7 @@ than you can now, and stale prescriptions poison later sessions.
 1. Copy the five templates into the epic directory; fill every bracket; delete unused
    optional sections. Seed journal.md with the S0 scaffold entry.
 2. **Fill the run's git work** from `policy.git` and the repository state Step 3
-   detected, the way `/dispatch-kickoff` fills its reconciliation recipe: the remote (or
+   detected, the way `/next-dispatch` fills its reconciliation recipe: the remote (or
    none, which drops every network step), the default branch, the run's branch from
    `policy.git.branchNameTemplate` with the packet's identifier as `{item-id}`, the base
    commit it starts from, and only the steps the policy permits. Leave no placeholders.
@@ -343,7 +343,9 @@ read anyway — the packet works even for an executor that has never seen this p
 - **Resume protocol** at the top of state.md: charter → plan → state → last journal entry;
   distrust-then-verify; files are memory, the repo is reality.
 - **Handoff-ready always:** sessions die without warning; update state.md and journal.md
-  before ending any work burst.
+  before ending any work burst. Each update refreshes state.md's *Tried and failed* from
+  `virtuoso_registry guards --dispatch <session id> --tried`, so the next session does not
+  retry a dead end.
 - **Never idle:** blocked on one front → advance another; blocked on all →
   BLOCKER(USER) with the exact question, clean journal exit.
 - **Fresh evidence:** completion claims re-run every DoD verification in the claiming

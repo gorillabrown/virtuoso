@@ -1,0 +1,9 @@
+{"type":"thread.started","thread_id":"22222222-2222-7222-8222-222222222222"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"<response-text>"}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"\"C:\\\\Program Files\\\\PowerShell\\\\7\\\\pwsh.exe\" -Command \"python -c \\\"import sys; print('v51out'); sys.stderr.write('v51err'); sys.exit(3)\\\"\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"\"C:\\\\Program Files\\\\PowerShell\\\\7\\\\pwsh.exe\" -Command \"python -c \\\"import sys; print('v51out'); sys.stderr.write('v51err'); sys.exit(3)\\\"\"","aggregated_output":"v51errv51out\r\n","exit_code":1,"status":"failed"}}
+{"type":"item.started","item":{"id":"item_2","type":"command_execution","command":"\"C:\\\\Program Files\\\\PowerShell\\\\7\\\\pwsh.exe\" -Command 'echo v51ok'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_2","type":"command_execution","command":"\"C:\\\\Program Files\\\\PowerShell\\\\7\\\\pwsh.exe\" -Command 'echo v51ok'","aggregated_output":"v51ok\r\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"<response-text>"}}
+{"type":"turn.completed","usage":{"input_tokens":90714,"cached_input_tokens":73472,"cache_write_input_tokens":0,"output_tokens":111,"reasoning_output_tokens":0}}

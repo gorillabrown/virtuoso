@@ -522,11 +522,13 @@ def test_the_board_filters_by_workstream_and_deliverable():
     found = {s["key"]: s for s in dashboard.slicers(items, [], dashboard.policy_orders(policy),
                                                     structured=True)}
     deliverables = found["deliverable"]
-    assert deliverables["values"] == ["Core", "A very long deliverable name", "Guide", ""]
-    assert deliverables["labels"] == {"A very long deliverable name": "A very long d…",
+    assert deliverables["values"] == ["D1", "D2", "D3", ""]       # a stored name reads as its id
+    assert deliverables["labels"] == {"D1": "Core", "D2": "A very long d…", "D3": "Guide",
                                       "": "Unassigned"}
-    assert len(deliverables["labels"]["A very long deliverable name"]) == dashboard.FACET_WIDTH
-    assert found["workstream"]["values"] == ["Engine", "Docs", "W1", ""]
+    assert len(deliverables["labels"]["D2"]) == dashboard.FACET_WIDTH
+    assert found["workstream"]["values"] == ["W1", "W2", ""]
+    assert found["workstream"]["labels"]["W1"] == "Engine"
+    assert found["workstream"]["labels"]["W2"] == "Docs"
     assert found["workstream"]["labels"][""] == "Unassigned"
     plain = {s["key"]: s for s in dashboard.slicers(items, [], {})}
     assert plain["workstream"]["labels"][""] == "(none)"         # no structure: as before
@@ -537,6 +539,22 @@ def test_the_board_filters_by_workstream_and_deliverable():
         policy = Policy(data={"roadmap": {"workstreams": broken}})
         assert board.approved_structure(policy) == []
         assert dashboard.policy_orders(policy)["deliverable"] == []
+
+
+def test_a_workstream_stored_by_id_and_by_name_is_one_slicer_value():
+    policy = Policy(data={"roadmap": {"workstreams": STRUCTURE}})
+    items = [item("B-1", base.QUEUED, 1, workstream="W1"),
+             item("B-2", base.QUEUED, 2, workstream="Engine"),
+             item("B-3", base.QUEUED, 3, workstream="Elsewhere")]      # unknown: as stored
+    found = {s["key"]: s for s in dashboard.slicers(items, [], dashboard.policy_orders(policy),
+                                                    structured=True)}
+    values = found["workstream"]["values"]
+    assert values.count("W1") == 1 and "Engine" not in values
+    assert values == ["W1", "Elsewhere"]
+    assert found["workstream"]["labels"] == {"W1": "Engine"}
+    index = dashboard.structure_index(STRUCTURE)
+    assert [dashboard.facets(i, True, index)["workstream"] for i in items[:2]] == ["W1", "W1"]
+    assert dashboard.facets(items[1])["workstream"] == "Engine"     # no structure: as stored
 
 
 def done_page(tmp_path, structure: bool) -> list[str]:
@@ -731,7 +749,7 @@ def test_the_review_reads_and_resolves_board_comments(workspace):  # noqa: F811
     listed = run(tool, "--root", str(workspace), "--json")
     assert json.loads(listed.stdout)["open"] == [
         {"item": "ITEM-2", "at": "2026-10-01T10:00:00Z", "text": "needs a spec"}]
-    refused = run(tool, "--root", str(workspace), "--actor", "dispatch-kickoff", "--resolve",
+    refused = run(tool, "--root", str(workspace), "--actor", "next-dispatch", "--resolve",
                   "ITEM-2", "--answer", "specified", "--apply")
     assert refused.returncode == 2 and "may not write" in refused.stderr
     done = run(tool, "--root", str(workspace), "--actor", "roadmap-review", "--resolve",
@@ -818,7 +836,7 @@ def test_the_board_missing_advisory(workspace):  # noqa: F811
 
 
 def test_every_ceremony_that_changes_the_register_names_the_board():
-    for skill in ("dispatch-closeout", "dispatch-kickoff", "roadmap-review"):
+    for skill in ("dispatch-closeout", "next-dispatch", "roadmap-review"):
         text = (SKILLS / skill / "SKILL.md").read_text(encoding="utf-8")
         assert "generate_board" in text, skill
 

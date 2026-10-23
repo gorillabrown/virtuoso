@@ -179,7 +179,10 @@ uncertainty.
 
 ### 6. Gap Analysis
 
-A table of specific gaps in the work, ordered by severity × leverage:
+A table of specific gaps in the work, ordered by severity × leverage. A gap that carries a
+cost or a saving is also written in the one finding format (tier `FIX`/`TRY`/`TEST`,
+confidence as a level, what happened, why it matters, what to do, now → after, its kind —
+`references/registry-contract.md`, *Findings*); savings of different tiers are never added:
 
 | ID | Gap | Severity | Effort to Close | Leverage |
 |----|-----|----------|-----------------|----------|

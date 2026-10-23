@@ -77,7 +77,7 @@ _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 #: the release commit, so dropping one is a deliberate edit here, never a side effect.
 PUBLIC_TREE = (".claude-plugin", ".gitattributes", ".github", ".gitignore", "LICENSE",
                "PRIVACY.md", "README.md", "RELEASE-NOTES.md", "docs/MIGRATION-1.4.md",
-               "docs/MIGRATION-1.15.md", "plugins")
+               "docs/MIGRATION-1.15.md", "docs/MIGRATION-1.16.md", "plugins")
 #: Names a publish target other than plugin.json's `repository` (tests use a local bare repo).
 PUBLIC_REMOTE_ENV = "VIRTUOSO_RELEASE_PUBLIC_REMOTE"
 _EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"

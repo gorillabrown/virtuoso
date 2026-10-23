@@ -12,7 +12,7 @@ This index maps the old section numbers to their new homes.
 
 - **virtuoso** — multi-step execution discipline (dispatches, narration, progress tracking);
   the only skill that executes
-- **roadmap-review / roadmap-status / dispatch-kickoff** — plan, pulse-check, and dispatch
+- **roadmap-review / roadmap-status / next-dispatch** — plan, pulse-check, and dispatch
 - **storyboard → write-plan → virtuoso** — the ad hoc path: scope to a draft stub, write
   the full plan, then execute; only virtuoso executes, and the entry is held for roadmap
   review

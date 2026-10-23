@@ -196,7 +196,7 @@ with these inputs: (a) completed tasks treated as the dispatch's deliverables,
 (b) cancelled tasks listed with reason "mid-dispatch pivot," (c) the close-out's
 findings table includes the pause-point finding that triggered the stop,
 (d) the stopped line of work goes back to `/roadmap-review` to be re-planned
-(`/dispatch-kickoff` escalates there when no head is dispatch-ready). Dispatch-closeout does not need
+(`/next-dispatch` escalates there when no head is dispatch-ready). Dispatch-closeout does not need
 a full pause summary — the mid-dispatch decision's Step 2 assessment serves as
 the summary input.
 

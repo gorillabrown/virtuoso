@@ -77,7 +77,7 @@ Each entry under `roles` carries the full metadata set (item 15):
 
 ### Opt-in roles
 
-Three roles are supported but never assumed: `create` lays down none of them, and a
+These roles are supported but never assumed: `create` lays down none of them, and a
 project registers each by adding its entry to the manifest when it first needs it.
 
 | Role | Holds | Writers | Registered |
@@ -85,6 +85,43 @@ project registers each by adding its entry to the manifest when it first needs i
 | `overlays` | project additions to shipped skills and agents (see *Project overlays*) | none (read-only) | when the project has something to overlay |
 | `epics` | one directory per epic packet, `<yyyy-mm-dd>-<slug>/` | `epic` | when the project runs its first epic |
 | `holdingBay` | one held plan per piece of ad hoc work, `<yyyy-mm-dd>-<slug>.md` (see *The holding bay*) | `storyboard`, `write-plan`, `virtuoso`, `dispatch-closeout`, `roadmap-review` | when the project storyboards its first piece of ad hoc work |
+| `board` | the roadmap board, one generated page | `roadmap-review`, `dispatch-closeout`, `next-dispatch` | the first roadmap review (`generate_board --create`) |
+| `boardComments` | row comments people leave on the board (JSON) | `roadmap-review` | with the board |
+| `guardLog` | the cost guards' receipts for each dispatch (`jsonl`, append-only), copied in at close-out by `guards --copy`; hooks never write it | `dispatch-closeout` | when the project wants guard figures in its own tree |
+
+`changeLedger` is not opt-in: `create` scaffolds it (`Change.Ledger.jsonl` beside the
+lessons), and `changes` and `results` show an existing project the entry to add.
+
+## The change ledger
+
+When each change took effect, so `results` can split the work at it. One JSON line per
+change, never rewritten; an undo is its own line (`"undoes": "CH-NNN"`):
+
+```json
+{"at": "…Z", "id": "CH-014", "action": "apply|undo", "kind": "guard|policy|lesson|standing-rule|plugin-version|manual",
+ "subject": "guards.retry.enabled", "from": …, "to": …, "scope": {"hosts": [], "agents": []},
+ "effectiveFrom": "…Z", "actor": "…", "note": "…"}
+```
+
+Writers by hand (`changes --record`, `--undo`): `roadmap-review`, `dispatch-closeout`,
+`project-profile`. An **automatic** line is not a separate permission: it rides on an
+operation authorized on its own role, inside it — `policy-set` writes one line per leaf it
+changes (and puts the manifest back if the line cannot be written), `lessons --record-status`
+one per status (dated with the record), and the next ceremony that writes the `closeOuts`
+role a `plugin-version` line when the running version is new. Preflight and session start
+never write it. Lines are appended under a lock; changes stack (undoing the latest puts back
+the one before). Its authority is `evidence`, like the close-outs.
+
+**`results [CH-NNN]`** compares the closed time logs that ended before a change with those
+that started after it (until it was undone or replaced): cost per measured row — tokens,
+and dollars unless `policy.cost.units` is `tokens`; for a lesson or standing rule, the share
+of time on rows the first listing missed. Its policy: `results.minimum` (`activeDays` 3,
+`closedLogs` 3, `measuredRows` 30 after the change before any verdict) and
+`results.noEffect` (0.10: a smaller move either way is *no clear effect*). The baseline is 14
+days, extended to 30 as the change ages; 3-, 5- and 7-day baselines give a range when they
+disagree. A dispatch whose work straddles the change belongs to neither side and is named.
+Across a change of price card, dollars are not compared and tokens carry the verdict. A
+verdict's kind is the weaker of its two sides'.
 
 A ceremony that needs an opt-in role the project has not registered stops and shows the
 entry to add; it never falls back to a conventional path.
@@ -762,7 +799,7 @@ more links count, in this order:
    a specification names each live lesson that bears on it and the change it made, or
    states that no live lesson applies. `roadmap-review` reads the live lessons before it
    drafts and re-checks every existing dispatch-ready specification against lessons
-   recorded since; `dispatch-kickoff` checks the head item before it prints.
+   recorded since; `next-dispatch` checks the head item before it prints.
    `lessons --check <spec> --item <ID>` is the mechanical half; a live lesson the section
    leaves uncited is listed, so the author's judgement is made rather than skipped.
 3. **Direction applies.** An `epic` charter carries *Lessons applied* before an unattended
@@ -859,6 +896,49 @@ promotions above zero, a high held rate, a falling repeated-trap rate. Any one f
 gamed; the set is expensive to game, because yield without holds, or holds without
 promotions, shows.
 
+## Figures and cost
+
+**Every figure says what kind of number it is.** `kind` is `measured` (read from a log, a
+transcript or host-reported usage), `inferred` (derived from measured data by a stated
+rule) or `estimated` (assumes how something would behave — a prediction, a rate not yet
+recorded on that day); `basis` is the calculation in one line, and `unit` the unit alone.
+JSON carries both; text shows the kind beside each figure, and `--why` (on `kpis`,
+`timing --summary`, `cost`, `results`) prints how each was calculated and what it assumes.
+`confidence` is a level, never a percentage. A figure whose inputs are missing is *not
+computable*, naming them.
+
+**`cost [--dispatch <id>] [--last N] [--why]`** prices work at API prices (on a subscription,
+a measure of the work, not the bill). A dispatch's transcript is found through its binding —
+recorded by the pre-tool hook when its session runs `timing --dispatch <id>` with a row verb —
+never by guessing; without one, transcript figures are not computable, unless the time log
+carries a `cost` event the backfill wrote. Its **row cost** is the calls of the workers whose
+spawn names the row (`row N`, or a task name starting `row_N_`); everything else in the top-level
+session between the log's first and last work stamp is **orchestration**. Prices come from
+`references/model-prices.json` (dated cards per model; a call is priced at the card in force
+on its day, one before the first card at that card and `estimated`), merged under the user's
+`~/.virtuoso/prices.json`; a model with no card is not computable, never approximated.
+**`policy.cost.units`** is `both` (default, `$1.30 (162K tokens)`), `tokens` or `dollars`; a
+user default may be set in `~/.virtuoso/config.json`, which the project's value overrides.
+
+**The backfill.** The next ceremony that writes the `closeOuts` role records, in each closed,
+settled (24 h), unbound time log with no token count, a `cost` event — dispatch-level, tokens
+`measured`, marked `backfilled` — from the transcripts the host still keeps: the sessions of
+this project that worked a row of the dispatch inside its work. A log with none left is marked
+*not computable* once; it is measured again only if its work later moves past the marked
+window.
+
+**`policy.guards`** switches the cost guards: `enabled` for all, and per guard `coldReturn`
+(`minContextTokens` 50000, `minRewrite` 0.50 dollars, `minRewriteTokens` 50000,
+`idleMinutes` 5), `retry` (`limit` 2 failures in one folder, the last within `withinMinutes`
+30), `bigRead` (`bytes` 65536), `compactNudge` (`share`
+0.75 of `windowTokens` 200000) and `weekly`, each with its own `enabled`. Setting any of them
+through `policy-set` lands in the change ledger. **`guards --dispatch <id>`** lists the
+receipts a dispatch's sessions kept (a hold counts as kept only if its step never came
+again); `--tried` prints what it tried and dropped; `--context [--model <m>]` reads the
+top-level conversation's context now from the bound transcript (read-only), and with a model
+the reload a switch to it costs (`estimated`); `--copy --apply` (dispatch-closeout)
+copies its receipts into `guardLog`.
+
 ## Findings
 
 The `findings` role holds what a governance sweep, an adversarial review, or an agent
@@ -874,6 +954,21 @@ add and says the findings exist only in its report.
 **Where:** path:line, or document § section
 **Finding:** what is wrong, with the evidence
 **Disposition:** open
+```
+
+A finding that carries a cost or a saving adds four lines: **Tier:** `FIX` (clear waste;
+removing it leaves the work unchanged) / `TRY` (a likely saving that changes what the agent
+does, shown `+` a figure) / `TEST` (a trade-off sized from the project's own runs, "up to" a
+figure) — never added across tiers; **Confidence:** `high` / `likely` / `possible`, never a
+percentage; **Kind:** `measured` / `inferred` / `estimated`; **Figure:** now → after. Shown
+in a report, the same finding reads as one block:
+
+```
+<TIER>  <title> · <confidence>
+        What happened   …
+        Why it matters  …
+        What to do      …
+        now <figure>  ->  after <figure>   (<n> rows, <share> of the dispatch)   <kind>
 ```
 
 A disposition changes only by appending a record under the same id —
@@ -951,7 +1046,7 @@ adds, with the reason, in the packet's plan.
 
 A combination's charter lists its items under `items:`, in serial order, and its packet
 identifier is `EPIC-` plus the slug in capitals. While the charter is active,
-`dispatch-kickoff` does not dispatch those items separately and `roadmap-review` does not
+`next-dispatch` does not dispatch those items separately and `roadmap-review` does not
 re-specify them. The close-out retires each one (`dispatch-closeout`, *Combined epics*).
 
 ## The holding bay

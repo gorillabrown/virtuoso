@@ -5,3 +5,5 @@
 # Pin them to LF so the shipped bytes are the checked-out bytes on every platform.
 plugins/virtuoso/bin/virtuoso      text eol=lf
 plugins/virtuoso/bin/virtuoso.ps1  text eol=lf
+# Transcripts and hook input captured from real hosts: test input kept byte for byte.
+plugins/virtuoso/scripts/fixtures/hosts/** -text

@@ -321,6 +321,187 @@ def _print_missing_prerequisites(missing: dict) -> None:
                   "the terminal ledger" % (prerequisite, item_id))
 
 
+def cmd_changes(args) -> int:
+    """The change ledger: list it, record a change made by hand, or record an undo.
+    Writes preview unless ``--apply``; only an actor the changeLedger role allows writes."""
+    from tools.governance import changes as changes_mod
+    reg = _load(args.root)
+    path = changes_mod.path_for(reg)
+    if path is None:
+        raise GovernanceError(
+            "no `changeLedger` role is registered, so no change is recorded and every "
+            "`results` figure is not computable. Register one in %s: %s"
+            % (schema.MANIFEST_RELPATH, _CHANGES_ENTRY))
+    skipped = []
+    lines = changes_mod.load(path, skipped)
+    if not (args.record or args.undo):
+        in_force = changes_mod.in_force(lines)
+        payload = {"ledger": os.path.relpath(path, args.root).replace(os.sep, "/"),
+                   "changes": lines, "inForce": sorted(c["id"] for c in in_force.values()),
+                   "skipped": skipped}
+        return _emit(payload, args.as_json, lambda: "\n".join(
+            ["%s  %s  %-14s %-24s %s -> %s%s" % (
+                l["id"], l.get("effectiveFrom", ""), l.get("kind", ""), l.get("subject", ""),
+                json.dumps(l.get("from")), json.dumps(l.get("to")),
+                "   in force" if l["id"] in payload["inForce"] else "") for l in lines]
+            or ["no change recorded yet in %s" % payload["ledger"]]))
+    actor = args.actor or ""
+    if not actor or not reg.writable(changes_mod.ROLE, actor):
+        raise GovernanceError("%s may not write the changeLedger role (allowedWriters in %s)"
+                              % (actor or "(no --actor)", schema.MANIFEST_RELPATH))
+    if args.undo:
+        target = changes_mod.find(lines, args.undo)
+        if target is None or target.get("action") != "apply":
+            raise GovernanceError("%s is not a recorded change to undo" % args.undo)
+        if target["id"] not in {c["id"] for c in changes_mod.in_force(lines).values()}:
+            raise GovernanceError("%s is not in force, so there is nothing to undo" % args.undo)
+        entry = dict(changes_mod.line(target.get("kind", "manual"), target.get("subject", ""),
+                                      target.get("to"), target.get("from"), actor,
+                                      action="undo", note=args.note), undoes=target["id"])
+    else:
+        if not args.subject:
+            raise GovernanceError("--record needs --subject: what changed")
+        entry = changes_mod.line(args.kind, args.subject,
+                                 _json_value(args.from_json, "--from-json") if args.from_json
+                                 else None,
+                                 _json_value(args.to_json, "--to-json") if args.to_json
+                                 else None, actor, note=args.note,
+                                 scope={"hosts": list(args.host or []), "agents": []})
+    if not args.apply:
+        return _emit({"preview": entry, "ledger": path}, args.as_json, lambda: (
+            "preview — append to %s (run again with --apply):\n%s"
+            % (path, json.dumps(entry, indent=2, ensure_ascii=True))))
+    blocked = changes_mod.ready(reg)
+    if blocked:
+        raise GovernanceError(blocked)
+    written = changes_mod.append(path, entry)
+    return _emit(written, args.as_json, lambda: "recorded %s: %s %s" % (
+        written["id"], written["action"], written["subject"]))
+
+
+def cmd_results(args) -> int:
+    """Did a change work? Its runs after against its runs before, with the sample it
+    still needs, the trade-offs and the confounders. Read-only."""
+    from tools.governance import changes as changes_mod, cost as cost_mod, results as results_mod
+    reg = _load(args.root)
+    path = changes_mod.path_for(reg)
+    if path is None:
+        raise GovernanceError(
+            "no `changeLedger` role is registered, so no change has a date to split the work "
+            "at and every `results` figure is not computable. Register one in %s: %s"
+            % (schema.MANIFEST_RELPATH, _CHANGES_ENTRY))
+    lines = changes_mod.load(path)
+    chosen = [l for l in lines if l.get("action") == "apply"]
+    if args.change:
+        chosen = [l for l in chosen if l.get("id") == args.change]
+        if not chosen:
+            raise GovernanceError("%s is not a recorded change" % args.change)
+    project_policy = policy_mod.load(reg.policy)
+    unit = cost_mod.units(reg.policy if isinstance(reg.policy, dict) else None)
+    records = results_mod.dispatch_facts(reg.resolve("closeOuts"),
+                                         since=_results_since(chosen))
+    found = [results_mod.judge(change, records, lines, unit=unit,
+                               minimum=project_policy.get("results.minimum"),
+                               no_effect=project_policy.get("results.noEffect", 0.10))
+             for change in chosen]
+    payload = {"results": found, "units": unit}
+    return _emit(payload, args.as_json, lambda: results_mod.render(found, unit, why=args.why))
+
+
+#: The manifest entry a project adds to register the change ledger, from the role's
+#: defaults so the message cannot fall behind them.
+_CHANGES_ENTRY = '"changeLedger": ' + json.dumps(dict(
+    [("path", "<file>.jsonl")]
+    + [(key, schema.DEFAULT_ROLES["changeLedger"][key])
+       for key in ("provider", "authority", "mutability", "owner", "allowedWriters")]))
+
+
+def cmd_guards(args) -> int:
+    """A dispatch's cost guards: the receipts its sessions kept, what it tried and dropped
+    (``--tried``, for the issue document, epic state and git hand-off), and — for
+    ``dispatch-closeout`` — copying the receipts into the ``guardLog`` role (``--copy``;
+    preview unless ``--apply``)."""
+    from tools.governance import guards as guards_mod
+    if args.context:
+        found = guards_mod.context_now(args.dispatch, args.model or "")
+        if not found["computable"]:
+            return _emit(found, args.as_json, lambda: "not computable (missing: %s)"
+                         % "; ".join(found["missing"]))
+        reload = found.get("reload")
+        return _emit(found, args.as_json, lambda: "%s: context %s tokens on %s (measured, %s)%s"
+                     % (args.dispatch, found["tokens"], found["model"], found["at"],
+                        "; switching to %s rewrites it: ~%s (estimated)" % (
+                            reload["model"], reload["text"]) if reload else ""))
+    if args.tried:
+        found = guards_mod.tried_and_failed(args.dispatch)
+        return _emit(found, args.as_json, lambda: "\n".join(
+            ["Tried and failed (%s):" % args.dispatch]
+            + (["- %s" % d for d in found["dropped"]] or ["- nothing recorded"])
+            if found["computable"] else
+            ["not computable (missing: %s)" % "; ".join(found["missing"])]))
+    found = guards_mod.dispatch_receipts(args.dispatch)
+    held = [r for r in found if r.get("event") == "hold"]
+    payload = {"dispatch": args.dispatch, "receipts": found, "holds": len(held),
+               "kept": sum(1 for r in held if r.get("kept"))}
+    if not args.copy:
+        return _emit(payload, args.as_json, lambda: "%s: %d hold(s), %d kept (never sent again)"
+                     % (args.dispatch, payload["holds"], payload["kept"]))
+    reg = _load(args.root)
+    actor = args.actor or ""
+    try:
+        path = reg.resolve("guardLog")
+    except RoleNotRegistered:
+        raise GovernanceError("no `guardLog` role is registered, so this dispatch's guard "
+                              "figures are not computable in the project. Register one in %s: "
+                              "%s" % (schema.MANIFEST_RELPATH, _GUARD_LOG_ENTRY))
+    if not reg.writable("guardLog", actor):
+        raise GovernanceError("%s may not write the guardLog role (allowedWriters in %s)"
+                              % (actor or "(no --actor)", schema.MANIFEST_RELPATH))
+    have = set()
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as handle:
+            have = {line.strip() for line in handle}
+    new = [json.dumps(dict(r, dispatch=args.dispatch), ensure_ascii=True, sort_keys=True)
+           for r in found]
+    new = [line for line in new if line not in have]  # copying twice adds nothing
+    if not args.apply:
+        return _emit(dict(payload, toCopy=len(new)), args.as_json, lambda: (
+            "preview — append %d receipt(s) to %s (run again with --apply)" % (len(new), path)))
+    if new:
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write("\n".join(new) + "\n")
+    return _emit(dict(payload, copied=len(new)), args.as_json,
+                 lambda: "copied %d receipt(s) into %s" % (len(new), path))
+
+
+_GUARD_LOG_ENTRY = '"guardLog": ' + json.dumps(dict(
+    [("path", "<file>.jsonl")]
+    + [(key, schema.DEFAULT_ROLES["guardLog"][key])
+       for key in ("provider", "authority", "mutability", "owner", "allowedWriters")]))
+
+
+def cmd_cost(args) -> int:
+    """What dispatches cost, in tokens and dollars at API prices. Read-only: transcripts
+    are found through dispatch bindings, never guessed; a figure that cannot be found is
+    *not computable*, naming what is missing."""
+    from tools.governance import cost as cost_mod, costreport
+    reg = _load(args.root)
+    unit = cost_mod.units(reg.policy if isinstance(reg.policy, dict) else None)
+    directory = reg.resolve("closeOuts")
+    if args.dispatch:
+        report = costreport.dispatch_cost(directory, args.dispatch)
+        report["units"] = unit
+        return _emit(report, args.as_json,
+                     lambda: costreport.render_dispatch(report, unit, why=args.why))
+    if args.last < 1:
+        print("error: --last is a count of dispatches, 1 or more", file=sys.stderr)
+        return 2
+    report = costreport.recent(directory, args.last, unit=unit)
+    report["units"] = unit
+    return _emit(report, args.as_json,
+                 lambda: costreport.render_recent(report, unit, why=args.why))
+
+
 def cmd_kpis(args) -> int:
     reg = _load(args.root)
     project_policy = policy_mod.load(reg.policy)
@@ -334,7 +515,51 @@ def cmd_kpis(args) -> int:
     )
     metrics.pace, metrics.invalid_deadlines = providers.pace_for(reg, snap)
     metrics.learning, metrics.learning_provenance = _learning_metrics(reg, project_policy)
-    return _emit(metrics.as_dict(), args.as_json, metrics.render)
+    applied = _applied(reg, project_policy)
+    payload = dict(metrics.as_dict(), applied=applied)
+    return _emit(payload, args.as_json, lambda: metrics.render(why=args.why) + (
+        "\n\napplied — changes in force, with their verdict so far\n" + "\n".join(
+            "  %s  %-24s %s" % (a["change"], a["subject"], a["verdict"]) for a in applied)
+        if applied else ""))
+
+
+def _results_since(changes_list):
+    """The earliest moment any of these changes' baselines can reach: 30 days before the
+    oldest. Logs that ended before it are never read."""
+    import datetime as _dt
+    from tools.governance import results as results_mod
+    moments = [results_mod._moment(str(c.get("effectiveFrom") or c.get("at")))
+               for c in changes_list]
+    moments = [m for m in moments if m]
+    return min(moments) - _dt.timedelta(days=30) if moments else None
+
+
+def _applied(reg, project_policy) -> list[dict]:
+    """Every change in force and its ``results`` verdict so far: a finding or lesson with
+    a change in force leaves the open lists for this block. Empty without a ledger."""
+    from tools.governance import changes as changes_mod, cost as cost_mod, results as results_mod
+    path = changes_mod.path_for(reg)
+    if path is None:
+        return []
+    lines = changes_mod.load(path)
+    in_force = [c for c in changes_mod.in_force(lines).values()
+                if c.get("kind") != "plugin-version"]
+    if not in_force:
+        return []
+    try:
+        records = results_mod.dispatch_facts(reg.resolve("closeOuts"),
+                                             since=_results_since(in_force))
+    except RoleNotRegistered:
+        records = []
+    except Exception:                                 # kpis never breaks on a cost read
+        records = []
+    unit = cost_mod.units(reg.policy if isinstance(reg.policy, dict) else None)
+    return [{"change": c["id"], "subject": c.get("subject"), "kind": c.get("kind"),
+             "verdict": results_mod.judge(
+                 c, records, lines, unit=unit,
+                 minimum=project_policy.get("results.minimum"),
+                 no_effect=project_policy.get("results.noEffect", 0.10))["verdict"]}
+            for c in in_force]
 
 
 #: Rubric checks whose gap a gate closes itself, by adding what is missing (U10: the task
@@ -420,7 +645,7 @@ def _timing_figures(reg, provenance):
                 for name in timing_mod.TIMING_METRICS + (timing_mod.PAIR_METRIC,)]
     provenance["timeLogs"] = os.path.relpath(directory, reg.root).replace(os.sep, "/")
     provenance["timeLogsClosed"] = len(timing_mod.closed_logs(directory))
-    return timing_mod.figures(directory)
+    return timing_mod.figures(directory) + [timing_mod.starting_load(directory)]
 
 
 def _effort_calibration(reg, provenance):
@@ -617,16 +842,40 @@ def _record_lesson_status(args, reg, path, source, recorded, text) -> int:
     problem = learning_mod.status_problem(recorded, args.record_status, args.status)
     if problem:
         raise GovernanceError(problem)
+    if args.date:
+        import datetime as _dt
+        try:
+            _dt.date.fromisoformat(args.date)
+        except ValueError:
+            raise GovernanceError("--date is a day, YYYY-MM-DD, not %r" % args.date)
     record = learning_mod.status_record(args.record_status, args.status,
                                         args.item or actor, args.date or _today().isoformat())
     if not args.apply:
         print("preview — append to %s (run again with --apply):\n\n%s" % (source, record))
         return EXIT_OK
+    from tools.governance import changes as changes_mod
+    blocked = changes_mod.ready(reg)
+    if blocked:
+        raise GovernanceError("%s, so this status could not be recorded when it took effect; "
+                              "nothing was written" % blocked)
+    previous = next((l for l in recorded if l.id == args.record_status), None)
     after = _append_lesson_record(reg, path, source, record)
     recorded_now = after.get(args.record_status)
     if recorded_now is None or recorded_now.status != args.status.strip():
         raise GovernanceError("the record was appended but does not read back as the "
                               "current status of %s; inspect %s" % (args.record_status, source))
+    day = args.date or _today().isoformat()
+    try:
+        changes_mod.record_automatic(reg, changes_mod.line(
+            "lesson", args.record_status, previous.status if previous else None,
+            recorded_now.status, actor, effective_from="%sT00:00:00Z" % day,
+            note="status record dated %s" % day))
+    except Exception as exc:
+        raise GovernanceError(
+            "the status of %s was recorded in %s, but the change ledger line was not (%s). "
+            "Record it by hand so `results` can split the work at it: `changes --record "
+            "--kind lesson --subject %s --apply`" % (args.record_status, source, exc,
+                                                     args.record_status))
     print("recorded %s: %s (%s)" % (args.record_status, recorded_now.status, source))
     return EXIT_OK
 
@@ -966,6 +1215,110 @@ def _skipped_logs(skipped: list) -> None:
         print("note: a time log was left out of the history: %s" % problem, file=sys.stderr)
 
 
+def _transcript_figures(dispatch: str, action: str, events: list, row_id,
+                        has_tokens: bool = False) -> dict:
+    """What a bound dispatch's transcript adds to a time-log event (G3, G6):
+    ``open`` its starting load; ``resume`` the cold return a wait past the cache's lifetime
+    will cost; ``end`` the row's tokens when ``--tokens`` was not given. Nothing for an
+    unbound dispatch, and never a failure of the write."""
+    try:
+        from tools.governance import costreport, hosts as hosts_mod
+        binding = hosts_mod.read_binding(dispatch)
+        adapter = hosts_mod.adapter((binding or {}).get("host", ""))
+        if not binding or adapter is None:
+            return {}
+        facts = adapter.read_transcript(binding.get("transcript") or "")
+        last = facts.last_call
+        if action == "open":
+            return {"startingLoad": {"tokens": last.usage.context, "kind": "measured"}} \
+                if last else {}
+        rows = {r.id: r for r in timing_mod.rows(events)}
+        row = rows.get(row_id)
+        if row is None:
+            return {}
+        if action == "resume":
+            if not row.waits or last is None:
+                return {}
+            began = row.waits[-1][0]
+            minutes, how = adapter.lifetime(facts)
+            idle = (timing_mod.now() - began).total_seconds() / 60
+            if not minutes or idle < minutes * (1 - 1 / 12):
+                return {}
+            reason = (row.wait_reasons[-1] if row.wait_reasons else "")
+            usd = cost_mod_price(last.usage.context, last, minutes)
+            return {"coldReturn": {"tokens": last.usage.context, "usd": usd,
+                                   "kind": "inferred",
+                                   "waiting": "away" if reason in ("owner", "session-ended")
+                                   else "tool", "idleMinutes": round(idle),
+                                   "lifetimeKind": how}}
+        if action == "end" and not has_tokens and row.started is not None:
+            start = timing_mod.stamp(row.started)
+            calls = []
+            for path, description, task_name in adapter.subagents(binding["transcript"], facts):
+                if hosts_mod.spawn_row(description, task_name) == row_id:
+                    calls += [c for c in adapter.read_transcript(path).calls
+                              if costreport._within(c, start, "", True)]
+            if calls:
+                return {"tokens": sum(c.usage.total for c in calls), "tokensKind": "measured",
+                        "tokensFrom": "transcript"}
+    except Exception:
+        return {}
+    return {}
+
+
+def cost_mod_price(tokens: int, call, minutes: int):
+    from tools.governance import cost as cost_mod, hosts as hosts_mod
+    usage = hosts_mod.Usage(cache_write_1h=tokens) if minutes == 60 else hosts_mod.Usage(
+        cache_write_5m=tokens)
+    return cost_mod.price(usage, call.model, (call.time or "")[:10]).usd
+
+
+def _after_write(reg, directory: str, actor: str, as_json: bool, current: str = "") -> None:
+    """What the next ceremony that writes does inside its own write and on its own
+    authorization: note a new plugin version in the change ledger, then backfill the
+    cost of closed time logs that predate dispatch bindings. Neither fails the write."""
+    try:
+        from tools.governance import changes as changes_mod
+        changes_mod.record_plugin_version(reg, actor)
+    except Exception as exc:
+        print("note: the plugin version was not recorded: %s" % exc, file=sys.stderr)
+    _backfill(directory, as_json, reg.root, current)
+
+
+def _backfill(directory: str, as_json: bool, project: str = "", current: str = "") -> None:
+    """Record the cost of closed time logs that predate dispatch bindings — never the
+    dispatch this write belongs to. It never fails the write it rides on."""
+    try:
+        from tools.governance import backfill
+        done = backfill.run(directory, project=project, current=current)
+    except Exception as exc:                          # the ceremony's own write stands
+        print("note: the cost backfill did not run: %s" % exc, file=sys.stderr)
+        return
+    if not done or as_json:
+        return
+    priced = [d for d in done if d.get("computable")]
+    marked = [d for d in done if d.get("computable") is False]
+    errors = [d for d in done if d.get("error")]
+    deferred = [d for d in done if d.get("deferred")]
+    if priced or marked:
+        print("note: cost backfilled for %d closed time log(s); %d had no transcript left "
+              "(marked not computable once)" % (len(priced), len(marked)), file=sys.stderr)
+    for entry in errors:
+        print("note: the cost backfill could not record %s (left for a later write): %s"
+              % (entry["dispatch"], entry["error"]), file=sys.stderr)
+    if deferred:
+        print("note: the cost backfill ran out of time; %d log(s) wait for the next write"
+              % len(deferred), file=sys.stderr)
+
+
+def _kindless_notes(warnings: list, as_json: bool) -> None:
+    """Each kindless-repeat warning as a ``note:`` line on stderr; under ``--json`` the
+    payload carries them as ``warnings`` instead."""
+    if not as_json:
+        for warning in warnings:
+            print("note: %s" % warning, file=sys.stderr)
+
+
 def _read_spec(path: str) -> str:
     text = textio.read_text(path)
     if text is None:
@@ -987,7 +1340,12 @@ def _timing_rows_from_spec(args, directory: str) -> int:
               lambda: "task list: NOT READY — %s" % exc)
         return EXIT_CHECK_FAILED
     total = timing_mod.total_line(priced)
-    return _emit({"ready": True, "rows": priced, "total": total}, args.as_json,
+    warnings = timing_mod.kindless_warnings(priced, timing_mod.kinds(past))
+    _kindless_notes(warnings, args.as_json)
+    payload = {"ready": True, "rows": priced, "total": total}
+    if warnings:
+        payload["warnings"] = warnings
+    return _emit(payload, args.as_json,
                  lambda: "\n".join(["%d. %s [%s]%s — %s" % (
                      row["id"], row["title"], row["class"],
                      " @%s" % row["kind"] if row.get("kind") else "",
@@ -1083,6 +1441,7 @@ def cmd_timing(args) -> int:
                                   "lives (allowedWriters in %s)"
                                   % (actor, schema.MANIFEST_RELPATH))
     events = timing_mod.load(path)
+    warnings = []
     if action in ("open", "add", "split"):
         split = args.do_split if action == "split" else None
         timing_mod.check(events, action, split)
@@ -1108,25 +1467,35 @@ def cmd_timing(args) -> int:
         skipped = []
         past = timing_mod.history(directory, skipped)
         _skipped_logs(skipped)
+        used = timing_mod.kinds(past)
         if not args.as_json:
-            used = timing_mod.kinds(past)
             print("kinds in use: %s" % (", ".join("%s (%d)" % pair for pair in used.items())
                                          or "none yet"))
         if split is None:
-            timing_mod.append(path, dict({"event": action, "rows": [
+            opening = dict({"event": action, "rows": [
                 dict(row, **written.get(row["id"], {}))
-                for row in timing_mod.price_rows(planned, past)]}, **extra))
+                for row in timing_mod.price_rows(planned, past)]}, **extra)
+            if action == "open":
+                opening.update(_transcript_figures(args.dispatch, "open", events, None))
+            timing_mod.append(path, opening)
+            warnings = timing_mod.kindless_warnings(planned, used)
+            _kindless_notes(warnings, args.as_json)
         else:
             # One line ends the row and adds its parts, so a cut-off write leaves neither.
             parts = [dict(spec, splitFrom=split) for spec in planned]
             timing_mod.append(path, {"event": "end", "row": split, "result": timing_mod.SPLIT,
                                      "rows": timing_mod.price_rows(parts, past)})
+            warnings = timing_mod.kindless_warnings(parts, used)
+            _kindless_notes(warnings, args.as_json)
     elif action in ("start", "wait", "resume", "end", "confirm", "timebox_reached", "park"):
         row_id = getattr(args, "do_" + action)
         timing_mod.check(events, event_name, row_id)
         event = dict({"event": event_name, "row": row_id}, **extra)
         if action == "end":
             event["result"] = args.result
+        if action in ("resume", "end"):
+            event.update(_transcript_figures(args.dispatch, action, events, row_id,
+                                             has_tokens="tokens" in event))
         timing_mod.append(path, event)
     elif not events:
         raise GovernanceError("no time log for dispatch %s at %s; open one with --open"
@@ -1134,12 +1503,18 @@ def cmd_timing(args) -> int:
     elif action == "summary":
         result = dict(timing_mod.summary(events, args.item or None),
                       log=os.path.relpath(path, args.root).replace(os.sep, "/"))
-        return _emit(result, args.as_json, lambda: timing_mod.summary_markdown(result))
+        return _emit(result, args.as_json,
+                     lambda: timing_mod.summary_markdown(result, why=args.why))
+    if action in _TIMING_WRITES:
+        _after_write(reg, directory, args.actor, args.as_json, current=args.dispatch)
     moment = timing_mod.now()
     found = timing_mod.rows(timing_mod.load(path), moment)
     if args.as_json:
-        return _emit({"log": path, "now": timing_mod.stamp(moment),
-                      "rows": [row.as_dict() for row in found]}, True)
+        payload = {"log": path, "now": timing_mod.stamp(moment),
+                   "rows": [row.as_dict() for row in found]}
+        if warnings:
+            payload["warnings"] = warnings
+        return _emit(payload, True)
     print(timing_mod.render_status(found, moment, compact=args.compact))
     return EXIT_OK
 
@@ -1242,6 +1617,12 @@ def cmd_structure(args) -> int:
     provider = selection.provider
     snap = provider.snapshot()
     if args.propose:
+        # The approved structure is checked first, as --apply checks the file it is given.
+        problems = policy_mod.workstream_problems(project_policy.workstreams)
+        if problems:
+            _emit({"problems": problems, "provenance": snap.provenance()}, args.as_json,
+                  lambda: "the approved structure is not usable:\n  " + "\n  ".join(problems))
+            return EXIT_CHECK_FAILED
         roadmap_text, roadmap_label = _roadmap_text(reg, args.root)
         result = structure_mod.propose(
             snap, project_policy.workstreams, roadmap_text=roadmap_text,
@@ -2001,6 +2382,11 @@ def _set_policy(root: str, actor: str, key: str, value, *, apply: bool):
         return ({"key": key, "current": before, "proposed": value, "applied": False,
                  "plan": plan.as_dict()}, plan, None)
 
+    from tools.governance import changes as changes_mod
+    blocked = changes_mod.ready(reg)
+    if blocked:
+        raise GovernanceError("%s, so this change could not be recorded when it took effect; "
+                              "nothing was written" % blocked)
     written, backup_set = repair_mod.apply_plan(reg, plan, label="policy-set", actor=actor)
     # Read the value back from disk. apply_plan re-validates what it wrote, but
     # "valid" is not "what was asked for", and a ceremony that is about to cite
@@ -2018,9 +2404,39 @@ def _set_policy(root: str, actor: str, key: str, value, *, apply: bool):
                backup_set.relative_directory))
     backup_mod.prune(root, keep=int(
         policy_mod.load(reg.policy).get("sweep.backupRetention", 10)))
+    recorded = []
+    try:
+        for subject, old, new in _leaf_changes(key, before, None if withdrawing else value):
+            entry = changes_mod.record_automatic(reg, changes_mod.line(
+                "guard" if subject == "guards" or subject.startswith("guards.") else "policy",
+                subject, old, new, actor))
+            if entry:
+                recorded.append(entry["id"])
+    except Exception as exc:                          # the change and its line fail together
+        backup_mod.restore(backup_set)
+        raise GovernanceError("policy.%s could not be recorded in the change ledger (%s), so "
+                              "the manifest was put back from %s; nothing was written"
+                              % (key, exc, backup_set.relative_directory))
     return ({"key": key, "current": before, "proposed": value, "applied": True,
              "withdrawn": withdrawing, "verified": True,
-             "filesWritten": written, "backup": backup_set.as_dict()}, plan, backup_set)
+             "filesWritten": written, "backup": backup_set.as_dict(),
+             "change": recorded[0] if len(recorded) == 1 else (recorded or None)},
+            plan, backup_set)
+
+
+def _leaf_changes(key: str, before, after) -> list[tuple[str, object, object]]:
+    """``(subject, old, new)`` for each leaf a policy write changes: a mapping is compared
+    key by key (``guards.retry.enabled``), anything else as one value."""
+    if isinstance(before, dict) or isinstance(after, dict):
+        old = before if isinstance(before, dict) else {}
+        new = after if isinstance(after, dict) else {}
+        found = []
+        for name in sorted(set(old) | set(new)):
+            found += _leaf_changes("%s.%s" % (key, name), old.get(name), new.get(name))
+        if not found and before != after:
+            found = [(key, before, after)]
+        return found
+    return [] if before == after else [(key, before, after)]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -2097,7 +2513,54 @@ def build_parser() -> argparse.ArgumentParser:
                       help="write the approved structure: policy, then the register")
     structure.add_argument("--file", default="", help="with --apply: the approved JSON")
     structure.set_defaults(func=cmd_structure)
-    sub.add_parser("kpis", parents=[common]).set_defaults(func=cmd_kpis)
+    kpis_parser = sub.add_parser("kpis", parents=[common])
+    kpis_parser.add_argument("--why", action="store_true",
+                             help="under each figure: how it was calculated and what it assumes")
+    kpis_parser.set_defaults(func=cmd_kpis)
+    cost_parser = sub.add_parser("cost", parents=[common])
+    cost_parser.add_argument("--dispatch", default="",
+                             help="one dispatch: orchestration apart, each row beside its time")
+    cost_parser.add_argument("--last", type=int, default=10,
+                             help="without --dispatch: how many closed dispatches (default 10)")
+    cost_parser.add_argument("--why", action="store_true",
+                             help="how each figure was calculated and what it assumes")
+    cost_parser.set_defaults(func=cmd_cost)
+    changes_parser = sub.add_parser("changes", parents=[common])
+    changes_mode = changes_parser.add_mutually_exclusive_group()
+    changes_mode.add_argument("--record", action="store_true",
+                              help="record a change made by hand (preview; --apply writes)")
+    changes_mode.add_argument("--undo", default="", metavar="CH-NNN",
+                              help="record that a change in force was undone")
+    changes_parser.add_argument("--kind", default="manual", choices=(
+        "guard", "policy", "lesson", "standing-rule", "plugin-version", "manual"))
+    changes_parser.add_argument("--subject", default="", help="with --record: what changed")
+    changes_parser.add_argument("--from-json", default="", help="with --record: the old value")
+    changes_parser.add_argument("--to-json", default="", help="with --record: the new value")
+    changes_parser.add_argument("--note", default="", help="why, in a line")
+    changes_parser.add_argument("--host", action="append", default=[],
+                                help="with --record: a host the change covers (repeat); "
+                                     "none means every host")
+    changes_parser.add_argument("--apply", action="store_true", help="write the line")
+    changes_parser.set_defaults(func=cmd_changes)
+    guards_parser = sub.add_parser("guards", parents=[common])
+    guards_parser.add_argument("--dispatch", required=True, help="the dispatch")
+    guards_mode = guards_parser.add_mutually_exclusive_group()
+    guards_mode.add_argument("--tried", action="store_true",
+                             help="what the dispatch tried and dropped, from its transcripts")
+    guards_mode.add_argument("--copy", action="store_true",
+                             help="copy its receipts into guardLog (preview; --apply writes)")
+    guards_mode.add_argument("--context", action="store_true",
+                             help="the top-level conversation's context now (read-only)")
+    guards_parser.add_argument("--model", default="",
+                               help="with --context: price the reload a switch to MODEL costs")
+    guards_parser.add_argument("--apply", action="store_true", help="with --copy: write")
+    guards_parser.set_defaults(func=cmd_guards)
+    results_parser = sub.add_parser("results", parents=[common])
+    results_parser.add_argument("change", nargs="?", default="",
+                                help="one change (CH-NNN); every change when omitted")
+    results_parser.add_argument("--why", action="store_true",
+                                help="how each verdict was worked out")
+    results_parser.set_defaults(func=cmd_results)
 
     closeout = sub.add_parser("closeout", parents=[common])
     closeout.add_argument("--item", required=True)
@@ -2168,6 +2631,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="the dispatch the log belongs to (every action but --kinds)")
     timing.add_argument("--sprint", dest="sprint_alias", default="",
                         help=argparse.SUPPRESS)   # 1.14 name, kept for one release
+    timing.add_argument("--why", action="store_true",
+                        help="with --summary: how each total was calculated")
     timing_action = timing.add_mutually_exclusive_group(required=True)
     timing_action.add_argument("--open", dest="do_open", action="store_true",
                                help="open the log from the first task listing (--rows-file)")

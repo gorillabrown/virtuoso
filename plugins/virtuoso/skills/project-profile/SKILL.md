@@ -121,7 +121,7 @@ found and ask only about what is missing or looks wrong — re-asking a settled 
 a profile gets overwritten with a worse answer.
 
 Where an answer is a *value*, record the value. Where it is genuinely prose, record which
-shipped file it belongs on top of: a rule about dispatching belongs on `dispatch-kickoff`, a rule
+shipped file it belongs on top of: a rule about dispatching belongs on `next-dispatch`, a rule
 about running tests belongs on the test-running agent, a readiness check belongs on the
 rubric.
 

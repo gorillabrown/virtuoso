@@ -93,7 +93,8 @@ Not aligned — [the open assumptions, frames, or questions, by name].
 
 ## Plan
 
-<!-- Filled by write-plan: readiness, roadmap placement, kickoff, repository
-     reconciliation, and one specification per draft-stub item, each headed
+<!-- Filled by write-plan: readiness, roadmap placement, the kickoff (one block
+     carrying its repository-reconciliation recipe), and one specification per
+     draft-stub item, each headed
      `#### HB-<n> — Title`. Empty until then. An epic-scale entry is never planned here.
      Only the virtuoso skill executes the plan, and it records the run in the trail. -->

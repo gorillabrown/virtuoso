@@ -185,6 +185,22 @@ Every dispatch follows this sequence. No exceptions. Zeus executes this as the o
 
 This is the behavioral pause mechanism — Zeus does not auto-advance between phases.
 
+**Compaction at the gate.** Neither the agent nor a hook can compact the conversation; the
+person can. When the top-level context (`virtuoso_registry guards --dispatch <ID> --context`)
+is past `guards.compactNudge.share` (default 0.75) of
+`guards.compactNudge.windowTokens`, the gate block also prints a ready-to-paste line —
+`/compact keep <DISPATCH-ID>, the time log, open decisions` — with the context size. It adds
+no wait: the person pastes it or not, and the dispatch recovers from a compaction through
+the time log (`timing --check`).
+
+**Spawns and models.** Every worker spawn names its row — `row N` in the description, and a
+task name starting `row_N_` where the host takes one — so its calls count as the row's cost.
+Change models at worker boundaries; a top-level model change re-reads the conversation on the
+new model and is stated with its reload cost before it is made (`virtuoso_registry guards
+--dispatch <ID> --context --model <new model>`: the context at that model's cache-write
+rate). The issue document's field 3
+carries the **Tried and failed** list (`virtuoso_registry guards --dispatch <ID> --tried`).
+
 ---
 
 ### Phase 1 — READ
@@ -197,7 +213,7 @@ This is the behavioral pause mechanism — Zeus does not auto-advance between ph
   the two differ, the registered source wins and the difference is an issue to route
 - Read this `zeus.md` (coordination protocol, routing tree, escalation rules)
 - Scan the agent roster (plugin `agents/` + project `.claude/agents/`) — discover all available agents + their exact `name:` fields
-- Read the dispatch spec referenced by the dispatch kickoff (the kickoff printed by **`/dispatch-kickoff`**)
+- Read the dispatch spec referenced by the dispatch kickoff (the kickoff printed by **`/next-dispatch`**)
 - Read any governance docs referenced by the spec
 
 **Agent Name Resolution:**

@@ -1,5 +1,78 @@
 # Virtuoso Release Notes
 
+## v1.16.0 (2026-10-23) — cost guards, `next-dispatch`, and one-paste kickoffs
+
+**Upgrading from 1.15.0.** Follow [`docs/MIGRATION-1.16.md`](docs/MIGRATION-1.16.md): rename
+`dispatch-kickoff` to `next-dispatch` in your workspace layout, then start a new session
+(`/dispatch-kickoff` and the old layout name keep working for this release, with a warning
+naming the fix). Cost guards are on by default; `policy-set guards.enabled --value-json false`
+turns them off. New workspaces get a `changeLedger` role and existing ones are offered it;
+`guardLog` is opt-in.
+
+- **Cost guards and change measurement.** In a project with a Virtuoso registry, hooks hold
+  a costly step once and let the identical step through: a cold return (with a
+  `/compact keep …` line mid-dispatch, a handoff note outside one), a third identical failing
+  command, a whole-file read over 64 KB in the main conversation. `cost` prices a dispatch
+  in tokens and dollars at API prices, orchestration apart from each row, from a dated price
+  catalogue; every figure carries its kind (`measured`, `inferred`, `estimated`) and `--why`.
+  A change ledger dates every change; `results` gives a before/after verdict with its sample,
+  range, trade-offs and confounders. Closed time logs are backfilled with their cost from the
+  transcripts the host keeps. What was tried and failed is carried into the issue document,
+  epic state and git hand-off. On Claude Code a turn can end with a one-line nudge to
+  compact (once per context epoch) and, once a week, the guards' tally; `guards --context`
+  reads the current context and a model switch's reload cost. **Upgrading from 1.15.0:** guards are on by default
+  (`policy-set guards.enabled --value-json false` turns them off); new workspaces get a
+  `changeLedger` role, existing ones are offered it; `guardLog` is opt-in. See the README's
+  *Cost guards* and *Did it work?*. (VIR-051)
+
+- **The held-plan template names one kickoff block.** A new held entry's `## Plan` note
+  lists the kickoff as one block carrying its repository-reconciliation recipe, as
+  `/write-plan` and `/next-dispatch` now print it. (VIR-053)
+
+- **`timing --split` warns on a kindless repeat part.** A part added by a split that is a
+  repeat task with no kind gets the same `note:` line (or `--json` warning) that `--open`
+  and `--add` give, so no kindless repeat row reaches a log unannounced. (VIR-052)
+
+- **The kickoff and its reconciliation recipe are one block.** `/next-dispatch` prints the
+  kickoff, a `REPOSITORY RECONCILIATION — run this FIRST` label naming the shell, the
+  filled recipe indented, and the halt line in one fence, so one paste gives the executing
+  session everything it needs. A plan `/write-plan` holds carries the same one block.
+  (VIR-049)
+
+- **Dispatch sessions show Remote Control's state and prompt for it.** At dispatch start
+  the virtuoso skill says whether the session's Remote Control is on, so you can follow and
+  answer the dispatch from another device. When it is off, it prints the one step that
+  turns it on; it switches it itself only when you asked for that in the session or the
+  kickoff, and it never turns it off. A host with no switch gets one line saying so. The
+  kickoff's `Session:` line names the state (`· Remote Control: on`, `off — <step>`, or
+  `not offered by this host`), and each epic session does the same. (VIR-046)
+
+- **A dispatch's session is named for the work when it starts.** Before implementation
+  begins, the virtuoso skill titles the session `[DISPATCH-ID] — [short dispatch name]`
+  by the first means the host offers: a session-title tool it calls itself, else a title
+  command it prints for you to run, else the title as its first visible line. The
+  `/next-dispatch` kickoff carries a `Session:` line that fixes the title in advance, and
+  each epic session titles itself `[PACKET-ID]-S<n> — [phase name]`. (VIR-045)
+
+- **`dispatch-kickoff` is now `next-dispatch`.** The skill that starts the next roadmap item
+  is `/next-dispatch`, matching `virtuoso_registry next`. For this release
+  `/dispatch-kickoff` prints that it is now `/next-dispatch` and runs it, and a workspace
+  layout naming `dispatch-kickoff` (or `next-pointer`) keeps working with a preflight
+  warning naming the fix. New projects write `next-dispatch`. `/dispatch-closeout` is
+  unchanged. **Upgrading from 1.15.0:** follow
+  [`docs/MIGRATION-1.16.md`](docs/MIGRATION-1.16.md). (VIR-050)
+
+- **A workstream is one thing, whether stored by id or by name.** A structure whose workstream
+  or deliverable is named like another one's id is refused, naming both, by `policy-set`,
+  `structure --propose` and `--apply`, and the board; a name equal to its own id is fine.
+  Under an approved structure the board reads a stored name as its id, so each workstream and
+  deliverable shows one slicer value, labelled by name. (VIR-048)
+
+- **A repeat task row with no kind is warned.** `timing --rows-from-spec`, `--open` and `--add`
+  print one `note:` line per repeat-class row that carries no kind (a `warnings` list under
+  `--json`), naming the kinds already in use, so the estimator can learn from every recurring
+  task. Exit codes are unchanged. (VIR-044)
+
 ## v1.15.0 (2026-10-15) — dispatch vocabulary, workstreams and deliverables, any-tool registers
 
 **Upgrading from 1.14.0.** Follow [`docs/MIGRATION-1.15.md`](docs/MIGRATION-1.15.md): rename

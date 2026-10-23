@@ -314,6 +314,11 @@ Module-mode and platform-specific alternatives are candidates, not answers, unti
 Batch every ambiguous finding into bounded questions (see *Flagging for human
 review*). Phase 1 ends when every question is answered.
 
+**Applied findings.** Before listing open findings, read `virtuoso_registry changes --json`
+(`inForce`) and `results --json`: a finding or lesson whose subject has a change in force is
+not an open finding — list it in an **Applied** block with its verdict so far. A finding that
+prices something uses the one finding format (tier, confidence, kind, now → after).
+
 ---
 
 ## Phase 2 — Work list & approval

@@ -98,10 +98,11 @@ NON_WRITABLE_AUTHORITIES = frozenset({"archive", "unknown"})
 #: Mutability values no ceremony may write to directly.
 NON_WRITABLE_MUTABILITIES = frozenset({"read-only", "immutable"})
 
-#: Skill names an earlier release used, and the names that replaced them in 1.15.
-#: For one release every actor check reads them as the new names, so a project's
-#: workspace-layout.json keeps working unedited. Removed in the next major.
-ACTOR_ALIASES = {"next-pointer": "dispatch-kickoff", "pointer-closeout": "dispatch-closeout"}
+#: Skill names earlier releases used (1.14's, and the 1.15 kickoff's), each mapped
+#: straight to the current name. Every actor check reads them as the current names,
+#: so a project's workspace-layout.json keeps working unedited. Removed in the next major.
+#: Kept on one line: the shipped-files check allows the old kickoff name only on this line.
+ACTOR_ALIASES = {"next-pointer": "next-dispatch", "dispatch-kickoff": "next-dispatch", "pointer-closeout": "dispatch-closeout"}
 
 
 def canonical_actor(name: str) -> str:
@@ -274,7 +275,7 @@ DEFAULT_ROLES: dict[str, dict] = {
         "authority": "live",
         "mutability": "read-write",
         "owner": "roadmap-review",
-        "allowedWriters": ["roadmap-review", "dispatch-kickoff", "mid-dispatch-decision",
+        "allowedWriters": ["roadmap-review", "next-dispatch", "mid-dispatch-decision",
                            "dispatch-closeout", "3rd-party-audit"],
         "validation": "markdown",
         "classification": "active",
@@ -286,7 +287,7 @@ DEFAULT_ROLES: dict[str, dict] = {
         "authority": "live",
         "mutability": "read-write",
         "owner": "roadmap-review",
-        "allowedWriters": ["roadmap-review", "dispatch-kickoff", "dispatch-closeout"],
+        "allowedWriters": ["roadmap-review", "next-dispatch", "dispatch-closeout"],
         "validation": "csv-headers",
         "classification": "active",
         "origin": "authored",
@@ -349,7 +350,7 @@ DEFAULT_ROLES: dict[str, dict] = {
         "authority": "reference",
         "mutability": "read-write",
         "owner": "mid-dispatch-decision",
-        "allowedWriters": ["mid-dispatch-decision", "dispatch-kickoff", "dispatch-closeout",
+        "allowedWriters": ["mid-dispatch-decision", "next-dispatch", "dispatch-closeout",
                            "roadmap-review", "virtuoso"],
         "validation": "exists",
         "classification": "active",
@@ -439,6 +440,38 @@ DEFAULT_ROLES: dict[str, dict] = {
         "origin": "authored",
         "label": "Holding bay — ad hoc plans awaiting roadmap review (directory)",
     },
+    "changeLedger": {
+        # When each change took effect, one JSON line per change, never rewritten (an undo
+        # is its own line): the split point `results` puts the runs after a change against
+        # the runs before it. A ceremony that records a change by hand is a writer; a line
+        # written automatically rides on the operation that caused it (policy-set, a lesson
+        # status), which was authorized on its own role, in the same transaction. Its
+        # authority is evidence, like the close-outs: `live` belongs to the one work register.
+        "provider": "jsonl",
+        "authority": "evidence",
+        "mutability": "append-only",
+        "owner": "roadmap-review",
+        "allowedWriters": ["roadmap-review", "dispatch-closeout", "project-profile"],
+        "validation": "exists",
+        "classification": "active",
+        "origin": "authored",
+        "label": "Change ledger — when each change took effect (append-only)",
+    },
+    "guardLog": {
+        # The receipts the cost guards kept for a dispatch (holds, and held steps sent
+        # again), copied in by dispatch-closeout from ~/.virtuoso/guard/receipts.jsonl:
+        # hooks never write a project file. Opt-in; without it, project guard figures are
+        # not computable, naming it.
+        "provider": "jsonl",
+        "authority": "evidence",
+        "mutability": "append-only",
+        "owner": "dispatch-closeout",
+        "allowedWriters": ["dispatch-closeout"],
+        "validation": "exists",
+        "classification": "active",
+        "origin": "generated",
+        "label": "Guard receipts, copied at close-out (append-only)",
+    },
     "board": {
         # The interactive roadmap board: one self-contained page (Dashboard, Roadmap,
         # Completed) regenerated from the register, the ledger and the roadmap by every
@@ -448,7 +481,7 @@ DEFAULT_ROLES: dict[str, dict] = {
         "authority": "report",
         "mutability": "generated",
         "owner": "roadmap-review",
-        "allowedWriters": ["roadmap-review", "dispatch-closeout", "dispatch-kickoff"],
+        "allowedWriters": ["roadmap-review", "dispatch-closeout", "next-dispatch"],
         "validation": "exists",
         "classification": "active",
         "origin": "generated",
@@ -549,6 +582,7 @@ CREATE_ROLE_ORDER = (
     "terminalLedger",
     "lessons",
     "findings",
+    "changeLedger",
     "closeOuts",
     "issues",
     "roadmapReviews",

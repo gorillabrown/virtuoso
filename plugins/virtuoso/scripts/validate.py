@@ -79,8 +79,10 @@ HOST_TERM_PATTERNS = [
 HOST_ADAPTER_FILES = {
     "skills/dispatch-closeout/agents/openai.yaml",
 }
+#: Directories whose every file is a host adapter or a fixture captured from a host.
+HOST_ADAPTER_DIRS = ("tools/governance/hosts/", "scripts/fixtures/hosts/")
 #: The one table that names model aliases (tier → alias → model id → effort).
-MODEL_TABLE_FILES = {"references/model-tiers.md"}
+MODEL_TABLE_FILES = {"references/model-tiers.md", "references/model-prices.json"}
 #: The agent frontmatter `model:` field is host configuration, not prose.
 MODEL_FRONTMATTER_RE = re.compile(r"^model:\s*\S+\s*$")
 
@@ -138,6 +140,8 @@ CREATE_ALLOWED = {
     "scripts/virtuoso_registry.py",
     "tools/governance/backup.py", "tools/governance/textio.py",
     "tools/governance/install.py", "tools/governance/repair.py",
+    # Guard state, only under the user's own ~/.virtuoso/guard/ (it refuses any other path).
+    "tools/governance/guardstate.py",
     "tools/governance/providers/csv_provider.py",
     "tools/governance/providers/ledger.py",
     "tools/governance/providers/recovery.py",
@@ -389,16 +393,28 @@ def check_session_hook() -> None:
         commands = [h.get("command", "")
                     for entry in data.get("hooks", {}).get("SessionStart", [])
                     for h in entry.get("hooks", [])]
-        if not commands:
-            fail("hooks/%s declares no SessionStart hook command" % name)
+        preflight = [c for c in commands if "virtuoso_preflight" in c]
+        if not preflight:
+            fail("hooks/%s declares no SessionStart preflight command" % name)
             return
-        for command in commands:
+        for command in preflight:
             mode = re.search(r"--mode\s+(\S+)", command)
             if not mode or mode.group(1) not in ("check", "detect"):
                 fail("hooks/%s runs SessionStart with --mode %s; it must be read-only "
                      "(check/detect)" % (name, mode.group(1) if mode else "<unset>"))
                 return
-    ok("%d hook file(s); every SessionStart command runs a read-only mode" % len(hook_files))
+        # Every other hook command, in any event, is the cost-guard entry, which writes only
+        # the user's own ~/.virtuoso/guard/ and nothing at all outside a Virtuoso project.
+        others = [h.get("command", "") for entries in data.get("hooks", {}).values()
+                  for entry in entries for h in entry.get("hooks", [])
+                  if "virtuoso_preflight" not in h.get("command", "")]
+        stray = [c for c in others if not re.search(r"scripts/virtuoso_guard\.py\"? ", c + " ")]
+        if stray:
+            fail("hooks/%s runs a command that is neither preflight (check/detect) nor the "
+                 "guard entry: %s" % (name, stray[0]))
+            return
+    ok("%d hook file(s); every SessionStart preflight runs a read-only mode, every other "
+       "hook is the guard entry" % len(hook_files))
 
 
 def check_relative_resources() -> None:
@@ -585,7 +601,8 @@ def check_text_scans(skill_names: list[str]) -> None:
         if not _is_test_file(rel):
             scan(rel, text, SHIPPED_PROJECT_PATTERNS, "project-specific", project)
         scan(rel, text, NONPORTABLE_SHELL_PATTERNS, "non-portable shell", shell)
-        if rel in HOST_ADAPTER_FILES or rel in MODEL_TABLE_FILES:
+        if (rel in HOST_ADAPTER_FILES or rel in MODEL_TABLE_FILES
+                or rel.startswith(HOST_ADAPTER_DIRS)):
             continue
         for number, line in enumerate(text.splitlines(), start=1):
             if EXEMPT in line or MODEL_FRONTMATTER_RE.match(line):

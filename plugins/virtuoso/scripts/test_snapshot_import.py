@@ -461,7 +461,7 @@ def test_every_refresh_instruction_names_the_rows_form():
     root = Path(PLUGIN_ROOT)
     places = [root / "references" / "registry-contract.md"] + [
         root / "skills" / name / "SKILL.md"
-        for name in ("dispatch-kickoff", "dispatch-closeout", "roadmap-review")]
+        for name in ("next-dispatch", "dispatch-closeout", "roadmap-review")]
     for path in places:
         text = " ".join(path.read_text(encoding="utf-8").split())
         assert "--import <rows.json>" in text, path

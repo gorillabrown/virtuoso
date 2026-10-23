@@ -9,7 +9,7 @@ description: >
   prompt with multiple steps, or any task where completion quality depends on maintaining focus
   across many tool calls. When in doubt, use this skill — the overhead is minimal and the
   discipline prevents regressions. It is the only skill in the plugin that executes:
-  storyboard scopes, write-plan and roadmap-review plan, dispatch-kickoff and epic prepare,
+  storyboard scopes, write-plan and roadmap-review plan, next-dispatch and epic prepare,
   and all of them hand off here. Before the first edit on a written plan it checks for
   upstream, downstream, in-flight, and roadmap-order conflicts.
 ---
@@ -50,7 +50,7 @@ This skill stays in active context because you reference it at every step bounda
 
 **The only skill that executes.** Every path to execution ends here
 (`references/execution-paths.md`). `/storyboard` scopes work to a draft stub.
-`/write-plan` and `/roadmap-review` write the full plan. `/dispatch-kickoff` gates it, and
+`/write-plan` and `/roadmap-review` write the full plan. `/next-dispatch` gates it, and
 `/epic` prepares a packet. None of them edits an edit site, creates the work branch, or
 runs the change. This skill does, and only from a written plan: a draft stub or an idea
 goes back to `/storyboard` and `/write-plan` first.
@@ -68,16 +68,48 @@ Examples:
 - `POSTV2-REVIEW-1 — Review Closeout`
 - `DISPATCH-QUEUE-MIGRATE — Workbook Queue Transition`
 
-If an explicit title-setting mechanism is available, set the dispatch record title to
-that value before implementation begins. If no title-setting mechanism is available,
-make the first substantive visible line after the short Virtuoso announcement:
+A kickoff that carries a `Session:` line gives the title already fixed: use that line's
+value up to ` · Remote Control:`, without the `Session:` label, as written.
+Title the session by the first means the host offers — a session-title tool, a title
+command, the first visible line — and do it before implementation begins. Try them in
+this order:
+
+1. **A session-title tool.** When the host exposes a tool that sets this session's own
+   title, call it with the title. Done.
+2. **A title command the owner types.** When the host has no such tool but has a command
+   the owner can type to rename the session, print that command filled in with the title,
+   ready to run, in the announcement, and ask the owner to run it. Carry on; do not wait.
+3. **The first visible line.** When the host offers neither, the title is the
+   first substantive visible line after the short Virtuoso announcement:
 
 `[DISPATCH-ID] — [short dispatch name]`
+
+Print that line in every case, even after a tool set the title, so the record reads the
+same on any host.
 
 Do not let the record remain titled `$virtuoso`, `/virtuoso`, "Virtuoso", or any
 other skill-trigger-only name when the dispatch or dispatch name is knowable. If the
 dispatch ID is unknown at intake, use a temporary descriptive title and update the
 first plan heading once the ID is discovered.
+
+### Remote Control: state it, prompt for it
+
+At dispatch start, right after the title is set, say whether Remote Control is on for this
+session, so the owner can follow and answer it from another device. Prompt; do not switch:
+
+- **On:** say so, and leave it as it is.
+- **Off:** print the one step that turns it on, ready to use: the host's switch or the
+  command the owner types. Carry on; do not wait.
+- **A Remote Control tool** the host exposes is called only when the owner asks for it,
+  on record for this dispatch: the owner said so in the session, or the kickoff asks for
+  it in so many words. The `Session:` line's Remote Control slot is the kickoff's
+  best-known state, not a request; restate the live state here.
+- **State unknown:** when the host has a switch but cannot report it, say so and print
+  the step.
+- **No switch at all:** say in one line that this host offers no Remote Control switch.
+
+A session never turns it off: not by a tool, and not by printing a step for a switch that
+is already on.
 
 ## Architecture: Parent Chat + Optional Swarm
 
@@ -147,7 +179,7 @@ Before touching any file or running any command:
 
 1. **Read the full task specification.** If the task references external docs, read those too.
    When the task is a governed dispatch, read its **origin line** as well
-   (`references/execution-paths.md`). The spec may be a roadmap item from `/dispatch-kickoff`, a
+   (`references/execution-paths.md`). The spec may be a roadmap item from `/next-dispatch`, a
    held plan handed off by `/write-plan`, or an epic packet from `/epic`. All three arrive
    meeting the same destination contract. The origin tells the intake below which checks
    to run, and tells Phase 6 how the close-out runs.
@@ -194,7 +226,7 @@ What a conflict does:
 - **Roadmap order** → ask one bounded question: wait for the earlier item, run now with
   the user's reason recorded in the plan, or send it back to be planned again.
 - **Drift, or a plan that no longer matches the code** → stop. A held plan goes back to
-  `/write-plan <entry>`, and a roadmap item to `/dispatch-kickoff`. Never re-plan here.
+  `/write-plan <entry>`, and a roadmap item to `/next-dispatch`. Never re-plan here.
 - **Downstream staleness** → not a stop. Name each affected item in Task #1's notes and
   in the close-out, so the review acts on it. Another item's specification is not this
   run's to edit.
@@ -212,7 +244,7 @@ it. Neither executed anything. As part of Task #1:
    - `planned` → continue.
    - `in-flight` → another run holds it. Stop and ask. Never run it twice.
    - `storyboarded` → there is only a draft stub, and no plan. Route to `/write-plan <entry>`.
-   - `absorbed` → it is a roadmap item now. Route to `/dispatch-kickoff`.
+   - `absorbed` → it is a roadmap item now. Route to `/next-dispatch`.
    - `executed` or `withdrawn` → there is nothing to run. Say so and stop.
 2. **Run the conflict check** above, against the entry's kickoff, placement, and impact map.
 3. **Record the start of execution.** Preview first, then run it with `--apply`:
@@ -733,7 +765,14 @@ For each task, the parent:
    --host <host>`, naming the model and host that run the row.
 4. Decides whether to execute locally or launch a child worker.
 5. If launching a worker, gives it a bounded task, explicit file/module ownership,
-   success criteria, and instructions not to revert others' edits.
+   success criteria, and instructions not to revert others' edits. **Name the row in the
+   spawn:** `row N` in the description (`row 4 — fix the parser`), and where the host takes
+   a task name, a task name starting `row_N_`. That is how the worker's calls count as the
+   row's cost; a spawn naming no row, or naming two rows that disagree, counts as
+   orchestration. Change models at worker boundaries: a model change in the top-level
+   session re-reads the whole conversation on the new model, so it is a priced decision —
+   state its reload cost before making it: the current context rewritten at the new model's
+   cache-write rate (`guards --dispatch <DISPATCH-ID> --context --model <new model>`).
 6. Verifies the result meets the task spec — mechanically, per the rule below.
 7. If the result includes information needed by downstream tasks, records the relevant
    summary for later steps.
@@ -1067,7 +1106,10 @@ is defined with these seven fields (the saved `.md` holds fields 1–6; field 7 
 
 1. **tl;dr:** one line.
 2. **Executive Summary:** 2–4 sentences — what happened and why it blocks.
-3. **Evidence of issue:** errors, failing test, contradicted assumption, file:line, logs.
+3. **Evidence of issue:** errors, failing test, contradicted assumption, file:line, logs —
+   and a **Tried and failed** list: what was tried and dropped, read mechanically from the
+   transcripts by `virtuoso_registry guards --dispatch <DISPATCH-ID> --tried`, so the next
+   session does not retry it.
 4. **Possible cause(s):** ranked hypotheses.
 5. **Likely solution(s):** candidate fixes/paths.
 6. **Confidence in cause and solution identification (1–10):** integer + one-line justification.
@@ -1079,7 +1121,8 @@ The saved file IS the handoff token — `/mid-dispatch-decision` expects a path 
 - Guess and keep going ("it's probably fine")
 - Try a different approach without saying so
 - Skip the blocked task and come back later (unless explicitly told to)
-- Retry the same thing more than twice
+- Retry the same thing more than twice (the retry guard holds a third identical failing
+  command once, in workers too; sending it again unchanged goes through)
 - Silently change scope or absorb a failed task without updating the plan
 
 ---
@@ -1209,7 +1252,7 @@ what was learned]
   reads first when processing a close-out into a Dispatch Close-Out Report. Run
   **`/dispatch-closeout`** on this block to fold the result into the roadmap, dispatch queue,
   and retrospective. (The spec arrived through one of the three paths in
-  `references/execution-paths.md`: `/dispatch-kickoff`'s kickoff, `/write-plan`'s held plan,
+  `references/execution-paths.md`: `/next-dispatch`'s kickoff, `/write-plan`'s held plan,
   or `/epic`'s packet. `/dispatch-closeout` reads the origin line to close each one
   correctly.)
 

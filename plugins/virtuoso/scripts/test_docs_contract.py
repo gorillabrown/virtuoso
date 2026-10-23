@@ -224,7 +224,7 @@ def test_no_ceremony_restates_the_rubrics_version_or_count():
 def test_the_specification_finding_matches_the_rubric():
     rubric = (ROOT / "references" / "readiness-rubric.md").read_text(encoding="utf-8")
     wanted = re.search(r"\*\*Specification readiness\*\* — ([^.]+?) plus", rubric).group(1)
-    kickoff = (ROOT / "skills" / "dispatch-kickoff" / "SKILL.md").read_text(encoding="utf-8")
+    kickoff = (ROOT / "skills" / "next-dispatch" / "SKILL.md").read_text(encoding="utf-8")
     assert "| **Specification readiness** | %s plus" % wanted in kickoff
 
 
@@ -288,7 +288,7 @@ def test_the_rubric_reports_five_separate_findings():
 
 
 def test_the_ceremonies_defer_to_the_shared_rubric():
-    for name in ("roadmap-review", "dispatch-kickoff", "write-plan"):
+    for name in ("roadmap-review", "next-dispatch", "write-plan"):
         text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
         assert "references/readiness-rubric.md" in text, (
             "%s does not point at the shared rubric" % name)
@@ -342,7 +342,7 @@ def test_the_registry_contract_documents_every_lessons_finding():
 
 
 def test_the_ceremonies_read_pace_rather_than_derive_it():
-    for name in ("roadmap-review", "roadmap-status", "dispatch-kickoff"):
+    for name in ("roadmap-review", "roadmap-status", "next-dispatch"):
         text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
         assert "`pace` block" in text, "%s does not read the pace block" % name
     review = (ROOT / "skills" / "roadmap-review" / "SKILL.md").read_text(encoding="utf-8")
@@ -377,7 +377,7 @@ def test_every_skill_names_five_effort_levels():
 
 
 def test_ceremony_skills_run_the_read_only_preflight():
-    ceremonies = ["roadmap-review", "roadmap-status", "dispatch-kickoff", "dispatch-closeout",
+    ceremonies = ["roadmap-review", "roadmap-status", "next-dispatch", "dispatch-closeout",
                   "mid-dispatch-decision", "3rd-party-audit", "storyboard", "write-plan"]
     for name in ceremonies:
         text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
@@ -432,10 +432,10 @@ def skill_text(name: str) -> str:
 
 
 def test_every_path_points_at_the_one_destination_contract():
-    """Storyboard -> write-plan, dispatch-kickoff and epic must arrive at the same place;
+    """Storyboard -> write-plan, next-dispatch and epic must arrive at the same place;
     the contract has one home, and every ceremony on a path reads it."""
     assert (ROOT / "references" / "execution-paths.md").is_file()
-    for name in ("storyboard", "write-plan", "dispatch-kickoff", "epic", "virtuoso",
+    for name in ("storyboard", "write-plan", "next-dispatch", "epic", "virtuoso",
                  "dispatch-closeout", "roadmap-review"):
         assert "references/execution-paths.md" in skill_text(name), name
 
@@ -488,7 +488,7 @@ def test_the_roadmap_paths_open_only_on_the_master_roadmap():
     assert "#### Step 1a — One item marked `Path: epic`" in epic
     assert "#### Step 1b — A combination of roadmap items" in epic
     assert "`/storyboard`" in epic
-    kickoff = skill_text("dispatch-kickoff")
+    kickoff = skill_text("next-dispatch")
     assert "`Path: epic`" in kickoff and "## Edge case: Epic at head" in kickoff
     assert "Origin: roadmap — [ITEM-ID]" in kickoff
 
@@ -576,6 +576,87 @@ def test_the_staging_catch_all_names_agent_files_overlays_and_briefs():
     for fragment in ("`agents/<Agent>.md`", "`<overlays>/agents/<Agent>.md`",
                      "`.claude/agents/`", "names the file as an edit site"):
         assert fragment in rule, fragment
+
+
+def test_the_virtuoso_skill_titles_the_session_first():
+    naming = _between(skill_text("virtuoso"), "## Dispatch Record Naming", "## Architecture")
+    order = [naming.index(fragment) for fragment in
+             ("session-title tool", "before implementation begins",
+              "first substantive visible line")]
+    assert order == sorted(order), order
+    means = [naming.index(fragment) for fragment in
+             ("1. **A session-title tool", "2. **A title command", "3. **The first visible line")]
+    assert means == sorted(means), means
+
+
+def test_the_kickoff_block_names_the_session():
+    block = _between(skill_text("next-dispatch"), "## Kickoff\n",
+                     "## Standing rules that apply").split("\\```")[1]   # the code block
+    assert any(line.startswith("Session: [ITEM-ID] — ") for line in block.splitlines())
+
+
+def test_the_kickoff_is_one_block():
+    output = _between(skill_text("next-dispatch"), "## Kickoff\n",
+                      "## Standing rules that apply")
+    parts = output.split("\\```")
+    assert len(parts) == 3, "exactly one fence under ## Kickoff"
+    lines = [line for line in parts[1].splitlines() if line.strip()]
+    flat = [" ".join(line.split()) for line in lines]      # a wrap never splits a phrase
+    session = next(i for i, line in enumerate(lines) if line.startswith("Session: [ITEM-ID] — "))
+    label = next(i for i, line in enumerate(flat)
+                 if "REPOSITORY RECONCILIATION — run this FIRST, before any edit" in line)
+    assert session < label < len(lines) - 1
+    assert all(line.startswith("  ") for line in lines[label + 1:-1])   # the recipe, indented
+    assert flat[-1] == ("Halt on any STOP and report the git output — a halt is a dispatch "
+                        "blocker, not something to improvise around.")
+    assert "## Repository reconciliation — run this FIRST" not in output
+    assert "```" not in parts[1]
+
+
+def test_the_epic_prompt_titles_each_session():
+    launch = (ROOT / "skills" / "epic" / "assets" / "launch.template.md").read_text(
+        encoding="utf-8")
+    kickoff = launch.split("## Kickoff / resume prompt", 1)[1].split("## Goal line", 1)[0]
+    prompt = kickoff.split("```", 2)[1]
+    assert "-S<n> — " in prompt and "title this session" in prompt
+
+
+def test_the_virtuoso_skill_turns_remote_control_on():
+    setup = " ".join(_between(skill_text("virtuoso"), "## Dispatch Record Naming",
+                              "## Architecture").split())     # a wrap never splits a phrase
+    for fragment in ("Remote Control", "only when the owner", "never turns it off",
+                     "offers no Remote Control switch"):
+        assert fragment in setup, fragment
+
+
+def test_the_kickoff_session_line_names_remote_control():
+    block = _between(skill_text("next-dispatch"), "## Kickoff\n",
+                     "## Standing rules that apply").split("\\```")[1]
+    session = [line for line in block.splitlines() if line.startswith("Session: ")]
+    assert len(session) == 1 and "· Remote Control:" in session[0], session
+
+
+def test_the_epic_prompt_turns_remote_control_on():
+    launch = (ROOT / "skills" / "epic" / "assets" / "launch.template.md").read_text(
+        encoding="utf-8")
+    kickoff = launch.split("## Kickoff / resume prompt", 1)[1].split("## Goal line", 1)[0]
+    prompt = kickoff.split("```", 2)[1]
+    assert "Remote Control" in prompt and "never turn it off" in " ".join(prompt.split())
+
+
+def test_the_held_plan_carries_one_kickoff_block():
+    step = _between(skill_text("write-plan"), "## Step 7 — Hold the plan", "2. Check the entry")
+    flat = " ".join(step.split())
+    assert "**Kickoff** (one block carrying the repository-reconciliation recipe" in flat
+    assert "**Repository reconciliation — run this FIRST**" not in flat
+
+
+def test_the_held_plan_template_names_one_kickoff_block():
+    template = (ROOT / "skills" / "storyboard" / "assets" / "held-plan.template.md").read_text(
+        encoding="utf-8")
+    plan = " ".join(template.split("## Plan", 1)[1].split())
+    assert "one block carrying its repository-reconciliation recipe" in plan
+    assert "kickoff, repository reconciliation" not in plan
 
 
 def test_scope_discipline_defines_each_delta():
@@ -680,3 +761,56 @@ def test_delayed_start_shows_the_deferred_task_blocked_on_the_plan():
                      "Meanwhile:", "with the zone"):
         assert fragment in flat, fragment
     assert "sleeps" not in text.split("---", 2)[1]
+
+
+# --- the kickoff skill's name ------------------------------------------------------------
+
+def _frontmatter(text: str) -> tuple[str, str]:
+    """A skill's frontmatter ``name`` and its ``description`` text."""
+    head = text.split("---", 2)[1]
+    name = re.search(r"^name:\s*(\S+)", head, re.M).group(1)
+    return name, head[head.index("description:"):]
+
+
+def test_the_kickoff_skill_is_next_dispatch():
+    text = skill_text("next-dispatch")
+    assert _frontmatter(text)[0] == "next-dispatch"
+    assert "/next-dispatch" in text and "--actor next-dispatch next --json" in text
+    assert "dispatch-kickoff" not in text
+
+
+def test_the_old_kickoff_command_redirects():
+    text = skill_text("dispatch-kickoff")
+    name, description = _frontmatter(text)
+    assert name == "dispatch-kickoff"
+    assert "/next-dispatch" in text and "skills/next-dispatch/SKILL.md" in text
+    assert "<!-- virtuoso-shared-contract v2 -->" in text
+    assert "<!-- virtuoso-overlay-clause v2 -->" in text
+    assert len(text.splitlines()) < 60
+    assert "what's next" not in description.lower() and "show next" not in description.lower()
+
+
+def test_no_shipped_file_names_the_old_kickoff():
+    allowed = {ROOT / "skills" / "dispatch-kickoff" / "SKILL.md"}
+    schema_file = ROOT / "tools" / "governance" / "schema.py"
+    named = []
+    for path in sorted(ROOT.rglob("*")):
+        if (not path.is_file() or "__pycache__" in path.parts or path in allowed
+                or (path.parent.name == "scripts" and path.name.startswith("test_"))):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue                    # not a text file
+        lines = [line for line in text.splitlines() if "dispatch-kickoff" in line]
+        if path == schema_file:
+            lines = [line for line in lines if not line.startswith("ACTOR_ALIASES = ")]
+        named += ["%s: %s" % (path.relative_to(ROOT).as_posix(), line.strip())
+                  for line in lines]
+    assert not named, "\n".join(named)
+
+
+def test_the_1_16_migration_note_names_the_rename():
+    note = (ROOT.parents[1] / "docs" / "MIGRATION-1.16.md").read_text(encoding="utf-8")
+    assert any(line.startswith("|") and "`dispatch-kickoff`" in line and "`next-dispatch`" in line
+               for line in note.splitlines())

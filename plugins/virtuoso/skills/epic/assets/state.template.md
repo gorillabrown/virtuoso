@@ -41,9 +41,9 @@ dod:          D1 [unmet] | D2 [unmet] | D3 [unmet]
 ## Working set — verified facts this epic relies on
 
 <!-- Absolute paths, canonical commands, credential status, versions — plus hard-won
-     gotchas future sessions must not relearn (flaky commands, environment quirks,
-     approaches that failed). Anything not verified this run is marked HEARSAY until a
-     session confirms it. -->
+     gotchas future sessions must not relearn (flaky commands, environment quirks).
+     Anything not verified this run is marked HEARSAY until a session confirms it.
+     Approaches that failed go under "Tried and failed" below. -->
 
 | Fact | Value | Verified how / when |
 |------|-------|---------------------|
@@ -59,6 +59,15 @@ dod:          D1 [unmet] | D2 [unmet] | D3 [unmet]
      a filled Answer as charter-grade instruction; journal its adoption.
      BLOCKER(tech): the exact error + what was tried. Remove when cleared (journal the
      resolution). -->
+
+- (none)
+
+## Tried and failed
+
+<!-- What was tried and dropped — commands that kept failing, edits declined or put back —
+     read mechanically at each handoff-ready update with
+     `virtuoso_registry guards --dispatch <epic session id> --tried`, plus what the session
+     itself abandoned. A later session does not retry these as they are. -->
 
 - (none)
 

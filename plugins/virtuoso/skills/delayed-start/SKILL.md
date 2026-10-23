@@ -55,7 +55,16 @@ Before executing the task below, wait until the specified target time.
       Meanwhile:     <other work carries on | everything holds, as you asked>
    ```
 
-4. Start a wait that blocks only the deferred task. Use the first of these the host offers:
+4. Start a wait that blocks only the deferred task. **First, the cache:** a wait longer than
+   the conversation's cache lifetime (an hour on a subscription's main conversation, often
+   five minutes otherwise) makes the wake-up re-read the whole conversation. When the wait
+   will outlive it, the conversation is large, and **no dispatch is open**, prefer the host
+   scheduler starting a **fresh session from a note** — the deferred task plus the handoff
+   note (asked last, changed, dropped, still open) — over waking this conversation. Inside an
+   open dispatch (every `mid-dispatch-decision` pause included) always resume the same
+   conversation, and say in *How it waits* what the wake-up will cost
+   (`virtuoso_registry cost --dispatch <ID>` shows the context it will re-read). Then use the
+   first of these the host offers:
    - **The wait may outlive the session** — the host can reclaim this session while it
      sits idle, or the wait is longer than the host lets a wake-up or background command
      run: hand the task to the host's scheduler as a one-time run at the target time,

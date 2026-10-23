@@ -133,12 +133,14 @@ Skeleton (fill every `<…>` from the actual diagnosis; drop steps that do not a
 You are completing a git hand-off in <absolute repository path>.
 
 ALREADY DONE (do not redo): <e.g. commit <id> (parent <id>) exists on local
-<branch>, touching exactly: <file list>.>
+<branch>, touching exactly: <file list>.> <Tried and failed: each item from
+`virtuoso_registry guards --dispatch <ID> --tried`, when a dispatch is bound.>
 
 REMAINING: <e.g. verify local state, push, verify the push.>
 
 PROHIBITIONS: Do NOT re-stage or re-commit — that would duplicate <id>. No
 force-push. No reset, clean, or destructive restore. Preserve unrelated dirty files.
+<Do not retry, as it is, each tried-and-failed item above.>
 If .git/index.lock exists, report it and check for a running git process before
 touching it.
 

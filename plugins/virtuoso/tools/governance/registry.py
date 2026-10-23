@@ -398,7 +398,7 @@ def load(root: str, *, plugin_version: str = "") -> Registry:
 
 
 def old_actor_findings(data) -> list[Finding]:
-    """One ``actor-renamed`` warning when any value in the manifest is a skill's pre-1.15
+    """One ``actor-renamed`` warning when any value in the manifest is a skill's earlier
     name. The old names still work (schema.ACTOR_ALIASES) until the next major."""
     found: set[str] = set()
 
@@ -418,7 +418,7 @@ def old_actor_findings(data) -> list[Finding]:
     renames = ", ".join("%s -> %s" % (old, schema.ACTOR_ALIASES[old]) for old in sorted(found))
     return [Finding(
         "actor-renamed", "warning",
-        "%s names skills by their pre-1.15 names (%s); they work until the next major. "
+        "%s names skills by their earlier names (%s); they work until the next major. "
         "Fix: make those replacements in %s" % (schema.MANIFEST_RELPATH, renames,
                                                 schema.MANIFEST_RELPATH))]
 

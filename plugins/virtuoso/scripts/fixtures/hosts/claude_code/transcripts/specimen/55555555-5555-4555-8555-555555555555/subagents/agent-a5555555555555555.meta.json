@@ -1,0 +1,10 @@
+{
+ "agentType": "virtuoso:Plato",
+ "launchedWithDefaults": true,
+ "description": "review the change",
+ "toolUseId": "toolu_FX000000000000000009",
+ "spawnDepth": 1,
+ "requestShape": "background",
+ "requestNonInteractive": true,
+ "finished": true
+}
