@@ -162,6 +162,9 @@ class TranscriptFacts:
     todos: list[str] = field(default_factory=list)
     headless: bool = False
     compacted_at: str = ""              # stamp of the latest compaction boundary, if any
+    #: Stamp of the latest turn-closing record, or ``""`` when the latest turn-relevant
+    #: record is not a close (the turn is still open, or no close was ever written).
+    turn_closed_at: str = ""
     calls: list[Call] = field(default_factory=list)       # in order, de-duplicated
     spawns: dict[str, str] = field(default_factory=dict)  # spawn call id -> description
     spawn_threads: dict[str, str] = field(default_factory=dict)  # spawn call id -> thread id

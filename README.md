@@ -219,6 +219,7 @@ located rather than guessing a path.
 |---|---|
 | `virtuoso_preflight.py` | check / adopt / create / repair, plus `--check-document` |
 | `virtuoso_registry.py` | read-only queries: `roles`, `resolve`, `overlays` (incl. `--scaffold`), `provider`, `items`, `next`, `combine`, `kpis` (`--why`), `cost` (`--dispatch`, `--last`, `--why`), `results` (`--why`), `changes`, `guards` (`--tried`), `closeout`, `lessons`, `holding`, `repo`, `recovery`; and the explicit writers `snapshot` (incl. `--import`), `closeout --prepare`, `lessons --record-status` / `--record-link`, `holding --record`, `changes --record` / `--undo`, `guards --copy`, `create-item`, `mutation-plan`, `mutation-confirm`, `mutation-abandon` |
+| `virtuoso_registry.py footprint` | the disk footprint: worktrees, clones, `temp` role scratch and pytest basetemps, sized and classified (read-only; `--dispatch ID` for one run); `--remove PATH` and `--extract PATH` preview, and `--apply` removes a redundant or regenerable one or writes a git tree's unique commits as patches |
 | `virtuoso_guard.py` | the cost-guard hook entry (the plugin's hooks run it; it acts only in a Virtuoso project) |
 | `generate_board.py` | the roadmap board (--create registers and creates it), read from the configured provider |
 | `build_register_report.py` | the generated spreadsheet report (declared generated roles only) |

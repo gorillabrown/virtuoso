@@ -230,6 +230,18 @@ Every case stays idempotent: a record already in the ledger for the item is a no
    or ignore, and is never a fault by itself: it is the trail that keeps an external
    write from repeating, and a confirmed write marks its record resolved and keeps
    it. Only `virtuoso_registry recovery` says whether anything is outstanding.
+   Then review what the run left **outside** the repository:
+
+       "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . footprint --dispatch <ITEM-ID>
+
+   It writes nothing, and lists the run's own worktrees (branch `<ITEM-ID>` or
+   `<ITEM-ID>-*`), and the pytest basetemps and `temp` role children made since the
+   branch left its base, each with its size, class and reason. Propose each `redundant`
+   or `regenerable` one for removal with the `footprint --remove <path> --apply` command
+   it prints, after the merge and the deliverable check. Name each `unique`, `evidence`
+   or `in-flight` one for the user's decision with its reason (extract first for
+   `unique`). Record the result as the *Files Created* section's `- **Footprint:**` line:
+   what was removed, what was kept and why, and free space before and after.
 8. State the **crossing plan**: the exact ordered steps Wave 2 will perform, the
    roles each touches, and what happens on a partial failure.
 9. Ask the user to confirm dispositions, lessons, file dispositions, and the crossing plan.

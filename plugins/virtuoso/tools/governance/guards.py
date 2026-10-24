@@ -191,6 +191,9 @@ def cold_return(hook: dict, adapter, pol, root: str):
     last = facts.last_call
     if facts.headless or last is None:
         return None
+    closed = _parse(facts.turn_closed_at) if facts.turn_closed_at else None
+    if closed is None:
+        return None                                   # a prompt typed before the turn closed
     minutes, how = adapter.lifetime(facts)
     threshold = minutes * (1 - EARLY) if minutes else float(
         pol.get("guards.coldReturn.idleMinutes", 5))
@@ -201,9 +204,9 @@ def cold_return(hook: dict, adapter, pol, root: str):
     if compacted and compacted >= ended:
         return None                                   # compacted since: that prompt is gone
     # The latest sign of work, not only the latest call: a long command still running
-    # (a prompt typed mid-turn) is not an idle conversation.
+    # (a prompt typed mid-turn) is not an idle conversation, and idle time runs from the close.
     busy = [t for t in (_parse(s) for s in facts.command_times[-1:]) if t]
-    ended = max([ended] + busy)
+    ended = max([ended, closed] + busy)
     idle = (now() - ended).total_seconds() / 60
     context = last.usage.context
     if idle < threshold or context < pol.get("guards.coldReturn.minContextTokens", 50000):

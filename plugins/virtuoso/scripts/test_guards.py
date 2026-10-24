@@ -51,10 +51,12 @@ def project(project):
     return project
 
 
-def cold_transcript(tmp_path, idle=70, context=180_000, extra=()):
+def cold_transcript(tmp_path, idle=70, context=180_000, extra=(), closed=True):
+    close = [{"type": "system", "subtype": "stop_hook_summary", "timestamp": _ago(idle)}]
     return _transcript(tmp_path / "t" / "s-1.jsonl", [
         {"type": "user", "message": {"content": "start"}},
-        _assistant(1, _ago(idle), context=context, write_1h=1000)] + list(extra))
+        _assistant(1, _ago(idle), context=context, write_1h=1000)] + (close if closed else [])
+        + list(extra))
 
 
 def prompt_hook(project, transcript, prompt="carry on"):
@@ -145,11 +147,28 @@ def test_a_cold_return_is_not_held_when_it_should_not_be(project, tmp_path, isol
         context = 20_000
     elif case == "injected":
         prompt = "<task-notification>\n<task-id>x</task-id>"
-    else:
+    else:                                       # its own close, so only headless can stop it
         extra = ({"type": "user", "promptSource": "sdk", "turnOrigin": "sdk",
-                  "message": {"content": "go"}},)
+                  "message": {"content": "go"}},
+                 {"type": "system", "subtype": "stop_hook_summary", "timestamp": _ago(idle)})
     hook = prompt_hook(project, cold_transcript(tmp_path, idle, context, extra), prompt)
     assert guards.handle(hook, "claude-code") is None
+
+
+def test_a_prompt_typed_before_the_turn_closed_is_not_held(project, tmp_path, isolated_home):
+    hook = prompt_hook(project, cold_transcript(tmp_path, closed=False))
+    assert guards.handle(hook, "claude-code") is None
+
+
+def test_idle_time_runs_from_the_turn_close(project, tmp_path, isolated_home):
+    def transcript(folder, closed_ago):
+        return _transcript(tmp_path / folder / "s-1.jsonl", [
+            {"type": "user", "message": {"content": "start"}},
+            _assistant(1, _ago(70), write_1h=1000),
+            {"type": "system", "subtype": "stop_hook_summary", "timestamp": _ago(closed_ago)}])
+    assert guards.handle(prompt_hook(project, transcript("warm", 30)), "claude-code") is None
+    held = guards.handle(prompt_hook(project, transcript("cold", 70)), "claude-code")
+    assert held["decision"] == "block"
 
 
 def test_the_handoff_note_reaches_the_next_session_once_within_thirty_minutes(project, tmp_path,
@@ -395,6 +414,8 @@ def test_a_large_transcript_is_read_within_budget(project, tmp_path, isolated_ho
         for n in range(20_000):                                     # about 45 MB
             handle.write(filler.replace('"m0"', '"m%d"' % n) + "\n")
         handle.write(json.dumps(_assistant(99_999, _ago(70), write_1h=1000)) + "\n")
+        handle.write(json.dumps({"type": "system", "subtype": "stop_hook_summary",
+                                 "timestamp": _ago(70)}) + "\n")
     started = time.monotonic()
     held = guards.handle(prompt_hook(project, str(path)), "claude-code")
     assert held is not None and time.monotonic() - started < 3.0
@@ -494,8 +515,9 @@ def test_expired_handoff_notes_are_swept_and_dropped_secrets_masked(isolated_hom
 
 
 def test_a_cold_return_after_a_compaction_is_not_held(project, tmp_path, isolated_home):
-    transcript = cold_transcript(tmp_path, extra=[
-        {"type": "system", "subtype": "compact_boundary", "timestamp": _ago(65)}])
+    transcript = cold_transcript(tmp_path, extra=[      # closed again, so only the compaction
+        {"type": "system", "subtype": "compact_boundary", "timestamp": _ago(65)},
+        {"type": "system", "subtype": "stop_hook_summary", "timestamp": _ago(60)}])
     assert guards.handle(prompt_hook(project, transcript), "claude-code") is None
 
 

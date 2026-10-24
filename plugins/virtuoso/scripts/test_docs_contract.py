@@ -744,6 +744,20 @@ def test_the_plan_is_the_time_log():
     assert "**Parked rows become findings.**" in closeout and "**Disposition:** `open`" in closeout
 
 
+def test_the_sweep_runs_the_footprint_audit():
+    sweep = " ".join(skill_text("governance-sweep").split())
+    assert "virtuoso_registry --root . footprint" in sweep
+    assert "Disk footprint" in sweep
+
+
+def test_the_close_out_records_the_dispatch_footprint():
+    closeout = " ".join(skill_text("dispatch-closeout").split())
+    assert "footprint --dispatch" in closeout
+    template = (ROOT / "skills" / "dispatch-closeout" / "assets" /
+                "CloseOut.template.md").read_text(encoding="utf-8")
+    assert "- **Footprint:**" in template
+
+
 def test_delayed_start_blocks_only_the_deferred_task():
     flat = " ".join(skill_text("delayed-start").split())
     for gone in ("The sleep is blocking", "hold the terminal", "time.sleep(",

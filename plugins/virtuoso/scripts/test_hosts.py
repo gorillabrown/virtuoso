@@ -2,6 +2,7 @@
 and each adapter's reading of transcripts captured from the real host."""
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 from pathlib import Path
@@ -241,6 +242,43 @@ def test_headless_is_seen_from_the_files_head_on_a_tail_read(tmp_path):
     assert facts.calls == [] and facts.last_prompt == ""
 
 
+def test_claude_code_reads_the_turn_close_past_trailing_bookkeeping():
+    capture = CC / "transcripts" / "capture"
+    path = capture / "11111111-1111-4111-8111-111111111111.jsonl"
+    lines = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines()]
+    close = lines[18]                                   # line 19, before the bookkeeping
+    assert (close["type"], close["subtype"]) == ("system", "stop_hook_summary")
+    assert [r["type"] for r in lines[19:]] == ["last-prompt", "cost-state"]
+    assert cc_adapter().read_transcript(str(path)).turn_closed_at == close["timestamp"]
+    blocked = capture / "33333333-3333-4333-8333-333333333333.jsonl"
+    assert cc_adapter().read_transcript(str(blocked)).turn_closed_at == ""
+
+
+def test_claude_code_a_later_record_reopens_the_turn(tmp_path):
+    def closing(at):
+        return {"type": "assistant", "timestamp": at, "message": {
+            "id": "m1", "model": "m", "stop_reason": "end_turn", "usage": {
+                "input_tokens": 1, "output_tokens": 1}, "content": [
+                {"type": "text", "text": "done"}]}}
+    at = "2026-10-22T10:00:00.000Z"
+    prompt = {"type": "user", "timestamp": "2026-10-22T10:05:00.000Z",
+              "message": {"content": "next"}}
+    reopened = cc_adapter().read_transcript(_write(tmp_path, [closing(at), prompt]))
+    assert reopened.turn_closed_at == ""
+    bookkeeping = [{"type": "last-prompt", "lastPrompt": "next"},
+                   {"type": "cost-state", "totalCostUSD": 0}]
+    kept = cc_adapter().read_transcript(_write(tmp_path, [closing(at)] + bookkeeping))
+    assert kept.turn_closed_at == at
+    for later, expected in (
+            ({"type": "system", "subtype": "turn_duration", "durationMs": 1}, at),
+            ({"type": "attachment", "attachment": {"type": "file"}}, at),
+            ({"type": "system", "subtype": "compact_boundary", "timestamp": at}, ""),
+            ({"type": "assistant", "timestamp": at, "message": {
+                "id": "m2", "model": "m", "stop_reason": "tool_use", "content": []}}, "")):
+        facts = cc_adapter().read_transcript(_write(tmp_path, [closing(at), later]))
+        assert facts.turn_closed_at == expected, later
+
+
 def test_workflow_and_nested_subagents_are_found_and_attributed(tmp_path):
     metas = [json.loads(l) for l in (CC / "records" / "meta_variants.jsonl")
              .read_text(encoding="utf-8").splitlines()]
@@ -466,3 +504,31 @@ def test_a_codex_subagent_skips_the_parents_replayed_history():
     assert sub.session_id == "44444444-4444-7444-8444-444444444444"
     assert [c.id for c in sub.calls] == ["resp_FX033", "resp_FX036", "resp_FX038"]
     assert sub.last_prompt == ""                        # its prompt is the parent's, replayed
+
+
+@pytest.mark.parametrize("path", [
+    CX / "rollout-2026-10-22T20-13-15-11111111-1111-7111-8111-111111111111.jsonl",
+    CX_RUN2, CX_PARENT, CX_SUB])
+def test_codex_reads_task_complete_as_the_turn_close(path, tmp_path):
+    last = json.loads(path.read_text(encoding="utf-8").splitlines()[-1])
+    assert last["payload"]["type"] == "task_complete"
+    closed = dt.datetime.fromtimestamp(last["payload"]["completed_at"], dt.timezone.utc)
+    assert cx_adapter().read_transcript(str(path)).turn_closed_at == closed.strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+    meta = {"type": "session_meta", "payload": {"id": "c-1",
+                                                "subagent_history_start_ordinal": 2}}
+    complete = {"type": "event_msg", "timestamp": "2026-10-22T10:00:00Z",
+                "payload": {"type": "task_complete", "completed_at": 1792718012}}
+    started = {"type": "event_msg", "payload": {"type": "task_started"}}
+    rollout = tmp_path / "rollout.jsonl"
+    rollout.write_text("\n".join(json.dumps(r) for r in [meta, complete, started]) + "\n",
+                       encoding="utf-8")
+    assert cx_adapter().read_transcript(str(rollout)).turn_closed_at == ""
+    unreadable = dict(complete, payload=dict(complete["payload"], completed_at=1e20))
+    rollout.write_text("\n".join(json.dumps(r) for r in [meta, unreadable]) + "\n",
+                       encoding="utf-8")
+    assert cx_adapter().read_transcript(str(rollout)).turn_closed_at == complete["timestamp"]
+    for ordinal, expected in ((1, ""), (2, "2026-10-23T01:13:32Z")):   # replayed, then own
+        rollout.write_text("\n".join(json.dumps(r) for r in [
+            meta, dict(complete, ordinal=ordinal)]) + "\n", encoding="utf-8")
+        assert cx_adapter().read_transcript(str(rollout)).turn_closed_at == expected

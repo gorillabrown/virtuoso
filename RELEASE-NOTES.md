@@ -1,5 +1,29 @@
 # Virtuoso Release Notes
 
+## v1.16.1 (2026-10-24) — the turn-close guard, the footprint audit, and where a dispatch's time goes
+
+- **A cold return waits for the turn to close.** The cold-return guard holds a typed prompt
+  only when the transcript shows the previous turn closed (on Claude Code an `end_turn`
+  reply or the Stop hook's summary, on Codex `task_complete`), and measures idle time from
+  that close, so a prompt typed during a long reply that runs no command is no longer held.
+  (VIR-055)
+- **The disk footprint, audited and cleaned safely.** `virtuoso_registry footprint` lists
+  the worktrees, clones, `temp` role scratch and pytest basetemps runs leave behind, one
+  level deep in three named places, each sized and classed `in-flight`, `evidence`,
+  `unique`, `redundant` or `regenerable`, with the free space. It writes nothing.
+  `--remove PATH --apply` removes only a redundant or regenerable one, links first and
+  never followed, and a worktree through `git worktree remove`; `--extract PATH --apply`
+  saves a tree's unique commits as patches first. `governance-sweep` runs it as check 22,
+  and `dispatch-closeout` records a run's own slice in the close-out's *Footprint* line.
+  (VIR-054)
+- **Where a dispatch's time goes.** `scripts/validate_pricing.py <close-outs dir>` reads every
+  closed time log and prints, per dispatch, its rows' minutes, the measured actual, the
+  unclocked gap inside its clocked span, minutes counted twice by overlapping rows, waits by
+  reason, added rows' minutes, the share of sub-minute and burst-stamped rows, and the median
+  of actual ÷ estimate; then it names the dominant cause of the calculable rows' shortfall in
+  one `verdict:` line and the one proposed fix. Read-only; `--write` saves the report as
+  `Validation.pricing.<date>.md`. (VIR-057)
+
 ## v1.16.0 (2026-10-23) — cost guards, `next-dispatch`, and one-paste kickoffs
 
 **Upgrading from 1.15.0.** Follow [`docs/MIGRATION-1.16.md`](docs/MIGRATION-1.16.md): rename

@@ -16,10 +16,13 @@ Facts this module relies on were captured from Codex CLI 0.163.0 on 2026-10-22 (
 * hooks: with an isolated home, a ``SessionStart`` hook's context reached the thread and a
   ``UserPromptSubmit`` hook blocked the prompt, in the same output shapes as the other
   host. A tool hook fires only once a model call is made, which the capture could not, so
-  holding a tool is a missing capability.
+  holding a tool is a missing capability;
+* a turn closes on an ``event_msg`` ``task_complete`` whose ``completed_at`` is epoch
+  seconds; the next turn opens with ``task_started``.
 """
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import os
 
@@ -159,6 +162,12 @@ def _facts(records) -> TranscriptFacts:
             continue
         if isinstance(record.get("ordinal"), int) and record["ordinal"] < start:
             continue                            # the parent's history, replayed
+        if kind == "event_msg" and payload.get("type") == "task_complete":
+            facts.turn_closed_at = (_epoch_stamp(payload.get("completed_at"))
+                                    or str(record.get("timestamp") or ""))
+        elif (kind == "event_msg" and payload.get("type") == "task_started") or (
+                kind == "response_item" and payload.get("type") == "function_call"):
+            facts.turn_closed_at = ""
         if kind == "turn_context":
             model = str(payload.get("model") or model)
         elif kind == "token_usage_record" and payload.get("response_id"):
@@ -191,6 +200,18 @@ def _facts(records) -> TranscriptFacts:
     facts.dropped += ["command failed %d times in a row: %s" % (count, command)
                       for command, count in facts.failing.items() if count >= DROPPED_AFTER]
     return facts
+
+
+def _epoch_stamp(seconds) -> str:
+    """Epoch seconds as an ISO 8601 UTC stamp to the second, or ``""`` when it is not a
+    number a date can be made of."""
+    if isinstance(seconds, bool) or not isinstance(seconds, (int, float)):
+        return ""
+    try:
+        moment = _dt.datetime.fromtimestamp(seconds, _dt.timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return ""
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _item(facts: TranscriptFacts, item: dict, at: str = "") -> None:

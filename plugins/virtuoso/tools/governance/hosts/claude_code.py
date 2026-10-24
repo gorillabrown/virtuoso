@@ -19,7 +19,10 @@ Facts this module relies on were captured from Claude Code 2.1.309 on 2026-10-22
 * a prompt Claude Code injected (a subagent's hand-back, a task notification, a slash
   command's expansion, a compaction summary) also reaches the prompt hook, and is not a
   typed prompt;
-* a headless run marks its prompt ``promptSource`` / ``turnOrigin`` ``sdk``.
+* a headless run marks its prompt ``promptSource`` / ``turnOrigin`` ``sdk``;
+* a turn closes on an ``assistant`` record whose ``stop_reason`` is ``end_turn``, then a
+  ``system`` ``stop_hook_summary``; bookkeeping (``last-prompt``, ``cost-state``) follows
+  the close, and a held prompt writes no ``user`` record.
 """
 from __future__ import annotations
 
@@ -227,6 +230,7 @@ def _facts(records, session: str) -> TranscriptFacts:
             facts.headless = True
         if kind == "system" and record.get("subtype") == "compact_boundary":
             facts.compacted_at = str(record.get("timestamp") or "")
+        _turn(facts, record, kind, message)
         if kind == "assistant" and isinstance(message, dict):
             key = message.get("id") or record.get("requestId") or record.get("uuid")
             model = message.get("model") or ""
@@ -270,6 +274,23 @@ def _facts(records, session: str) -> TranscriptFacts:
     facts.dropped += ["command failed %d times in a row: %s" % (count, command)
                       for command, count in facts.failing.items() if count >= DROPPED_AFTER]
     return facts
+
+
+def _turn(facts: TranscriptFacts, record: dict, kind, message) -> None:
+    """Keep :attr:`TranscriptFacts.turn_closed_at`: a close stamps it, a later ``user`` or
+    ``assistant`` record (a tool result is a ``user`` record) or a compaction clears it, and
+    bookkeeping leaves it as it is. Any other stop reason, or a close with no stamp, reads as
+    an open turn: the conservative side, where nothing is held."""
+    stamp = str(record.get("timestamp") or "")
+    if kind == "assistant":
+        closed = isinstance(message, dict) and message.get("stop_reason") == "end_turn"
+        facts.turn_closed_at = stamp if closed else ""
+    elif kind == "user":
+        facts.turn_closed_at = ""
+    elif kind == "system" and record.get("subtype") == "stop_hook_summary":
+        facts.turn_closed_at = stamp
+    elif kind == "system" and record.get("subtype") == "compact_boundary":
+        facts.turn_closed_at = ""
 
 
 def _result(facts: TranscriptFacts, use: dict, block: dict, record: dict, edits: list) -> None:

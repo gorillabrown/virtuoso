@@ -46,6 +46,12 @@ Subcommands:
           --start|--wait|--resume|--end N  row N, stamped by the clock (a write)
           --status          each row's state and measured working minutes
   repo [--expect PATHS]     read-only repository state and readiness finding
+  footprint [--dispatch ID] the disk footprint: worktrees, clones, temp-role scratch and
+                            pytest basetemps, each sized and classified (read-only)
+          --remove PATH     remove one redundant or regenerable candidate (preview;
+                            --apply removes)
+          --extract PATH    write a git tree's unique commits and uncommitted work as
+                            patches under the temp role (preview; --apply writes)
   deps                      check the project's declared runtime dependencies
   protected                 hash every protected file (immutable-hash verification)
   snapshot --out PATH       capture a timestamped snapshot of the work register
@@ -92,7 +98,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tools.governance import (  # noqa: E402
     backup as backup_mod, combine as combine_mod, holding as holding_mod,
     learning as learning_mod,
-    lessons as lessons_mod, move as move_mod, overlays as overlays_mod,
+    footprint as footprint_mod, lessons as lessons_mod, move as move_mod,
+    overlays as overlays_mod,
     policy as policy_mod, providers,
     registry as registry_mod, repair as repair_mod, schema, structure as structure_mod,
     textio, timing as timing_mod,
@@ -1889,6 +1896,65 @@ def cmd_repo(args) -> int:
     return EXIT_OK
 
 
+def _footprint_context(args) -> footprint_mod.Context:
+    reg = _load(args.root)
+    temp = reg.resolve("temp") if reg.role("temp") and not reg.role("temp").is_external else None
+    evidence = [reg.resolve(spec.name) for spec in reg.roles.values()
+                if spec.is_directory and not spec.is_external
+                and (spec.authority in ("evidence", "archive")
+                     or spec.name in ("evidence", "archive"))]
+    epics = reg.resolve("epics") if reg.role("epics") and reg.role("epics").is_directory else None
+    notes = []
+    try:
+        snap = providers.work_register(reg, actor=args.actor).provider.snapshot()
+        live = {i.id for i in snap.items if not i.is_terminal}
+    except (GovernanceError, OSError, ValueError) as exc:
+        live = None
+        notes.append("the work register could not be read (%s): every worktree on a "
+                     "non-default branch is treated as in flight" % exc)
+    ctx = footprint_mod.make_context(
+        args.root, temp_role=temp, evidence_dirs=evidence, epics_dir=epics, live_items=live,
+        policy_branch=str(policy_mod.load(reg.policy).section("git").get("defaultBranch") or ""))
+    ctx.notes.extend(notes)
+    return ctx
+
+
+def _mib(size: int) -> str:
+    return "%.1f MiB" % (size / 1048576.0)
+
+
+def cmd_footprint(args) -> int:
+    """The disk footprint (VIR-054). Read-only unless --remove/--extract with --apply."""
+    if args.dispatch and (args.remove or args.extract):
+        raise GovernanceError("footprint: --dispatch scopes the audit only; give --remove or "
+                              "--extract a path without it")
+    ctx = _footprint_context(args)
+    if args.remove or args.extract:
+        result = (footprint_mod.remove(ctx, args.remove, apply=args.apply) if args.remove
+                  else footprint_mod.extract(ctx, args.extract, apply=args.apply))
+        if args.as_json:
+            return _emit(result, True)
+        for key, value in result.items():
+            print("%-13s %s" % (key + ":", value))
+        return EXIT_OK
+    report = footprint_mod.audit(ctx, dispatch=args.dispatch or None)
+    if args.as_json:
+        return _emit(report, True)
+    print("footprint%s — %d candidate(s); default branch %s" % (
+        " for " + args.dispatch if args.dispatch else "", len(report["candidates"]),
+        report["defaultBranch"] or "unknown"))
+    for cand in report["candidates"]:
+        print("  %-11s %-9s %10s  %s" % (cand["class"], cand["kind"], _mib(cand["size"]),
+                                         cand["path"]))
+        print("              %s" % cand["reason"])
+        if cand.get("next"):
+            print("              next: %s" % cand["next"])
+    for note in report["notes"]:
+        print("note: %s" % note)
+    print("free space: %s of %s" % (_mib(report["freeBytes"]), _mib(report["totalBytes"])))
+    return EXIT_OK
+
+
 def cmd_recovery(args) -> int:
     records = recovery.outstanding(os.path.abspath(args.root))
     if args.as_json:
@@ -2752,6 +2818,19 @@ def build_parser() -> argparse.ArgumentParser:
     repo.add_argument("--expect", default="",
                       help="comma-separated paths this work is expected to touch")
     repo.set_defaults(func=cmd_repo)
+
+    footprint = sub.add_parser("footprint", parents=[common])
+    footprint.add_argument("--dispatch", default="", metavar="ITEM-ID",
+                           help="only this run's worktrees (branch ITEM-ID or ITEM-ID-*), and "
+                                "the basetemp and temp-role folders made since its merge base")
+    action = footprint.add_mutually_exclusive_group()
+    action.add_argument("--remove", default="", metavar="PATH",
+                        help="remove one redundant or regenerable candidate (preview)")
+    action.add_argument("--extract", default="", metavar="PATH",
+                        help="write a git tree's unique commits as patches (preview)")
+    footprint.add_argument("--apply", action="store_true",
+                           help="with --remove or --extract: perform it")
+    footprint.set_defaults(func=cmd_footprint)
 
     sub.add_parser("deps", parents=[common]).set_defaults(func=cmd_deps)
     sub.add_parser("protected", parents=[common]).set_defaults(func=cmd_protected)

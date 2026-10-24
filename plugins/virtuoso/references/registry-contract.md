@@ -1195,6 +1195,46 @@ unreconciled beyond the files the report names.
 An untracked file under `Virtuoso/.recovery/` carries its own verdict, `commit: a
 recovery record, never remove or ignore` (see *What git versions*).
 
+## Disk footprint
+
+`virtuoso_registry --root . footprint [--dispatch ITEM-ID] [--json]` lists what runs
+leave on the disk outside the repository's tracked files, and writes nothing. It looks
+one level deep in three places only — the drive root, `%TEMP%` and the project's parent
+folder — plus the repository's own worktree list and the children of the `temp` role:
+
+| Kind | What it is |
+|---|---|
+| `worktree` | a worktree `git worktree list` names, the primary excluded |
+| `clone` | a git work tree one level under the drive root or the parent folder whose root commit is this repository's |
+| `scratch` | a child of the registered `temp` role |
+| `basetemp` | a folder one level under the drive root, `%TEMP%` or the parent folder holding at least two pytest per-test folders (`^test_.+\d+$`), most of its children pytest's own |
+
+Each candidate gets one class, first match wins: `in-flight` (a worktree on the branch of
+a register item that is not terminal, read through the provider; every non-default
+branch when the register cannot be read), `evidence` (inside a role whose authority is
+`evidence` or `archive`, inside the `epics` role, an epic packet, or the tool's own
+extract folder), `unique` (uncommitted files, or a commit that no branch or remote ref
+of the primary repository contains; a git tree the default branch does not contain is
+kept as `unique` too), `redundant` (a clean git tree whose HEAD the default branch
+contains), `regenerable` (a basetemp, `temp` role scratch with no git tree, or a folder
+holding only venvs, caches or build output). A folder it cannot read is `unreadable`.
+`--dispatch ITEM-ID` keeps only that run's worktrees (branch `ITEM-ID` or `ITEM-ID-*`)
+and the basetemp and `temp` children made since the branch's merge base.
+
+`footprint --remove <path>` previews; `--apply` removes. It refuses every class but
+`redundant` and `regenerable`, whatever the flags. It removes links (symlinks and Windows
+junctions) before any recursive delete, never following them — in a worktree too, where
+it keeps the tracked symlinks and then runs `git worktree remove` (no `--force`) and
+`git worktree prune` — and reports free space before and after. A basetemp or scratch
+folder holding a git tree anywhere inside is `unique`. `footprint --extract <path>
+[--apply]` saves a git tree's unique work under
+`<temp role>/footprint-extract/<folder name>-<head>/`: `unique.bundle` (every unique
+commit, merges included), one `git format-patch` file per non-merge commit,
+`uncommitted.diff` and `untracked.diff` (the untracked files' contents). It is the step
+before the user deletes `unique` work. Evidence is deleted only by the user, with the command the audit prints.
+`governance-sweep` runs the audit as check 22, and `dispatch-closeout` runs the
+`--dispatch` slice in Wave 1.
+
 ## What git versions
 
 The plugin keeps some of its state under `Virtuoso/` and some in the registered
@@ -1206,7 +1246,7 @@ The plugin keeps some of its state under `Virtuoso/` and some in the registered
 | `Virtuoso/.recovery/` | commit | the idempotency trail for external writes. A confirmed write marks its record resolved and keeps it; a clone without the records can repeat a write that already happened |
 | `Virtuoso/.backups/` | ignore | repair backups for this machine |
 | `policy.sweep.quarantineDirectory` (default `Virtuoso/.quarantine/`) | ignore | files the sweep set aside instead of deleting |
-| the `temp` role (default `Project Documentation/3 temp/`) | ignore | scratch; `created-files` reports anything in it as temporary until it is ignored |
+| the `temp` role (default `Project Documentation/3 temp/`) | ignore | scratch; `created-files` reports anything in it as temporary until it is ignored; `footprint` lists its children and writes its extracted patches there |
 
 `create` appends the three ignore lines to the workspace's `.gitignore`, after a
 `# Virtuoso: machine-local state` header, adding only the lines it lacks. `adopt` never

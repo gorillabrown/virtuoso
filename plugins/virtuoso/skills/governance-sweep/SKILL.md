@@ -258,6 +258,27 @@ definition** and the mirror is out of date (item 57).
     update as a restatement, never an edit). The catalog is append-only: every one of
     these is a new entry or a status record.
 
+**Disk footprint** (always, in a git repository):
+22. **Disk footprint — what dispatches left on the disk.** Run
+
+        "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . footprint
+
+    It writes nothing. It lists every worktree, every clone of this repository one
+    level under the drive root or the project's parent folder, every child of the
+    `temp` role, and every pytest basetemp one level under the drive root, `%TEMP%` or
+    the parent folder, each with its size, class and reason, then the free space.
+    List the candidates by class:
+    - **redundant** and **regenerable** — carry each removal into the Phase 2 work list
+      in Group F order, as the `footprint --remove <path> --apply` command the audit
+      prints. The tool removes links before any recursive delete and removes a worktree
+      with `git worktree remove`, then `git worktree prune`.
+    - **unique** — route to the user, with the extract step first
+      (`footprint --extract <path> --apply`, patches under the `temp` role). The tool
+      refuses to remove it.
+    - **evidence** — route to the user as the printed owner command. The tool never
+      deletes evidence.
+    - **in-flight** and **unreadable** — report only.
+
 Print findings grouped by check, with exact locations. Print only categories with findings.
 
 ### Registered generation and validation commands (item 60)
@@ -344,6 +365,12 @@ Repair, relocation, regeneration, verification, and parity all precede anything
 irreversible. Under the default `deletionPolicy: "quarantine"`, Group G does not run
 at all: approved removals land in `policy.sweep.quarantineDirectory`, from which the
 user can restore or purge them later (item 53).
+
+Check 22's removals are not files in the project, so they never pass through the
+quarantine area: each is its own Group F action, the `footprint --remove <path> --apply`
+command, run after every other Group F move. Only `redundant` and `regenerable`
+candidates enter the work list. A `unique` or `evidence` candidate is a question for the
+user, never an action.
 
 Every action is **atomic and self-contained**: project-relative paths, verbatim
 unique match strings for content edits, checksums for binary moves, and the
@@ -489,6 +516,8 @@ what this sweep touched and what it must leave alone:
 - Protected-file hashes: [N] checked, [N] unchanged
 - Verification: [all checks passed | anomalies: …]
 - Deferred (manual): [N] — [list]
+- Disk footprint: [removed: paths and sizes | none]; [kept for the user: unique,
+  evidence, in-flight paths]; free space [before] → [after]
 - Findings recorded: [F-NNN … in the registered `findings` role, or "none"]
 
 ### Repository scope

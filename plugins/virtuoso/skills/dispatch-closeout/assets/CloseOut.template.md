@@ -58,6 +58,7 @@ status: [all-pass | has-regressions | has-discoveries]
 - **Ignored:** [patterns added] *(or: none)*
 - **Left for a decision:** [path — why] *(or: none)*
 - **Guard:** `created-files` exit [0 / 1: the files named above]
+- **Footprint:** [`footprint --dispatch <ITEM-ID>`: removed paths and sizes / none; kept paths — class and why / none]; free space [before] → [after]
 
 ## Governance Updates
 
