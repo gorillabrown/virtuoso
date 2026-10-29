@@ -132,13 +132,13 @@ def test_mid_dispatch_the_hold_offers_the_compact_line_never_a_fresh_start(proje
         {"event": "open", "at": "2026-10-22T00:00:00Z", "rows": [
             {"id": 1, "title": "w", "predicted": 5, "basis": "estimated"}]}) + "\n",
         encoding="utf-8")
-    transcript = cold_transcript(tmp_path)
-    hosts.record_binding("X-1", "s-1", transcript, "claude-code")
+    transcript = cold_transcript(tmp_path)                  # unbound: the project's one open log
     reason = guards.handle(prompt_hook(project, transcript), "claude-code")["reason"]
     assert "/compact keep X-1, the time log, open decisions" in reason and "/clear" not in reason
 
 
-@pytest.mark.parametrize("case", ["warm", "small", "injected", "headless"])
+@pytest.mark.parametrize("case", ["warm", "small", "injected", "cross-session", "side-sessions",
+                                  "headless"])
 def test_a_cold_return_is_not_held_when_it_should_not_be(project, tmp_path, isolated_home, case):
     idle, context, prompt, extra = 70, 180_000, "carry on", ()
     if case == "warm":
@@ -147,6 +147,11 @@ def test_a_cold_return_is_not_held_when_it_should_not_be(project, tmp_path, isol
         context = 20_000
     elif case == "injected":
         prompt = "<task-notification>\n<task-id>x</task-id>"
+    elif case == "cross-session":
+        prompt = ('<cross-session-message from="uds:x" from-session="local_1" '
+                  'from-name="Brain" from-mode="bypass">\ncheck-in\n</cross-session-message>')
+    elif case == "side-sessions":
+        prompt = "<side-sessions-event>None of the sessions is working now.</side-sessions-event>"
     else:                                       # its own close, so only headless can stop it
         extra = ({"type": "user", "promptSource": "sdk", "turnOrigin": "sdk",
                   "message": {"content": "go"}},
@@ -268,6 +273,49 @@ def test_a_big_whole_file_read_at_top_level_is_denied_once(project, tmp_path, is
     image.write_bytes(b"x" * 70_000)
     pic = dict(hook, session_id="s-8", tool_input={"file_path": str(image)})
     assert guards.handle(pic, "claude-code") is None
+
+
+# --- unattended sessions: no guard holds ------------------------------------------------------------
+
+def _bind_open_dispatch(project, transcript):
+    layout = json.loads((project / "Virtuoso" / "workspace-layout.json").read_text(
+        encoding="utf-8"))
+    close_outs = project.joinpath(*layout["roles"]["closeOuts"]["path"].split("/"))
+    close_outs.mkdir(parents=True, exist_ok=True)
+    (close_outs / "Timing.X-7.jsonl").write_text(json.dumps(
+        {"event": "open", "at": "2026-10-22T00:00:00Z", "rows": [
+            {"id": 1, "title": "w", "predicted": 5, "basis": "estimated"}]}) + "\n",
+        encoding="utf-8")
+    hosts.record_binding("X-7", "s-1", transcript, "claude-code")
+
+
+@pytest.mark.parametrize("why", ["bypassPermissions", "dispatch X-7"])
+def test_an_unattended_session_is_never_held_and_the_receipt_says_why(project, tmp_path,
+                                                                      isolated_home, why):
+    cold = cold_transcript(tmp_path)
+    failing = failing_transcript(tmp_path / "f", 2)
+    big = tmp_path / "big.txt"
+    big.write_text("x" * 70_000, encoding="utf-8")
+    hooks = [prompt_hook(project, cold),
+             tool_hook(project, failing, "python -m pytest x"),
+             {"hook_event_name": "PreToolUse", "session_id": "s-1", "cwd": str(project),
+              "transcript_path": "", "tool_name": "Read", "tool_input": {"file_path": str(big)}}]
+    if why == "bypassPermissions":
+        hooks = [dict(h, permission_mode="bypassPermissions") for h in hooks]
+    else:
+        _bind_open_dispatch(project, cold)
+    for hook in hooks:
+        assert guards.handle(hook, "claude-code") is None
+    found = receipts(isolated_home)
+    assert [(r["guard"], r["event"], r["why"]) for r in found] == [
+        ("coldReturn", "unattended", why), ("retry", "unattended", why),
+        ("bigRead", "unattended", why)]
+
+
+def test_an_attended_session_in_default_mode_is_still_held(project, tmp_path, isolated_home):
+    hook = prompt_hook(project, cold_transcript(tmp_path))
+    held = guards.handle(dict(hook, permission_mode="default"), "claude-code")
+    assert held["decision"] == "block"
 
 
 # --- the binding, session start, the entry ----------------------------------------------------------

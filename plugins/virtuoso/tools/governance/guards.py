@@ -138,8 +138,9 @@ def hold_once(guard: str, key: str, hook: dict, root: str, **figures) -> bool:
 
 # --- the dispatch a session is running -------------------------------------------------------------
 
-def open_dispatch(root: str, session: str) -> str:
-    """The dispatch this session is bound to whose time log is still open, or ``""``."""
+def open_dispatch(root: str, session: str, bound_only: bool = False) -> str:
+    """The dispatch this session is bound to whose time log is still open, or ``""``. With
+    ``bound_only``, never fall back to the project's one open log."""
     from . import registry as registry_mod, timing
     folder = os.path.join(guardstate.guard_dir(), "bindings")
     try:
@@ -161,7 +162,7 @@ def open_dispatch(root: str, session: str) -> str:
     for dispatch in bound:
         if is_open(os.path.join(directory, timing.log_name(dispatch))):
             return dispatch
-    if bound:
+    if bound or bound_only:
         return ""
     # Not bound yet (no row worked this session): the project's one open time log, if
     # exactly one is open; with several, naming one would be a guess.
@@ -173,6 +174,25 @@ def open_dispatch(root: str, session: str) -> str:
     found = [n[len(prefix):len(n) - len(suffix)] for n in sorted(names)
              if is_open(os.path.join(directory, n))]
     return found[0] if len(found) == 1 else ""
+
+
+def unattended(hook: dict, root: str) -> str:
+    """Why nobody may be at this session's prompt to answer a hold, or ``""``: it runs with
+    permissions bypassed (how an unattended dispatch or epic is launched), or it is bound to a
+    dispatch whose time log is still open. A hold there stalls the run, so no guard holds."""
+    if hook.get("permission_mode") == "bypassPermissions":
+        return "bypassPermissions"
+    dispatch = open_dispatch(root, hook.get("session_id") or "", bound_only=True)
+    return "dispatch %s" % dispatch if dispatch else ""
+
+
+def passed_unattended(guard: str, hook: dict, root: str, **figures) -> bool:
+    """``True`` when the session is unattended: the step goes through, and a receipt records
+    what the guard would have held."""
+    why = unattended(hook, root)
+    if why:
+        receipt(guard, "unattended", hook, root, why=why, **figures)
+    return bool(why)
 
 
 # --- G1: a cold return ------------------------------------------------------------------------------
@@ -223,6 +243,8 @@ def cold_return(hook: dict, adapter, pol, root: str):
     key = "%s|cold|%s" % (hook.get("session_id"), last.id)
     figures = {"tokens": context, "usd": price.usd, "kind": "measured" if minutes and how ==
                "measured" else "inferred", "idleMinutes": round(idle)}
+    if passed_unattended("coldReturn", hook, root, key=key, **figures):
+        return None
     if not hold_once("coldReturn", key, hook, root, **figures):
         return None
     dispatch = open_dispatch(root, hook.get("session_id") or "")
@@ -355,6 +377,8 @@ def retry(hook: dict, adapter, pol, root: str):
     key = "%s|%s|retry|%s|%s" % (hook.get("session_id"), hook.get("agent_id") or "",
                                  hashlib.sha256(command.encode()).hexdigest()[:16],
                                  facts.last_change)
+    if passed_unattended("retry", hook, root, key=key, failures=failures):
+        return None
     if not hold_once("retry", key, hook, root, failures=failures):
         return None
     return adapter.deny_tool(
@@ -382,6 +406,8 @@ def big_read(hook: dict, adapter, pol, root: str):
     if size <= limit:
         return None
     key = "%s|read|%s|%d" % (hook.get("session_id"), os.path.normcase(path), int(mtime))
+    if passed_unattended("bigRead", hook, root, key=key, bytes=size):
+        return None
     if not hold_once("bigRead", key, hook, root, bytes=size):
         return None
     return adapter.deny_tool(

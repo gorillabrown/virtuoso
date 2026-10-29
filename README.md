@@ -233,13 +233,15 @@ Windows shell that pipes or redirects the output needs no `PYTHONIOENCODING`.
 In a project with a Virtuoso registry, the plugin's hooks catch waste as it happens. Each
 guard holds a costly step **once**, says what it costs and the ways on, and lets the
 identical step through when you send it again. Any error, missing capability or headless
-run lets the step through; a cost hold never replaces an issue-document stop, a git-safety
+run lets the step through. An unattended session never holds: one running with permissions
+bypassed, or bound to a dispatch whose time log is open, lets every step through and logs an
+`unattended` receipt instead, so the cost still shows in `guards`; a cost hold never replaces an issue-document stop, a git-safety
 rule or a write permission. Guard state lives in your own `~/.virtuoso/guard/`; the project
 is never written by a hook.
 
 | Guard | What it does |
 |---|---|
-| Cold return | Holds a typed message once after the conversation's cache has expired on a large context, with its re-read price. Mid-dispatch it offers a ready-to-paste `/compact keep …` line, never a fresh start; outside one, a handoff note for `/clear` |
+| Cold return | Holds a typed message once after the conversation's cache has expired on a large context, with its re-read price. Messages the host injects (task notifications, messages from other sessions) are never held. With one open time log in the project it offers a ready-to-paste `/compact keep …` line, never a fresh start; otherwise, a handoff note for `/clear` |
 | Retry | Denies once the same failing command after it failed twice with nothing changed, in workers too |
 | Big read | Denies once a whole-file read over 64 KB in the top-level session: read a range, or read again |
 | Waits and resumes | `timing --resume` records what a wait past the cache lifetime costs; `--end` fills the row's tokens |

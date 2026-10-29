@@ -41,7 +41,8 @@ SYNTHETIC_MODEL = "<synthetic>"
 #: Prompt text Claude Code writes itself, never typed by the person.
 _INJECTED_RE = re.compile(r"^\s*(?:<(?:agent-message|task-notification|command-name|"
                           r"command-message|local-command-stdout|local-command-caveat|"
-                          r"system-reminder)\b|\[Request interrupted by user)")
+                          r"system-reminder|cross-session-message|side-sessions-event|"
+                          r"ci-monitor-event)\b|\[Request interrupted by user)")
 _EXIT_RE = re.compile(r"^Exit code (\d+)")
 
 

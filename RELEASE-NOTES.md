@@ -1,5 +1,13 @@
 # Virtuoso Release Notes
 
+## v1.16.2 (2026-10-29) — guards never block an unattended session
+
+- **Guards never block an unattended session.** The cold-return, retry and big-read guards
+  let every step through in a session running with permissions bypassed, or bound to a
+  dispatch whose time log is open, and log an `unattended` receipt instead. A message from
+  another session (`<cross-session-message>`), a side-sessions event or a CI-monitor event
+  is no longer held as if it were typed.
+
 ## v1.16.1 (2026-10-24) — the turn-close guard, the footprint audit, and where a dispatch's time goes
 
 - **A cold return waits for the turn to close.** The cold-return guard holds a typed prompt
