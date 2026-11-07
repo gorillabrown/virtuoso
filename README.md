@@ -304,6 +304,7 @@ Invoked through the plugin namespace, e.g. `/virtuoso:roadmap-review`.
 | `adversarial-review` | — | Structured red-team review (modifier) |
 | `git-handoff` | — | Hand-off packet for a session that cannot mutate the repository |
 | `delayed-start` | `/virtuoso:delayed-start` | Defer execution to a clock time or delay |
+| `catfish` | `/virtuoso:catfish` | Put a curious, well-informed challenger on a plan's owner: each interval, probing questions on its waits and sequencing, followed up until decided and reported, while the owner keeps every decision |
 | `virtuoso-init` | `/virtuoso:virtuoso-init` | Register a project, or initialize a workspace |
 | `project-profile` | `/virtuoso:project-profile` | Establish what makes this project different — declarations and their bodies |
 

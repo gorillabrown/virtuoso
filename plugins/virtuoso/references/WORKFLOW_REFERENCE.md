@@ -25,5 +25,6 @@ This index maps the old section numbers to their new homes.
 - **3rd-party-audit** — external codebase audit lifecycle
 - **ultrathink / effort-levels / adversarial-review** — reasoning, sizing, red-team modifiers
 - **delayed-start** — defer execution to a clock time / delay
+- **catfish** — recurring probing questions on a plan owner's waits and sequencing, followed up until decided and reported; asks, never decides
 - **git-handoff** — legacy git handoff packet (manual only)
 - **virtuoso-init** — create/repair this workspace

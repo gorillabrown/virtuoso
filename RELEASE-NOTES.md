@@ -1,5 +1,17 @@
 # Virtuoso Release Notes
 
+## v1.16.3 (2026-11-07) — catfish: a recurring challenger on a plan's owner
+
+- **`catfish`: a curious, well-informed challenger on a plan's owner.** The new skill first
+  asks who the owner is, who receives its reports, when the deadline falls, how often to
+  check in, and what shape the questions should take. Then, every interval, it reviews the
+  plan and its evidence, puts probing questions on the owner's waits and sequencing, tests
+  the logic behind the model and effort level for each agent's work on whichever host it
+  runs, follows up until the owner has decided each one, and reports the decisions. Future
+  work with no model or effort level chosen gets them settled in that conversation. It
+  stays read-only, takes no assignments, asks and never decides, and ends itself at the
+  deadline.
+
 ## v1.16.2 (2026-10-29) — guards never block an unattended session
 
 - **Guards never block an unattended session.** The cold-return, retry and big-read guards
