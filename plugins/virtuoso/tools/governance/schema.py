@@ -503,6 +503,24 @@ DEFAULT_ROLES: dict[str, dict] = {
         "origin": "authored",
         "label": "Roadmap board comments",
     },
+    "progress": {
+        # The progress band's data: one JSON file (title, deadline, updated, items with a
+        # state each) the plugin's hooks module draws above the prompt and in the status
+        # line, re-read every 30 seconds and at the end of every turn. Kept current by the
+        # ceremonies that move items; the band only reads it. Opt-in: a project registers it
+        # when it wants the band, and until then the band draws nothing.
+        "provider": "json",
+        "authority": "reference",
+        "mutability": "read-write",
+        "owner": "virtuoso",
+        "allowedWriters": ["virtuoso", "next-dispatch", "dispatch-closeout", "epic",
+                           "roadmap-review", "mid-dispatch-decision", "adversarial-review",
+                           "3rd-party-audit", "governance-sweep"],
+        "validation": "exists",
+        "classification": "active",
+        "origin": "authored",
+        "label": "Progress band data (JSON)",
+    },
     "governance": {
         "provider": "directory",
         "authority": "reference",
@@ -571,7 +589,7 @@ DEFAULT_ROLES: dict[str, dict] = {
 
 #: Roles created by ``create`` on a brand-new workspace, in readme order.
 #:
-#: ``overlays``, ``epics``, ``holdingBay``, ``board`` and ``boardComments`` are deliberately
+#: ``overlays``, ``epics``, ``holdingBay``, ``board``, ``boardComments`` and ``progress`` are deliberately
 #: not here. Each is opt-in: a
 #: project registers it when it first has something to put there, and until then `create`
 #: lays down no empty directory for it. Leaving a role out of this tuple is how the plugin says

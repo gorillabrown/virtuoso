@@ -140,6 +140,8 @@ CREATE_ALLOWED = {
     "scripts/virtuoso_registry.py",
     "tools/governance/backup.py", "tools/governance/textio.py",
     "tools/governance/install.py", "tools/governance/repair.py",
+    # The progress file and its lock, only where the registered `progress` role points.
+    "tools/governance/progress.py",
     # Guard state, only under the user's own ~/.virtuoso/guard/ (it refuses any other path).
     "tools/governance/guardstate.py",
     "tools/governance/providers/csv_provider.py",

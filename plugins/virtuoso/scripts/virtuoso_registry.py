@@ -3,7 +3,8 @@
 
 Query subcommands create nothing and heal nothing as a side effect (item 86).
 The commands that write say so explicitly: `snapshot`, `closeout --prepare`,
-`create-item` (appends a new item to a LOCAL register), `mutation-plan` (opens
+`create-item` (appends a new item to a LOCAL register), `progress` with a change flag
+(the progress band's file, stamped from the clock), `mutation-plan` (opens
 durable recovery before a host connector write), `mutation-confirm` (records
 the connector result and resolves recovery only on success), `timing`
 (appends clock-stamped events to a dispatch's time log in the closeOuts role), and
@@ -45,6 +46,14 @@ Subcommands:
           --open|--add --rows-file PATH   the first listing, or rows added mid-run
           --start|--wait|--resume|--end N  row N, stamped by the clock (a write)
           --status          each row's state and measured working minutes
+  progress                  the progress band's figures (read-only)
+          --flag ID --label L [--state S] [--after ID]   add a deliverable (a write)
+          --set ID --state S   move one: queued, active, done, blocked (a write)
+          --drop ID            withdraw one (a write)
+          --prune-done         drop every done item, for a new phase (a write)
+          --title T | --deadline YYYY-MM-DD | --now TEXT   the band's header (a write)
+          --register [--path P]   register the role (preview; --apply writes)
+          --drift              where the band and the work register disagree (read-only)
   repo [--expect PATHS]     read-only repository state and readiness finding
   footprint [--dispatch ID] the disk footprint: worktrees, clones, temp-role scratch and
                             pytest basetemps, each sized and classified (read-only)
@@ -484,6 +493,193 @@ def cmd_guards(args) -> int:
 _GUARD_LOG_ENTRY = '"guardLog": ' + json.dumps(dict(
     [("path", "<file>.jsonl")]
     + [(key, schema.DEFAULT_ROLES["guardLog"][key])
+       for key in ("provider", "authority", "mutability", "owner", "allowedWriters")]))
+
+
+def cmd_progress(args) -> int:
+    """The progress band's data (the ``progress`` role): its figures (read-only), or one
+    change — flag a deliverable, move one to a state, drop one, set the title or deadline.
+
+    Every change is a write, stamped ``updated`` from the clock, and needs an ``--actor``
+    that may write the role. Without the role registered, a change is refused naming the
+    entry to add, and the read reports the band as off.
+    """
+    from tools.governance import progress as progress_mod
+    reg = _load(args.root)
+    actor = args.actor or ""
+    if args.register:
+        return _progress_register(reg, actor, args)
+    changing = any(v is not None for v in (args.flag, args.set_id, args.drop, args.title,
+                                           args.deadline, args.now)) or args.prune_done
+    try:
+        path = reg.resolve("progress")
+    except RoleNotRegistered:
+        if not changing:
+            return _emit({"registered": False, "entry": _PROGRESS_ENTRY}, args.as_json,
+                         lambda: "the progress band is off: no `progress` role is registered. "
+                         "Register one in %s: %s" % (schema.MANIFEST_RELPATH, _PROGRESS_ENTRY))
+        raise GovernanceError("no `progress` role is registered, so the progress band is off "
+                              "and nothing was flagged. Register one in %s: %s"
+                              % (schema.MANIFEST_RELPATH, _PROGRESS_ENTRY))
+    if args.drift:
+        return _progress_drift(reg, path, args)
+    if not changing:
+        try:
+            doc = progress_mod.load(path)
+        except (ValueError, OSError) as exc:
+            raise GovernanceError("the progress file cannot be read: %s" % exc)
+        found = dict(progress_mod.summary(doc), registered=True, path=path)
+        return _emit(found, args.as_json, lambda: "%s %d/%d (%d%%) · Now: %s · Next: %s%s" % (
+            found["title"], found["done"], found["total"], found["percent"],
+            ", ".join(found["active"]) or "none", found["next"] or "none",
+            " · updated %s" % found["updated"] if found["updated"] else ""))
+    if not reg.writable("progress", actor):
+        raise GovernanceError("%s may not write the progress role (allowedWriters in %s)"
+                              % (actor or "(no --actor)", schema.MANIFEST_RELPATH))
+    if args.set_id is not None and not args.state:
+        raise GovernanceError("--set needs --state (%s)" % ", ".join(progress_mod.STATES))
+    try:
+        with progress_mod.locked(path):
+            try:
+                doc = progress_mod.load(path)
+            except (ValueError, OSError) as exc:
+                raise GovernanceError("the progress file cannot be read: %s" % exc)
+            if args.flag is not None:
+                outcome = progress_mod.flag(doc, args.flag, args.label or "",
+                                            args.state or "queued", args.after)
+                subject = args.flag
+            elif args.set_id is not None:
+                outcome = progress_mod.set_state(doc, args.set_id, args.state)
+                subject = args.set_id
+            elif args.drop is not None:
+                outcome = progress_mod.drop(doc, args.drop)
+                subject = args.drop
+            elif args.prune_done:
+                missing = _progress_unrecorded(reg, doc, actor)
+                if missing:
+                    raise GovernanceError(
+                        "--prune-done refused: %s marked done on the band but %s no record in "
+                        "the terminal ledger. Close %s out first (dispatch-closeout); nothing "
+                        "was pruned." % (", ".join(missing),
+                                         "has" if len(missing) == 1 else "have",
+                                         "it" if len(missing) == 1 else "them"))
+                pruned = progress_mod.prune_done(doc)
+                outcome, subject = ("pruned %d" % pruned if pruned else "unchanged"), "done items"
+            else:
+                if args.title is not None:
+                    doc["title"] = args.title or progress_mod.DEFAULT_TITLE
+                if args.deadline is not None:
+                    progress_mod.set_deadline(doc, args.deadline)
+                if args.now is not None:
+                    if args.now:
+                        doc["now"] = args.now
+                    else:
+                        doc.pop("now", None)
+                outcome, subject = "set", "header"
+            if outcome != "unchanged":
+                progress_mod.save(path, doc)
+    except progress_mod.ProgressError as exc:
+        raise GovernanceError(str(exc))
+    found = dict(progress_mod.summary(doc), outcome=outcome, subject=subject, path=path)
+    return _emit(found, args.as_json, lambda: "%s %s · %s %d/%d (%d%%)" % (
+        subject, outcome, found["title"], found["done"], found["total"], found["percent"]))
+
+
+def _progress_unrecorded(reg, doc: dict, actor: str) -> list[str]:
+    """Done items on the band that the live work register holds but the terminal ledger has
+    no record of: pruning them would drop a completion nobody recorded. Ids the register
+    does not hold (audit and sweep entries) have no ledger path and are exempt. Where either
+    cannot be read the prune is refused, naming what is missing, never guessed."""
+    done = [i.get("id") for i in doc["items"] if i.get("state") == "done"]
+    if not done:
+        return []
+    try:
+        recorded = {r.item_id for r in providers.terminal_ledger(reg).records()
+                    if not r.corrects}
+        held = {i.id for i in providers.work_register(reg, actor=actor).provider.snapshot().items}
+    except (GovernanceError, CapabilityError, RoleNotRegistered, OSError) as exc:
+        raise GovernanceError("--prune-done cannot confirm the done items are in the terminal "
+                              "ledger (%s); nothing was pruned" % exc)
+    return [d for d in done if d in held and d not in recorded]
+
+
+def _progress_drift(reg, path: str, args) -> int:
+    """Read-only: where the band and the live work register disagree about an item being
+    done. Not computable, with the missing input named, where either cannot be read."""
+    from tools.governance import progress as progress_mod
+    try:
+        doc = progress_mod.load(path)
+    except (ValueError, OSError) as exc:
+        raise GovernanceError("the progress file cannot be read: %s" % exc)
+    try:
+        snap = providers.work_register(reg, actor=args.actor or "").provider.snapshot()
+    except (GovernanceError, CapabilityError, RoleNotRegistered, OSError) as exc:
+        found = {"computable": False, "missing": ["the work register (%s)" % exc]}
+        return _emit(found, args.as_json, lambda: "not computable (missing: %s)"
+                     % "; ".join(found["missing"]))
+    found = dict(progress_mod.drift(doc, {i.id: bool(i.is_terminal) for i in snap.items}),
+                 computable=True, provenance=snap.provenance())
+    return _emit(found, args.as_json, lambda: (
+        "in sync: %d · register done, band not: %s · band done, register not: %s · "
+        "not in the register: %d (source: %s, snapshot %s)" % (
+            found["inSync"], ", ".join(found["registerDoneBandNot"]) or "none",
+            ", ".join(found["bandDoneRegisterNot"]) or "none", len(found["notInRegister"]),
+            snap.source, snap.taken_at)))
+
+
+#: Who may register the progress role: its writers, and the ceremonies that set a project up.
+_PROGRESS_REGISTRARS = ("project-profile", "virtuoso-init")
+
+
+def _progress_register(reg, actor: str, args) -> int:
+    """Register the opt-in ``progress`` role (preview unless ``--apply``), through the
+    same backed-up, validated, rolled-back write the repair path uses. The file goes
+    where ``--path`` says, else ``Progress.json`` in the registered ``operational``
+    directory; with neither, the command asks for ``--path`` rather than guess."""
+    from tools.governance import progress as progress_mod
+    from tools.governance import repair as repair_mod
+    writers = schema.DEFAULT_ROLES["progress"]["allowedWriters"]
+    if not schema.actor_allowed(actor, list(writers) + list(_PROGRESS_REGISTRARS)):
+        raise CapabilityError("registering the progress role needs an --actor among %s"
+                              % ", ".join(list(writers) + list(_PROGRESS_REGISTRARS)))
+    existing = reg.roles.get("progress")
+    if existing is not None:
+        return _emit({"registered": True, "path": existing.path, "applied": False},
+                     args.as_json, lambda: "the progress role is already registered at %s"
+                     % existing.path)
+    target = (args.path or "").strip().replace("\\", "/")
+    if not target:
+        operational = reg.roles.get("operational")
+        if operational is None or not operational.path:
+            raise GovernanceError("no `operational` role to place the file in; name one with "
+                                  "--path <project-relative file>.json")
+        target = operational.path.rstrip("/") + "/Progress.json"
+    if os.path.isabs(target) or ".." in target.split("/"):
+        raise GovernanceError("--path must be project-relative, inside the project: %s" % target)
+    meta = schema.default_role("progress")
+    spec = schema.RoleSpec.from_manifest("progress", dict(meta, path=target))
+    plan = repair_mod.role_plan(reg, spec)
+    if not args.apply:
+        return _emit({"registered": False, "proposed": target, "applied": False,
+                      "plan": plan.as_dict()}, args.as_json, lambda: (
+            "preview — register the progress role at %s (files: %s); run again with --apply"
+            % (target, ", ".join(plan.files_affected))))
+    written, backup_set = repair_mod.apply_plan(reg, plan, label="progress-register",
+                                                actor=actor)
+    path = os.path.join(reg.root, *target.split("/"))
+    if not os.path.exists(path):
+        with progress_mod.locked(path):
+            progress_mod.save(path, progress_mod.empty())
+        written.append(target)
+    return _emit({"registered": True, "path": target, "applied": True,
+                  "filesWritten": written, "backup": backup_set.relative_directory},
+                 args.as_json, lambda: "registered the progress role at %s; wrote %s (backup %s)"
+                 % (target, ", ".join(written), backup_set.relative_directory))
+
+
+_PROGRESS_ENTRY = '"progress": ' + json.dumps(dict(
+    [("path", "<file>.json")]
+    + [(key, schema.DEFAULT_ROLES["progress"][key])
        for key in ("provider", "authority", "mutability", "owner", "allowedWriters")]))
 
 
@@ -2621,6 +2817,34 @@ def build_parser() -> argparse.ArgumentParser:
                                help="with --context: price the reload a switch to MODEL costs")
     guards_parser.add_argument("--apply", action="store_true", help="with --copy: write")
     guards_parser.set_defaults(func=cmd_guards)
+    progress_parser = sub.add_parser("progress", parents=[common])
+    progress_mode = progress_parser.add_mutually_exclusive_group()
+    progress_mode.add_argument("--flag", default=None, metavar="ID",
+                               help="add a deliverable to the queue (a write)")
+    progress_mode.add_argument("--set", dest="set_id", default=None, metavar="ID",
+                               help="move one deliverable to --state (a write)")
+    progress_mode.add_argument("--drop", default=None, metavar="ID",
+                               help="withdraw one deliverable (a write)")
+    progress_mode.add_argument("--prune-done", action="store_true",
+                               help="drop every done item: a new phase's bar (a write)")
+    progress_mode.add_argument("--drift", action="store_true",
+                               help="where the band and the work register disagree (read-only)")
+    progress_mode.add_argument("--register", action="store_true",
+                               help="register the progress role (preview; --apply writes)")
+    progress_parser.add_argument("--path", default=None,
+                                 help="with --register: the project-relative file")
+    progress_parser.add_argument("--apply", action="store_true", help="with --register: write")
+    progress_parser.add_argument("--now", default=None,
+                                 help="set the free-text Now note; empty clears (a write)")
+    progress_parser.add_argument("--label", default=None, help="with --flag: the text shown")
+    progress_parser.add_argument("--state", default=None,
+                                 help="queued, active, done or blocked")
+    progress_parser.add_argument("--after", default=None, metavar="ID",
+                                 help="with --flag: place it after this item")
+    progress_parser.add_argument("--title", default=None, help="set the band's title (a write)")
+    progress_parser.add_argument("--deadline", default=None,
+                                 help="set the deadline, YYYY-MM-DD; empty clears (a write)")
+    progress_parser.set_defaults(func=cmd_progress)
     results_parser = sub.add_parser("results", parents=[common])
     results_parser.add_argument("change", nargs="?", default="",
                                 help="one change (CH-NNN); every change when omitted")

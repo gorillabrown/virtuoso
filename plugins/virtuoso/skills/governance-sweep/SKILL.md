@@ -425,6 +425,19 @@ Phase 3 begins only on (a) or (b). On (c) offer to save the work list.
 
 ---
 
+### Progress band
+
+On approval, flag one entry per approved work-list group, in execution order, so the band
+above the prompt tracks Phase 3 (`references/registry-contract.md`, *Feeding the band*):
+
+```bash
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor governance-sweep progress --flag SWEEP-<date>-<n> --label "<group name>"
+```
+
+Mark each `--set SWEEP-<date>-<n> --state done` as its group verifies (Phase 3, Step 2). A
+group deferred to the user is dropped. Where the role is not registered the command prints
+the entry to add: put it in the completion report and carry on.
+
 ## Phase 3 — Implementation
 
 The only phase that changes files.

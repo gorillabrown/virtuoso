@@ -1290,6 +1290,24 @@ Before skipping narration, skipping a reprint, or taking a shortcut, check this 
 
 ---
 
+## The Progress Band
+
+The plugin draws a progress band above the prompt in every Claude Code session it is enabled
+in, from the registry's opt-in `progress` role (a JSON file; format and resolution in
+`references/registry-contract.md`, *The progress band* and *Feeding the band*). Every
+change goes through the registry command, never a hand edit; it stamps the time itself.
+
+- **Phase 1**, once the dispatch's item id is known: flag it (a no-op when roadmap-review
+  or next-dispatch already did) and move it to `active`:
+  `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso progress --flag <ITEM-ID> --label "<short title>"`, then
+  `... --actor virtuoso progress --set <ITEM-ID> --state active`.
+- **Phase 5**, when the run pauses with an issue document: `--set <ITEM-ID> --state blocked`.
+  `/mid-dispatch-decision` moves it back.
+- `done` is `/dispatch-closeout`'s, after the evidence verifies; this skill never marks it.
+
+Work with no item id is not flagged. Where the role is not registered the command says the
+band is off and prints the entry to add: say so once in the dispatch report and carry on.
+
 ## Project-Specific Overlays
 
 This skill provides the generic execution framework. A project layers its own requirements

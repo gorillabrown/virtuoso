@@ -261,6 +261,20 @@ is ready only when all five pass.
 
 ---
 
+## Progress band
+
+When the kickoff prints, flag the head item (a no-op when roadmap-review already did) and
+move it to `active`, so the band above the prompt shows what is now running
+(`references/registry-contract.md`, *Feeding the band*):
+
+```bash
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor next-dispatch progress --flag <ITEM-ID> --label "<short title>"
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor next-dispatch progress --set <ITEM-ID> --state active
+```
+
+A head item routed to `/epic` is left to that skill. Where the role is not registered the
+command prints the entry to add: say so once under the kickoff and carry on.
+
 ## Repository reconciliation
 
 The recipe below is a **template**. Fill it from `policy.git` and from the

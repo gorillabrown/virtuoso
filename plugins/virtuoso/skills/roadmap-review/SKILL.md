@@ -318,6 +318,21 @@ If a legacy `sprintCatalog` is being read through the compatibility adapter, say
 so explicitly in your report: it is a mirror, not the authority, and it cannot be
 written until a `workRegister` role exists.
 
+### 0.3b Offer the progress band
+
+If no `progress` role is registered, offer the progress band once: two lines above the
+prompt showing how far through the build queue the project is, fed by the dispatch buffer
+this review sets (Phase D.6b). It is opt-in and this ceremony does not register it
+unasked. Preview, and apply only on the user's yes:
+
+```bash
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor roadmap-review progress --register
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor roadmap-review progress --register --apply
+```
+
+A "no" is final for this review; say that `progress --register` adds it later. Where the
+role is registered already, say nothing.
+
 ### 0.4 Legacy structure
 
 Detect older structures and show a migration plan before applying anything.
@@ -892,6 +907,25 @@ completed summary carries one line each; standing rules reflect the checklist.
 - **Buffer gaps** — items that could not be made dispatch-ready, with the rubric
   checks that blocked them
 - **Provenance** — provider, source, snapshot time for every figure
+
+### D.6b Feed the progress band
+
+Flag every item in the dispatch buffer, in roadmap order, so the band above the prompt shows
+the queue this review set (`references/registry-contract.md`, *Feeding the band*):
+
+```bash
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor roadmap-review progress --flag <ITEM-ID> --label "<short title>"
+```
+
+At the start of a new phase, run `progress --prune-done`, after the done items are in the
+terminal ledger, and set `--title` to the phase name, so the bar measures the current phase
+and not all-time history. The command refuses, naming the item, if a done item the register
+holds has no terminal-ledger record: close it out first, never work around the refusal.
+
+Flagging an item already there only relabels it. `--drop <ITEM-ID>` each item this review
+withdrew or archived, and set `--deadline YYYY-MM-DD` to the nearest declared deadline (an
+empty value clears it). Where the role is not registered the command prints the entry to
+add: put that line in the final summary and carry on.
 
 ### D.7 Regenerate the board
 

@@ -1,5 +1,32 @@
 # Virtuoso Release Notes
 
+## v1.17.0 (2026-11-12) — the progress band: how far through the build queue, above the prompt
+
+- **A progress band above the prompt.** Two lines in Claude Code show the queue as a bar
+  (`Build queue ██████░░░░ 6/19 (32%)`), the days to a deadline, what is running now, what
+  is next and when the file was last updated, with a short `Build 6/19` entry in the status
+  line. The plugin ships the module and loads it in every session; it re-reads its file
+  every 30 seconds and at the end of every turn, and draws nothing in a project that has not
+  registered one. An optional `progressFile` setting overrides the registered path.
+- **Opt-in `progress` role.** One JSON file (title, deadline, items with a state each),
+  registered like any other role. `virtuoso_registry progress --register` previews the role
+  and, with `--apply`, writes it through the same backed-up, validated, rolled-back write a
+  repair uses and seeds an empty file. `virtuoso-init` and `roadmap-review` offer it once.
+- **Skills flag deliverables and mark them done.** One command, never a hand edit, stamps
+  the time from the clock and takes a lock so parallel sessions never lose each other's
+  change: `progress --flag`, `--set`, `--drop`, `--prune-done`, `--deadline`, `--title` and
+  `--now`. `roadmap-review` flags the dispatch buffer and starts each phase's bar fresh;
+  `next-dispatch` and `virtuoso` mark an item active, `dispatch-closeout` marks it done,
+  `mid-dispatch-decision` blocks and releases it, `epic` flags its items, and
+  `adversarial-review`, `3rd-party-audit` and `governance-sweep` flag their own
+  deliverables. The ad hoc path (`storyboard`, `write-plan`) does not write it: a held plan
+  shows when it executes or is absorbed.
+- **The band cannot lose a completion.** `--prune-done` refuses, naming the item, when a
+  done item the work register holds has no terminal-ledger record. `progress --drift` is
+  read-only and lists items the register closed that the band has not marked, the reverse,
+  and band ids the register does not hold; `roadmap-status` reports it with the band's
+  figures.
+
 ## v1.16.3 (2026-11-07) — catfish: a recurring challenger on a plan's owner
 
 - **`catfish`: a curious, well-informed challenger on a plan's owner.** The new skill first

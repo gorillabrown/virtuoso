@@ -309,6 +309,20 @@ than you can now, and stale prescriptions poison later sessions.
    executes nothing itself. Otherwise, end with the packet path, the code-boxed prompt,
    and the goal line.
 
+### Progress band
+
+As the packet is scaffolded, flag each item of the epic in serial order, so the band above
+the prompt shows the run's queue across every session it spans
+(`references/registry-contract.md`, *Feeding the band*):
+
+```bash
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor epic progress --flag <ITEM-ID> --label "<short title>"
+```
+
+Each session moves its item to `active` under the virtuoso skill, and `/dispatch-closeout`
+marks it `done`. Where the role is not registered the command prints the entry to add: put
+it in the hand-off and carry on.
+
 ## Scaffolding budget
 
 Producing the packet is **minutes of document writing, not a mini-project**. Do not build

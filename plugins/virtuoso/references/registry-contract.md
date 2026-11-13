@@ -87,7 +87,97 @@ project registers each by adding its entry to the manifest when it first needs i
 | `holdingBay` | one held plan per piece of ad hoc work, `<yyyy-mm-dd>-<slug>.md` (see *The holding bay*) | `storyboard`, `write-plan`, `virtuoso`, `dispatch-closeout`, `roadmap-review` | when the project storyboards its first piece of ad hoc work |
 | `board` | the roadmap board, one generated page | `roadmap-review`, `dispatch-closeout`, `next-dispatch` | the first roadmap review (`generate_board --create`) |
 | `boardComments` | row comments people leave on the board (JSON) | `roadmap-review` | with the board |
+| `progress` | the progress band's data, one JSON file (see *The progress band*) | `virtuoso`, `next-dispatch`, `dispatch-closeout`, `epic`, `roadmap-review`, `mid-dispatch-decision`, `adversarial-review`, `3rd-party-audit`, `governance-sweep` | when the project wants the band (`virtuoso-init` and `project-profile` may also register it) |
 | `guardLog` | the cost guards' receipts for each dispatch (`jsonl`, append-only), copied in at close-out by `guards --copy`; hooks never write it | `dispatch-closeout` | when the project wants guard figures in its own tree |
+
+### The progress band
+
+The plugin ships a hooks module (`hooks/progress-band.tsx`) that loads in every Claude Code
+session the plugin is enabled in. It draws two lines above the prompt and one status-line
+entry from the `progress` role's file:
+
+```
+Build queue ██████░░░░░░░░░░░░░░ 6/19 (32%)  ·  50 days to 2027-01-01
+Now: economy batch  ·  Next: catalogue first release  ·  updated 2026-11-12T22:42Z
+```
+
+The file is resolved in this order, never from a conventional path: the plugin's
+`progressFile` option when it is set (absolute, or relative to the session's working
+directory), else `roles.progress.path` in `Virtuoso/workspace-layout.json` under the
+session's working directory. With neither, or with the file absent, the band draws nothing
+and the status entry is cleared. The band re-reads the file every 30 seconds and at the end
+of every turn; a file that is not valid JSON or has no `items` array shows one dim line
+naming the path and the error.
+
+```json
+{
+  "title": "Build queue",
+  "deadline": "2027-01-01",
+  "updated": "2026-11-12T22:42Z",
+  "now": "free text for readers of the file; the band does not show it",
+  "items": [
+    { "id": "VIR-060", "label": "economy batch", "state": "done" },
+    { "id": "VIR-061", "label": "catalogue first release", "state": "active" },
+    { "id": "VIR-062", "label": "sf1", "state": "queued" }
+  ]
+}
+```
+
+| Field | Use |
+|---|---|
+| `title` | Bold label opening line one and the status entry. |
+| `deadline` | Optional `YYYY-MM-DD`; the band shows whole days to it. |
+| `updated` | Optional; shown as written. Read the clock before stamping it. |
+| `items` | Queue order. `done` fills the bar; `active` items follow "Now:"; the first item neither `done` nor `active` follows "Next:". States are `queued`, `active`, `done` and `blocked`; the band counts any state but `done` and `active` as not started. |
+
+#### Feeding the band
+
+Nothing updates the file by itself. Every skill that commits to a deliverable flags it, and
+every skill that finishes one marks it, through one command, never a hand edit:
+
+```bash
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor <skill> progress --flag <ID> --label "<short title>"
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor <skill> progress --set <ID> --state active|done|blocked
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor <skill> progress --drop <ID>
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor <skill> progress --deadline YYYY-MM-DD
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor <skill> progress --prune-done
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . progress --drift
+```
+
+`--prune-done` drops every done item, for a new phase; it refuses, naming the item, if a done
+item the live register holds has no terminal-ledger record (ids the register does not hold are
+exempt), or if either record cannot be read. `roadmap-review` runs it at D.6b.
+`--register [--path P] [--apply]` adds the role (preview first). Writes take a lock beside
+the file, so sessions running at once never lose each other's change. `--drift` is
+read-only: it lists items the live register has closed that the band has not marked, the
+reverse, and band ids the register does not hold (held plans, audit and sweep entries),
+which are not drift.
+
+The command stamps `updated` from the clock and writes the file whole. Flagging an id
+already there changes nothing but its label, so a skill flags without checking first, and a
+`done` item is never moved back by a later flag.
+
+| Skill | Flags (`queued`) | Moves |
+|---|---|---|
+| `roadmap-review` | every item in the dispatch buffer, in roadmap order, at Phase D; drops an item it withdraws or archives; sets `--deadline` to the nearest declared deadline; at a new phase runs `--prune-done` and sets `--title` | — |
+| `adversarial-review` | one entry per remediation phase (`REVIEW-<date>-P<n>`) when it writes the remediation plan | `done` as each phase's gate passes |
+| `epic` | each item of the epic, in serial order, at Step 5 | — |
+| `next-dispatch` | the head item, if missing | `active` when the kickoff prints |
+| `virtuoso` | the dispatch's item, if missing | `active` at Phase 1; `blocked` when it pauses with an issue |
+| `mid-dispatch-decision` | — | `active` when the decision releases the pause; `--drop` on a Type 4 stop that withdraws the item |
+| `dispatch-closeout` | — | `done` in Step 4, after the evidence verifies (each item of a combined epic) |
+| `3rd-party-audit` | `AUDIT-<date>-D1` … `D5`, one per deliverable, at Step 1; each accepted remediation item (`AUDIT-<date>-R<n>`) at Step 6 | `done` as each deliverable lands, and as each remediation item is implemented |
+| `governance-sweep` | one entry per work-list group (`SWEEP-<date>-<n>`) at the Phase 2 approval | `done` as each group verifies in Phase 3 |
+
+Ids are the item's own roadmap or held-plan id; a label is the item's short title, a few
+words. Work with no roadmap, held-plan, audit or sweep id is not a queue deliverable and is
+not flagged. Read-only skills (`roadmap-status` and the rest) never write the file;
+`roadmap-status` may report `progress` figures.
+
+Where the role is not registered the command refuses and prints the entry to add: say so
+once in the skill's report, with that entry, and carry on. The band never blocks work. Any
+other refusal (an unknown id, a bad state) is reported as it stands, never worked around by
+editing the file.
 
 `changeLedger` is not opt-in: `create` scaffolds it (`Change.Ledger.jsonl` beside the
 lessons), and `changes` and `results` show an existing project the entry to add.

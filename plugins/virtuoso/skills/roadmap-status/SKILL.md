@@ -256,6 +256,8 @@ The status *words* in the register are the project's own; the canonical statuses
 above come from `policy.workRegister.statusMappings`. Never assume a project
 spells anything a particular way.
 
+| Progress band | `virtuoso_registry progress --json` (the band's own figures: done of total, Now, Next, `updated`) and `progress --drift --json` (where the band and the live register disagree: closed in the register but not on the band, the reverse, and band ids the register does not hold). No `progress` role: say the band is off; do not report it as drift. Drift is a Phase 2 candidate to correct through the registry command, never a Phase 1 edit |
+
 **There is no cache to refresh.** If a generated report exists and disagrees, the
 report is stale by definition — note it if asked, regenerate it through its
 registered generator if the user wants, and never read it as truth.
@@ -303,6 +305,7 @@ Each becomes a Phase 2 candidate, never a Phase 1 edit.
 - [Dispatch buffer: N of [policy target] — or: eager specification is disabled.]
 - [If stragglers: N items look complete and need migration.]
 - [If drift: the roadmap and the register disagree about N items.]
+- [If the progress band is on: the band reads N of M done; and, from `progress --drift`, N items the register has closed that the band has not marked, N the band marks done that the register does not. Omit when the band is off.]
 - [If anything is held: N ad hoc plans are waiting for the next roadmap review (N planned, N storyboarded, N executed, N in flight).]
 
 ### Recently completed (since YYYY-MM-DD)
