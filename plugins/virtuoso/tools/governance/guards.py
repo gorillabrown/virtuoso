@@ -422,10 +422,30 @@ def bind(hook: dict, adapter) -> None:
     """Record which session runs a dispatch, from a ``timing`` command that works a row."""
     if hook.get("agent_id"):
         return                                        # a subagent's command: bind the session
-    dispatch, verbs = hosts.timing_call(str((hook.get("tool_input") or {}).get("command") or ""))
+    command = str((hook.get("tool_input") or {}).get("command") or "")
+    dispatch, verbs = hosts.timing_call(command)
     if dispatch and verbs:
         hosts.record_binding(dispatch, hook.get("session_id") or "",
                              hook.get("transcript_path") or "", adapter.name)
+
+
+def bind_band(hook: dict) -> None:
+    """The progress band: point the session at the run a ``progress`` command feeds, or
+    clear its end line. Any project, registered or not: the band needs no registry."""
+    if hook.get("agent_id"):
+        return
+    command = str((hook.get("tool_input") or {}).get("command") or "")
+    run, action = hosts.progress_call(command)
+    session = hook.get("session_id") or ""
+    if action and session:
+        from . import progress
+        try:
+            if action == "feed":
+                progress.bind_session(session, run, progress.now())
+            else:
+                progress.clear_session(session, progress.now())
+        except (progress.ProgressError, OSError, ValueError):
+            pass                                      # the band never blocks a command
 
 
 # --- session start ------------------------------------------------------------------------------
@@ -653,6 +673,9 @@ def handle(hook: dict, host: str, version: str = ""):
         project = os.path.abspath(os.environ.get("CLAUDE_PROJECT_DIR") or cwd)
         inside = os.path.normcase(cwd + os.sep).startswith(os.path.normcase(project + os.sep))
         root = (registry_root(project) if inside else "") or registry_root(cwd)
+        if hook.get("hook_event_name") == "PreToolUse" and \
+                hook.get("tool_name") in ("Bash", "PowerShell"):
+            bind_band(hook)                           # the band, in any project
         if not root:
             return None                               # not a project that chose Virtuoso
         event = hook.get("hook_event_name")

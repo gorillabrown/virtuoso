@@ -253,9 +253,10 @@ def _words(segment: str) -> list[str]:
     return [a or b or c for a, b, c in re.findall(r'"([^"]*)"|\'([^\']*)\'|(\S+)', segment)]
 
 
-def _registry_call(words: list[str]) -> list[str] | None:
-    """The words after ``timing`` when the segment calls the registry helper's ``timing``
-    from a command position (the launcher, or a Python running the script)."""
+def _registry_call(words: list[str], sub: str = "timing") -> list[str] | None:
+    """The words after ``sub`` (``timing``, or ``progress``) when the segment calls the
+    registry helper's ``sub`` from a command position (the launcher, or a Python running
+    the script)."""
     start = 0
     while start < len(words):                         # wrappers that run what follows
         word = words[start].lower()
@@ -284,9 +285,9 @@ def _registry_call(words: list[str]) -> list[str] | None:
         rest = rest[1:]
     elif not head.startswith("virtuoso_registry"):
         return None
-    if "timing" not in rest:
+    if sub not in rest:
         return None
-    return rest[rest.index("timing") + 1:]
+    return rest[rest.index(sub) + 1:]
 
 
 def _flags(args: list[str]) -> tuple[str, set[str]]:
@@ -340,6 +341,37 @@ def timing_call(command: str) -> tuple[str, set[str]]:
             if dispatch and verbs:
                 return dispatch, verbs
     return "", set()
+
+
+#: The ``progress`` flags that feed a run: a command carrying one of them with ``--run``
+#: binds the session that runs it to that run.
+PROGRESS_FEEDS = ("--plan", "--from-spec", "--from-charter", "--milestone", "--step",
+                  "--complete", "--stop")
+
+
+def progress_call(command: str) -> tuple[str, str]:
+    """What a command does to the progress band: ``(run, "feed")`` for ``progress --run RUN``
+    with a feeding flag, ``("", "clear")`` for ``progress --clear`` naming no session, else
+    ``("", "")``. The hook acts on it, because the command cannot know its own session and
+    the hook can: a feed points the session at its run, a clear removes that session's end
+    line and no other. Reading a run never moves the pointer. Quoted text is never a call."""
+    for segment in _segments(command):
+        args = _registry_call(_words(segment), "progress")
+        if args is None:
+            continue
+        names, run = set(), ""
+        for n, word in enumerate(args):
+            name, _eq, value = word.partition("=")
+            names.add(name)
+            if name == "--run":
+                value = value or (args[n + 1] if n + 1 < len(args) else "")
+                value = value.strip("\"'").rstrip(".,")
+                run = value if _ID_RE.match(value) else ""
+        if "--clear" in names and "--session" not in names:
+            return "", "clear"
+        if run and names & set(PROGRESS_FEEDS):
+            return run, "feed"
+    return "", ""
 
 
 def binding_dispatch(command: str) -> str:

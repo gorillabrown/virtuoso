@@ -87,97 +87,109 @@ project registers each by adding its entry to the manifest when it first needs i
 | `holdingBay` | one held plan per piece of ad hoc work, `<yyyy-mm-dd>-<slug>.md` (see *The holding bay*) | `storyboard`, `write-plan`, `virtuoso`, `dispatch-closeout`, `roadmap-review` | when the project storyboards its first piece of ad hoc work |
 | `board` | the roadmap board, one generated page | `roadmap-review`, `dispatch-closeout`, `next-dispatch` | the first roadmap review (`generate_board --create`) |
 | `boardComments` | row comments people leave on the board (JSON) | `roadmap-review` | with the board |
-| `progress` | the progress band's data, one JSON file (see *The progress band*) | `virtuoso`, `next-dispatch`, `dispatch-closeout`, `epic`, `roadmap-review`, `mid-dispatch-decision`, `adversarial-review`, `3rd-party-audit`, `governance-sweep` | when the project wants the band (`virtuoso-init` and `project-profile` may also register it) |
 | `guardLog` | the cost guards' receipts for each dispatch (`jsonl`, append-only), copied in at close-out by `guards --copy`; hooks never write it | `dispatch-closeout` | when the project wants guard figures in its own tree |
 
 ### The progress band
 
 The plugin ships a hooks module (`hooks/progress-band.tsx`) that loads in every Claude Code
-session the plugin is enabled in. It draws two lines above the prompt and one status-line
-entry from the `progress` role's file:
+session the plugin is enabled in, in any project, with nothing to register or opt into.
+While the session runs a dispatch or an epic it draws two lines above the prompt and one
+status-line entry:
 
 ```
-Build queue ██████░░░░░░░░░░░░░░ 6/19 (32%)  ·  50 days to 2027-01-01
-Now: economy batch  ·  Next: catalogue first release  ·  updated 2026-11-12T22:42Z
+██████████░░░░░░░░░░ Step 2/4      ( 50% complete; milestone ETA 12:22Z) Wire the CLI
+░░░░░░░░░░░░░░░░░░░░ Milestone 0/2 (  0% complete; dispatch ETA —)       Core
 ```
 
-The file is resolved in this order, never from a conventional path: the plugin's
-`progressFile` option when it is set (absolute, or relative to the session's working
-directory), else `roles.progress.path` in `Virtuoso/workspace-layout.json` under the
-session's working directory. With neither, or with the file absent, the band draws nothing
-and the status entry is cleared. The band re-reads the file every 30 seconds and at the end
-of every turn; a file that is not valid JSON or has no `items` array shows one dim line
-naming the path and the error.
+A run is one dispatch or one epic. Its milestones are the plan's phases (a specification's
+`##### Milestones`, an epic charter's `## Milestones`; a plan with no phases has one), and
+line one's steps are the current milestone's. X/Y and the percent count finished items; a
+cancelled step or milestone drops out of both, so they follow the plan. Both
+bars are one width and the counters and parentheticals are padded so the names start in one
+column. No line ever wraps, live, stale or end: (1) the name is cut with `…`, down to
+nothing; (2) both bars shrink alike to 10 cells; (3) the labels are shortened (`complete`,
+then `milestone`/`dispatch`/`epic`; on an end line `took`, `finished`, `stopped`,
+`Milestone`→`M`, `Step`→`S`) and the bars regrow into the room freed. Values are never cut,
+and a resize re-fits the lines. The status
+entry reads `Step X/Y · Milestone X/Y`. Each run draws in a colour pair picked from a fixed
+palette by its id (`--colors A,B` overrides it), so two sessions tell their runs apart.
+
+Each ETA is now plus the remaining items times the median duration of the finished items at
+that level, measured from the stamps the command writes, never planned or guessed: the
+`12:29Z` on the same UTC day, `11-20 18:05Z` on a later one. Until two items at a level are
+finished it reads `ETA —`. A run with no feed for max(30 minutes, 2 × its median finished
+step) (30 minutes until two steps are finished) is drawn dim, with `no update since hh:mmZ`
+in place of each ETA.
+
+A run ends in one line, drawn from the archived run:
+
+```
+████████████████████ ✓ COMPLETE (Milestone 2/2; finished 2026-11-12 15:12Z; took 3h12m) Catalogue first release
+██████████░░░░░░░░░░ ■ STOPPED (Step 1/3 of Milestone 2/2; stopped 2026-11-12 13:40Z; halted) Catalogue first release
+```
+
+COMPLETE only when the virtuoso skill's completion check passed; STOPPED, with its reason,
+for any other end. The end line stays until the session's next run starts or the user runs
+`progress --clear`, which clears only the current session's band. The band is hidden only
+when no run has started in the session, or after a clear. A wait on a decision is not an
+end: the band stays live through it.
+
+#### Where it is kept
+
+Nothing is written in a project. The store is the user's own state folder,
+`<VIRTUOSO_HOME or home>/.virtuoso/progress/`: `runs/<run>.json` for a run under way,
+`archive/<run>.json` once it ended, and `sessions/<session id>.json` naming the run each
+session draws. The band re-reads them at session start, every 30 seconds and at the end of
+every turn; a file it cannot read draws one dim line naming the path and the error.
 
 ```json
 {
-  "title": "Build queue",
-  "deadline": "2027-01-01",
-  "updated": "2026-11-12T22:42Z",
-  "now": "free text for readers of the file; the band does not show it",
-  "items": [
-    { "id": "VIR-060", "label": "economy batch", "state": "done" },
-    { "id": "VIR-061", "label": "catalogue first release", "state": "active" },
-    { "id": "VIR-062", "label": "sf1", "state": "queued" }
-  ]
+  "schema": 3,
+  "run": { "id": "VIR-061", "title": "Catalogue first release", "kind": "dispatch" },
+  "root": "C:/Projects/catalogue", "colors": ["cyan", "blue"],
+  "started": "2026-11-12T12:00:00Z", "updated": "2026-11-12T12:10:00Z",
+  "milestones": [
+    { "id": "M1", "label": "Core", "state": "active", "started": "2026-11-12T12:00:00Z" },
+    { "id": "M2", "label": "Proof", "state": "queued" } ],
+  "current": "M1",
+  "steps": [
+    { "id": "1", "label": "Write the parser", "state": "done",
+      "started": "2026-11-12T12:00:00Z", "finished": "2026-11-12T12:10:00Z" },
+    { "id": "2", "label": "Wire the CLI", "state": "active", "started": "2026-11-12T12:10:00Z" } ]
 }
 ```
 
-| Field | Use |
-|---|---|
-| `title` | Bold label opening line one and the status entry. |
-| `deadline` | Optional `YYYY-MM-DD`; the band shows whole days to it. |
-| `updated` | Optional; shown as written. Read the clock before stamping it. |
-| `items` | Queue order. `done` fills the bar; `active` items follow "Now:"; the first item neither `done` nor `active` follows "Next:". States are `queued`, `active`, `done` and `blocked`; the band counts any state but `done` and `active` as not started. |
-
 #### Feeding the band
 
-Nothing updates the file by itself. Every skill that commits to a deliverable flags it, and
-every skill that finishes one marks it, through one command, never a hand edit:
+Only the `virtuoso` skill opens, feeds and ends a run, through one command, never a hand edit
+(the skill's *The Progress Band* says when). `next-dispatch`, `epic` and `dispatch-closeout`
+never touch it. Feeding never writes the registry or any project file.
 
 ```bash
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor <skill> progress --flag <ID> --label "<short title>"
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor <skill> progress --set <ID> --state active|done|blocked
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor <skill> progress --drop <ID>
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor <skill> progress --deadline YYYY-MM-DD
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor <skill> progress --prune-done
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . progress --drift
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso progress --run <RUN> --from-spec <spec> --item <ITEM-ID> --title "<short title>"
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso progress --run <RUN> --plan <file.json> --title "<short title>"
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso progress --run <EPIC-ID> --from-charter <charter>
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso progress --run <RUN> --step <ID> --state active|done|blocked|cancelled [--label "<task>"]
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso progress --run <RUN> --milestone <M#> --state active|done|cancelled
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso progress --run <RUN> --complete --evidence "<the check>"
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso progress --run <RUN> --stop <reason>
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . progress --clear
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . progress --check-milestones <spec> [--item <ITEM-ID>] [--charter]
+"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . progress [--run <RUN>] [--session <ID>] [--width N] [--json]
 ```
 
-`--prune-done` drops every done item, for a new phase; it refuses, naming the item, if a done
-item the live register holds has no terminal-ledger record (ids the register does not hold are
-exempt), or if either record cannot be read. `roadmap-review` runs it at D.6b.
-`--register [--path P] [--apply]` adds the role (preview first). Writes take a lock beside
-the file, so sessions running at once never lose each other's change. `--drift` is
-read-only: it lists items the live register has closed that the band has not marked, the
-reverse, and band ids the register does not hold (held plans, audit and sweep entries),
-which are not drift.
+Opening a run that exists resumes it, never recreates it: an epic's later sessions open it
+again with the same id and continue its milestones and stamps. Opening it with a changed plan
+updates the milestone list and keeps the stamps of milestones still in it. A run that ended
+COMPLETE cannot be reopened, and a run opened from another project folder is refused. The
+command cannot see which session runs it; the plugin's PreToolUse hook can, and points the
+session that runs a feeding command at that run, and marks it cleared on `--clear`.
 
-The command stamps `updated` from the clock and writes the file whole. Flagging an id
-already there changes nothing but its label, so a skill flags without checking first, and a
-`done` item is never moved back by a later flag.
-
-| Skill | Flags (`queued`) | Moves |
-|---|---|---|
-| `roadmap-review` | every item in the dispatch buffer, in roadmap order, at Phase D; drops an item it withdraws or archives; sets `--deadline` to the nearest declared deadline; at a new phase runs `--prune-done` and sets `--title` | — |
-| `adversarial-review` | one entry per remediation phase (`REVIEW-<date>-P<n>`) when it writes the remediation plan | `done` as each phase's gate passes |
-| `epic` | each item of the epic, in serial order, at Step 5 | — |
-| `next-dispatch` | the head item, if missing | `active` when the kickoff prints |
-| `virtuoso` | the dispatch's item, if missing | `active` at Phase 1; `blocked` when it pauses with an issue |
-| `mid-dispatch-decision` | — | `active` when the decision releases the pause; `--drop` on a Type 4 stop that withdraws the item |
-| `dispatch-closeout` | — | `done` in Step 4, after the evidence verifies (each item of a combined epic) |
-| `3rd-party-audit` | `AUDIT-<date>-D1` … `D5`, one per deliverable, at Step 1; each accepted remediation item (`AUDIT-<date>-R<n>`) at Step 6 | `done` as each deliverable lands, and as each remediation item is implemented |
-| `governance-sweep` | one entry per work-list group (`SWEEP-<date>-<n>`) at the Phase 2 approval | `done` as each group verifies in Phase 3 |
-
-Ids are the item's own roadmap or held-plan id; a label is the item's short title, a few
-words. Work with no roadmap, held-plan, audit or sweep id is not a queue deliverable and is
-not flagged. Read-only skills (`roadmap-status` and the rest) never write the file;
-`roadmap-status` may report `progress` figures.
-
-Where the role is not registered the command refuses and prints the entry to add: say so
-once in the skill's report, with that entry, and carry on. The band never blocks work. Any
-other refusal (an unknown id, a bad state) is reported as it stands, never worked around by
-editing the file.
+Every write takes a lock in the store and writes a temporary file then renames it, so
+sessions writing at once never lose each other's change. `--complete` needs every milestone
+done and the evidence; `--stop` needs a reason. A run no feed has touched for 14 days is
+archived as stopped (`abandoned`). `--check-milestones` is read-only (rubric U11): exit 0
+prints the milestones and their steps, a refusal names what is missing or wrong.
 
 `changeLedger` is not opt-in: `create` scaffolds it (`Change.Ledger.jsonl` beside the
 lessons), and `changes` and `results` show an existing project the entry to add.
@@ -905,6 +917,7 @@ more links count, in this order:
 | `lesson-unknown` | a specification cites an identifier no lesson carries |
 | `lesson-not-appended` | a close-out names a lesson that is not in the role — the append did not happen |
 | `lesson-closed-cited` | a specification cites a promoted or retired lesson; cite what it became (warning) |
+| `retired-role` | the registry still names the `progress` role, retired in v1.17.1; the band no longer reads it, and the entry is never rewritten (warning) |
 | `lessons-not-cited` | live lessons the specification does not cite, listed for the author to confirm (info) |
 | `lessons-item-section-missing` | `--item` names an item the document has no section for |
 | `lesson-reason-unanchored` | a close-out's "No new lesson" reason names nothing it examined — no lesson, standing rule or item identifier — while the catalog or `policy.standingRules.ids` holds something to examine |

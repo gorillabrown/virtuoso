@@ -1,7 +1,7 @@
 {
   "name": "virtuoso",
   "displayName": "Virtuoso",
-  "version": "1.17.0",
+  "version": "1.17.1",
   "description": "A living roadmap that makes every task your agents finish improve the next one. Each task is scoped against what earlier work proved, run on the model and effort it needs, and closed out with evidence and a record of what it taught; lessons that keep holding become standing rules. The roadmap, ledger, lessons and rules live in plain files in your project.",
   "author": {
     "name": "Evan Brown",
@@ -12,14 +12,6 @@
   "repository": "https://github.com/gorillabrown/virtuoso",
   "license": "MIT",
   "types": "./types/index.d.ts",
-  "userConfig": {
-    "progressFile": {
-      "type": "string",
-      "title": "Progress file",
-      "description": "JSON file the progress band above the prompt reads, overriding the registry's progress role. A relative path is resolved against the session's working directory. Leave empty to use the registry; the band stays hidden where no file is named or the file does not exist.",
-      "default": ""
-    }
-  },
   "keywords": [
     "governance",
     "roadmap",

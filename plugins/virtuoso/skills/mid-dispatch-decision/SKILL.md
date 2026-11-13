@@ -795,22 +795,6 @@ as settled.
 
 Print confirmation: "Recorded the decision in [issue file]."
 
----
-
-#### 6e. Update the progress band
-
-The virtuoso skill set the dispatch's item to `blocked` when it paused. When the decision
-releases the pause (Types 1a–3a, and Type 5 once verified), move it back; on a Type 4 stop
-that withdraws the item, drop it (`references/registry-contract.md`, *Feeding the band*):
-
-```bash
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor mid-dispatch-decision progress --set <ITEM-ID> --state active
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor mid-dispatch-decision progress --drop <ITEM-ID>
-```
-
-A Type 4 stop that keeps the item for later leaves it `blocked`. Where the role is not
-registered the command prints the entry to add: say so once and carry on.
-
 ## Integration with Other Skills
 
 ### + Dispatch-Closeout

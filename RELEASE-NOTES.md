@@ -1,5 +1,60 @@
 # Virtuoso Release Notes
 
+## v1.17.1 (2026-11-12) — the progress band follows the dispatch or epic in hand
+
+This release replaces v1.17.0's buffer bar. The band no longer shows how far through the
+roadmap's build queue a project is; it shows how far the dispatch or epic this session is
+running has come, milestone by milestone and step by step. Nothing to register: it works in
+every project.
+
+- **Two lines about the work in hand.**
+  `██████████░░░░░░░░░░ Step 2/4      ( 50% complete; milestone ETA 12:22Z) Wire the CLI`
+  over `░░░░░░░░░░░░░░░░░░░░ Milestone 0/2 (  0% complete; dispatch ETA —)       Core`.
+  Line one's bar covers the current milestone's steps; line two's covers the run's
+  milestones, which are the plan's phases (one where the plan has none). The status line
+  reads `Step X/Y · Milestone X/Y`.
+- **One row each, never wrapped.** Every line (both live lines, the stale lines and the end
+  line) fits the terminal in this order: (1) the name is cut with `…`, down to nothing;
+  (2) both bars shrink alike to 10 cells; (3) the labels are shortened (`complete`, then
+  `milestone`/`dispatch`/`epic`, and on an end line `took`, `finished`, `stopped`,
+  `Milestone`→`M`, `Step`→`S`), and the bars regrow into the room that frees. Values (the
+  counts, percents, times, dates, durations and reasons) are never cut. A resize re-fits.
+- **ETAs measured, never guessed.** Now plus the remaining items times the median time of
+  the finished ones at that level; `ETA —` until two are finished. An ETA reads `12:29Z` on
+  the same UTC day and `11-20 18:05Z` on a later one. A run is stale once it has had no feed
+  for 30 minutes or twice its median finished step, whichever is longer (30 minutes until
+  two steps are finished): both lines dim and show `no update since hh:mmZ`.
+- **An end you can see.** `✓ COMPLETE (Milestone 2/2; finished 2026-11-13 12:31Z; took
+  3h12m)`, only when the virtuoso skill's completion check passed; `■ STOPPED (Step 2/9 of
+  Milestone 1/6; stopped 2026-11-13 12:40Z; halted)` for any other end. End lines carry the
+  date because they persist across days. A cancelled step or milestone drops out of X/Y,
+  so the percent measures the work that remains. The end line stays until the
+  session's next run starts or `progress --clear` clears this session's band. A wait on a
+  decision is not an end: the band stays live.
+- **Each session sees only its own run, in its own colours.** One file per run in your own
+  state folder (`~/.virtuoso/progress/`), never in a project; the plugin's hook points each
+  session at the run it feeds. Each run takes a colour pair from a fixed palette by its id
+  (`--colors` overrides it). An epic's later sessions reopen the same run and keep its pace.
+- **Only the virtuoso skill feeds the band**, through `progress --run <ID>` with
+  `--from-spec`, `--plan` or `--from-charter`, then `--step`, `--milestone`, `--complete
+  --evidence` or `--stop <reason>`. Reopening with a changed plan updates the milestones.
+  Writes go to a temporary file then a rename, under a lock, and never touch the registry.
+  `next-dispatch`, `epic`, `dispatch-closeout` and the other v1.17.0 writers no longer touch
+  it, and `roadmap-status` no longer reports band figures.
+- **Milestones in every dispatch and epic.** A specification carries a `##### Milestones`
+  table grouping its task rows, an epic charter a `## Milestones` table of outcome
+  checkpoints. The readiness rubric is v1.3, with U11, *Milestones*, a closable gap like U10;
+  the virtuoso skill derives milestones at kickoff where a ready specification has none.
+  `progress --check-milestones` checks either table.
+- **Removed.** The `progress` registry role, `progress --register`, the offers in
+  `virtuoso-init` and `roadmap-review` (0.3b), the `progressFile` plugin option, and the
+  v1.17.0 modes `--flag`, `--set`, `--drop`, `--prune-done`, `--drift`, `--deadline` and
+  `--now`. A registry that still names the `progress` role stays valid: preflight reports it
+  as a warning and never rewrites it. The old `Progress.json` is no longer read; delete it,
+  and its role entry, when convenient.
+- **Fixed.** On Windows a progress write could fail when another process was reading the
+  run file at the same moment; the write now waits for the reader.
+
 ## v1.17.0 (2026-11-12) — the progress band: how far through the build queue, above the prompt
 
 - **A progress band above the prompt.** Two lines in Claude Code show the queue as a bar

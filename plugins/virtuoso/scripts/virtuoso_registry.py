@@ -46,14 +46,13 @@ Subcommands:
           --open|--add --rows-file PATH   the first listing, or rows added mid-run
           --start|--wait|--resume|--end N  row N, stamped by the clock (a write)
           --status          each row's state and measured working minutes
-  progress                  the progress band's figures (read-only)
-          --flag ID --label L [--state S] [--after ID]   add a deliverable (a write)
-          --set ID --state S   move one: queued, active, done, blocked (a write)
-          --drop ID            withdraw one (a write)
-          --prune-done         drop every done item, for a new phase (a write)
-          --title T | --deadline YYYY-MM-DD | --now TEXT   the band's header (a write)
-          --register [--path P]   register the role (preview; --apply writes)
-          --drift              where the band and the work register disagree (read-only)
+  progress [--run R] [--session S]   what the band shows (read-only)
+          --run R --plan FILE | --from-spec PATH [--item ID] | --from-charter PATH
+                  [--title T] [--colors A,B]   open or resume a run (virtuoso only)
+          --run R --milestone ID | --step ID [--label L] --state S   move one item
+          --run R --complete --evidence TEXT | --stop REASON   end and archive it
+          --clear [--session S]   remove this session's end line
+          --check-milestones PATH [--item ID] [--charter]   rubric U11 (read-only)
   repo [--expect PATHS]     read-only repository state and readiness finding
   footprint [--dispatch ID] the disk footprint: worktrees, clones, temp-role scratch and
                             pytest basetemps, each sized and classified (read-only)
@@ -497,190 +496,164 @@ _GUARD_LOG_ENTRY = '"guardLog": ' + json.dumps(dict(
 
 
 def cmd_progress(args) -> int:
-    """The progress band's data (the ``progress`` role): its figures (read-only), or one
-    change — flag a deliverable, move one to a state, drop one, set the title or deadline.
+    """The progress band: the milestones and steps of the dispatch or epic a session runs.
 
-    Every change is a write, stamped ``updated`` from the clock, and needs an ``--actor``
-    that may write the role. Without the role registered, a change is refused naming the
-    entry to add, and the read reports the band as off.
+    The band's files live in the user's own state folder, never in a working tree, and no
+    mode reads or writes the registry. Only the ``virtuoso`` skill feeds a run:
+    ``--plan``/``--from-spec``/``--from-charter`` open or resume it from its plan,
+    ``--milestone`` and ``--step`` move one item, ``--complete`` and ``--stop`` end and archive
+    it. ``--clear`` removes this session's end line. ``--check-milestones`` reads a plan's
+    milestones (rubric U11). With no mode, prints what a run or every running run shows.
     """
     from tools.governance import progress as progress_mod
-    reg = _load(args.root)
-    actor = args.actor or ""
-    if args.register:
-        return _progress_register(reg, actor, args)
-    changing = any(v is not None for v in (args.flag, args.set_id, args.drop, args.title,
-                                           args.deadline, args.now)) or args.prune_done
+    if args.check_milestones:
+        return _progress_check(args)
+    if args.clear:
+        return _progress_clear(args)
+    feeds = [name for name, value in (
+        ("--plan", args.plan), ("--from-spec", args.from_spec),
+        ("--from-charter", args.from_charter), ("--milestone", args.milestone),
+        ("--step", args.step), ("--complete", args.complete),
+        ("--stop", args.stop is not None)) if value]
+    if not feeds:
+        return _progress_read(args)
+    if len(feeds) > 1:
+        raise GovernanceError("one change at a time: %s" % ", ".join(feeds))
+    if not args.run:
+        raise GovernanceError("%s needs --run <dispatch or epic id>" % feeds[0])
+    if (args.actor or "") != "virtuoso":
+        raise CapabilityError("only the virtuoso skill feeds the progress band "
+                              "(--actor virtuoso); got %s" % (args.actor or "no --actor"))
+    root = os.path.abspath(args.root or ".")
+    moment = progress_mod.now()
     try:
-        path = reg.resolve("progress")
-    except RoleNotRegistered:
-        if not changing:
-            return _emit({"registered": False, "entry": _PROGRESS_ENTRY}, args.as_json,
-                         lambda: "the progress band is off: no `progress` role is registered. "
-                         "Register one in %s: %s" % (schema.MANIFEST_RELPATH, _PROGRESS_ENTRY))
-        raise GovernanceError("no `progress` role is registered, so the progress band is off "
-                              "and nothing was flagged. Register one in %s: %s"
-                              % (schema.MANIFEST_RELPATH, _PROGRESS_ENTRY))
-    if args.drift:
-        return _progress_drift(reg, path, args)
-    if not changing:
-        try:
-            doc = progress_mod.load(path)
-        except (ValueError, OSError) as exc:
-            raise GovernanceError("the progress file cannot be read: %s" % exc)
-        found = dict(progress_mod.summary(doc), registered=True, path=path)
-        return _emit(found, args.as_json, lambda: "%s %d/%d (%d%%) · Now: %s · Next: %s%s" % (
-            found["title"], found["done"], found["total"], found["percent"],
-            ", ".join(found["active"]) or "none", found["next"] or "none",
-            " · updated %s" % found["updated"] if found["updated"] else ""))
-    if not reg.writable("progress", actor):
-        raise GovernanceError("%s may not write the progress role (allowedWriters in %s)"
-                              % (actor or "(no --actor)", schema.MANIFEST_RELPATH))
-    if args.set_id is not None and not args.state:
-        raise GovernanceError("--set needs --state (%s)" % ", ".join(progress_mod.STATES))
-    try:
-        with progress_mod.locked(path):
-            try:
-                doc = progress_mod.load(path)
-            except (ValueError, OSError) as exc:
-                raise GovernanceError("the progress file cannot be read: %s" % exc)
-            if args.flag is not None:
-                outcome = progress_mod.flag(doc, args.flag, args.label or "",
-                                            args.state or "queued", args.after)
-                subject = args.flag
-            elif args.set_id is not None:
-                outcome = progress_mod.set_state(doc, args.set_id, args.state)
-                subject = args.set_id
-            elif args.drop is not None:
-                outcome = progress_mod.drop(doc, args.drop)
-                subject = args.drop
-            elif args.prune_done:
-                missing = _progress_unrecorded(reg, doc, actor)
-                if missing:
-                    raise GovernanceError(
-                        "--prune-done refused: %s marked done on the band but %s no record in "
-                        "the terminal ledger. Close %s out first (dispatch-closeout); nothing "
-                        "was pruned." % (", ".join(missing),
-                                         "has" if len(missing) == 1 else "have",
-                                         "it" if len(missing) == 1 else "them"))
-                pruned = progress_mod.prune_done(doc)
-                outcome, subject = ("pruned %d" % pruned if pruned else "unchanged"), "done items"
-            else:
-                if args.title is not None:
-                    doc["title"] = args.title or progress_mod.DEFAULT_TITLE
-                if args.deadline is not None:
-                    progress_mod.set_deadline(doc, args.deadline)
-                if args.now is not None:
-                    if args.now:
-                        doc["now"] = args.now
-                    else:
-                        doc.pop("now", None)
-                outcome, subject = "set", "header"
-            if outcome != "unchanged":
-                progress_mod.save(path, doc)
+        abandoned = progress_mod.abandon_stale(moment)
+        if feeds[0] in ("--plan", "--from-spec", "--from-charter"):
+            colors = [c.strip() for c in args.colors.split(",")] if args.colors else None
+            if colors is not None and len(colors) != 2:
+                raise GovernanceError("--colors takes two colour names: <first>,<second>")
+            outcome = progress_mod.open_run(args.run, args.title or "", _progress_plan(args),
+                                            root, moment, colors,
+                                            "epic" if args.from_charter else "dispatch")
+            subject = args.run
+        elif args.milestone:
+            outcome = progress_mod.set_milestone(args.run, args.milestone, _state(args), root,
+                                                 moment, args.label or "")
+            subject = "%s milestone %s" % (args.run, args.milestone)
+        elif args.step:
+            outcome = progress_mod.set_step(args.run, args.step, _state(args), root, moment,
+                                            args.label or "")
+            subject = "%s step %s" % (args.run, args.step)
+        elif args.complete:
+            outcome = progress_mod.end_run(args.run, "complete", root, moment,
+                                           evidence=args.evidence or "")["state"]
+            subject = args.run
+        else:
+            outcome = progress_mod.end_run(args.run, "stopped", root, moment,
+                                           reason=args.stop)["state"]
+            subject = args.run
     except progress_mod.ProgressError as exc:
         raise GovernanceError(str(exc))
-    found = dict(progress_mod.summary(doc), outcome=outcome, subject=subject, path=path)
-    return _emit(found, args.as_json, lambda: "%s %s · %s %d/%d (%d%%)" % (
-        subject, outcome, found["title"], found["done"], found["total"], found["percent"]))
+    payload = {"subject": subject, "outcome": outcome, "abandoned": abandoned}
+    return _emit(payload, args.as_json, lambda: "%s %s%s" % (
+        subject, outcome, " (archived abandoned: %s)" % ", ".join(abandoned) if abandoned else ""))
 
 
-def _progress_unrecorded(reg, doc: dict, actor: str) -> list[str]:
-    """Done items on the band that the live work register holds but the terminal ledger has
-    no record of: pruning them would drop a completion nobody recorded. Ids the register
-    does not hold (audit and sweep entries) have no ledger path and are exempt. Where either
-    cannot be read the prune is refused, naming what is missing, never guessed."""
-    done = [i.get("id") for i in doc["items"] if i.get("state") == "done"]
-    if not done:
-        return []
-    try:
-        recorded = {r.item_id for r in providers.terminal_ledger(reg).records()
-                    if not r.corrects}
-        held = {i.id for i in providers.work_register(reg, actor=actor).provider.snapshot().items}
-    except (GovernanceError, CapabilityError, RoleNotRegistered, OSError) as exc:
-        raise GovernanceError("--prune-done cannot confirm the done items are in the terminal "
-                              "ledger (%s); nothing was pruned" % exc)
-    return [d for d in done if d in held and d not in recorded]
-
-
-def _progress_drift(reg, path: str, args) -> int:
-    """Read-only: where the band and the live work register disagree about an item being
-    done. Not computable, with the missing input named, where either cannot be read."""
+def _state(args) -> str:
     from tools.governance import progress as progress_mod
-    try:
-        doc = progress_mod.load(path)
-    except (ValueError, OSError) as exc:
-        raise GovernanceError("the progress file cannot be read: %s" % exc)
-    try:
-        snap = providers.work_register(reg, actor=args.actor or "").provider.snapshot()
-    except (GovernanceError, CapabilityError, RoleNotRegistered, OSError) as exc:
-        found = {"computable": False, "missing": ["the work register (%s)" % exc]}
-        return _emit(found, args.as_json, lambda: "not computable (missing: %s)"
-                     % "; ".join(found["missing"]))
-    found = dict(progress_mod.drift(doc, {i.id: bool(i.is_terminal) for i in snap.items}),
-                 computable=True, provenance=snap.provenance())
-    return _emit(found, args.as_json, lambda: (
-        "in sync: %d · register done, band not: %s · band done, register not: %s · "
-        "not in the register: %d (source: %s, snapshot %s)" % (
-            found["inSync"], ", ".join(found["registerDoneBandNot"]) or "none",
-            ", ".join(found["bandDoneRegisterNot"]) or "none", len(found["notInRegister"]),
-            snap.source, snap.taken_at)))
+    if args.state not in progress_mod.STATES:
+        raise GovernanceError("--state is one of %s" % ", ".join(progress_mod.STATES))
+    return args.state
 
 
-#: Who may register the progress role: its writers, and the ceremonies that set a project up.
-_PROGRESS_REGISTRARS = ("project-profile", "virtuoso-init")
+def _progress_plan(args):
+    """The milestones a run opens with: a plan file the skill wrote (derived at kickoff when
+    the specification has none), a specification's, or an epic charter's."""
+    from tools.governance import milestones as milestones_mod
+    where = lambda p: p if os.path.isabs(p) else os.path.join(args.root or ".", p)
+    if args.plan:
+        try:
+            with open(where(args.plan), encoding="utf-8") as handle:
+                data = json.load(handle)
+        except (OSError, ValueError) as exc:
+            raise GovernanceError("cannot read %s: %s" % (args.plan, exc))
+        return data.get("milestones") if isinstance(data, dict) else data
+    path = args.from_spec or args.from_charter
+    text = textio.read_text(where(path))
+    if text is None:
+        raise GovernanceError("cannot read %s" % path)
+    if args.from_spec:
+        return milestones_mod.from_spec(text, args.item or "")
+    return milestones_mod.from_charter(text)
 
 
-def _progress_register(reg, actor: str, args) -> int:
-    """Register the opt-in ``progress`` role (preview unless ``--apply``), through the
-    same backed-up, validated, rolled-back write the repair path uses. The file goes
-    where ``--path`` says, else ``Progress.json`` in the registered ``operational``
-    directory; with neither, the command asks for ``--path`` rather than guess."""
+def _progress_read(args) -> int:
+    """What a run shows (``--run``), or what every running run and this session show."""
     from tools.governance import progress as progress_mod
-    from tools.governance import repair as repair_mod
-    writers = schema.DEFAULT_ROLES["progress"]["allowedWriters"]
-    if not schema.actor_allowed(actor, list(writers) + list(_PROGRESS_REGISTRARS)):
-        raise CapabilityError("registering the progress role needs an --actor among %s"
-                              % ", ".join(list(writers) + list(_PROGRESS_REGISTRARS)))
-    existing = reg.roles.get("progress")
-    if existing is not None:
-        return _emit({"registered": True, "path": existing.path, "applied": False},
-                     args.as_json, lambda: "the progress role is already registered at %s"
-                     % existing.path)
-    target = (args.path or "").strip().replace("\\", "/")
-    if not target:
-        operational = reg.roles.get("operational")
-        if operational is None or not operational.path:
-            raise GovernanceError("no `operational` role to place the file in; name one with "
-                                  "--path <project-relative file>.json")
-        target = operational.path.rstrip("/") + "/Progress.json"
-    if os.path.isabs(target) or ".." in target.split("/"):
-        raise GovernanceError("--path must be project-relative, inside the project: %s" % target)
-    meta = schema.default_role("progress")
-    spec = schema.RoleSpec.from_manifest("progress", dict(meta, path=target))
-    plan = repair_mod.role_plan(reg, spec)
-    if not args.apply:
-        return _emit({"registered": False, "proposed": target, "applied": False,
-                      "plan": plan.as_dict()}, args.as_json, lambda: (
-            "preview — register the progress role at %s (files: %s); run again with --apply"
-            % (target, ", ".join(plan.files_affected))))
-    written, backup_set = repair_mod.apply_plan(reg, plan, label="progress-register",
-                                                actor=actor)
-    path = os.path.join(reg.root, *target.split("/"))
-    if not os.path.exists(path):
-        with progress_mod.locked(path):
-            progress_mod.save(path, progress_mod.empty())
-        written.append(target)
-    return _emit({"registered": True, "path": target, "applied": True,
-                  "filesWritten": written, "backup": backup_set.relative_directory},
-                 args.as_json, lambda: "registered the progress role at %s; wrote %s (backup %s)"
-                 % (target, ", ".join(written), backup_set.relative_directory))
+    moment = progress_mod.now()
+    shown = {}
+    try:
+        if args.session:
+            state, doc = progress_mod.session_run(args.session)
+            if doc:
+                shown[doc["run"]["id"]] = dict(progress_mod.summary(doc, moment, state == "ended",
+                                                                    args.width),
+                                               state=state)
+        else:
+            folder = os.path.join(progress_mod.store_dir(), "runs")
+            names = sorted(os.listdir(folder)) if os.path.isdir(folder) else []
+            for name in names:
+                if name.endswith(".json"):
+                    doc = progress_mod.read(os.path.join(folder, name))
+                    if isinstance(doc, dict) and (not args.run or doc["run"]["id"] == args.run):
+                        shown[doc["run"]["id"]] = dict(progress_mod.summary(doc, moment,
+                                                                            width=args.width),
+                                                       state="running")
+            if args.run and args.run not in shown:
+                doc = progress_mod.read(progress_mod.archive_path(args.run))
+                if isinstance(doc, dict):
+                    shown[args.run] = dict(progress_mod.summary(doc, moment, True), state="ended")
+    except (ValueError, OSError, progress_mod.ProgressError) as exc:
+        raise GovernanceError("the progress store cannot be read: %s" % exc)
+    return _emit({"store": progress_mod.store_dir(), "runs": shown}, args.as_json, lambda: (
+        "\n".join("%s\n  %s" % (rid, r["end"]) if "end" in r else
+                  "%s\n  %s\n  %s" % (rid, r["line1"], r["line2"])
+                  for rid, r in shown.items()) or "no run is being tracked"))
 
 
-_PROGRESS_ENTRY = '"progress": ' + json.dumps(dict(
-    [("path", "<file>.json")]
-    + [(key, schema.DEFAULT_ROLES["progress"][key])
-       for key in ("provider", "authority", "mutability", "owner", "allowedWriters")]))
+def _progress_clear(args) -> int:
+    """Remove a session's end line. Run from a Claude Code session, the plugin's hook clears
+    that session's line as the command runs (the hook knows the session; the command cannot),
+    so this only reports it; ``--session`` clears the one named."""
+    from tools.governance import progress as progress_mod
+    moment = progress_mod.now()
+    if args.session:
+        try:
+            cleared = progress_mod.clear_session(args.session, moment)
+        except progress_mod.ProgressError as exc:
+            raise GovernanceError(str(exc))
+        return _emit({"session": args.session, "cleared": cleared}, args.as_json, lambda: (
+            "cleared the end line of session %s" % args.session if cleared
+            else "session %s has no end line to clear" % args.session))
+    return _emit({"session": None, "cleared": "by the hook"}, args.as_json, lambda: (
+        "the plugin's hook clears this session's end line as the command runs; a session "
+        "still running its run keeps it. Outside a hooked session, pass --session <id>"))
+
+
+def _progress_check(args) -> int:
+    """Read-only (rubric U11): the milestones a specification or charter carries, or what
+    is missing or wrong in them. Exit 0 prints them; a refusal names the fix."""
+    from tools.governance import milestones as milestones_mod
+    path = args.check_milestones
+    text = textio.read_text(path if os.path.isabs(path) else os.path.join(args.root or ".", path))
+    if text is None:
+        raise GovernanceError("cannot read %s" % path)
+    found = (milestones_mod.from_charter(text) if args.charter
+             else milestones_mod.from_spec(text, args.item or ""))
+    return _emit({"milestones": found}, args.as_json, lambda: "\n".join(
+        "%s — %s (%d step%s): %s" % (m["id"], m["name"], len(m["steps"]),
+                                    "" if len(m["steps"]) == 1 else "s", m["doneWhen"])
+        for m in found))
 
 
 def cmd_cost(args) -> int:
@@ -766,9 +739,10 @@ def _applied(reg, project_policy) -> list[dict]:
 
 
 #: Rubric checks whose gap a gate closes itself, by adding what is missing (U10: the task
-#: list, references/task-rows.md). A closable gap never makes a written specification
-#: unready, so the buffer judges U9 alone; a check taken out of here counts against it.
-CLOSABLE_CHECKS = ("U10",)
+#: list, references/task-rows.md; U11: the milestones, which the virtuoso skill can also
+#: derive at kickoff). A closable gap never makes a written specification unready, so the
+#: buffer judges U9 alone; a check taken out of here counts against it.
+CLOSABLE_CHECKS = ("U10", "U11")
 
 
 def _task_list_ready(text: str, item: str = "") -> bool:
@@ -2819,31 +2793,47 @@ def build_parser() -> argparse.ArgumentParser:
     guards_parser.set_defaults(func=cmd_guards)
     progress_parser = sub.add_parser("progress", parents=[common])
     progress_mode = progress_parser.add_mutually_exclusive_group()
-    progress_mode.add_argument("--flag", default=None, metavar="ID",
-                               help="add a deliverable to the queue (a write)")
-    progress_mode.add_argument("--set", dest="set_id", default=None, metavar="ID",
-                               help="move one deliverable to --state (a write)")
-    progress_mode.add_argument("--drop", default=None, metavar="ID",
-                               help="withdraw one deliverable (a write)")
-    progress_mode.add_argument("--prune-done", action="store_true",
-                               help="drop every done item: a new phase's bar (a write)")
-    progress_mode.add_argument("--drift", action="store_true",
-                               help="where the band and the work register disagree (read-only)")
-    progress_mode.add_argument("--register", action="store_true",
-                               help="register the progress role (preview; --apply writes)")
-    progress_parser.add_argument("--path", default=None,
-                                 help="with --register: the project-relative file")
-    progress_parser.add_argument("--apply", action="store_true", help="with --register: write")
-    progress_parser.add_argument("--now", default=None,
-                                 help="set the free-text Now note; empty clears (a write)")
-    progress_parser.add_argument("--label", default=None, help="with --flag: the text shown")
+    progress_mode.add_argument("--plan", default=None, metavar="FILE",
+                               help="open or resume --run from a plan the skill wrote (JSON)")
+    progress_mode.add_argument("--from-spec", default=None, metavar="PATH",
+                               help="open or resume --run from a specification's milestones")
+    progress_mode.add_argument("--from-charter", default=None, metavar="PATH",
+                               help="open or resume --run from an epic charter's milestones")
+    progress_mode.add_argument("--milestone", default=None, metavar="ID",
+                               help="move one milestone of --run to --state")
+    progress_mode.add_argument("--step", default=None, metavar="ID",
+                               help="move one step of --run's current milestone to --state")
+    progress_mode.add_argument("--complete", action="store_true",
+                               help="end --run COMPLETE, after its completion check passed "
+                                    "(needs --evidence)")
+    progress_mode.add_argument("--stop", default=None, metavar="REASON",
+                               help="end --run STOPPED, with a one-word reason")
+    progress_mode.add_argument("--clear", action="store_true",
+                               help="remove this session's end line")
+    progress_mode.add_argument("--check-milestones", default=None, metavar="PATH",
+                               help="the milestones a specification or charter carries "
+                                    "(read-only; rubric U11)")
+    progress_parser.add_argument("--run", default=None,
+                                 help="the dispatch or epic id; reading, the one run to show")
     progress_parser.add_argument("--state", default=None,
-                                 help="queued, active, done or blocked")
-    progress_parser.add_argument("--after", default=None, metavar="ID",
-                                 help="with --flag: place it after this item")
-    progress_parser.add_argument("--title", default=None, help="set the band's title (a write)")
-    progress_parser.add_argument("--deadline", default=None,
-                                 help="set the deadline, YYYY-MM-DD; empty clears (a write)")
+                                 help="with --milestone / --step: queued, active, done, blocked")
+    progress_parser.add_argument("--label", default=None,
+                                 help="with --milestone / --step: its label (adds one the plan "
+                                      "did not list)")
+    progress_parser.add_argument("--title", default=None, help="opening: the run's title")
+    progress_parser.add_argument("--colors", default=None, metavar="FIRST,SECOND",
+                                 help="opening: the run's colour pair, overriding the palette")
+    progress_parser.add_argument("--item", default=None,
+                                 help="with --from-spec / --check-milestones: the item, for a "
+                                      "specification stored inline in a roadmap")
+    progress_parser.add_argument("--charter", action="store_true",
+                                 help="with --check-milestones: PATH is an epic charter")
+    progress_parser.add_argument("--evidence", default=None,
+                                 help="with --complete: the completion check that passed")
+    progress_parser.add_argument("--session", default=None,
+                                 help="with --clear or reading: the session, by id")
+    progress_parser.add_argument("--width", type=int, default=None,
+                                 help="reading: fit each line to this many columns, as the band does")
     progress_parser.set_defaults(func=cmd_progress)
     results_parser = sub.add_parser("results", parents=[common])
     results_parser.add_argument("change", nargs="?", default="",

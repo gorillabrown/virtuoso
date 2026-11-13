@@ -252,25 +252,6 @@ Organize materials into tiers:
 
 ---
 
-### Progress band
-
-At the start of Step 1, flag the audit's five deliverables, so the band above the prompt
-tracks the audit through every handoff (`references/registry-contract.md`, *Feeding the
-band*), with `<date>` the audit's date:
-
-```bash
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor 3rd-party-audit progress --flag AUDIT-<date>-D1 --label "Audit package"
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor 3rd-party-audit progress --flag AUDIT-<date>-D2 --label "Audit report (3rd party)"
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor 3rd-party-audit progress --flag AUDIT-<date>-D3 --label "Remediation plan"
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor 3rd-party-audit progress --flag AUDIT-<date>-D4 --label "Auditor review (3rd party)"
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor 3rd-party-audit progress --flag AUDIT-<date>-D5 --label "Final decisions"
-```
-
-Mark each one `--set AUDIT-<date>-D<n> --state done` as it lands: D1 when the package is
-built, D2 and D4 when the user brings back the auditor's document, D3 and D5 when the planner
-finishes them. Where the role is not registered the command prints the entry to add: say so
-once and carry on.
-
 ## Step 2 — Handoff to Auditor
 
 **No deliverable — user action only.**
@@ -420,18 +401,6 @@ The auditor provides line-by-line responses with disposition:
 5. **Print a summary** of all roadmap changes
 
 6. **Update CLAUDE.md** §External Audit Outcomes (or equivalent section)
-
-7. **Flag each accepted remediation item on the progress band** (`references/registry-contract.md`,
-   *Feeding the band*), so the work the audit produced stays visible until it is done:
-
-   ```bash
-   "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor 3rd-party-audit progress --flag AUDIT-<date>-R<n> --label "<short title>"
-   ```
-
-   Mark it `--set AUDIT-<date>-R<n> --state done` when it is implemented, and mark D5 done
-   (`AUDIT-<date>-D5`) once `AuditDecisions` is written. Items that become roadmap items are
-   flagged by roadmap-review under their own ids; do not flag them twice. Where the role is
-   not registered the command prints the entry to add: say so once and carry on.
 
 ---
 

@@ -237,12 +237,15 @@ def added_since(rubric: str, pinned: str) -> dict:
             if key(version) > key(pinned)}
 
 
-def test_a_pinned_project_sees_u10():
+def test_a_pinned_project_sees_u10_and_u11():
     rubric = (ROOT / "references" / "readiness-rubric.md").read_text(encoding="utf-8")
     assert "names the checks added since before assessing" in rubric
-    assert added_since(rubric, "1.1") == {"U10": "Task list"}
-    assert added_since(rubric, "1.0") == {"U9": "Lessons applied", "U10": "Task list"}
+    assert added_since(rubric, "1.2") == {"U11": "Milestones"}
+    assert added_since(rubric, "1.1") == {"U10": "Task list", "U11": "Milestones"}
+    assert added_since(rubric, "1.0") == {"U9": "Lessons applied", "U10": "Task list",
+                                          "U11": "Milestones"}
     assert re.search(r"(?m)^###\s+U10\s+—\s+Task list$", rubric)
+    assert re.search(r"(?m)^###\s+U11\s+—\s+Milestones$", rubric)
 
 
 EFFORT_DURATION = re.compile(r"\d+\s*(m|min|h)\b")

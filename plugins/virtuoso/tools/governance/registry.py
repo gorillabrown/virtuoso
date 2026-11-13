@@ -335,6 +335,13 @@ def _populate(reg: Registry, data: dict) -> None:
     if isinstance(roles_blob, dict):
         for name, entry in roles_blob.items():
             reg.roles[name] = schema.RoleSpec.from_manifest(name, entry)
+        if "progress" in roles_blob:
+            # Retired in v1.17.1: the band keeps its own store outside the project. A
+            # registry that still names the role stays valid and is never rewritten.
+            reg.findings.append(Finding(
+                code="retired-role", severity="warning", role="progress",
+                message="the `progress` role is retired since v1.17.1: the progress band no "
+                        "longer reads it. Remove the entry (and its file) when convenient."))
     elif data and reg.schema_version == 1:
         from .migrate import roles_from_v1  # local import: migration is optional
         migrated, notes = roles_from_v1(data)

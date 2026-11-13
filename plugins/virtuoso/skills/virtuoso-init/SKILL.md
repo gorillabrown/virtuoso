@@ -164,23 +164,6 @@ The local CSV is **optional** and it is **not special**. It is authoritative her
 only because `create` explicitly declared it so; a project may make it a generated
 mirror or drop it entirely.
 
-### Then: offer the progress band
-
-After a successful `create`, and after `adopt` of a project with no `progress` role, offer
-the progress band: two lines above the prompt showing how far through the build queue the
-project is (`references/registry-contract.md`, *The progress band*). It is opt-in, so ask
-once and do not register it unasked. Preview first, and apply only on the user's yes:
-
-```bash
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso-init progress --register
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso-init progress --register --apply
-```
-
-The preview names the file (`Progress.json` beside the other operational documents, or the
-project's own `--path`). `--apply` writes the role through the same backed-up, validated
-write a repair uses and seeds an empty file. A "no" is final for the run: say that
-`progress --register` adds it later.
-
 ## Move the work register to another tool
 
 A project that already has a register can move it — from a CSV to a connected tool,

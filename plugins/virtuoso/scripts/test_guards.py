@@ -330,6 +330,25 @@ def test_working_a_row_binds_the_session_to_its_dispatch(project, tmp_path, isol
     assert hosts.read_binding("X-3") is None
 
 
+def test_feeding_a_progress_run_points_the_session_at_it(project, isolated_home):
+    """The progress band shows a session only its own run: the hook is what knows the session.
+    It never writes in the project, and a read-only call points nothing."""
+    from tools.governance import progress
+    before = sorted(p.relative_to(project) for p in project.rglob("*"))
+    guards.handle(tool_hook(project, "/t/s-7.jsonl", "virtuoso_registry --root . --actor "
+                            "virtuoso progress --run VIR-61 --from-spec s.md --item VIR-61",
+                            session_id="s-7"), "claude-code")
+    assert progress.read(progress.session_path("s-7"))["run"] == "VIR-61"
+    guards.handle(tool_hook(project, "/t/s-8.jsonl", "virtuoso_registry --root . --actor "
+                            "virtuoso progress --run=EPIC-2 --step 1.1 --state done",
+                            session_id="s-8"), "claude-code")
+    assert progress.read(progress.session_path("s-8"))["run"] == "EPIC-2"
+    guards.handle(tool_hook(project, "/t/s-9.jsonl", "virtuoso_registry --root . progress "
+                            "--run VIR-62", session_id="s-9"), "claude-code")
+    assert progress.read(progress.session_path("s-9")) is None
+    assert sorted(p.relative_to(project) for p in project.rglob("*")) == before
+
+
 def test_a_session_binds_even_with_guards_off(project, isolated_home):
     manifest = project / "Virtuoso" / "workspace-layout.json"
     data = json.loads(manifest.read_text(encoding="utf-8"))

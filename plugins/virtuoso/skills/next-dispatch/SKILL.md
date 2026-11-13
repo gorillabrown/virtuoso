@@ -223,7 +223,7 @@ Never collapse these into a single verdict:
 
 | Finding | What it covers |
 |---|---|
-| **Specification readiness** | U1–U4, U6, U7, U9, U10 plus declared project extensions |
+| **Specification readiness** | U1–U4, U6, U7, U9, U10, U11 plus declared project extensions |
 | **Prerequisite readiness** | U5, resolved against the live register through the provider |
 | **Repository readiness** | U8 plus the repository's actual current state, under `policy.git` |
 | **External-register readiness** | can the register be read; is the snapshot fresh; does the provider support the mutations this dispatch needs |
@@ -260,20 +260,6 @@ is ready only when all five pass.
 6. Possibly: an issue document for a blocker, routed per `policy.issues.targets`.
 
 ---
-
-## Progress band
-
-When the kickoff prints, flag the head item (a no-op when roadmap-review already did) and
-move it to `active`, so the band above the prompt shows what is now running
-(`references/registry-contract.md`, *Feeding the band*):
-
-```bash
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor next-dispatch progress --flag <ITEM-ID> --label "<short title>"
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor next-dispatch progress --set <ITEM-ID> --state active
-```
-
-A head item routed to `/epic` is left to that skill. Where the role is not registered the
-command prints the entry to add: say so once under the kickoff and carry on.
 
 ## Repository reconciliation
 
@@ -565,6 +551,7 @@ structure and formatting.
 | Missing reconciliation recipe | Fill the template above from `policy.git` and detected repository state. Pure text; no git mutation. |
 | Missing lessons applied | From 1.6: name each live lesson that bears on the item and the change it makes here, or state that none applies; re-run `lessons --check`. |
 | Missing task list | Write the `##### Task list` per `references/task-rows.md`: one row per outcome-level task with its class, and an estimate or a frontier timebox. Price it and take the total line from `timing --rows-from-spec <spec> --item <ITEM-ID>`, then re-run it until it exits 0. Always closable, never structural. |
+| Missing milestones | Write the `##### Milestones` table per the rubric's U11: a few named stages, each the task-list rows that make it up and a *Done when*, every row in one milestone. Re-run `progress --check-milestones <spec> --item <ITEM-ID>` until it exits 0. Always closable, never structural; a specification that still lacks them gets them derived at kickoff by the virtuoso skill. |
 
 ### 3.1 Re-audit
 Walk the rubric again. Two passes maximum. Still failing → ask, or escalate to

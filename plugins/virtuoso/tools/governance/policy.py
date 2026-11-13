@@ -90,7 +90,7 @@ DEFAULTS: dict = {
     },
     # --- readiness rubric (items 52, 53) -------------------------------------
     "rubric": {
-        "version": "1.2",               # 1.1 added U9, Lessons applied; 1.2 U10, Task list
+        "version": "1.3",               # 1.1 added U9, Lessons applied; 1.2 U10, Task list; 1.3 U11, Milestones
         "extensions": [],               # project-specific check ids
     },
     # --- standing rules / escalation (items 48b, 49b) -------------------------

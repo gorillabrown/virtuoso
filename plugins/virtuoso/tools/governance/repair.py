@@ -248,27 +248,6 @@ def policy_plan(reg: registry_mod.Registry, key: str, before, after, *,
     )
 
 
-def role_plan(reg: registry_mod.Registry, spec: schema.RoleSpec) -> RepairPlan:
-    """A plan that registers one opt-in role, through :func:`apply_plan`'s transaction:
-    the manifest, and the readme view where it carries a generated region (a
-    user-authored readme is never rewritten; it is left for repair to offer)."""
-    reg.roles[spec.name] = spec
-    reg.compute_presence()
-    out = RepairPlan(root=reg.root, actions=[RepairAction(
-        kind="register-role", role=spec.name,
-        detail="register the %s role at %s" % (spec.name, spec.path or spec.external),
-        current="(unregistered)", proposed=json.dumps(spec.to_manifest(), ensure_ascii=False))],
-        files_affected=[schema.MANIFEST_RELPATH], manifest_text=reg.manifest_json())
-    existing = textio.read_text(reg.readme_path)
-    if existing is not None:
-        new_text, action = readme_mod.sync(existing, _ordered_roles(reg))
-        if action != "unmanaged" and textio.normalized(existing) != textio.normalized(new_text):
-            out.readme_text = new_text
-            out.readme_action = action
-            out.files_affected.append(schema.README_RELPATH)
-    return out
-
-
 def apply_plan(reg: registry_mod.Registry, repair_plan: RepairPlan, *,
                plugin_version: str = "", now=None,
                label: str = "repair",

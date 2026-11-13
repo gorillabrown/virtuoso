@@ -197,6 +197,9 @@ Before touching any file or running any command:
 6. **Run the conflict check** (below) for a governed dispatch, and the **held-plan
    intake** when the origin is a held plan. Both come before the first edit and before
    the work branch exists.
+7. **Read the milestones** of a governed dispatch or epic, derive them if the specification
+   has none, show them, and open the progress band's run (*The Progress Band*, below).
+   The milestones group the task list Phase 2 builds.
 
 ### The conflict check — before the first edit
 
@@ -762,7 +765,9 @@ For each task, the parent:
 2. **Set effort level** — if this task has an effort override (e.g., `{max}`),
    note the override before starting and pass it through to any worker prompt.
 3. **Starts the row's clock:** `timing --dispatch <DISPATCH-ID> --start N --model <model id>
-   --host <host>`, naming the model and host that run the row.
+   --host <host>`, naming the model and host that run the row. Where the band tracks the
+   dispatch, mark the row's step active: `progress --run <DISPATCH-ID> --step N --state
+   active` (*The Progress Band*).
 4. Decides whether to execute locally or launch a child worker.
 5. If launching a worker, gives it a bounded task, explicit file/module ownership,
    success criteria, and instructions not to revert others' edits. **Name the row in the
@@ -780,7 +785,9 @@ For each task, the parent:
    proves it>"` — the test, the command output or the commit step 6 checked (add
    `--result blocked` or `--result cancelled` when it did not complete, and
    `--tokens <count>` when the host reported the row's token usage), and marks the
-   task ✓ or ✗. A row ended `done` without evidence is a `timing --check` finding.
+   task ✓ or ✗. A row ended `done` without evidence is a `timing --check` finding. Mark the
+   row's step on the band to match: `--state done` for a row ended done, `blocked` for one
+   ended blocked, and `cancelled` for one cancelled, which drops it out of the counts.
 9. Reprints the plan.
 10. Moves to the next task.
 
@@ -1292,21 +1299,58 @@ Before skipping narration, skipping a reprint, or taking a shortcut, check this 
 
 ## The Progress Band
 
-The plugin draws a progress band above the prompt in every Claude Code session it is enabled
-in, from the registry's opt-in `progress` role (a JSON file; format and resolution in
-`references/registry-contract.md`, *The progress band* and *Feeding the band*). Every
-change goes through the registry command, never a hand edit; it stamps the time itself.
+The plugin draws a progress band above the prompt of every session running a dispatch or an
+epic, in any project (format in `references/registry-contract.md`, *The progress band*):
 
-- **Phase 1**, once the dispatch's item id is known: flag it (a no-op when roadmap-review
-  or next-dispatch already did) and move it to `active`:
-  `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso progress --flag <ITEM-ID> --label "<short title>"`, then
-  `... --actor virtuoso progress --set <ITEM-ID> --state active`.
-- **Phase 5**, when the run pauses with an issue document: `--set <ITEM-ID> --state blocked`.
-  `/mid-dispatch-decision` moves it back.
-- `done` is `/dispatch-closeout`'s, after the evidence verifies; this skill never marks it.
+    <bar over this milestone's steps> Step X/Y      ( P% complete; milestone ETA) <step>
+    <bar over the run's milestones>   Milestone X/Y ( Q% complete; dispatch ETA) <milestone>
 
-Work with no item id is not flagged. Where the role is not registered the command says the
-band is off and prints the entry to add: say so once in the dispatch report and carry on.
+This skill is the band's only writer: it opens the run, feeds it, and ends it. Nothing else
+does, not `/next-dispatch`, `/epic` or `/dispatch-closeout`. Every change goes through one
+command, never a hand edit; the command stamps the time, and each ETA is measured from those
+stamps. Its files live in your own state folder, never in the project, and it never touches
+the registry. The plugin's hook points the session that runs a feeding command at that run,
+so each session shows only its own, even when two share one folder.
+
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso progress --run <ID> <change>
+
+- **Phase 1 — milestones.** The milestones are the plan's phases: a specification's
+  `##### Milestones` table grouping its task rows (rubric U11; check it with
+  `progress --check-milestones <spec> --item <ITEM-ID>`), an epic charter's `## Milestones`.
+  A ready specification with no milestones is not refused: derive them from its task rows
+  and *Done when* (two to five, each a group of consecutive rows ending in something
+  checkable; one milestone where the plan has no phases), write them to a scratch JSON file
+  outside the project as `[{"id": "M1", "label", "steps": [{"id": "<row #>", "label"}]}]`,
+  and say they were derived. Show the milestones, with their steps, before Phase 2.
+- **Phase 1 — open.** `progress --run <DISPATCH-ID> --from-spec <spec> --item <ITEM-ID>
+  --title "<short title>"`, or `--plan <file>` for derived milestones. Phase 2's task list
+  follows the milestones. If the plan changes mid-run, open it again the same way: the
+  milestone list follows the plan, and every stamp already made stays.
+- **Phase 4 — steps.** A step is a task row, its id the row number, so the band moves with
+  the time log: beside `timing --start <n>` run `progress --run <DISPATCH-ID> --step <n>
+  --state active`, and beside `timing --end <n>` run `--state done` (or `blocked`, or
+  `cancelled`: a cancelled step or milestone drops out of X/Y). Mark a
+  milestone `done` with `--milestone <M#> --state done` when its *Done when* holds; the next
+  milestone's steps then take over line one. A row added mid-run is added to the band with
+  `--step <n> --label "<task>"`.
+- **Phase 5.** A pause to wait on a decision is not an end: mark the active step `blocked`,
+  and `active` again when the decision releases it. The band stays live throughout.
+- **Phase 6 — end.** `progress --run <DISPATCH-ID> --complete --evidence "<the check>"`
+  only once this skill's own completion check has passed and every milestone is done; the
+  band then shows `✓ COMPLETE`. Any other end (failed, aborted, halted) is
+  `--stop <one-word reason>`, shown as `■ STOPPED`, never COMPLETE and never hidden. The run
+  is archived either way, and its end line stays until the session's next run starts or the
+  user runs `progress --clear`.
+- **An epic.** The run id is the epic's id, carried in its launch and state. Its first
+  session opens it with `--from-charter <charter>`; each step is a charter checkpoint
+  (`1.1`, `1.2`, …). After context loss or in a later session, open it again the same way:
+  that re-attaches to the same run and continues its milestones and stamps; never start a
+  second run for one epic. End it only when the epic ends.
+
+A run with no feed for 30 minutes (longer where its steps run long) is drawn dim with when
+it last moved. Work with no
+dispatch or epic id is not tracked. The band never blocks work: a refusal from the command
+is reported as it stands, never worked around by editing a file.
 
 ## Project-Specific Overlays
 

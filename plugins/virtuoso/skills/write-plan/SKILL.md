@@ -227,6 +227,10 @@ Write one specification per draft-stub item, in prerequisite order, in roadmap-r
 - **Task list**, under the heading U10 reads, in the row format of
   `references/task-rows.md`, priced and totalled by
   `timing --rows-from-spec <spec> --item HB-<n>`.
+- **Milestones**, under the heading U11 reads: a few named stages, each the task-list rows
+  that make it up and a *Done when*, every row in exactly one. Check them with the command
+  the rubric's U11 names. They are what the progress band tracks when the virtuoso skill
+  implements the plan.
 - **Lessons applied**, under the heading U9 reads.
 
 Plan tasks at outcome altitude. Each specification carries its task list: the outcomes

@@ -625,22 +625,6 @@ If the project declares no git policy and the default applies, say plainly which
 files were written and whether they are committed. The close-out is not finished
 while the changes are unpersisted.
 
-#### Mark it done on the progress band
-
-With the evidence verified (Step 1) and the local records written, mark the item done so the
-band above the prompt fills (`references/registry-contract.md`, *Feeding the band*). A
-combined epic marks each of its items; a held plan marks its `HB-<n>`:
-
-```bash
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor dispatch-closeout progress --flag <ITEM-ID> --label "<short title>"
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor dispatch-closeout progress --set <ITEM-ID> --state done
-```
-
-The flag is a no-op when the item is already there. This is a display write, not part of
-the crossing: a refusal here never rolls the crossing back or opens a recovery record. Where
-the role is not registered the command prints the entry to add: put it in the close-out
-report and carry on.
-
 ### Step 5 — Close the item in the live register
 
 Through the provider, not by editing a file:

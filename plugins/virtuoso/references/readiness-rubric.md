@@ -1,4 +1,4 @@
-# Dispatch Readiness Rubric — v1.2
+# Dispatch Readiness Rubric — v1.3
 
 **One rubric, one version, one home.** Every ceremony that assesses readiness
 reads *this* file. No skill restates the checks in its own words, and no skill
@@ -7,10 +7,10 @@ carries its own count of them. If you change a check, change it here and bump
 version that project expects. A ceremony always applies the current version; when a
 project pins an earlier one, it names the checks added since before assessing, so no
 project meets a new check by surprise. **v1.1** added U9, *Lessons applied*.
-**v1.2** added U10, *Task list*.
+**v1.2** added U10, *Task list*. **v1.3** added U11, *Milestones*.
 
-    version: 1.2
-    universal-checks: 10
+    version: 1.3
+    universal-checks: 11
     extension-checks: project-defined (policy.rubric.extensions)
 
 A specification is **dispatch-ready** when every universal check passes and every
@@ -21,7 +21,7 @@ host (redesign item 75).
 
 ---
 
-## Universal checks (U1–U10)
+## Universal checks (U1–U11)
 
 These apply to every project.
 
@@ -104,6 +104,28 @@ A missing or broken task list is always a **closable gap**, never a structural o
 ceremony that meets it closes it by writing the table. It never blocks a dispatch, and
 `dispatch-buffer-ready` does not count it.
 
+### U11 — Milestones
+- The specification carries a `##### Milestones` table after its task list, with the
+  columns `Milestone | Rows | Done when`: each milestone a named stage of the work, its
+  `Rows` the task-list rows that make it up (`1-3`, `4, 5`), and a *Done when* that says
+  what ends the stage.
+- Every task-list row is in exactly one milestone. Two to five milestones suit most
+  dispatches; one is allowed for a small one.
+- Verify it mechanically — exit 0 prints the milestones and their steps, a refusal names
+  what is missing or wrong:
+
+      "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . progress --check-milestones <spec> --item <ITEM-ID>
+
+The milestones are what the progress band tracks while the virtuoso skill implements the
+dispatch. Missing milestones are a **closable gap**, never a structural one: the ceremony
+that meets them writes the table. A ready specification written before v1.3 is not refused
+for lacking them; the virtuoso skill derives them at kickoff from its task rows and *Done
+when*, and shows them before it starts. `dispatch-buffer-ready` does not count U11.
+
+An epic charter carries the same check in its own form: a `## Milestones` table with the
+columns `Milestone | Steps | Done when`, its steps outcome checkpoints separated by `;`
+(`progress --check-milestones <charter> --charter`).
+
 ---
 
 ## Project extension checks
@@ -176,7 +198,7 @@ To generate the skeleton (it writes nothing; redirect it yourself):
 Report readiness as separate findings, never as one blended verdict
 (redesign item 39):
 
-1. **Specification readiness** — U1–U4, U6, U7, U9, U10 plus declared extensions.
+1. **Specification readiness** — U1–U4, U6, U7, U9, U10, U11 plus declared extensions.
 2. **Prerequisite readiness** — U5, resolved against the live work register.
 3. **Repository readiness** — U8 plus the repository's actual current state.
 4. **External-register readiness** — whether the register can be read, whether

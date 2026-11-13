@@ -218,6 +218,14 @@ one session.
 Every row must be checkable by a command or a concrete procedure — a row that cannot be
 verified is a wish, not a condition; tighten it or move it to non-goals.
 
+Then write the charter's **Milestones** (rubric U11, in its charter form): a few named
+stages from start to done, each with its outcome checkpoints and a *Done when* that is
+checkable, often one of the DoD rows. The checkpoints are outcomes a reader could see
+reached ("the importer reads every fixture"), never tasks: they mark the run's progress
+across its sessions, not a plan for how to get there. Check the table with
+`"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . progress --check-milestones <charter> --charter`
+until it exits 0.
+
 - **User present:** ask up to ~5 questions, highest-leverage first — what does done mean,
   what must never happen, which calls may Claude make alone, where are the
   access/credential edges, who unblocks what. One question at a time.
@@ -272,7 +280,8 @@ items' *Done when* rows. Record in plan.md why each item sits where it does, the
 prerequisites and shared files the order honours, so the executor keeps to the order
 when it replans. Plan at phase altitude: no step lists, no pre-generated task backlogs,
 no code. Steps belong to the run; a capable executor plans them better with the repo in front of it
-than you can now, and stale prescriptions poison later sessions.
+than you can now, and stale prescriptions poison later sessions. The charter's milestone
+checkpoints are not such a list: they say what will be true along the way, never how.
 
 ### Step 5 — Scaffold and hand off
 
@@ -308,20 +317,6 @@ than you can now, and stale prescriptions poison later sessions.
    virtuoso skill, the only skill that executes, from the kickoff prompt. This skill
    executes nothing itself. Otherwise, end with the packet path, the code-boxed prompt,
    and the goal line.
-
-### Progress band
-
-As the packet is scaffolded, flag each item of the epic in serial order, so the band above
-the prompt shows the run's queue across every session it spans
-(`references/registry-contract.md`, *Feeding the band*):
-
-```bash
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor epic progress --flag <ITEM-ID> --label "<short title>"
-```
-
-Each session moves its item to `active` under the virtuoso skill, and `/dispatch-closeout`
-marks it `done`. Where the role is not registered the command prints the entry to add: put
-it in the hand-off and carry on.
 
 ## Scaffolding budget
 

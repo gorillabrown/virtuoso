@@ -40,6 +40,18 @@ by the user, never loosened by the executor. A combination carries every item's 
 when* rows, each labelled with its item (`[ITEM-ID] — …`), and one row proving they all
 pass together on the integrated tree.
 
+## Milestones — the run's stages
+
+| Milestone | Steps | Done when |
+|-----------|-------|-----------|
+| [a stage a reader would name] | [outcome checkpoint]; [outcome checkpoint] | [checkable end of the stage, often a DoD row: D1] |
+| [...] | [...] | [...] |
+
+Steps are outcome checkpoints separated by `;`, never tasks or code steps: the run plans its
+own steps. The virtuoso skill marks each checkpoint as the run reaches it, so the band above
+the prompt shows the epic's progress in every session it spans. Check the table with
+`virtuoso_registry progress --check-milestones charter.md --charter`.
+
 ## Constraints — hard limits
 
 - **Git, from `policy.git` ([POLICY]):** all work on branch `[BRANCH]`, cut from

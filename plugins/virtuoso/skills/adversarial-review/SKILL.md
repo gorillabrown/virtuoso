@@ -304,20 +304,6 @@ Phase 2 — [Name] (addresses R3, R4, ...)
   that warrant their own investigation, note them as "out of scope — recommend separate
   review" rather than folding them into this plan.
 
-### Flagging the remediation phases
-
-When the project registers a `progress` role, flag each phase of the remediation plan so
-the band above the prompt tracks it (`references/registry-contract.md`, *Feeding the
-band*), with `<date>` the review's date and a few-word label for the phase:
-
-```bash
-"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor adversarial-review progress --flag REVIEW-<date>-P<n> --label "<phase name>"
-```
-
-Whoever carries out the phase marks it `--set REVIEW-<date>-P<n> --state done` when its
-gate passes. A review with no remediation plan flags nothing. Where the role is not
-registered the command prints the entry to add: mention it once and carry on.
-
 ### Recording the review
 
 When the project registers a `findings` role, append each blocking concern and each
