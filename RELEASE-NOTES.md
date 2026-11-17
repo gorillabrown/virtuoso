@@ -1,5 +1,28 @@
 # Virtuoso Release Notes
 
+## v1.17.2 (2026-11-17) — every 3rd-party audit begins with its questions
+
+A 3rd-party audit now starts by agreeing what it must answer. Nothing is packaged, scoped
+or sent to an auditor until the questions are approved.
+
+- **Step 0: Audit Questions Q&A.** The planner asks one question at a time: what decision
+  the audit informs, why the audit is happening now, and what a yes or a no would change.
+  It then drafts a one-sentence **primary question** and revises it until you confirm it.
+  The old fixed question ("is this the right plan, in the right order, for the right
+  reasons?") is now an option to offer, not the default.
+- **Child questions, offered for approval.** Each one comes with why it bears on the
+  primary question and what evidence would answer it, and the planner says whether
+  together they cover the primary question. You approve, edit, drop or add questions. Step 1
+  waits for your explicit approval of the full set.
+- **A new deliverable, D0.** The approved set is saved as `AuditQuestions.N.YYYY-MM-DD.md`
+  and bundled into `00_orientation_manifest.zip`. A question changed later is recorded as
+  a dated amendment, with your approval.
+- **The questions carry through.** The auditor prompt now uses your primary and child
+  questions and requires an answer to each, with evidence. The orientation document lists
+  them, the findings summary is organised by question, and any question the report leaves
+  unanswered is raised with the auditor. The remediation plan and final decisions state
+  the answers. The pipeline is now 7 steps and 6 deliverables.
+
 ## v1.17.1 (2026-11-12) — the progress band follows the dispatch or epic in hand
 
 This release replaces v1.17.0's buffer bar. The band no longer shows how far through the

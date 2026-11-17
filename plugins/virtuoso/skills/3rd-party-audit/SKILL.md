@@ -4,8 +4,10 @@ description: >
   Full lifecycle management of external 3rd-party codebase audits. Use this skill whenever
   the user says "3rd party audit", "external audit", "outside audit", or when an audit is
   required at phase close. This skill governs package creation, auditor prompts, remediation
-  planning, and final decision integration. It produces 5 deliverables across 6 steps with
-  structured handoffs between the planner, the user, and the external auditor. Trigger on:
+  planning, and final decision integration. Every audit begins with a Q&A that establishes
+  the primary question the audit must answer and the child questions that bear on it, the
+  child questions offered to the user for approval. It produces 6 deliverables across 7 steps
+  with structured handoffs between the planner, the user, and the external auditor. Trigger on:
   "3rd party audit", "audit the codebase", "prepare audit package", "audit remediation",
   "process audit findings", or any phase-close audit gate. This is a planner skill — all
   audit steps are coordinated from the planning surface.
@@ -94,9 +96,10 @@ only the audit package and orientation brief and evaluate the project on its own
 
 ## Audit Pipeline Overview
 
-The audit is a 6-step pipeline producing 5 deliverables with structured handoffs:
+The audit is a 7-step pipeline producing 6 deliverables with structured handoffs:
 
 ```
+Step 0: Audit Questions Q&A (planner+user) → D0
 Step 1: Package Creation (planner)         → D1a + D1b
 Step 2: Handoff to Auditor (User)         → [user action]
 Step 3: Audit Report (3rd Party)          → D2
@@ -105,7 +108,11 @@ Step 5: Auditor Review of Response (3P)   → D4
 Step 6: Final Decisions (planner + user)   → D5
 ```
 
-**Ownership:** the planner owns Steps 1, 4, 6. User owns Step 2. 3rd party owns Steps 3, 5.
+**Ownership:** planner and user share Step 0; the user approves its questions. The planner
+owns Steps 1, 4, 6. User owns Step 2. 3rd party owns Steps 3, 5.
+
+**Every audit begins at Step 0.** No package is built, no auditor prompt is written, and no
+scope is settled until the primary question and its child questions are approved.
 
 ---
 
@@ -146,16 +153,58 @@ Media files cannot be packaged in zips and would need to be delivered as standal
 
 ---
 
+## Step 0 — Audit Questions Q&A
+
+**Deliverable:** D0 (AuditQuestions)
+
+The audit answers questions; it does not survey a codebase for whatever turns up. This step
+settles what those questions are before anything else happens. It is a conversation with
+the user: ask **one question at a time** and wait for each answer.
+
+### Actions
+
+1. **Establish the primary question** through Q&A:
+   - What decision will this audit inform, and who makes it?
+   - What prompted the audit now (phase close, a concern, a pending commitment)?
+   - What would a "yes" and a "no" each change?
+
+   Then draft the **primary question** in one sentence, answerable from evidence, and put it
+   to the user. Revise until the user confirms it. The default ("Given the current codebase
+   and documentation, is this the right plan, in the right order, for the right reasons?")
+   is an option to offer, never an assumption.
+
+2. **Settle scope** in the same conversation, as it bears on the primary question:
+   - Which phases or areas are in scope? Full-scope audit or targeted?
+   - Any specific concerns to flag to the auditor?
+
+3. **Propose the child questions** for approval. Present them as a numbered list, each
+   with:
+   - **Question**: one sentence, answerable from evidence in the package
+   - **Bears on the primary question because**: one line
+   - **Evidence that would answer it**: the files, data, or behaviour the auditor must examine
+
+   Together the child questions must cover the primary question: if every one were
+   answered, the primary question could be answered. Say so explicitly, or name the gap.
+
+4. **Get approval.** The user approves, edits, drops, or adds child questions. Revise and
+   re-present until the user approves the full set explicitly. Do not proceed to Step 1 on
+   silence, a partial answer, or your own judgement that the set is good enough.
+
+5. **Record D0.** Once the audit folder exists (Step 1, action 3), save the approved set as
+   `AuditQuestions.N.YYYY-MM-DD.md`: the primary question, the approved child questions
+   (numbered `Q1`, `Q2`, …), scope, and the date the user approved them. D0 is fixed for the
+   cycle: a question changed later is recorded as a dated amendment, with the user's approval.
+
+---
+
 ## Step 1 — Package Creation
 
 **Deliverables:** D1a (AuditOrientation) + D1b (AuditPackage)
 
 ### Actions
 
-1. **Confirm scope** with user:
-   - Which phases or areas are in scope?
-   - Full-scope audit or targeted?
-   - Any specific concerns to flag to the auditor?
+1. **Carry in Step 0.** Scope, the primary question, and the approved child questions come
+   from D0. If Step 0 has not been completed and approved, stop and run it.
 
 2. **Determine audit number:**
    - Check existing `OutsideAudit.N.*` folders in the manifest `outsideAudits` directory
@@ -169,6 +218,7 @@ Media files cannot be packaged in zips and would need to be delivered as standal
 4. **Generate AuditOrientation document (D1a):**
    - Format: `.docx` (use the docx skill)
    - Required sections:
+     - The audit questions: the primary question and the approved child questions from D0
      - Executive summary of the project
      - Current build status (phase completion, calibration metrics, test counts)
      - Architecture overview
@@ -185,6 +235,7 @@ Media files cannot be packaged in zips and would need to be delivered as standal
 6. **Assemble the `00_*.zip` orientation bundle:**
    - Filename: `00_orientation_manifest.zip`
    - Contents: the AuditOrientation `.docx` from step 4 + the `MANIFEST.md` from step 5
+     + `AuditQuestions.N.YYYY-MM-DD.md` (D0)
    - This is always **entry 0** of the outer zip
 
 7. **Assemble content sub-zips (entries 01–09):**
@@ -209,8 +260,9 @@ Media files cannot be packaged in zips and would need to be delivered as standal
 
 ```
 AuditPackage.N.YYYY-MM-DD.zip                     (single deliverable, ≤ 100 MB, exactly 10 entries)
-├── 00_orientation_manifest.zip                   ← entry 0: orientation + manifest
+├── 00_orientation_manifest.zip                   ← entry 0: orientation + manifest + questions
 │   ├── AuditOrientation.N.YYYY-MM-DD.docx
+│   ├── AuditQuestions.N.YYYY-MM-DD.md
 │   └── MANIFEST.md
 ├── 01_<slug>.zip                                 ← entry 1: content group (e.g., engine_code_tests_data)
 ├── 02_<slug>.zip                                 ← entry 2: content group (e.g., governance_root)
@@ -275,13 +327,17 @@ The auditor produces their report externally. When the user returns with it:
 
 1. Save as `AuditReport.N.YYYY-MM-DD.md` in the audit subfolder
 2. Read the full report
-3. Summarize key findings for the user before proceeding to Step 4
+3. Summarize key findings for the user before proceeding to Step 4, organized by the D0
+   questions: the answer to the primary question, then each child question's answer. Name
+   any question the report left unanswered or answered without evidence; that is a gap to
+   raise with the auditor, not one to fill in yourself
 4. Record each finding in the registered `findings` role as an `F-NNN` entry (this skill is
    one of its writers; see `references/registry-contract.md`, *Findings*), with
    `**Source:** 3rd-party-audit`. A finding that prices something adds its **Tier**,
    **Confidence**, **Kind** and **Figure** lines, in the one finding format.
 
 The report should cover:
+- A direct answer to the primary question and to each approved child question, with evidence
 - Executive verdict (sound / partially flawed / structurally unsound)
 - Codebase reality check
 - Roadmap item-by-item audit with classification
@@ -332,7 +388,7 @@ The report should cover:
    | **Reject** | Disagree | Evidence or reasoning doesn't hold — explain why with counter-evidence |
 
 3. **Produce `AuditRemediationPlan.N.YYYY-MM-DD.md` containing:**
-   - Management summary
+   - Management summary, including the audit's answer to the primary question
    - Audit feedback response matrix (finding → disposition → next step)
    - Exact roadmap rewrite actions
    - Grouped implementation packages
@@ -393,6 +449,7 @@ The auditor provides line-by-line responses with disposition:
    - Variable/constants references — if constants affected
 
 4. **Produce `AuditDecisions.N.YYYY-MM-DD.md` summarizing:**
+   - The final answer to the primary question and to each child question
    - All changes made to the roadmap
    - Deferred items with placement
    - Rejected items with rationale
@@ -432,7 +489,12 @@ These are project-agnostic templates. Customize the bracketed sections for each 
 > - If a claim cannot be verified, state that clearly
 > - Distinguish between: (a) what already exists, (b) what the roadmap assumes exists, (c) what is actually missing, (d) what must happen before later items can succeed
 >
-> Primary review question: "Given the current codebase and documentation, is this the right plan, in the right order, for the right reasons?"
+> Primary review question: "[PRIMARY QUESTION — from D0]"
+>
+> Child questions (answer each, with evidence):
+> - Q1. [CHILD QUESTION 1 — from D0]
+> - Q2. [CHILD QUESTION 2 — from D0]
+> - …
 >
 > Review dimensions (score 1–10 each):
 > 1. Grounding in current codebase
@@ -444,7 +506,7 @@ These are project-agnostic templates. Customize the bracketed sections for each 
 > 7. Delivery practicality
 > 8. Overall confidence
 >
-> Required output format: (A) Executive verdict, (B) Current-state architecture summary, (C) Roadmap item-by-item audit, (D) Major contradictions, (E) Sequencing analysis, (F) Structural/modeling review, (G) Testing review, (H) Top risks, (I) Missing work, (J) Proposed revised roadmap, (K) Final recommendation with scores
+> Required output format: (0) Answers to the primary question and to each child question, each grounded in cited evidence or marked unverifiable, (A) Executive verdict, (B) Current-state architecture summary, (C) Roadmap item-by-item audit, (D) Major contradictions, (E) Sequencing analysis, (F) Structural/modeling review, (G) Testing review, (H) Top risks, (I) Missing work, (J) Proposed revised roadmap, (K) Final recommendation with scores
 
 ### Step 2 Prompt — Remediation Plan (planner)
 
@@ -483,12 +545,15 @@ These are project-agnostic templates. Customize the bracketed sections for each 
 
 Use this checklist to track progress through the audit lifecycle:
 
-- [ ] Confirm scope with user (phases covered, full vs. targeted)
+- [ ] Step 0 Q&A: establish the primary question with the user, one question at a time
+- [ ] Settle scope (phases covered, full vs. targeted) against the primary question
+- [ ] Propose child questions; revise until the user approves the full set
 - [ ] Determine audit number (check last `OutsideAudit.N.*` folder)
 - [ ] Create `OutsideAudit.N+1.YYYY-MM-DD/` folder
+- [ ] Save the approved questions as `AuditQuestions.N.YYYY-MM-DD.md` (D0)
 - [ ] Generate AuditOrientation document (D1a) — use the docx skill
 - [ ] Generate `MANIFEST.md` describing the outer-zip layout (entries 00–09)
-- [ ] Bundle orientation .docx + MANIFEST.md into `00_orientation_manifest.zip`
+- [ ] Bundle orientation .docx + MANIFEST.md + D0 into `00_orientation_manifest.zip`
 - [ ] Assemble content sub-zips `01_*.zip` through `09_*.zip` (each ≤ 100 MB; no video/audio)
 - [ ] Assemble outer audit package zip `AuditPackage.N.YYYY-MM-DD.zip`: exactly 10 entries (1 × `00_*.zip` + up to 9 content sub-zips), ≤ 100 MB total (D1b)
 - [ ] Verify auditor handoff is a single deliverable (the outer zip); pivot to GitHub repo path if outer zip exceeds size limit
@@ -496,7 +561,7 @@ Use this checklist to track progress through the audit lifecycle:
 - [ ] Provide user with Step 1 Prompt for the auditor
 - [ ] **WAIT** — User delivers to auditor and returns with D2
 - [ ] Save audit report as `AuditReport.N.YYYY-MM-DD.md` (D2)
-- [ ] Summarize key findings for user
+- [ ] Summarize key findings for user, by question; flag any question left unanswered
 - [ ] Execute Step 4: produce remediation plan (D3)
 - [ ] Present remediation plan to user for review
 - [ ] Provide user with Step 3 Prompt for the auditor
@@ -525,6 +590,8 @@ Maintain an audit history table in the project's audit procedure document or CLA
 
 | Anti-Pattern | Why It's Wrong | Do This Instead |
 |-------------|---------------|-----------------|
+| Building the package before the questions are approved | The audit answers no one's question; findings sprawl and can't be judged complete | Always run Step 0 first; proceed only on the user's explicit approval of the child questions |
+| Choosing the child questions without the user | The planner's framing replaces the user's; the audit tests what the planner wanted tested | Offer the child questions for approval; the user edits, drops, and adds |
 | Skipping the orientation document | Auditor lacks context, produces surface-level review | Always generate D1a with full project context |
 | Including `.git/` or caches in the package | Bloats zip, confuses auditor | Apply exclusion rules strictly |
 | Rejecting findings without counter-evidence | Turns the audit into a rubber stamp | Provide specific code/data evidence for every rejection |
