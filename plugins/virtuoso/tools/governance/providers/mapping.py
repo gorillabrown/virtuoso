@@ -21,6 +21,8 @@ DEFAULT_FIELDS = {
     "written_status": "written_status",
     "prerequisites": "prerequisites",
     "effort": "effort",
+    # The hours estimate: a number, or a select whose labels are numbers (v1.17.3).
+    "effort_hours": "effort_hours",
     "workstream": "workstream",
     "deliverable": "deliverable",
     "group": "group",
@@ -43,6 +45,8 @@ DEFAULT_ALIASES = {
     "written_status": ["written status", "written", "spec status", "specification status"],
     "prerequisites": ["dependencies", "depends on", "blocked by", "prereqs"],
     "effort": ["loe", "size", "estimate", "story points", "points"],
+    "effort_hours": ["hours", "effort hours", "estimated hours", "hours estimate",
+                     "estimate hours"],
     # "lane" is the field's name before 1.15.0: a project's own Lane column still reads.
     "workstream": ["lane", "stage", "swimlane", "track"],
     "deliverable": [],

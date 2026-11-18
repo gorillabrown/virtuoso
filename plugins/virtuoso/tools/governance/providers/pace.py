@@ -2,7 +2,8 @@
 
 The rate a deadline requires — what remains in its scope, divided by the weeks
 left — against the rate the project has delivered over a trailing window, in items
-and in points, with a verdict.
+and in effort, with a verdict. Effort is hours when ``policy.roadmap.effortBasis``
+resolves to hours (``effort.resolve``), else points from the size word (v1.17.3).
 
 Pure: no I/O and no clock. "As of" is the snapshot's own date, so a stale snapshot
 yields pace as of that date, flagged stale, and the same inputs always give the same
@@ -24,18 +25,20 @@ from types import SimpleNamespace
 
 from .. import policy as policy_mod
 from ..deadlines import Deadline
-from . import base, mapping as mapping_mod
+from . import base, effort as effort_mod, mapping as mapping_mod
 from .kpi import DEFAULT_EFFORT_SCALE
 
 #: Worst first. A deadline's headline verdict is the worst verdict among the
 #: units that could be computed.
 VERDICTS = ("overdue", "behind", "on track", "ahead", "met")
 NOT_COMPUTABLE = "not computable"
+#: The size-basis units; an hours-basis report reads ("items", "hours").
 UNITS = ("items", "points")
 
 #: Canonical fields a scope may select on; anything else is looked up among the
 #: register's own columns, verbatim.
-_SCOPE_FIELDS = ("id", "title", "workstream", "deliverable", "group", "effort", "branch")
+_SCOPE_FIELDS = ("id", "title", "workstream", "deliverable", "group", "effort", "effort_hours",
+                 "branch")
 
 _DATE_PREFIX_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:$|[T ])")
 
@@ -58,6 +61,8 @@ class Completion:
     canonical: str           # through the project's status vocabulary
     record: str = ""         # the ledger record id, or the item id for a register
     effort: str = ""         # the size word recorded with it (ledger Effort column)
+    effort_hours: str = ""   # the hours estimate recorded with it (ledger Hours column)
+    effort_actual: str = ""  # the duration it took (ledger Actual column)
 
 
 @dataclass
@@ -89,14 +94,17 @@ def from_ledger(records, statuses) -> list[Completion]:
         if key not in effective:
             order.append(key)
         effective[key] = {"item": record.item_id, "completed": record.completed,
-                          "result": record.result, "effort": record.effort}
+                          "result": record.result, "effort": record.effort,
+                          "effort_hours": record.effort_hours,
+                          "effort_actual": record.effort_actual}
     out = []
     for key in order:
         entry = effective[key]
         out.append(Completion(item_id=entry["item"], date=record_date(entry["completed"]),
                               raw_date=entry["completed"], result=entry["result"],
                               canonical=statuses.to_canonical(entry["result"]), record=key,
-                              effort=entry["effort"]))
+                              effort=entry["effort"], effort_hours=entry["effort_hours"],
+                              effort_actual=entry["effort_actual"]))
     return out
 
 
@@ -104,14 +112,16 @@ def _corrected(original: dict, correction) -> dict:
     return {"item": correction.item_id or original["item"],
             "completed": correction.completed or original["completed"],
             "result": correction.result or original["result"],
-            "effort": correction.effort or original["effort"]}
+            "effort": correction.effort or original["effort"],
+            "effort_hours": correction.effort_hours or original["effort_hours"],
+            "effort_actual": correction.effort_actual or original["effort_actual"]}
 
 
 def from_register(items) -> list[Completion]:
     """Completions from a register that keeps finished items and their dates."""
     return [Completion(item_id=i.id, date=record_date(i.completed), raw_date=i.completed,
                        result=i.raw_status or i.status, canonical=i.status, record=i.id,
-                       effort=i.effort)
+                       effort=i.effort, effort_hours=i.effort_hours)
             for i in items if i.is_terminal]
 
 
@@ -136,6 +146,18 @@ class PaceReport:
     missing: dict = field(default_factory=dict)
     findings: list = field(default_factory=list)
     notes: list = field(default_factory=list)
+    #: "hours" or "size": which effort the second unit measures.
+    effort_basis: str = effort_mod.SIZE
+    #: Per figure ("remaining", "trailing"), the effort provenance (``effort.Sum``).
+    effort: dict = field(default_factory=dict)
+
+    @property
+    def effort_unit(self) -> str:
+        return effort_mod.UNIT[self.effort_basis]
+
+    @property
+    def units(self) -> tuple:
+        return ("items", self.effort_unit)
 
     @property
     def weeks_remaining(self) -> float | None:
@@ -151,7 +173,9 @@ class PaceReport:
             "remaining": {u: _r(v, 2) for u, v in self.remaining.items()},
             "blocked": dict(self.blocked),
             "required": {u: _r(v, 2) for u, v in self.required.items()},
-            "trailing": dict(self.trailing, **{u: _r(self.trailing.get(u), 2) for u in UNITS}),
+            "trailing": dict(self.trailing,
+                             **{u: _r(self.trailing.get(u), 2) for u in self.units
+                                if u in self.trailing}),
             "verdict": self.verdict,
             "basis": list(self.basis),
             "unitVerdicts": dict(self.unit_verdicts),
@@ -160,6 +184,9 @@ class PaceReport:
             "missingInputs": {k: list(v) for k, v in self.missing.items()},
             "findings": list(self.findings),
             "notes": list(self.notes),
+            "effortBasis": self.effort_basis,
+            "effortUnit": self.effort_unit,
+            "effort": {k: dict(v) for k, v in self.effort.items()},
         }
 
     def render(self) -> str:
@@ -169,20 +196,24 @@ class PaceReport:
             lines.append("    as of %s (snapshot%s): %s"
                          % (self.as_of.isoformat(), ", STALE" if self.stale else "",
                             _days_text(self.days_remaining, self.weeks_remaining)))
+        unit = self.effort_unit
         if self.remaining.get("items") is not None:
-            points = self.remaining.get("points")
+            points = self.remaining.get(unit)
             lines.append("    scope:    %s: %d items, %s remain"
                          % (d.scope_text(), self.remaining["items"],
-                            "%s points" % _n(points) if points is not None
-                            else "points not computable"))
+                            "%s %s" % (_n(points), unit) if points is not None
+                            else "%s not computable" % unit))
+            if "remaining" in self.effort:
+                lines.append("              %s (%s)" % (self.effort["remaining"]["describe"],
+                                                     self.effort["remaining"]["kind"]))
             if self.blocked.get("items"):
-                share = self.blocked.get("shareOfPoints")
+                share = self.blocked.get("shareOf%s" % unit.capitalize())
                 lines.append("              blocked: %d items%s"
                              % (self.blocked["items"],
-                                ", %s points (%s%% of remaining points)"
-                                % (_n(self.blocked.get("points")), _n(share))
+                                ", %s %s (%s%% of remaining %s)"
+                                % (_n(self.blocked.get(unit)), unit, _n(share), unit)
                                 if share is not None else ""))
-        rates = ["%s %s/week" % (_n(self.required[u], 2), u) for u in UNITS
+        rates = ["%s %s/week" % (_n(self.required[u], 2), u) for u in self.units
                  if self.required.get(u) is not None]
         if rates:
             lines.append("    required: %s" % ", ".join(rates))
@@ -194,24 +225,31 @@ class PaceReport:
                          % (self.trailing.get("completions", 0),
                             _tally(": ", self.trailing.get("byResult", {})),
                             _tally("; excluded: ", self.trailing.get("excluded", {}))))
-            if self.trailing.get("points") is not None:
-                lines.append("              %s points/week" % _n(self.trailing["points"], 2))
+            if self.trailing.get(unit) is not None:
+                lines.append("              %s %s/week%s"
+                             % (_n(self.trailing[unit], 2), unit,
+                                " (%s; %s)" % (self.effort["trailing"]["describe"],
+                                               self.effort["trailing"]["kind"])
+                                if "trailing" in self.effort else ""))
+            if self.trailing.get("actualHours") is not None:
+                lines.append("              %s hours/week actually taken (ledger Actual)"
+                             % _n(self.trailing["actualHours"], 2))
             lines.append("              source: %s" % (self.trailing.get("source") or "—"))
         for figure, inputs in self.missing.items():
             lines.append("    not computable: %s (missing: %s)"
-                         % (_FIGURE_LABELS.get(figure, figure), "; ".join(inputs)))
+                         % (_label(figure), "; ".join(inputs)))
         verdict = self.verdict.upper()
         if self.basis:
             verdict += " on %s" % " and ".join(self.basis)
         # A not-computable verdict's reason is the missing inputs, listed just above.
         reason = "" if self.verdict == NOT_COMPUTABLE else self.reason
         lines.append("    verdict:  %s%s" % (verdict, (": " + reason) if reason else ""))
-        for unit in UNITS:
-            finish = self.projected.get(unit)
+        for each in self.units:
+            finish = self.projected.get(each)
             if finish:
                 late = (_dt.date.fromisoformat(finish) - d.date).days
                 lines.append("    projected finish at the trailing %s rate: %s, %s"
-                             % (unit[:-1], finish,
+                             % (each[:-1], finish,
                                 "%d days after the deadline" % late if late > 0
                                 else "%d days before the deadline" % -late if late < 0
                                 else "on the deadline"))
@@ -227,9 +265,15 @@ _FIGURE_LABELS = {
     "asOf": "as-of date",
     "scope": "scope",
     "remaining.points": "remaining points",
+    "remaining.hours": "remaining hours",
     "trailing": "trailing rate",
     "trailing.points": "trailing points/week",
+    "trailing.hours": "trailing hours/week",
 }
+
+
+def _label(figure: str) -> str:
+    return _FIGURE_LABELS.get(figure, figure)
 
 
 def _r(value, places):
@@ -264,8 +308,13 @@ def _days_text(days: int, weeks: float) -> str:
 
 def compute(deadline: Deadline, snapshot: base.Snapshot, source: CompletionSource, *,
             effort_scale: dict | None = None, trailing_weeks: int = 4,
-            tolerance: float = 0.1) -> PaceReport:
-    report = PaceReport(deadline=deadline, stale=snapshot.stale)
+            tolerance: float = 0.1, effort_basis: str = "auto") -> PaceReport:
+    basis = effort_mod.resolve(effort_basis, snapshot.fields)
+    unit = effort_mod.UNIT[basis]
+    report = PaceReport(deadline=deadline, stale=snapshot.stale, effort_basis=basis,
+                        remaining={"items": None, unit: None},
+                        required={"items": None, unit: None},
+                        projected={"items": None, unit: None})
     scale = {str(k).lower(): v for k, v in (effort_scale or DEFAULT_EFFORT_SCALE).items()}
     if snapshot.stale:
         report.notes.append("the snapshot is stale (%s); pace is as of its own date"
@@ -291,16 +340,20 @@ def compute(deadline: Deadline, snapshot: base.Snapshot, source: CompletionSourc
     remaining = [i for i in in_scope if not i.is_terminal]
     blocked = [i for i in remaining if i.status == base.BLOCKED]
     report.remaining["items"] = len(remaining)
-    points, points_missing = _points(remaining, scale, "effort" in snapshot.fields)
-    report.remaining["points"] = points
-    if points_missing:
-        report.missing["remaining.points"] = points_missing
-    blocked_points = _points(blocked, scale, "effort" in snapshot.fields)[0] \
+    sized = effort_mod.total(remaining, basis=basis, scale=scale, fields=snapshot.fields)
+    points = sized.value
+    report.remaining[unit] = points
+    if sized.missing:
+        report.missing["remaining.%s" % unit] = sized.missing
+    else:
+        report.effort["remaining"] = sized.provenance()
+    blocked_points = effort_mod.total(blocked, basis=basis, scale=scale,
+                                      fields=snapshot.fields).value \
         if points is not None else None
     report.blocked = {
         "items": len(blocked),
-        "points": _r(blocked_points, 2),
-        "shareOfPoints": _r(100.0 * blocked_points / points, 1)
+        unit: _r(blocked_points, 2),
+        "shareOf%s" % unit.capitalize(): _r(100.0 * blocked_points / points, 1)
         if blocked_points is not None and points else None,
         "shareOfItems": _r(100.0 * len(blocked) / len(remaining), 1) if remaining else None,
     }
@@ -310,7 +363,7 @@ def compute(deadline: Deadline, snapshot: base.Snapshot, source: CompletionSourc
     if remaining and report.days_remaining > 0:
         report.required["items"] = len(remaining) / weeks
         if points is not None:
-            report.required["points"] = points / weeks
+            report.required[unit] = points / weeks
 
     # 6-8. trailing
     _trailing(report, source, snapshot, scale, trailing_weeks)
@@ -319,10 +372,10 @@ def compute(deadline: Deadline, snapshot: base.Snapshot, source: CompletionSourc
     if not remaining:
         report.verdict, report.reason = "met", "nothing in scope remains"
         return report
-    for unit in UNITS:
-        required, trailing = report.required.get(unit), report.trailing.get(unit)
+    for each in report.units:
+        required, trailing = report.required.get(each), report.trailing.get(each)
         if required is not None and trailing is not None:
-            report.unit_verdicts[unit] = unit_verdict(required, trailing, tolerance)
+            report.unit_verdicts[each] = unit_verdict(required, trailing, tolerance)
     _project(report)
     if report.days_remaining <= 0:
         report.verdict = "overdue"
@@ -337,7 +390,7 @@ def compute(deadline: Deadline, snapshot: base.Snapshot, source: CompletionSourc
         return report
     worst = min(report.unit_verdicts.values(), key=VERDICTS.index)
     report.verdict = worst
-    report.basis = [u for u in UNITS if report.unit_verdicts.get(u) == worst]
+    report.basis = [u for u in report.units if report.unit_verdicts.get(u) == worst]
     report.reason = "; ".join(
         "trailing %s %s/week is %d%% of the %s required"
         % (_n(report.trailing[u], 2), u, round(100 * report.trailing[u] / report.required[u]),
@@ -355,9 +408,10 @@ def unit_verdict(required: float, trailing: float, tolerance: float) -> str:
 
 
 def compute_all(deadlines, snapshot, source, *, effort_scale=None, trailing_weeks=4,
-                tolerance=0.1) -> list[PaceReport]:
+                tolerance=0.1, effort_basis="auto") -> list[PaceReport]:
     reports = [compute(d, snapshot, source, effort_scale=effort_scale,
-                       trailing_weeks=trailing_weeks, tolerance=tolerance)
+                       trailing_weeks=trailing_weeks, tolerance=tolerance,
+                       effort_basis=effort_basis)
                for d in sorted(deadlines, key=lambda d: (d.date, d.id))]
     if len(reports) > 1:
         for report in reports:
@@ -424,7 +478,8 @@ def _some(names, limit: int = 5) -> str:
 def _trailing(report: PaceReport, source: CompletionSource, snapshot, scale, weeks: int):
     as_of = report.as_of
     start = as_of - _dt.timedelta(days=7 * weeks)          # exclusive
-    report.trailing = {"items": None, "points": None, "projectWide": True,
+    unit = report.effort_unit
+    report.trailing = {"items": None, unit: None, "projectWide": True,
                        "window": {"from": (start + _dt.timedelta(days=1)).isoformat(),
                                   "to": as_of.isoformat(), "weeks": weeks},
                        "completions": 0, "byResult": {}, "excluded": {},
@@ -477,27 +532,57 @@ def _trailing(report: PaceReport, source: CompletionSource, snapshot, scale, wee
                             "trailing rate may understate delivery from before it"
                             % min(dated).isoformat())
 
-    # Each completion's effort is its own (the ledger's Effort column) first, the
-    # register item's second; only a completion sized by neither is missing.
+    # Each completion's effort is its own (the ledger's Hours or Effort column) first,
+    # the register item's second; only a completion sized by neither is missing.
+    basis = report.effort_basis
     by_id = {i.id: i for i in snapshot.items}
-    own = [SimpleNamespace(id=item, effort=c.effort) for item, c in counted.items() if c.effort]
-    from_register = [item for item, c in counted.items() if not c.effort]
-    absent = [item for item in from_register if item not in by_id]
+
+    def own(c) -> bool:
+        return bool(c.effort or (basis == effort_mod.HOURS and c.effort_hours))
+
+    absent = [item for item, c in counted.items() if not own(c) and item not in by_id]
     if absent:
-        report.missing["trailing.points"] = [
+        report.missing["trailing.%s" % unit] = [
             "effort for %d completed item(s) absent from the register and blank in the "
-            "terminal ledger's Effort column: %s" % (len(absent), _some(absent))]
+            "terminal ledger's %s column: %s"
+            % (len(absent), "Hours and Effort" if basis == effort_mod.HOURS else "Effort",
+               _some(absent))]
         return
-    points, missing = _points(own + [by_id[item] for item in from_register], scale,
-                              "effort" in snapshot.fields or bool(own and not from_register))
-    if missing:
-        report.missing["trailing.points"] = missing
+    sized_items = []
+    for item, c in counted.items():
+        held = by_id.get(item)
+        ledger_hours = c.effort_hours if basis == effort_mod.HOURS else ""
+        sized_items.append(SimpleNamespace(
+            id=item, from_ledger=bool(ledger_hours),
+            effort_hours=ledger_hours or (held.effort_hours if held else ""),
+            effort=c.effort or (held.effort if held else "")))
+    every_own = bool(counted) and all(own(c) for c in counted.values())
+    fields = set(snapshot.fields)
+    if every_own:
+        fields |= {"effort", effort_mod.HOURS_FIELD}
+    sized = effort_mod.total(sized_items, basis=basis, scale=scale, fields=fields)
+    if sized.missing:
+        report.missing["trailing.%s" % unit] = sized.missing
         return
-    report.trailing["points"] = points / weeks
+    report.trailing[unit] = sized.value / weeks
+    report.effort["trailing"] = sized.provenance()
+    actual = [_actual_hours(c.effort_actual) for c in counted.values()]
+    if basis == effort_mod.HOURS and counted and all(a is not None for a in actual):
+        report.trailing["actualHours"] = round(sum(actual) / weeks, 2)
+
+
+def _actual_hours(text) -> float | None:
+    """Hours in a ledger Actual duration (``90m``, ``1h30m``, a bare number of hours)."""
+    hours = effort_mod.parse_hours(text)
+    if hours is not None:
+        return hours
+    from ..timing import parse_duration
+    minutes = parse_duration(text)
+    return None if minutes is None else minutes / 60
 
 
 def _project(report: PaceReport) -> None:
-    for unit in UNITS:
+    for unit in report.units:
         rate, left = report.trailing.get(unit), report.remaining.get(unit)
         if rate is None or left is None:
             continue

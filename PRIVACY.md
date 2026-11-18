@@ -2,7 +2,7 @@
 
 **Effective:** 24 September 2026
 
-**Applies to:** the Virtuoso plugin for Claude Code and Codex, published at
+**Applies to:** the Virtuoso plugin for Claude Code, Codex and Google Antigravity, published at
 https://github.com/gorillabrown/virtuoso
 
 Virtuoso collects nothing. It has no servers, accounts, telemetry, analytics or tracking,
@@ -41,7 +41,8 @@ stays in your project, and in the repository you keep it in.
 
 - **Your AI host's own transcripts**, on your machine — Claude Code's under
   `~/.claude/projects/` (or `CLAUDE_CONFIG_DIR`), Codex's under `~/.codex/sessions/` (or
-  `CODEX_HOME`) — to price the work and to notice waste. Only in a project that has a
+  `CODEX_HOME`), Antigravity's at the transcript path its hooks pass (under
+  `~/.gemini/antigravity*/brain/`) — to price the work and to notice waste. Only in a project that has a
   Virtuoso registry; only the sessions that ran its dispatches; read in place, never
   copied, and nothing from them leaves your machine.
 - Your host's settings are not read.
@@ -68,7 +69,7 @@ does nothing unless you run it.
 
 ## Your AI host
 
-Virtuoso runs inside an AI coding host, such as Claude Code or Codex. The host and its
+Virtuoso runs inside an AI coding host, such as Claude Code, Codex or Google Antigravity. The host and its
 model provider process your conversations and the files your agent reads, under their
 own terms and privacy policies. Virtuoso does not change what they collect.
 

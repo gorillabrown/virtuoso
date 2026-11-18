@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import PLUGIN_ROOT, snapshot_tree
+from conftest import PLUGIN_ROOT, snapshot_tree, skill_text
 from tools.governance import overlays as overlays_mod, registry as registry_mod, schema
 from tools.governance import result as result_mod
 
@@ -1069,7 +1069,7 @@ def test_the_overlays_verb_writes_nothing(with_overlays):
 
 @pytest.mark.parametrize("name", SKILL_NAMES)
 def test_every_shipped_skill_carries_the_clause_verbatim(name):
-    text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+    text = skill_text(ROOT / "skills" / name)
     assert overlays_mod.OVERLAY_CLAUSE in text
 
 
@@ -1362,17 +1362,19 @@ def model_tiers() -> dict:
 
 
 def test_every_agent_declares_a_model_and_an_effort(fake_plugin):
-    """Each agent keeps its model alias and declares its tier's default effort, the tier
-    being the one the model table gives its alias."""
+    """Each agent declares `model: inherit` (a vendor alias makes a host that does not
+    know it skip the agent) and its tier's default effort, the tier being the row of the
+    model table whose Agents column names it."""
     from tools.governance import timing
     module = load_validate()
     tiers = model_tiers()
     assert sorted(t for t, _, _ in tiers.values()) == ["bounded", "cross-cutting", "mechanical"]
     for name in AGENT_FILES:
         fields = module.frontmatter_fields((ROOT / "agents" / name).read_text(encoding="utf-8"))
-        assert fields.get("model") in tiers, name
-        tier, default, listed = tiers[fields["model"]]
-        assert name[:-3] in listed, name                   # the table's Agents column
+        assert fields.get("model") == "inherit", name
+        rows = [row for row in tiers.values() if name[:-3] in row[2]]
+        assert len(rows) == 1, name                        # exactly one tier lists it
+        tier, default, _listed = rows[0]
         assert fields.get("effort") in timing.EFFORT_LEVELS, name
         assert fields["effort"] == default == timing.TIER_EFFORT[tier], name
     # validate's host check accepts only the five levels.
@@ -2004,6 +2006,9 @@ def test_every_install_manifest_advertises_the_same_version():
             json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"],
         ".codex-plugin/plugin.json":
             json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"],
+        ".antigravity-plugin/plugin.json":
+            json.loads((ROOT / ".antigravity-plugin" / "plugin.json")
+                       .read_text(encoding="utf-8"))["version"],
         "marketplace.json":
             json.loads((ROOT.parent.parent / ".claude-plugin" / "marketplace.json")
                        .read_text(encoding="utf-8"))["plugins"][0]["version"],
@@ -2016,6 +2021,7 @@ def test_the_release_bumper_tracks_every_install_manifest():
                json.loads((ROOT / ".version-bump.json").read_text(encoding="utf-8"))["files"]}
     assert ".claude-plugin/plugin.json" in tracked
     assert ".codex-plugin/plugin.json" in tracked
+    assert ".antigravity-plugin/plugin.json" in tracked
     assert "../../.claude-plugin/marketplace.json" in tracked
 
 

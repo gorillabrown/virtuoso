@@ -30,14 +30,11 @@ same thing — proceed on the shipped file alone.
 
 # Governance Sweep
 
-Structured sweep of a project's governance and operational documents. It discovers
-documents dynamically, resolves **structural authority through the project's
-governance registry**, identifies what is outdated, misplaced, or out of sync with
-its source, and — after your approval — performs the cleanup, with a verifiable
-backup manifest and quarantine before any deletion.
-
-Three gated phases. You review and approve the complete plan before a single file
-changes.
+Structured sweep of a project's governance and operational documents: it discovers
+documents dynamically, resolves **structural authority through the project's governance
+registry**, finds what is outdated, misplaced, or out of sync with its source, and — only
+after your approval of the complete plan — performs the cleanup, with a verifiable backup
+manifest and quarantine before any deletion.
 
 ---
 
@@ -66,43 +63,22 @@ at the Phase 2 gate, the sweep ends having changed nothing.
 ### Structural authority comes from the registry
 
 A directory `readme.md` is treated as structural authority **only when the project
-declares it so** (redesign item 50). Set `policy.sweep.structuralAuthority`:
-
-| Value | Meaning |
-|---|---|
-| `registry` *(default)* | The registry's role table defines what belongs where. A directory readme is documentation, and inconsistency with it is a *finding*, not a mandate. |
-| `directory-readme` | Each directory's readme defines what belongs in it, as in earlier versions of this skill. |
-| `both` | Registry wins on conflict; readme governs anything the registry does not cover. |
+declares it so** (redesign item 50), in `policy.sweep.structuralAuthority`: `registry`
+*(default)*, `directory-readme`, or `both` (registry wins on conflict) — each value's
+meaning is in [references/sweep-policy.md](references/sweep-policy.md).
 
 Under `registry` (the default), never delete, move, or rewrite a file because a
 directory readme does not list it. Report the discrepancy and let the user decide.
 
 ### Scan boundaries are configuration (item 51)
 
-`policy.sweep` governs the entire traversal. Respect every field:
+`policy.sweep` governs the entire traversal; respect every field (names and shipped
+defaults: [references/sweep-policy.md](references/sweep-policy.md)). In particular:
 
-```jsonc
-"sweep": {
-  "include": ["**/*"],
-  "exclude": ["Virtuoso/.backups/**", "Virtuoso/.quarantine/**",
-              "**/node_modules/**", "**/.git/**", "**/__pycache__/**",
-              "**/.venv/**", "**/vendor/**", "**/dist/**", "**/build/**"],
-  "ignoreDirectories": [".git", "node_modules", "__pycache__", ".venv", "vendor"],
-  "followSymlinks": false,
-  "maxFileBytes": 5242880,
-  "binaryPolicy": "skip",
-  "quarantineDirectory": "Virtuoso/.quarantine",
-  "deletionPolicy": "quarantine",
-  "backupRetention": 10,
-  "protectedAuthorities": ["archive", "terminal", "evidence"],
-  "structuralAuthority": "registry"
-}
-```
-
-- **Do not follow symlinks** unless `followSymlinks` is true; a symlink loop or a
-  link out of the project is a finding, not something to traverse.
-- **Do not read a file larger than `maxFileBytes`** for content analysis. Record
-  its size and hash instead.
+- **Do not follow symlinks** unless `followSymlinks` is true; a symlink loop or a link out
+  of the project is a finding, not something to traverse.
+- **Do not read a file larger than `maxFileBytes`** for content analysis; record its size
+  and hash instead.
 - **Binaries** follow `binaryPolicy`: `skip` (inventory only) or `hash-only`.
 - **Backup and quarantine directories are excluded by default** (item 56), so past
   sweeps never become new findings. Apply `backupRetention` at the end of Phase 3.
@@ -131,26 +107,20 @@ findings and every clarifying question. Nothing changes.
 ### Stage A — Discover
 
 Walk the project within the configured boundaries. Inventory directories and files.
-Do not hardcode paths.
-
-| Category | Typical signals |
-|---|---|
-| **Registered roles** | everything the registry declares — the primary inventory |
-| **Project rules** | root-level rule and configuration documents |
-| **Operational docs** | documentation directories |
-| **Historical records** | close-outs, archives, dated folders |
-| **Agent infrastructure** | agent and skill definition directories |
-| **Reference material** | references, assets, templates |
+Do not hardcode paths. Categories: **registered roles** (everything the registry declares —
+the primary inventory), **project rules** (root-level rule and configuration documents),
+**operational docs** (documentation directories), **historical records** (close-outs,
+archives, dated folders), **agent infrastructure** (agent and skill definition
+directories), **reference material** (references, assets, templates).
 
 Print: directories, file counts, which are registered roles, which have a readme,
 and — explicitly — **what the boundaries excluded**, with counts. A sweep that
 silently skips a tree reads as "clean" when it was not looked at.
 
-**Detect which optional audit modules apply.** Agent definitions → roster checks.
-A registered `lessons` role → lessons hygiene (check 21). The same document
-deployed in multiple places → parity checks. Registered generated artifacts →
-source-to-mirror checks. If none exist, only the universal checks run. State which
-modules are active at the start.
+**Detect which optional audit modules apply** — agent definitions → roster checks; a
+registered `lessons` role → lessons hygiene (check 21); one document deployed in several
+places → parity checks; registered generated artifacts → source-to-mirror checks. With
+none, only the universal checks run. State which modules are active at the start.
 
 ### Stage B — Structure
 
@@ -197,138 +167,16 @@ definition** and the mirror is out of date (item 57).
 
 ### Stage D — Audit
 
-**Universal checks (always):**
-
-1. **Structural violations** — orphans; registered-but-absent targets; unregistered
-   directories; registry findings from preflight.
-2. **Stale content** — references to moved or deleted files; outdated descriptions;
-   version, date, and status drift.
-3. **Cross-document inconsistency** — the same fact stated differently.
-4. **Dead references** — links to files, sections, or anchors that do not exist.
-5. **Duplicate content** — one logical document maintained in two places, drifted.
-6. **Misplaced content** — archive-era content in active directories; wrong level.
-7. **Temp and junk artifacts** — editor swap files, OS metadata, empties.
-8. **Version proliferation** — `.v2`, `_old`, `_backup`, `(1)` variants; identify
-   which is current.
-9. **Naming-convention violations** — against the documented pattern, where one exists.
-10. **Volume and age archival triggers** — advisory; route to the user.
-11. **Stale temp packages** — content past its lifecycle or tied to closed work.
-12. **Stale tool infrastructure** — caches and tool directories nested where they
-    do not belong.
-13. **Binary accounting** — undocumented binaries; large binaries better stored
-    elsewhere.
-14. **Source-to-mirror drift** (item 57/58) — for every role with `generatedFrom`,
-    is the mirror in sync with its source? A drifted mirror is **regenerated**, never
-    edited.
-15. **Immutable-hash verification** (item 62) — hash every protected historical file
-    at the start of the sweep, and again at the end. Any change is a defect in the
-    sweep itself and halts it.
-16. **Documented-command health** (items 60, 61) — for every command the docs tell a
-    reader to run, does it exist and does it work in the documented form?
-
-**Agent-specific** (only if agent infrastructure was detected):
-17. Ghost references to agents that no longer exist (record file, line, name, successor).
-18. Deprecated stubs still present.
-19. Memory directories not matching an active agent.
-
-**Parity** (only if parity targets were detected):
-20. Checksum mismatches between a canonical file and its deployed copies.
-
-**Lessons** (only if a `lessons` role is registered):
-21. **Lessons hygiene — tidy, merge, retire.** Run
-
-        "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --hygiene
-
-    and carry every proposal into the work list:
-    - **merge** — live lessons recording one pattern: keep the first recorded,
-      supersede each other by it (`Superseded -> <kept ID>`). If the kept entry lacks
-      detail the duplicates carry, append a complete restatement under the next free
-      identifier first, keep that one, and supersede all of the originals by it.
-    - **retire** — live observations older than `policy.lessons.staleAfterDays` that no
-      close-out ever applied: `Retired — <why it no longer bears>`. Route any whose
-      relevance you cannot judge to the user instead of retiring it.
-    - **tidy** — a live lesson missing a field: append a complete restatement under the
-      next free identifier and supersede the incomplete entry by it.
-    - **record** — a live lesson whose prose claims it closed ("Promoted to SR-12") with
-      no status record saying so: carry the proposal with its command. A proposal with a
-      `problem` and no command goes to the user.
-    - **repair** — an identifier reused for a second lesson: give the second its own
-      identifier by restatement, and record the reuse.
-    Also flag entries referencing changed names, paths or items (propose the reference
-    update as a restatement, never an edit). The catalog is append-only: every one of
-    these is a new entry or a status record.
-
-**Disk footprint** (always, in a git repository):
-22. **Disk footprint — what dispatches left on the disk.** Run
-
-        "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . footprint
-
-    It writes nothing. It lists every worktree, every clone of this repository one
-    level under the drive root or the project's parent folder, every child of the
-    `temp` role, and every pytest basetemp one level under the drive root, `%TEMP%` or
-    the parent folder, each with its size, class and reason, then the free space.
-    List the candidates by class:
-    - **redundant** and **regenerable** — carry each removal into the Phase 2 work list
-      in Group F order, as the `footprint --remove <path> --apply` command the audit
-      prints. The tool removes links before any recursive delete and removes a worktree
-      with `git worktree remove`, then `git worktree prune`.
-    - **unique** — route to the user, with the extract step first
-      (`footprint --extract <path> --apply`, patches under the `temp` role). The tool
-      refuses to remove it.
-    - **evidence** — route to the user as the printed owner command. The tool never
-      deletes evidence.
-    - **in-flight** and **unreadable** — report only.
+**Before running the checks, read [references/audit-checks.md](references/audit-checks.md)**
+— every check in full, registered commands, verification adapters, and documented-command
+repair. Run universal checks 1–16 always (check 15: any change to a protected file halts
+the sweep); agent checks 17–19, parity check 20, and lessons hygiene check 21 only where
+Stage A detected their module; **Disk footprint** check 22 always, in a git repository.
+Run only registered commands; a verification whose dependency is missing is *not verified,
+dependency missing*, never a pass; replace a broken documented command only with one that
+ran and succeeded.
 
 Print findings grouped by check, with exact locations. Print only categories with findings.
-
-### Registered generation and validation commands (item 60)
-
-A project registers the commands that generate and validate its artifacts, under an
-extension namespace so plugin upgrades never discard them:
-
-```jsonc
-"x-commands": {
-  "build-handbook": {
-    "run": "make handbook",
-    "workingDirectory": "docs",
-    "requires": ["make", "pandoc>=3"],
-    "produces": ["docs/build/handbook.pdf"],
-    "fallback": "python -m handbook_build"
-  }
-}
-```
-
-A sweep may run a registered command to regenerate or validate an artifact. It never
-invents one, and it never runs an unregistered command found in prose.
-
-### Document-type verification adapters (item 59)
-
-Match the check to the document type. Run the ones that apply and that the project's
-declared dependencies support:
-
-| Type | Verification |
-|---|---|
-| Markdown / text | link validity, anchor existence, reference resolution |
-| Rendered documents (PDF, DOCX) | it renders; expected pages exist; expected headings present |
-| Spreadsheets | formulas resolve; no error cells; expected sheets and headers present |
-| Generated mirrors | regenerate into a temporary location and diff against the committed copy |
-| Source-to-mirror coverage | every source section appears in the mirror |
-| Data files | parses; required keys present |
-
-A verification that cannot run because a dependency is missing is reported as
-*not verified, dependency missing* — never as a pass.
-
-### Repairing a documented command (item 61)
-
-When check 16 finds a documented command that no longer works:
-
-1. Determine the correct invocation for this project **and test it**.
-2. Only after it succeeds, propose the documentation edit, carrying the evidence
-   (the command run and its output).
-3. If no working replacement is found, the finding is *documented command is broken*
-   with the error — **do not** replace it with an untested alternative.
-
-Module-mode and platform-specific alternatives are candidates, not answers, until run.
 
 ### End of Phase 1 — ask
 
@@ -366,11 +214,10 @@ irreversible. Under the default `deletionPolicy: "quarantine"`, Group G does not
 at all: approved removals land in `policy.sweep.quarantineDirectory`, from which the
 user can restore or purge them later (item 53).
 
-Check 22's removals are not files in the project, so they never pass through the
-quarantine area: each is its own Group F action, the `footprint --remove <path> --apply`
-command, run after every other Group F move. Only `redundant` and `regenerable`
-candidates enter the work list. A `unique` or `evidence` candidate is a question for the
-user, never an action.
+Check 22's removals never pass through the quarantine area (they are not project files):
+each is its own Group F action, the `footprint --remove <path> --apply` command, run after
+every other Group F move. Only `redundant` and `regenerable` candidates enter the work
+list; a `unique` or `evidence` candidate is a question for the user, never an action.
 
 Every action is **atomic and self-contained**: project-relative paths, verbatim
 unique match strings for content edits, checksums for binary moves, and the
@@ -399,20 +246,10 @@ document is unregistered and moving it is safe.
 
 ### Present the work list
 
-```
-## Governance Sweep — Work List ([project], [date])
-
-- Findings: [N]   Actions: [N]   Files affected: [N]   Deferred: [N]
-- Structural authority: [registry | directory-readme | both]
-- Boundaries: [N] path(s) excluded by policy — [summary]
-- Protected and untouchable: [N] path(s) — [roles/classes]
-- Deletion policy: quarantine → [quarantine dir]   (or: permanent, as required)
-
-[Groups A–G, each action enumerated with source, target, and rationale]
-
-### Deferred (left for you to handle manually)
-[items too ambiguous to act on, with why]
-```
+Present it in the *Work list* format of
+[references/sweep-formats.md](references/sweep-formats.md): the counts, structural
+authority, excluded boundaries, protected paths, deletion policy, Groups A–G with each
+action's source, target and rationale, and the Deferred items with why.
 
 ### Approval gate
 
@@ -435,15 +272,12 @@ partial completion.
 
 ### Step 0 — Back up, verifiably (items 9, 55)
 
-Copy every file the plan will modify, move, or delete into a timestamped backup
-set under `Virtuoso/.backups/`, and write its **backup manifest** recording, for
-each entry: source path, destination path, byte count, SHA-256, timestamp, and the
-operation that prompted it.
-
-Then **verify the set before proceeding** — re-hash every stored copy against the
-manifest. A backup that does not verify halts the sweep before anything changes.
-A backup set is restorable and independently checkable, not merely a copy in a
-timestamped folder.
+Copy every file the plan will modify, move, or delete into a timestamped backup set under
+`Virtuoso/.backups/`, with a **backup manifest** recording, per entry: source path,
+destination path, byte count, SHA-256, timestamp, and the operation that prompted it.
+Then **verify the set before proceeding** — re-hash every stored copy against the manifest.
+A backup that does not verify halts the sweep before anything changes. A backup set is
+restorable and independently checkable, not merely a copy in a timestamped folder.
 
 Also record the hashes of every protected historical file now (check 15), for the
 end-of-sweep comparison:
@@ -500,33 +334,15 @@ ones. Backup and quarantine directories stay excluded from future sweeps.
 
 ### Step 4 — Completion report, with exact repository scope (item 63)
 
-Get the repository facts from the read-only inspector rather than assuming them — it
-detects the remote and default branch, enumerates worktrees, and splits the dirty set into
-what this sweep touched and what it must leave alone:
+Get the repository facts from the read-only inspector, never by assumption — it detects the
+remote and default branch, enumerates worktrees, and splits the dirty set into what this
+sweep touched and what it must leave alone:
 
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . repo --expect "<the plan's paths>" --json
 
-
-```
-## Governance Sweep — Complete
-
-- Actions executed: [N]  (A:[n] B:[n] C:[n] D:[n] E:[n] F:[n] G:[n])
-- Files created / moved / quarantined / deleted / edited: [counts]
-- Backup set: [path]   manifest verified: [yes]
-- Protected-file hashes: [N] checked, [N] unchanged
-- Verification: [all checks passed | anomalies: …]
-- Deferred (manual): [N] — [list]
-- Disk footprint: [removed: paths and sizes | none]; [kept for the user: unique,
-  evidence, in-flight paths]; free space [before] → [after]
-- Findings recorded: [F-NNN … in the registered `findings` role, or "none"]
-
-### Repository scope
-- Changed paths:            [explicit list]
-- Staged paths:             [explicit list, or "none — policy.git is <policy>"]
-- Cached diff (name-only):  [explicit list]
-- Commit:                   [sha, or "not committed — policy.git is <policy>"]
-- Uncommitted unrelated work present: [explicit list, untouched]
-```
+Then write the completion report in the *Completion report* format of
+[references/sweep-formats.md](references/sweep-formats.md), including its
+**Repository scope** block.
 
 **Record what outlives the sweep.** Every deferred item, every flag for human review,
 and every audit finding the work list did not fix is appended to the registered
@@ -552,20 +368,11 @@ set path. Never improvise a recovery.
 ## Flagging for human review
 
 Findings needing judgement become bounded questions, per
-`references/actors-and-interaction.md` — batched, never one file at a time, each
-naming the specific file with its viable dispositions and consequences.
+`references/actors-and-interaction.md` — batched, never one file at a time, each naming the
+specific file with its viable dispositions and consequences.
 
-- **Ambiguous orphan** — Absorb into [doc] / Archive / Promote / Quarantine.
-- **Absorption target unclear** — [best guess] / Promote standalone / Archive.
-- **Large orphan** (>500 lines) — Absorb whole / Absorb summary + link / Promote.
-- **Stale reference, no obvious fix** — [best guess] / Remove the reference / Defer.
-- **Duplicate conflict** — which copy is authoritative, or defer to a manual merge.
-- **Archival rotation** (multi-select) — which of these oldest records rotate?
-- **Unclear version currency** — which variant is current?
-- **Binary of unknown purpose** — document / archive / quarantine.
-- **Protected path implicated** — a registry change, previewed, never a sweep action.
-- **Broken documented command with no tested replacement** — leave and flag / the
-  user supplies the correct invocation / remove the instruction.
+**Before asking, read [references/sweep-formats.md](references/sweep-formats.md)**,
+*Human-review questions* — each finding type with the dispositions to offer.
 
 Answers become actions tagged `[user-confirmed]`. Declined items become **Deferred
 (manual)** — surfaced in the work list and the completion report, never silently
@@ -575,11 +382,8 @@ acted on.
 
 ## Scope
 
-It does:
-- Discover, classify, and audit documentation (Phase 1).
-- Propose a complete ordered work list and get approval (Phase 2).
-- Edit, move, archive, quarantine, regenerate, and verify documents (Phase 3), with
-  a verifiable backup manifest and per-action verification.
+It does: discover, classify, and audit (Phase 1); propose the work list and get approval
+(Phase 2); edit, move, archive, quarantine, regenerate, and verify documents (Phase 3).
 
 It does NOT:
 - Change anything before the Phase 2 approval.
@@ -596,10 +400,8 @@ It does NOT:
 
 ## Adapting to project structure
 
-Works on any project — a single documentation folder, or a mature tree with agent
-definitions, roadmaps, retrospective catalogs, archives, and multi-project
-deployments. The universal checks run everywhere; optional modules activate only
-when their infrastructure is detected, and the sweep states which are active at the
-start. The only hard requirement is a governance registry (so authority and
-protection are declared) plus at least one directory containing documents. Without a
-registry, report that and route the user to `virtuoso_preflight.py --mode check`.
+Works on any project, from a single documentation folder to a mature multi-project tree;
+optional modules activate only when detected (Stage A). The only hard requirement is a
+governance registry (so authority and protection are declared) plus at least one directory
+containing documents. Without a registry, report that and route the user to
+`virtuoso_preflight.py --mode check`.

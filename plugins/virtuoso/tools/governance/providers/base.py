@@ -40,7 +40,7 @@ MUTATIONS = frozenset({WRITE_STATUS, STORE_SPEC_LINK, RECORD_COMPLETION, CREATE_
 #: are computed by the provider from what it wrote, never supplied.
 CREATABLE_FIELDS = (
     "id", "title", "sequence", "status", "written_status", "prerequisites", "effort",
-    "workstream", "deliverable", "group", "spec_link", "branch", "started", "completed", "evidence",
+    "effort_hours", "workstream", "deliverable", "group", "spec_link", "branch", "started", "completed", "evidence",
     "description", "notes",
 )
 
@@ -74,7 +74,8 @@ class WorkItem:
     written_status: str = ""         # canonical: "" | stub | full-spec
     raw_written_status: str = ""
     prerequisites: list[str] = field(default_factory=list)
-    effort: str = ""
+    effort: str = ""                 # the size word on the effort scale (XS … XL)
+    effort_hours: str = ""           # the hours estimate, as the register holds it
     workstream: str = ""
     deliverable: str = ""
     group: str = ""
@@ -95,7 +96,10 @@ class WorkItem:
         return self.status in TERMINAL_STATUSES
 
     def as_dict(self) -> dict:
-        return asdict(self)
+        data = asdict(self)
+        if not data["effort_hours"]:        # absent, not blank: a register without hours
+            del data["effort_hours"]        # reads exactly as it did before 1.17.3
+        return data
 
 
 @dataclass

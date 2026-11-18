@@ -119,7 +119,8 @@ record its identifier anyway, for a later session that has the connector, or to 
 with a file in the repository. Record it only if they ask.
 
 For a tool, ask how its columns map to the register's fields (at least `id`, `title`,
-`status`; also `sequence`, `effort`, `prerequisites` where it has them) and how its
+`status`; also `sequence`, `effort` (the size word), `effort_hours` (an hours estimate),
+`prerequisites` where it has them) and how its
 status words map to `queued`, `in-flight`, `blocked` and `completed`. Write the answer
 to a small JSON file — `{"fieldMappings": {...}, "statusMappings": {...}}` — and pass it
 with `--register-mappings`.

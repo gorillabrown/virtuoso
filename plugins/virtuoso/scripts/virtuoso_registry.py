@@ -320,6 +320,8 @@ def cmd_next(args) -> int:
     print("  specification: %s" % (item.written_status or "unknown"))
     print("  prerequisites: %s" % (", ".join(item.prerequisites) or "none"))
     print("  effort:        %s" % (item.effort or "unrecorded"))
+    if "effort_hours" in snap.fields:
+        print("  hours:         %s" % (item.effort_hours or "unrecorded"))
     _print_missing_prerequisites(missing)
     if snap.stale:
         print("\n[STALE] %s. Refresh the snapshot before naming this the head: read the "
@@ -688,6 +690,8 @@ def cmd_kpis(args) -> int:
         effort_scale=project_policy.get("roadmap.effortScale"),
         dispatch_buffer=project_policy.dispatch_buffer,
         spec_ready=_spec_ready(reg, project_policy),
+        effort_basis=project_policy.effort_basis,
+        max_item_hours=project_policy.max_item_hours,
     )
     metrics.pace, metrics.invalid_deadlines = providers.pace_for(reg, snap)
     metrics.learning, metrics.learning_provenance = _learning_metrics(reg, project_policy)
@@ -1748,11 +1752,12 @@ def cmd_combine(args) -> int:
         for number, item_id in enumerate(combo.order, start=1):
             member = by_id[item_id]
             item = member.item
-            print("    %d. %s (%s)  seq %s · workstream %s · effort %s · %s"
+            print("    %d. %s (%s)  seq %s · workstream %s · effort %s%s · %s"
                   % (number, item.title or "untitled", item.id,
                      item.sequence if item.sequence is not None else "-",
                      item.workstream or "-",
                      item.effort or "-",
+                     " (%s h)" % item.effort_hours if item.effort_hours else "",
                      "%d file(s)" % len(member.spec.files) if member.files_known
                      else "files unknown"))
     if len(combo.workstreams) > 1:
@@ -1763,7 +1768,12 @@ def cmd_combine(args) -> int:
         print("  %s before %s — %s" % (edge["before"], edge["after"], edge["why"]))
     effort = combo.effort
     if effort.get("computable"):
-        print("  effort: %g points (%s)" % (effort["points"], effort["scale"]))
+        print("  effort: %g points (%s)%s" % (effort["points"], effort["scale"],
+                                              "; %g hours" % effort["hours"]
+                                              if "hours" in effort else ""))
+    elif "hours" in effort:
+        print("  effort: %g hours (size words not computable — %s)"
+              % (effort["hours"], "; ".join(effort.get("missingInputs", []))))
     else:
         print("  effort: not computable — %s" % "; ".join(effort.get("missingInputs", [])))
     for finding in combo.findings:
@@ -2216,7 +2226,8 @@ def cmd_record_completion(args) -> int:
     record = ledger_mod.LedgerRecord(record_id=book.next_record_id(), item_id=args.item,
                                      completed=args.date, result=args.result,
                                      evidence=args.evidence, effort_estimate=args.estimate,
-                                     effort_actual=args.actual, effort=item.effort)
+                                     effort_actual=args.actual, effort=item.effort,
+                                     effort_hours=item.effort_hours)
     completed_already = item.status == provider_base.COMPLETED
     plan = {"item": args.item, "actor": actor, "register": provider.source,
             "ledger": os.path.relpath(book.path, reg.root).replace(os.sep, "/"),

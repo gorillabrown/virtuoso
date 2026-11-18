@@ -1,6 +1,24 @@
 # Spec Retrospective Format
 
-Use this reference for the workflow-facing retrospective.
+Serves dispatch-closeout SKILL.md, Wave 1 item 5 and Deliverable 2: the lessons and the
+workflow-facing retrospective — entry shape, the "No new lesson" reason, status and link records.
+
+## What every close-out records
+
+- **New lessons**, one entry each, appended to the registered `lessons` role under
+  `nextLessonId`, in the shape below. Offer what the run tried and dropped
+  (`virtuoso_registry guards --dispatch <ITEM-ID> --tried`) as candidates — offered,
+  never recorded without the owner's yes.
+- Or the line **`No new lesson — <reason>`** in the report's Lessons section. The
+  reason is evidence, and it names what was examined by identifier: "followed
+  <prefix>-NNN exactly", "both risks were covered by <prefix>-NNN and standing rule
+  <rule id>", "the same change as <ITEM-ID>, which taught <prefix>-NNN". Whenever the
+  catalog or the standing rules hold anything, a reason that names none of it fails
+  the gate (`lesson-reason-unanchored`). A close-out that names neither is not finished.
+- In either case, **the outcome of every lesson the specification applied** (its
+  *Lessons applied* section): each held, or did not. A lesson that failed to prevent
+  the trap it names is the second occurrence that promotes it, or the evidence that
+  retires it — append a status record under its identifier; never edit the original.
 
 ## Verdict Style
 
@@ -96,3 +114,5 @@ The command appends it for you, previews first, and refuses a status that says n
 A lesson is **live** until a status beginning `Promoted`, `Retired`, or `Superseded`
 is appended. The live lessons are what readiness check U9 holds every specification
 to.
+
+Return to SKILL.md, Wave 1 item 5 (drafting) or Wave 2 Step 4 (appending).

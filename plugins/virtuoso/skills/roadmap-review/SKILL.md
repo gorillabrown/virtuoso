@@ -43,10 +43,13 @@ same thing — proceed on the shipped file alone.
 
 # Roadmap Review
 
+Periodic recalibration of a whole project: where it has been, where it is going, what to
+dispatch next. Linked `references/<topic>.md` files are this skill's own detail, read at
+the step that links them; unlinked `references/...` paths are the plugin's.
+
 ## Preflight — read-only registry check (run first)
 
-Resolve the plugin through its launcher, then run the **read-only** check. It performs
-discovery and validation with zero project writes.
+Resolve the plugin through its launcher and run the **read-only** check (zero project writes):
 
 **Unix-like shell**
 
@@ -56,385 +59,167 @@ discovery and validation with zero project writes.
 
     & "$HOME/.virtuoso/bin/virtuoso.ps1" virtuoso_preflight --root . --mode check
 
-Add `--json` when you want the structured result (status, writes, findings, and the full
-resolved role table). Read the `virtuoso-status:` line and branch:
+`--json` gives the structured result. Branch on the `virtuoso-status:` line:
 
-- `ready` — the registry is valid. Continue.
-- `warning` — usable; surface the findings to the user and continue. Warnings are not blockers.
-- `repair-needed` — **STOP.** Run `--mode repair` to produce the preview, show the user the
-  proposed paths, semantic changes, files affected, and backup location, and apply it only
-  with `--apply` after they approve.
-- `adoptable` — the project has governance documents but is not registered. Offer
-  `--mode adopt`: it registers what exists, in place. Nothing is moved, duplicated, or rewritten.
-- `none` — no registry and nothing to adopt. Route the user to `/virtuoso-init`.
+- `ready` — continue.
+- `warning` — usable; surface the findings and continue. Warnings are not blockers.
+- `repair-needed` — **STOP.** Run `--mode repair` for the preview; show the user the
+  proposed paths, semantic changes, files affected, and backup location; apply with
+  `--apply` only after they approve.
+- `adoptable` — governance documents exist but are unregistered. Offer `--mode adopt`: it
+  registers what exists, in place; nothing is moved, duplicated, or rewritten.
+- `none` — nothing to adopt. Route the user to `/virtuoso-init`.
 - `failed` — report the error verbatim and stop.
 
-If neither launcher resolves, report that the plugin could not be located and stop. Do not
-guess a path.
-
-**Governance authority.** Resolve every document you need through the registry
-(`references/registry-contract.md`). Never create a parallel document for a registered role;
-never write to a role whose `allowedWriters` does not name this ceremony; never treat a
+If neither launcher resolves, report that the plugin could not be located and stop; do
+not guess a path. Resolve every document through the registry
+(`references/registry-contract.md`): never create a parallel document for a registered
+role, write to a role whose `allowedWriters` does not name this ceremony, or treat a
 `mirror`, `report`, `archive`, or `unknown` role as truth.
 
-Read the `roadmap-integrity:` line the preflight printed (it follows the `deadlines:` line; `--json` carries it as `roadmapIntegrity`). On `fail` (missing, not text, or null bytes), STOP and report the corruption to the user; do not migrate or rewrite a corrupt roadmap. On `warn` (empty or unusually large), surface it and confirm with the user before proceeding. On `ok`, or `external` (a roadmap the preflight does not read), continue. Before rewriting the roadmap, re-check it: `virtuoso_preflight --check-document <path>` prints the same state for one file.
+Read the `roadmap-integrity:` line (after `deadlines:`; `roadmapIntegrity` in `--json`).
+`fail` (missing, not text, or null bytes): STOP and report the corruption; never migrate
+or rewrite a corrupt roadmap. `warn` (empty or unusually large): surface it and confirm
+with the user before proceeding. `ok` or `external`: continue. Before rewriting the
+roadmap, re-check it with `virtuoso_preflight --check-document <path>`.
 
+### Resolve the work register and the policy before Phase 0
 
-Heavyweight, periodic recalibration of an entire project. The ceremony
-you run when you need to know — with confidence — where the project
-has been, where it's going, and what to dispatch next.
-### Resolve the work register before Phase 0
-
-This ceremony reads and (where policy permits) writes work items. It does that
-through the configured provider, never by opening a file directly.
+Work items are read and written through the configured provider, never by opening a file:
 
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor roadmap-review provider
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor roadmap-review items --all --json
-
-Read the provider description and **negotiate capabilities up front**:
-
-| To do this | You need |
-|---|---|
-| read the pipeline at all | `list-active`, `read-status` |
-| re-sequence the conveyor belt | `read-sequence` **and** `write-status` on a sequence field |
-| replenish the dispatch buffer | `store-spec-link` (or inline specs — see policy) |
-| record completion in Phase A (by `/dispatch-closeout`, A.4) | `record-completion` |
-| register a newly specified item that has no row yet | `create-item` |
-| absorb a held ad hoc plan (Phase A.4b, C.3) | `create-item`, plus `record-completion` for one that already ran |
-
-If a capability you need is missing, say so plainly and adjust the plan before
-starting. Example: a project whose register is a read-only snapshot can still get
-Phases A–C as a *report*, but Phase D cannot write status back — offer the report
-and stop, rather than starting and failing halfway.
-
-**Three roles, not one.** The live work register (`workRegister`), the append-only
-terminal ledger (`terminalLedger`), and any compatibility export (`sprintCatalog`,
-`sprintQueue`) are separate. This ceremony writes to the live register when its
-`allowedWriters` names `roadmap-review`. It appends a correction to the terminal
-ledger only when `policy.terminalLedger.correctionWriters` permits it, and an
-ordinary record, such as a retirement, only when `policy.terminalLedger.writers`
-names it. By default that never happens, so it routes those records to
-`/dispatch-closeout` (A.4). It regenerates exports only through their registered
-generator.
-
-**If the project has no `workRegister` role,** the provider layer serves a
-registered legacy `sprintCatalog` **read-only** through the compatibility adapter
-and says so. In that state, run Phases A–C as analysis and offer to register a
-`workRegister` role before doing anything that mutates.
-
-### Read the project's policy before planning
-
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . roles --json
 
-The manifest's `policy` block governs the shape of the plan. Nothing below is a
-fixed number or a required structure:
+**Read [references/setup.md](references/setup.md)**: the capability each phase needs, and
+the `policy` keys that shape the plan (none is a fixed number or a required structure).
+If a capability is missing, say so and adjust the plan before starting — never start and
+fail halfway.
 
-| Policy | What it controls | Default |
-|---|---|---|
-| `roadmap.dispatchBuffer` | how many dispatch-ready specifications to carry | 5 (0 disables eager specification) |
-| `roadmap.eagerSpec` | whether to specify ahead at all | true |
-| `roadmap.hierarchy` | grouping levels, e.g. `["phase","stage"]`, `["milestone"]`, or `[]` | `["phase","stage"]` |
-| `roadmap.workstreams` | parallel workstreams, if the project uses them | none |
-| `roadmap.specStorage` | `inline` (in the roadmap), `files` (one per item), or `external` | inline |
-| `roadmap.lengthCeilingLines` | when to snapshot and trim | 2000 |
-| `roadmap.effortScale` | size → points for effort-weighted metrics | generic t-shirt scale |
-| `roadmap.deadlines` | dated finish lines, by id: `date`, `owner`, and optionally `label`, `finishLine`, `scope` | none |
-| `roadmap.pace.trailingWeeks` | the window the trailing delivery rate is measured over | 4 |
-| `roadmap.pace.tolerance` | how far from the required rate still reads "on track" | 0.1 |
-| `standingRules.ids` | the project's inheritable rule identifiers | none — never hardcode one |
-| `issues.targets` | where a blocker is written: `local`, `external`, or both | `["local"]` |
-
-A project with a flat backlog and no phases is fully supported: `hierarchy: []`
-means do not invent a phase layer to hang items from.
+**Three roles, not one:** the live work register (`workRegister`), the append-only
+terminal ledger (`terminalLedger`), and any compatibility export (`sprintCatalog`,
+`sprintQueue`). Write the register only when its `allowedWriters` names
+`roadmap-review`; the ledger only as A.4 allows; an export only through its registered
+generator. With no `workRegister` role, a legacy `sprintCatalog` is served **read-only**
+through the compatibility adapter: run Phases A–C as analysis, and offer to register a
+`workRegister` role before anything mutates.
 
 ## When to use
 
-Run this skill when:
-- A phase or milestone has just closed
-- The roadmap feels stale, drifted, or inaccurate
-- You're prepping for a leadership or stakeholder checkpoint
-- You're returning to a project after a gap and need to resync
-- You suspect scope creep and want to verify
+**Manual only:** the user types `/roadmap-review`, "run roadmap review", or "perform
+roadmap review"; if you inferred it from context, STOP and confirm first. Run it when a
+phase or milestone closed, the roadmap feels stale, a stakeholder checkpoint is near, you
+return after a gap, or you suspect scope creep. Not for single-item planning, weekly
+status (`/roadmap-status`), or ad hoc work between reviews (`/storyboard`, then
+`/write-plan`; their output waits in the holding bay for this ceremony). Terms:
+[references/roadmap-format.md](references/roadmap-format.md) § Glossary.
 
-Do NOT use this skill for:
-- Routine single-item planning
-- Ad hoc work that arrives between reviews — that is `/storyboard`, then `/write-plan`.
-  What they produce waits in the holding bay, and this ceremony reconciles it.
-- Weekly status updates (use `/roadmap-status`)
+## Readiness and operating principles
 
-## Invocation
+**Do not restate the rubric.** There is one, versioned: the plugin's
+`references/readiness-rubric.md` (its universal checks at the version it declares, plus
+`policy.rubric.extensions`), the same file `/next-dispatch` applies. Report readiness as
+its five separate findings (specification, prerequisite, repository, external-register,
+execution-environment), never one blended verdict.
 
-Manual only. The user must explicitly type one of:
-- `/roadmap-review`
-- "run roadmap review"
-- "perform roadmap review"
+1. **Iterative.** Each run makes the plan more accurate; the first need not be perfect.
+2. **The registry decides authority.** The roadmap is the specification store; the work
+   register is the live status authority. Roles are declared, not assumed.
+3. **Archive-forward; the active section is uncompleted-only** (hard invariant). It holds
+   dispatch-ready specifications for the buffer, stubs beyond, and one line per completed
+   item; full content migrates to a dated archive at close-out.
+4. **Specifications are complete because incomplete ones cannot be executed** — by
+   anyone. Never justify rigor by claiming the implementer is a weaker model.
+5. **Standing rules consolidate inheritable lessons.** Ids come from
+   `policy.standingRules.ids`; never invent or hardcode one.
+6. **Forward visibility.** Carry specifications or stubs for at least three items ahead
+   of dispatch, or the whole backlog if shorter.
+7. **Checkpoint between phases.** The user confirms each phase.
+8. **Bounded questions only** (`references/actors-and-interaction.md`): 2–4 concrete
+   options, exactly one recommended, an escape hatch on consequential decisions;
+   structured when the host supports it, plain text when not. Never open free text when
+   a bounded set exists.
+9. **Orchestrate, don't reimplement.** Invoke an existing skill that handles a sub-task well.
+10. **The holding bay empties at every review**, the one ceremony that brings ad hoc work
+    onto the roadmap: each open entry is absorbed or withdrawn, except one in flight,
+    reported and reconciled next review (`references/execution-paths.md`).
 
-If you infer this skill from context without an explicit invocation, STOP and
-confirm with the user before proceeding.
+## Inputs and outputs
 
-## Glossary
+**Inputs**, each through the registry: the roadmap, the work register (via its
+provider), close-outs, retrospectives, audits, decision records, the terminal ledger, the
+codebase (for D.3), and the holding bay if registered.
 
-- **Work item** — a discrete unit of work with clear acceptance criteria. The
-  atomic dispatch unit. Identified by whatever id the project's register uses.
-- **Group / workstream** — optional grouping levels, named by `policy.roadmap.hierarchy`
-  and `policy.roadmap.workstreams`. A project may use neither.
-- **Stub** — a placeholder item: id, title, and optionally a one-line gist.
-- **Specification** — an item card with full structural fields plus implementation
-  detail. It lives wherever `policy.roadmap.specStorage` says.
-- **Dispatch-ready** — a specification that passes the shared readiness rubric.
-- **Dispatch** — sending an item to the implementation agent.
-- **Dispatch buffer** — the number of dispatch-ready specifications carried ahead
-  of the head of the conveyor belt. Size is `policy.roadmap.dispatchBuffer`.
-
-### The progression of an item's content density
-
-```
-Stub  →  Specification  →  Dispatch-ready  →  Close-out
-(gist)   (drafted)         (rubric passed)    (terminal record)
-                           ▲                  │
-                           │                  ▼
-                   roadmap-review        One record appended to the
-                   Phase D.3 applies     terminal ledger; the full
-                   the shared rubric     specification migrates to a
-                                         dated archive
-```
-
-## Dispatch-Readiness Rubric
-
-**Do not restate the rubric here.** There is exactly one rubric, versioned, in
-the plugin's `references/readiness-rubric.md` — its universal checks, at the version
-it declares at its top, plus whatever the project declares in
-`policy.rubric.extensions`. Open it and apply it. `/next-dispatch` applies the same
-file — that is the point.
-
-Report readiness as the five separate findings the rubric defines
-(specification, prerequisite, repository, external-register,
-execution-environment). Never blend them into one verdict.
-
-## Operating principles
-
-1. **Iterative.** Each invocation makes the plan more accurate. It does not need
-   to be perfect on the first run.
-2. **The registry decides what is authoritative.** The roadmap document is the
-   specification store; the work register is the live status authority. Which
-   file plays which role is declared, not assumed.
-3. **Archive-forward discipline.** The active roadmap holds dispatch-ready
-   specifications for the buffer, stubs beyond, and one line per completed item.
-   Full content migrates to a dated archive at close-out.
-4. **The active section is uncompleted-only.** Hard invariant.
-5. **Conveyor-belt sequencing.** Prerequisites first → risk-first tiebreaker →
-   hardest-first second tiebreaker. The register's sequence field mirrors it.
-6. **The dispatch buffer is policy.** Replenish to `policy.roadmap.dispatchBuffer`.
-   If it is 0, skip eager specification entirely and say so.
-7. **The rubric is non-negotiable.** A specification that fails it is not saved as
-   dispatch-ready. It is enriched until it passes, or left a stub and flagged as a
-   buffer gap.
-8. **Specifications are complete because incomplete ones cannot be executed** —
-   by anyone. Never justify rigor by claiming the implementer is a weaker model.
-9. **Standing rules consolidate inheritable lessons.** Their identifiers come from
-   `policy.standingRules.ids`; never invent or hardcode a rule id.
-10. **Forward visibility minimum.** Carry specifications or stubs for at least
-    three items ahead of dispatch, or the whole remaining backlog if it is shorter.
-11. **Length ceiling.** Honour `policy.roadmap.lengthCeilingLines`. When crossed,
-    snapshot to a dated archive and trim distant stubs.
-12. **Checkpoint between phases.** The user confirms each phase.
-13. **Bounded questions only.** Follow `references/actors-and-interaction.md`:
-    2–4 concrete options, one recommended, an escape hatch on consequential
-    decisions — structured when the host supports it, plain text when it does not.
-14. **Orchestrate, don't reimplement.** Where an existing skill handles a
-    sub-task well, invoke it.
-15. **The holding bay empties at every review.** This is the one ceremony that brings ad
-    hoc work onto the roadmap. Each open held entry is absorbed or withdrawn here. The
-    exception is one that is in flight, which is reported and reconciled at the next
-    review. See `references/execution-paths.md`.
-
-## Inputs
-
-1. The registry (`virtuoso_registry roles --json`) — the authority for every path.
-2. The roadmap document, resolved through the `roadmap` role.
-3. The work register, read through its provider.
-4. Close-outs, retrospectives, audits, and decision records, resolved through
-   their registered roles.
-5. The terminal ledger, for what is already final.
-6. The project codebase — required for Phase D.3 rubric verification.
-7. The holding bay, if the project registers one: `holding --open --json`. It lists the
-   ad hoc plans `/storyboard` and `/write-plan` held since the last review. Every open
-   entry is reconciled here.
-
-## Outputs
-
-Written into the registered `roadmapReviews` directory, under the prefix the resolver
-names (`--date` defaults to today's UTC date, which it prints as `date`):
+**Outputs** go in the registered `roadmapReviews` directory. Run the resolver once, at the start:
 
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . review --date <YYYY-MM-DD>
 
-Write under its `prefix` — the date, or `DATE-2`, `DATE-3`… for a second review that
-day — or under `resume` when it names an interrupted review of the same date, which you
-then finish. An earlier review's records are never overwritten. Run it once, at the
-start, and keep that `date` for every later call in this review, so a review that runs
-past midnight UTC keeps one prefix. `YYYY-MM-DD` below stands for that prefix:
-- `YYYY-MM-DD-audit.md` — Phase A diff
-- `YYYY-MM-DD-assessment.md` — Phase B opinion
-- `YYYY-MM-DD-plan.md` — Phase C decomposition
-- `YYYY-MM-DD-lessons-applied.md` — Phase D lessons review
-- `YYYY-MM-DD-phase-brief.md` — Phase D forward brief
-
-Plus, updated in place where policy permits:
-- The roadmap document
-- The live work register, via its provider
-- A new dated archive if the length ceiling was crossed
-
-Every output states the provider, source, and snapshot time its figures came from.
+Keep the `date` it prints (default: today, UTC) for every later call, so a review past
+midnight UTC keeps one prefix. Write under its `prefix` (the date, or `DATE-2`…), or
+under `resume` when it names an interrupted review of that date, which you finish. Never
+overwrite an earlier review's records. `YYYY-MM-DD` below is that prefix: `-audit.md`,
+`-assessment.md`, `-plan.md`, `-lessons-applied.md`, `-phase-brief.md`. Every output
+states the provider, source, and snapshot time of its figures.
 
 ---
 
 ## Phase 0 — INITIATE (only if needed)
 
-### 0.1 Confirm the roadmap role
-
-Resolve the `roadmap` role. If it is registered but absent, **report that** — do
-not go looking for a similarly named file and do not seed a replacement. Offer
-either to point the role at the real document (a registry edit, previewed) or to
-create the document at the registered path.
-
-### 0.2 Check for a finish line
-
-If a finish-line target is missing, ask for one. Do not proceed without it.
-
-### 0.3 Confirm the work register
-
-If no `workRegister` role is registered, ask which of these the project wants,
-and register it (the answer is a registry edit, previewed and approved — this
-ceremony does not decide authority on its own):
-
-- a local file the project already maintains (CSV or Markdown table),
-- a spreadsheet,
-- a connector-backed task manager, issue tracker, or database (registered as an
-  external identifier such as `notion:database/<id>`, `linear:team/<key>` or
-  `monday:board/1234567890`),
-- a read-only snapshot, for reporting only.
-
-If a legacy `sprintCatalog` is being read through the compatibility adapter, say
-so explicitly in your report: it is a mirror, not the authority, and it cannot be
-written until a `workRegister` role exists.
-
-### 0.4 Legacy structure
-
-Detect older structures and show a migration plan before applying anything.
-Migration is conservative: an unrecognized legacy role stays unclassified rather
-than being promoted to writable or authoritative.
+- **0.1 Roadmap role** registered but absent → **report that**; never seek a lookalike
+  file or seed a replacement. Offer to point the role at the real document (a previewed
+  registry edit) or create the document at the registered path.
+- **0.2 Finish line** missing → ask for one. Do not proceed without it.
+- **0.3 Work register** unregistered → ask which kind and register it as a previewed,
+  approved registry edit: [references/setup.md](references/setup.md) § Register kinds.
+- **0.4 Legacy structure.** Show a migration plan before applying anything. An
+  unrecognized legacy role stays unclassified, never promoted to writable or authoritative.
 
 ---
 
 ## Phase A — AUDIT (≈10 min)
 
-Goal: enforce archive-forward discipline. Move completed work out of the active
-section, append its terminal record, and reconcile the register.
+Goal: move completed work out of the active section, append its terminal record, and
+reconcile the register.
 
 ### A.1 Read everything
-Inventory every item and its claimed status, from the register and the roadmap
-separately. Record where they disagree; do not silently pick a winner.
-
-A connector-backed register is read fresh first: read every item with the session's
-connector, write the rows keyed by the register's own column names, and import them with
-`virtuoso_registry --root . snapshot --import <rows.json>` (or a raw items page and its
-column list: `--import <page> --columns <columns>`)
-(`references/registry-contract.md`, *Refreshing a connector-backed register's
-snapshot*). Report each `[DRIFT]` line as a finding.
-
-Read the holding bay too:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . holding --open --json
-
-Exit 3 naming `holdingBay` means the project holds no ad hoc work. Say so and move on.
-An entry listed with problems (`holding --check <entry>` names them) is surfaced, not
-skipped.
-
-Read every close-out written since the last review, and check that each carries
-its Lessons section:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --check <close-out> --closeout --item <ITEM-ID>
-
-One that fails is a gap for D.4: the dispatch taught something nobody recorded, or
-recorded nothing and gave no reason.
+Inventory every item's claimed status from the register and the roadmap separately;
+record disagreements, never silently pick a winner. Read a connector-backed register
+fresh first: read every item with the session's connector, write the rows keyed by the
+register's own column names, and import them with `virtuoso_registry --root . snapshot
+--import <rows.json>` (or a raw page: `--import <page> --columns <columns>`;
+`references/registry-contract.md`, *Refreshing a connector-backed register's
+snapshot*). Each `[DRIFT]` line is a finding. Read the holding bay (`holding --open
+--json`; Exit 3 naming `holdingBay` means none is held — say so), and surface an entry
+with problems (`holding --check <entry>`), never skip it. Check each close-out since the
+last review with `lessons --check <close-out> --closeout --item <ITEM-ID>`: one that
+fails is a gap for D.4 — a lesson nobody recorded, or nothing recorded and no reason given.
 
 ### A.2 Build a candidate completion/archive list
-Classify each item as *likely complete*, *likely dissolved*, or *definitely live*,
-citing the signal for each.
-
-Classify each open held entry by its trail state:
-
-| State | Reconciled in |
-|---|---|
-| `executed` | A.4b. It ran ad hoc and was closed out, and it becomes a completed register item now. |
-| `storyboarded`, `planned` | C.3. It is absorbed onto the roadmap, or withdrawn. A `planned` entry whose trail names items that already closed out sends those items to A.4b first. |
-| `in-flight` | Nowhere yet. Report it: it is executing, and the review after its close-out absorbs it. |
-| `unrecorded`, or listed with problems | Surfaced to the user in A.3: repaired through its owner, or withdrawn. |
+Classify each item *likely complete*, *likely dissolved*, or *definitely live*, citing
+the signal. Route each open held entry by trail state: `executed` → A.4b; `storyboarded`
+or `planned` → C.3 (a `planned` entry whose trail names closed-out items sends those to
+A.4b first); `in-flight` → report only (the review after its close-out absorbs it); `unrecorded` or with problems → A.3, repaired
+through its owner or withdrawn.
 
 ### A.3 Confirm with the user
-Batched, 5 at a time, with the bounded-question protocol.
+Batched, 5 at a time, with bounded questions.
 
 ### A.4 Apply changes
-For each item being retired:
-1. **Route its terminal record to the close-out ceremony.** A retirement is an
-   *ordinary* terminal record, and only an actor `policy.terminalLedger.writers`
-   names may append one. By default that is `dispatch-closeout` alone.
-   `correctionWriters` does not cover a retirement: it permits only
-   *corrections*, which are new records naming the record they correct, and a
-   retirement corrects nothing. So invoke `/dispatch-closeout` for the item, as
-   A.4b does for held plans. Its section *Retirement records routed here* says
-   what runs:
-   - completed but never closed out → its full crossing, because no record is
-     appended without verified evidence and lessons;
-   - completed and closed out, with only the record missing → its recording
-     crossing;
-   - dissolved or superseded → one record with that result, and this review's
-     decision as the evidence.
-
-   Append the record yourself only when `writers` names `roadmap-review`. That is
-   a project's explicit choice, never a default. Terminal records are append-only:
-   never reorder, rewrite, or delete one. When this audit finds a record wrong, it
-   appends a correction, a new record naming the one it corrects. That is what
-   `correctionWriters` lets this ceremony append.
-2. Add its one-line entry to the roadmap's completed summary.
-3. Move its full content to the current dated archive.
-4. Remove the full content from the active roadmap.
-5. Update the item in the live register through the provider: its status, a
-   cleared sequence, the date, and the evidence link. Skip anything
-   `/dispatch-closeout`'s crossing already wrote for a completion; never write it
-   twice. Pass the `revision` you read, so a concurrent change is refused rather
-   than clobbered.
-6. Re-running this step must not duplicate anything: the provider's writes are
-   idempotent, and a terminal record that already exists is a no-op.
-
-If the register write succeeds but an external half fails, a recovery record is
-written under `Virtuoso/.recovery/`. Surface it; do not paper over it.
+**Read [references/audit.md](references/audit.md) § A.4 first.** Route each retired
+item's terminal record to `/dispatch-closeout`: a retirement is an *ordinary* record,
+which only an actor `policy.terminalLedger.writers` names may append (by default
+`dispatch-closeout` alone; `correctionWriters` covers corrections only), and its
+*Retirement records routed here* says what runs. Then add the completed-summary line,
+archive the full content, and update the register through the provider with the
+`revision` you read. Terminal records are append-only; a re-run duplicates nothing.
+Surface any recovery record under `Virtuoso/.recovery/`.
 
 ### A.4b Absorb held plans that already ran
-
-For each `executed` entry, per `HB-<n>` item it closed out:
-
-1. **Create the register item** through `create-item`, with an identifier in the
-   register's own scheme. Give it the title, the effort, and `notes` reading
-   `origin: held plan <entry> (HB-<n>)`. Use the mutation handshake for an external
-   register, as in D.5.3.
-2. **Record its completion by invoking `/dispatch-closeout`'s recording crossing**
-   (its *Held plans* section). Do not write the terminal ledger yourself: that ceremony
-   is the ledger's writer. It appends the terminal record and closes the item, using
-   the close-out, date, and result the entry's `executed` row names, and nothing is
-   re-verified or re-taught.
-3. Add its one-line entry to the roadmap's completed summary, citing the entry.
-4. Record the absorption, naming what it became:
-
-       "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor roadmap-review holding --record <entry> --state absorbed --note "as <ITEM-ID> (completed)" --apply
-
-A run that stopped partway returns its entry to `planned`, and the trail note names the
-items that did close out. That entry is absorbed in two halves. The closed-out items take
-the steps above, using their own close-outs. The rest go to C.3 as queued items. Record
-the entry's absorption once, naming every item it became.
+For each `executed` entry, follow [references/audit.md](references/audit.md) § A.4b. Its
+completion is recorded by `/dispatch-closeout`'s recording crossing, never by you.
 
 ### A.5 Length-ceiling check
-If the active roadmap exceeds `policy.roadmap.lengthCeilingLines`, snapshot and trim.
+Past `policy.roadmap.lengthCeilingLines`, snapshot to a dated archive and trim distant stubs.
 
 ### A.6 Checkpoint
 Show the diff. Ask: approve / roll back / pause.
@@ -447,99 +232,40 @@ Show the diff. Ask: approve / roll back / pause.
 
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . kpis --json
 
-Use the returned metrics. Each carries provenance. **A metric returned as
-`not computable` is reported as not computable, with its missing inputs named.**
-Never substitute an estimate, and never present a percentage the data cannot
-support.
+Each metric carries provenance. **A metric returned as `not computable` is reported as
+such, with its missing inputs named** — never an estimate, never an unsupported percentage.
 
 ### B.2 Pace
-Pace comes from the `pace` block of the same `kpis --json` call — one report per
-declared deadline. Each gives the rate the date requires (remaining work ÷ weeks
-left) against the trailing rate (completions over
-`policy.roadmap.pace.trailingWeeks`), in items and in points, and a verdict:
-`ahead`, `on track`, `behind`, `overdue`, or `met`, naming the unit that drove it.
-Report, for each deadline:
-
-- the verdict and its reason, and the projected finish at the trailing rate
-- the scope it covers — say it, because a wrong assumption about scope is only
-  visible if it is stated
-- the blocked share of remaining work: blocked work cannot be delivered however
-  fast the rest moves
-- every figure returned as not computable, with its missing inputs named
-
-With no deadline declared, say "no deadline is declared": pace against a date is
-not computable, and now the cause is stated rather than implied. Never derive
-pace by hand, and never copy a date from anywhere but the policy.
-
-**Recording a deadline the owner sets or moves.** The date has one home,
-`policy.roadmap.deadlines.<id>`. Before writing, ask which finish line the date is
-for and which items count toward it — the answers are `finishLine` and `scope`;
-without them the review reports the deadline unanchored, which is the truth.
-Preview, get approval, then apply:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor roadmap-review policy-set roadmap.deadlines.<id> --value-json '{"date": "YYYY-MM-DD", "owner": "<who ruled>", "finishLine": "<roadmap heading>"}'
-
-then the same command with `--apply`. A moved date is
-`policy-set roadmap.deadlines.<id>.date`; a withdrawn one is `--value-json null`.
-Record the ruling in the roadmap's finish-line section as prose that points at the
-policy. Do not copy the date into memory, charters, or the board — every surface
-reads it from the policy, and a copy is a second authority that drifts.
+Read the `pace` block of the same call: per declared deadline, a verdict (`ahead`, `on
+track`, `behind`, `overdue`, `met`). **[references/assess.md](references/assess.md) §
+B.2** lists what to report per deadline and how to record a deadline the owner sets or
+moves. With none declared, say "no deadline is declared": pace against a date is not
+computable. Never derive pace by hand or copy a date from anywhere but the policy.
 
 ### B.3 Scope discipline
-Forward / sideways / backward deltas since the previous review. Score =
-forward / (forward + sideways + backward).
+Score = forward / (forward + sideways + backward), over items that reached a terminal
+status since the previous review and work shipped with no register entry (named as
+such), each counted once:
 
-Count items that reached a terminal status since the previous review, and work shipped
-with no register entry, which is named as such. Each counts once:
-
-- **Forward** — counts toward the finish line: named in a declared deadline's `scope`
+- **Forward** — toward the finish line: named in a declared deadline's `scope`
   (`policy.roadmap.deadlines.<id>.scope`), or, with none declared, in the roadmap's
   finish-line section.
-- **Sideways** — delivered, but not toward the finish line: hardening, measurement,
-  tooling, an ad hoc stream, a held plan that already ran (A.4b).
+- **Sideways** — delivered, not toward the finish line: hardening, measurement, tooling,
+  an ad hoc stream, a held plan that already ran (A.4b).
 - **Backward** — undoes delivered work: a revert or rollback, a terminal item reopened,
   a release withdrawn.
 
-Scope added to the backlog, including held entries absorbed in C.3, is listed with the
-class it would take, and is not scored. Where a call is a judgement, say so, and keep the
-previous review's call for the same item.
+Added scope, including held entries absorbed in C.3, is listed with the class it would
+take, and is not scored. Say where a call is a judgement; keep the previous review's call
+for the same item. Name each absorbed held entry by title and entry, and each withdrawn
+one with its reason: unreviewed ad hoc entry is how scope drifts unseen.
 
-Name each held entry this review absorbs by title and entry: one absorbed in A.4b counts
-as a delivered delta, one absorbed in C.3 is listed as added scope. Ad hoc entry is
-legitimate. Ad hoc entry that nobody reviews is how scope drifts unseen. Name each
-withdrawn entry with its reason.
-
-Then read what the previous cycle left for this one: the previous review's
-`YYYY-MM-DD-lessons-applied.md` (the lessons it applied, the candidates it left
-undecided — decide them in D.4). The resolver names it:
-`"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . review --date <YYYY-MM-DD>`
-gives `previous`, latest by date, then run. When that set was interrupted and has no
-lessons-applied, read `previousComplete`'s, and name the interrupted review in the
-assessment. Read too every entry in
-the registered `findings` role whose latest **Disposition** is still `open`. Each open
-finding is carried into the plan: fixed by a planned item, accepted with a reason,
-or turned into a lesson — recorded by appending a disposition under its id. A finding
-left open across two reviews is named in the assessment.
-
-Beside the open findings, read the open **board comments** — the notes people left on
-the roadmap board's rows, saved or exported into the registered `boardComments` file:
-
-    "$HOME/.virtuoso/bin/virtuoso" board_comments --root .
-
-Address, adopt or answer each one. A comment on live work is input to that item's plan
-or specification; a comment on finished work (the Completed tab) is a follow-up
-candidate, proposed as a new item, never a change to the closed one. Mark each answered
-comment resolved, which greys it out on the page:
-
-    "$HOME/.virtuoso/bin/virtuoso" board_comments --root . --actor roadmap-review --resolve <ID> --answer "<what the review did>" --apply
-
-The board never edits the register or the roadmap; its comments reach them only through
-this review. Resolving changes the comments file, so preflight reads `board: stale`
-until D.7 regenerates the page later in this review.
+Then carry in the previous cycle's `YYYY-MM-DD-lessons-applied.md`, every open entry in
+the registered `findings` role, and the open board comments (`board_comments`), each as
+[references/assess.md](references/assess.md) § B.3 says.
 
 ### B.4 Render the assessment
-Write `YYYY-MM-DD-assessment.md` into the registered reviews directory, with the
-provenance block at the top.
+`YYYY-MM-DD-assessment.md`, provenance block at the top.
 
 ### B.5 Checkpoint
 
@@ -551,110 +277,44 @@ provenance block at the top.
 3–7 large outcome blocks.
 
 ### C.2 Group them
-**Workstreams and deliverables.** Run the proposal. It is read-only:
+**Workstreams and deliverables.** Run the read-only proposal:
 
     python <plugin>/scripts/virtuoso_registry.py --root . structure --propose --json
 
-**First, check that the register can hold a structure.** The proposal's `registerColumns`
-says so. When `ready` is false, settle that before naming any candidate. Tell the owner
-which columns are missing (`missing`), and how to add them for their register
-(`references/registry-contract.md`, *Adding the workstream and deliverable columns*). Map
-them, refresh the snapshot, and run the proposal again. An approval the register cannot
-store is wasted, so never ask for one. When the owner declines to add the columns, record
-that, and skip the grouping this review.
-
-- **A first review** (no `policy.roadmap.workstreams`): it proposes the whole structure.
-  Candidate workstreams are joined by prerequisites or by mostly shared files, and
-  candidate deliverables inside them by prerequisites or an existing grouping. Give each
-  candidate a name and a one-line purpose. Show its signals, and the crossings between
-  workstreams as a hint only: the files and prerequisites they share. Run-time ordering
-  stays `combine`'s. An item flagged `noSignal` is named as its own candidate, never merged
-  without the owner saying so. Every item under `unread` is named too.
-- **A later review** (a structure approved): it proposes only a place for each item the
-  register does not assign, a split for a deliverable over 8 items, and a merge for two
-  deliverables sharing more than half their files.
-
-Ask the owner to approve, rename or reject each workstream and deliverable: the whole
-structure at a first review, only the proposals at a later one. **Nothing is written
-before the owner approves.** Then write the approved file, `{"workstreams": [{id, name,
-purpose, deliverables: [{id, name, purpose}]}], "assignments": {"<ITEM-ID>":
-{"workstream": "<id>", "deliverable": "<id>"}}}`, and apply it:
+First check its `registerColumns`. When `ready` is false, settle that before naming any
+candidate: tell the owner which columns are `missing` and how to add them
+(`references/registry-contract.md`, *Adding the workstream and deliverable columns*), map
+them, refresh the snapshot, propose again. Never ask for an approval the register cannot
+store; if the owner declines the columns, record that and skip grouping. **Read
+[references/plan.md](references/plan.md) § C.2** for what each review proposes and what
+the apply writes. Ask the owner to approve, rename or reject each workstream and
+deliverable. **Nothing is written before the owner approves.** Then:
 
     python <plugin>/scripts/virtuoso_registry.py --root . --actor roadmap-review structure --apply --file <approved.json>
 
-It writes `roadmap.workstreams` and `roadmap.hierarchy: ["workstream", "deliverable"]`
-through `policy-set`, which backs them up. Then it writes each assigned active item's
-workstream and deliverable to the register. A local register is written directly. For an
-external register it prints one `set-status` plan per item, which the host's connector
-executes and `mutation-confirm` records. Finished items are never touched. When the register has
-no workstream or deliverable column, it stops before any write and names the missing
-columns: adding them is the owner's call. A rejected proposal is an empty file, and
-nothing is written. After a rejection, the next review puts the proposal to the owner
-again only if the active items changed since: a judgement for the review, which the
-command does not track.
-
-After an apply, the roadmap's active section is grouped under `### <workstream>` and
-`#### <deliverable>` headings (the template below). Each item keeps its own `####`
-heading after its deliverable's, so its section still ends at the next heading.
-
-A project whose `hierarchy` names other levels (phases, stages) groups by those instead,
-and a project whose owner wants no workstreams skips `structure --propose`. With
-`hierarchy: []` and no structure approved, skip the grouping: do not invent phases.
+A `hierarchy` naming other levels groups by those; an owner who wants no workstreams
+skips the proposal. With `hierarchy: []` and no structure approved, invent no phases.
 
 ### C.3 Decompose into items
-Each becomes a stub in the roadmap and a row in the register.
-
-**Absorb the open held entries.** Each `storyboarded` or `planned` entry either
-comes onto the roadmap here or is withdrawn. Ask the user, in a batch, using the
-bounded-question protocol. Nothing is carried past the review.
-
-| Held as | Absorbed as |
-|---|---|
-| `planned` | Each `HB-<n>` becomes an item. Its specification moves into `policy.roadmap.specStorage`, with the provisional id replaced by the register's id. It is re-audited in D.3/D.4.5 before it counts as dispatch-ready, because code moves between planning and review. |
-| `storyboarded`, dispatch-sized | A stub per item in its draft stub, with the entry's alignment record and frames cited as its source |
-| `storyboarded`, epic-scale | One item whose structural fields carry `Path: epic`, with the entry cited as the source its charter is built from. `/next-dispatch` routes it to `/epic` when it reaches the head. |
-
-Create each item through `create-item`, with `notes` reading
-`origin: held plan <entry> (HB-<n>)`. Add the entry's downstream flags to the
-non-blocking follow-up queue, and read the entry's placement into C.4: the exact slot
-`/write-plan` recorded for a `planned` entry (its *Roadmap placement*), or the storyboard's
-recommendation for a `storyboarded` one. Apply the slot unless the review's own
-sequencing shows it is wrong, and say why when it does.
-Then record the absorption. The note names what the entry became, for example
-`as ADD-052 (queued, full-spec)`, `as ADD-053, ADD-054 (queued, stubs)`, or
-`as ADD-055 (Path: epic)`. A note is one line, and it cannot contain `|`:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor roadmap-review holding --record <entry> --state absorbed --note "as <ITEM-ID> (queued, full-spec)" --apply
-
-A withdrawn entry records `--state withdrawn --note "<the user's reason>"`.
-
-**Set the path of items already on the roadmap.** `Path` arrived in 1.11, so an older
-roadmap carries none, and a missing field means `dispatch`. Walk the active items. One
-that is epic-scale on its own (outcome-stated, multi-phase, multi-session or walk-away)
-gets `- **Path:** epic — <why it cannot be one dispatch>` in its entry, so
-`/next-dispatch` routes it to `/epic`. Dispatch-sized items that belong together keep
-their own path: `/epic` combines them when the user wants them run as one
-(`references/execution-paths.md`). Name each item this review marks, with the reason,
-in the plan.
+Each becomes a roadmap stub and a register row. Every open `storyboarded` or `planned`
+held entry is absorbed or withdrawn here (asked in a batch; nothing is carried past the
+review), and every item already on the roadmap gets its `Path` set:
+[references/plan.md](references/plan.md) § C.3.
 
 ### C.4 Sequence the conveyor belt
-Prerequisites → risk → hardest-first. Write the sequence back through the
-provider only if it supports `write-status` on the sequence field; otherwise
-produce the sequence as a recommendation and say why it was not written.
+Prerequisites first → risk-first → hardest-first; the register's sequence field mirrors
+it. Write it through the provider only if it supports `write-status` on the sequence
+field; otherwise give a recommendation and say why.
 
 ### C.5 Answer the pace verdict
-A `behind` or `overdue` verdict from B.2 gets a stated response in the plan — at
-least one of:
-
-- reduce scope, with the owner, so the dated finish line holds less
-- resequence toward the dated finish line
-- release blocked work, naming the rulings or dependencies that hold it
-- take a moved date to the owner (recorded through `policy-set`, never by hand)
-
-A plan that leaves a behind verdict unaddressed says so explicitly.
+A `behind` or `overdue` verdict gets a stated response in the plan, at least one of:
+reduce scope with the owner; resequence toward the dated finish line; release blocked
+work, naming what holds it; take a moved date to the owner (via `policy-set`, never by
+hand). A plan that leaves it unaddressed says so.
 
 ### C.6 Render the plan
-Write `YYYY-MM-DD-plan.md`; update the roadmap's active section.
+Write `YYYY-MM-DD-plan.md`; update the roadmap's active section (template:
+[references/roadmap-format.md](references/roadmap-format.md)).
 
 ### C.7 Checkpoint
 
@@ -662,361 +322,68 @@ Write `YYYY-MM-DD-plan.md`; update the roadmap's active section.
 
 ## Phase D — DISPATCH (≈25 min)
 
-Goal: bring the dispatch buffer up to `policy.roadmap.dispatchBuffer`, validate
-against lessons learned, integrate, and brief.
+Goal: fill the dispatch buffer to `policy.roadmap.dispatchBuffer`, validate against
+lessons learned, integrate, and brief.
 
 ### D.1 Identify the head of the conveyor belt
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . next
-
-Then take the first *N* active items in sequence order, where *N* is the buffer size.
+Run `virtuoso_registry --root . next`; take the first *N* active items in sequence (*N*
+= buffer size).
 
 ### D.2 Determine the specification count
-
 1. `target = policy.roadmap.dispatchBuffer` (default 5).
-2. If `target == 0` or `policy.roadmap.eagerSpec` is false: skip D.3 entirely.
-   Say that eager specification is disabled for this project and move to D.4.
-3. Walk the belt from the head; count items already dispatch-ready.
-4. `new specifications = target − already_ready`.
-5. Target the next items in sequence order that are still stubs. Skip an item whose
-   entry declares `Path: epic`: `/epic` charters it, and the dispatch rubric is not its
-   gate. It does not count toward the buffer. Skip, too, an item an active epic charter
-   names (`item:` or `items:`, in the registered `epics` role): it is in a run, under
-   that packet's order.
+2. `target == 0` or `policy.roadmap.eagerSpec` false → skip D.3, say eager specification
+   is disabled, go to D.4.
+3. `new specifications = target − items already dispatch-ready` from the head.
+4. Target the next stubs in sequence. Skip one declaring `Path: epic` (`/epic` charters
+   it; it does not count toward the buffer), and one an active epic charter names
+   (`item:` or `items:`, in the registered `epics` role): it runs under that packet's order.
 
-Edge cases: fewer than *N* active items → specify all of them. Group boundaries
-are not a stopping condition. A hard blocker mid-buffer → stop there, flag it in
-D.6, and note the buffer will fall short.
+Fewer than *N* active items → specify all. Group boundaries do not stop the walk. A hard
+blocker → stop there, flag it in D.6, note the shortfall.
 
 ### D.3 Write the dispatch-ready specifications
-
-**D.3.0 Read the live lessons first.** Before drafting anything:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --open
-
-Carry the list into every draft. A lesson is applied while a specification is being
-written, not retrofitted after the specification has passed.
-
-For each item in scope:
-
-**D.3.1 Draft.** Write each specification in the D.5.2 format, with structural and
-implementation-detail inputs sourced from close-outs, decision records, standing rules, and archives —
-and a **Lessons applied** section: each live lesson that bears on the item, by
-identifier, with the concrete change it made to this specification; or the
-statement that no live lesson applies.
-
-**D.3.2 Apply the shared rubric.** Open `references/readiness-rubric.md` and walk
-every universal check plus the project's declared extensions. For each item:
-- **PASS** → move on.
-- **CLOSABLE GAP** → resolve by investigation:
-
-  | Gap | How to close |
-  |---|---|
-  | Stale location reference | Read the source; correct it in place. |
-  | Vague test reference | Read the test file; insert the exact name and assertion. |
-  | Unverified constant | Search; record the current value and where it lives. |
-  | Non-mechanical acceptance criterion | Rewrite it as a command or assertion. |
-  | Missing branch plan | Apply `policy.git.branchNameTemplate`. |
-  | Missing failure handling | Enumerate the known failure modes; add "if X, do Y". |
-  | Missing rollback | State the revert path for this project's git policy. |
-  | Missing source citation | Find it and link it, with an anchor. |
-  | Missing project-extension detail | Consult the project's own precedent. |
-  | Missing or empty Lessons applied | From D.3.0: name each live lesson that bears on the item and what it changed here, or that none applies. |
-
-- **STRUCTURAL GAP** → ask the user. Do not invent decisions.
-
-**D.3.3 Re-audit.** Walk the rubric again. Two enrichment passes maximum. A
-specification still failing after two passes is NOT saved as dispatch-ready: flag
-it as a buffer gap in D.6 and continue from the next item. U9 has a mechanical
-half, and it must pass before the specification is saved:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --check <spec> --item <ITEM-ID>
-
-**D.3.4 Save.** Store the specification where `policy.roadmap.specStorage` says:
-
-- `inline` — in the roadmap document at the item's position.
-- `files` — one file per item under `policy.roadmap.specDirectory`, with the link
-  stored on the register item via `store-spec-link`.
-- `external` — in the external system, with the link stored the same way.
-
-If the provider lacks `store-spec-link` and storage is `files` or `external`,
-say so and record the links in the roadmap instead.
+**Follow [references/specifications.md](references/specifications.md) § D.3** (D.3.0–D.3.4):
+the live lessons first (`lessons --open`), drafts in the D.5.2 format, the shared rubric
+(`references/readiness-rubric.md`) walked per item. **Gates:** a STRUCTURAL GAP goes to
+the user — never invent decisions; after two enrichment passes, a still-failing
+specification is NOT saved as dispatch-ready but flagged as a buffer gap in D.6.
 
 ### D.4 Lessons-learned review
-
-**D.4.1 Gather.** Read the registered `lessons` role (`lessons --open`), the
-close-outs since the last review, audits, and decision records. Resolve each
-through the registry; do not scan the filesystem for lookalike names.
-
-**D.4.2 Build the checklist.** Deduped, grouped by theme. The promotion candidates are
-computed, not remembered:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --candidates
-
-It lists every pattern that recurred (a second close-out reported it) and every lesson
-applied and held in two close-outs — **promote** — and every lesson that did not hold
-twice — **revise or retire**. Decide each; a candidate left undecided is carried into
-D.4.6 by name.
-
-**D.4.3 Update the standing rules.** Rules live where
-`policy.standingRules.source` says, and their identifiers come from
-`policy.standingRules.ids`. Present rules get their wording verified; missing ones
-are added with a source; superseded ones are updated or removed. A lesson promoted
-here gets a status record appended under its identifier in the `lessons` role —
-`Promoted -> <rule id>` — never an edit to its original entry:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --record-status <ID> --status "Promoted -> <rule id>" --actor roadmap-review --item <review date> --apply
-
-**D.4.4 Confirm the new specifications** applied the lessons: U9 passed for each in
-D.3. Note any live lesson every one of them declined, and whether that is right.
-
-**D.4.5 Review the existing specifications** — every dispatch-ready item this
-review did not write — against the live lessons:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --check <spec> --item <ITEM-ID>
-
-One that fails is no longer dispatch-ready: enrich it in place, or flag it as a
-buffer gap in D.6. A lesson recorded after a specification was written is exactly
-what this step exists to catch.
-
-**D.4.6 Render** `YYYY-MM-DD-lessons-applied.md`: the live lessons; which
-specification applied which; the promotions and retirements recorded; the candidates
-left undecided; the `learning` figures from `kpis` beside the previous review's (the
-resolver's `previous`, or `previousComplete` when `previous` has no lessons-applied); and
-the close-outs since the last review that recorded no lesson and gave no reason.
+**Follow [references/lessons-review.md](references/lessons-review.md)** (D.4.1–D.4.6):
+decide every computed promotion candidate (`lessons --candidates`), record promotions as
+status records (`--record-status`), and re-check every dispatch-ready specification
+against the live lessons.
 
 ### D.5 Integrate
-
-**D.5.1** Place specifications per `policy.roadmap.specStorage`.
-
-**D.5.2** Specification format (structural fields first, then implementation
-detail, then the task list U10 reads, in the row format of `references/task-rows.md`,
-then the milestones U11 reads, then the lessons applied under the heading U9 reads).
-Grouping headings
-appear only if `policy.roadmap.hierarchy` declares them:
-
-```
-#### ITEM-ID — Item title
-
-- **What:** …
-- **Why:** …
-- **Prerequisites:** …
-- **Done when:**
-    1. … (mechanically verifiable)
-- **Effort:** …
-- **Owners:** … (roles from policy.actors)
-- **Source:** …
-- **Path:** dispatch | epic — … (optional; absent means dispatch — see references/execution-paths.md)
-- **Origin:** … (for absorbed ad hoc work: held plan <entry> (HB-<n>))
-
-##### Implementation detail
-- **Edit sites:** …
-- **Tests:** …
-- **Constants:** …
-- **Branch:** … from …
-- **Staging plan:** explicit paths, per policy.git
-- **Failure handling:** if X, do Y; rollback: …
-- **Project extensions:** … (only those policy.rubric.extensions declares)
-
-##### Task list
-| # | Task | Class | Kind | Tier | Effort | Estimate | Timebox | Group |
-|---|---|---|---|---|---|---|---|---|
-| 1 | … (an outcome, never a code step) | repeat | … | bounded | medium | 35m (median of 9 runs) | — | — |
-
-**Total:** the line `timing --rows-from-spec <spec> --item ITEM-ID` prints
-
-##### Milestones
-| Milestone | Rows | Done when |
-|---|---|---|
-| … (a stage a reader would name) | 1-3 | … (something checkable, ending the stage) |
-
-##### Lessons applied
-- <prefix>-NNN — what it changed here: a *Done when* row, a constraint, a test
-- (or) No live lesson applies — N read
-```
-
-Mid-dispatch amendments append as `##### Mid-Dispatch Amendment — YYYY-MM-DD`.
-
-**D.5.3 Update the live work register.** Through the provider, for each newly
-specified item: sequence, title, group, workstream, effort, prerequisites, status, the
-specification state, branch, description — each only where the register has a
-column for it (a declared `policy.workRegister.fieldMappings` names it; a plan naming any
-other is refused). Pass the `revision` you read.
-
-For an external register, every change is its own plan and its own connector call
-(the external handshake in `references/registry-contract.md`). Read the item back
-before every `mutation-confirm`. When only some fields landed, confirm `--partial
---written <fields>`, then plan the rest. Close a plan you will not execute with
-`mutation-abandon --recovery-id <ID> --reason <why>`.
-
-An item that is **not yet in the register** — a specification this review authored
-or approved that has no row — is brought into existence through `create-item`,
-never by writing a row into a file by hand and never by calling a connector's raw
-create. For a local register that is one write. For an external register it is
-the handshake: refresh the snapshot first (`snapshot --import <rows.json>`, or a raw
-page with `--columns`; a `[DRIFT]` line naming a field you are about to write is fixed in
-`fieldMappings` before planning), then `mutation-plan --operation create-item`, execute
-the returned instruction with the host's connector, read the item back,
-`mutation-confirm --recovery-id <RECOVERY-ID> --succeeded --provider-id <ID>
---actual-revision <REVISION>`, then refresh the canonical snapshot the same way
-(`snapshot --import <rows.json>`) and verify `recovery` is empty. The
-plan is refused when the snapshot is absent or stale, when the id already exists (terminal
-items included), or when a creation under the same idempotency key was already
-confirmed; each refusal names the fix. If `policy.workRegister.creators` does not
-name this ceremony, say so and stop — creation is separately authorized.
-
-Only write fields the provider reports it can write. Field *names* come from
-`policy.workRegister.fieldMappings`; status *words* come from
-`policy.workRegister.statusMappings`. Never assume a column is called
-"Implementation Status" or that "Queued" is the right word for this project.
-
-**D.5.4 Regenerate exports (optional).** If the project registers a generated
-report role, regenerate it through its registered generator:
-
-    "$HOME/.virtuoso/bin/virtuoso" build_register_report --root . --role sprintQueue
-
-The generator refuses to write any role the project has not declared generated.
-A generated export is a presentation output: never read it back as truth, and
-never hand-edit it — regenerate it.
-
-**D.5.5 Reconcile.** The roadmap's active section and the live register agree;
-the first *N* items in sequence are dispatch-ready; later ones are stubs; the
-completed summary carries one line each; standing rules reflect the checklist.
+- **D.5.1** Place specifications per `policy.roadmap.specStorage`.
+- **D.5.2 Specification format** — in [references/specifications.md](references/specifications.md),
+  which also holds D.5.3–D.5.4. Other skills cite it as roadmap-review's D.5.2.
+- **D.5.3 Update the live work register** as that file says. Create a missing item only
+  through `create-item`, and only when `policy.workRegister.creators` names this
+  ceremony — otherwise say so and stop.
+- **D.5.4 Regenerate exports (optional)**, only through the registered generator.
+- **D.5.5 Reconcile.** Roadmap and register agree; the first *N* items are
+  dispatch-ready, later ones stubs; one completed-summary line each; standing rules
+  reflect the checklist.
 
 ### D.6 Write the phase brief
-
-`YYYY-MM-DD-phase-brief.md`:
-- Group name(s) and goal(s), if the project uses grouping
-- The items in the buffer, in sequence, **by descriptive name first** with the
-  internal id secondary
-- Implementation-detail highlights
-- Rubric result per item, split into the rubric's five findings
-- Lessons applied
-- Prerequisites into and out of the buffer
-- Exit criteria and estimated buffer duration
-- Top 1–2 risks
-- **Buffer gaps** — items that could not be made dispatch-ready, with the rubric
-  checks that blocked them
-- **Provenance** — provider, source, snapshot time for every figure
+`YYYY-MM-DD-phase-brief.md`: [references/review-outputs.md](references/review-outputs.md) § D.6.
 
 ### D.7 Regenerate the board
 
     "$HOME/.virtuoso/bin/virtuoso" generate_board --root . --create
 
-The **roadmap board** is the project's one interactive page: a Dashboard (KPI tiles,
-charts, slicers built from the data), a Roadmap tab (live work as a board, grouped by
-pipeline state, with a comment box and a copy button on every row) and a Completed
-tab (the register's terminal items joined with the terminal ledger, mismatches marked
-*unreconciled*). `--create` makes this the first review's step that brings it into
-being: it registers the `board` and `boardComments` roles when they are missing
-(default paths `roadmap-board.html` and `roadmap-board.comments.json` in the project
-root), generates a missing page and reports `board created`, and adds the page's path
-to `.gitignore` once — skipped when it is already ignored or the project is not a git
-repository. The page is a build output: never commit it. The comments file is written
-by people: commit it. A later review regenerates the page and reports `board
-regenerated`.
-
-The board reads the configured authoritative work register through its provider and
-the roadmap through its registered role. It never modifies a source document; it
-surfaces drift on the Dashboard instead. Every figure carries its provenance, and a
-snapshot-backed read is labelled with its age. A `planning-cockpit.html` left by an
-earlier version is not read or written; delete it when you like.
+Reports `board created` at the first review, `board regenerated` after. Never commit the
+page; commit its comments file. See [references/roadmap-format.md](references/roadmap-format.md)
+§ The roadmap board.
 
 ### D.8 Final summary
-
-- Roadmap changes
-- Work-register changes, and which provider served them
-- Pace and scope-discipline read, with any *not computable* metrics named as such
-- The phase brief, in chat
-- Buffer status: N dispatch-ready of the policy target
-- Holding bay: N absorbed (by title, and what each became), N withdrawn (with the
-  reasons), N still in flight
-- Lessons applied
-- Board: `created` or `regenerated`, its path, and what `.gitignore` got; board
-  comments resolved (by item) and adopted as new items
-- Any outstanding recovery records
-
----
-
-## Roadmap document template
-
-Headings the plugin's parser recognizes are shown; a project may rename sections
-and register the change. Grouping headings appear only if the project uses them.
-
-```markdown
-# [Project] — Roadmap
-
-**Last updated:** [YYYY-MM-DD] — [one-line state]
-
-## How This Document Is Maintained
-[Archive-forward policy; dispatch buffer size; where specifications live]
-
-## Finish Line — Target
-[Description, graduated tiers if applicable]
-
-## Completed Work Summary
-| Item | Session | Result | Close-Out |
-|------|---------|--------|-----------|
-
-**Disposition of superseded work:**
-- `[ITEM-ID]` — [reason]. [Where the work is preserved.]
-
-## Active & Remaining Work
-
-### Standing Rules All Items Inherit
-- **[id from policy.standingRules.ids — short title].** [Rule.]
-
-### [Workstream name]    *(only after an approved structure, C.2)*
-[Its one-line purpose.]
-
-#### [Deliverable name]
-[Its one-line purpose.]
-
-#### ITEM-ID — Title    *(position 1 — dispatch-ready)*
-[structural fields + implementation detail, per D.5.2]
-
-#### ITEM-ID — Title    *(beyond the buffer — stub)*
-[One-line gist.]
-
-## Non-Blocking Follow-Up Queue
-## Notes
-```
-
-## The work register
-
-The register's shape is the project's, not the plugin's. The canonical fields the
-plugin reasons in are:
-
-`id`, `title`, `sequence`, `status`, `written_status`, `prerequisites`, `effort`,
-`workstream`, `deliverable`, `group`, `spec_link`, `branch`, `started`, `completed`,
-`evidence`, `description`, `notes`.
-
-Map them to the project's own column names in
-`policy.workRegister.fieldMappings`, and the project's own status words in
-`policy.workRegister.statusMappings`. Canonical statuses: `queued`, `in-flight`,
-`blocked`, `completed`, `dissolved`, `superseded`. Canonical specification
-states: `stub`, `full-spec`.
-
-All metrics are computed from the register at read time, through the provider,
-with provenance. There is no cache to refresh and nothing to recalculate.
+In chat: [references/review-outputs.md](references/review-outputs.md) § D.8.
 
 ## Escalating a blocker
 
-A stop, hold, or block becomes an issue document routed per `policy.issues.targets`:
-
-- `local` — write it to the registered `issues` directory using
-  `policy.issues.filenameTemplate`.
-- `external` — create it in the tracker named by `policy.issues.externalRole`,
-  through the host's connector, and record the resulting identifier.
-- both — do both, and cross-reference them.
-
-Then route to `/mid-dispatch-decision` by path or identifier.
-
----
-
-## Question protocol reminder
-
-Every clarifying question follows `references/actors-and-interaction.md`: 2–4
-concrete options, exactly one recommended, an escape hatch on consequential
-decisions, structured when the host supports it and plain text when it does not.
-Never ask an open-ended free-text question when a bounded set exists.
+A stop, hold, or block becomes an issue document per `policy.issues.targets` (`local`:
+the registered `issues` directory, named by `policy.issues.filenameTemplate`; `external`:
+the tracker `policy.issues.externalRole` names, via the host's connector, recording its
+identifier; both: cross-referenced). Then route to `/mid-dispatch-decision` by path or
+identifier.

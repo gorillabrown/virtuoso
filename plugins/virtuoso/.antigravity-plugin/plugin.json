@@ -1,0 +1,28 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "virtuoso",
+  "displayName": "Virtuoso",
+  "version": "1.17.3",
+  "description": "A living roadmap that makes every task your agents finish improve the next one, with scoped dispatches, evidence-backed close-outs and lessons that become rules.",
+  "author": {
+    "name": "Evan Brown",
+    "email": "evan@heyevanbrown.com",
+    "url": "https://github.com/gorillabrown"
+  },
+  "homepage": "https://github.com/gorillabrown/virtuoso",
+  "repository": "https://github.com/gorillabrown/virtuoso",
+  "license": "MIT",
+  "keywords": [
+    "governance",
+    "roadmap",
+    "dispatch",
+    "workflow",
+    "lessons-learned"
+  ],
+  "logo": "./assets/app-icon.png",
+  "suggestedPrompts": [
+    "Set this project up for governed dispatch.",
+    "What should we dispatch next, and at what effort?",
+    "Close out this dispatch and record what it taught."
+  ]
+}

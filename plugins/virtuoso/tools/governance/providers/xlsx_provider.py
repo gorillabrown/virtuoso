@@ -111,7 +111,8 @@ class XlsxWorkRegister(base.WorkRegisterProvider):
             raw_written_status=value("written_status"),
             prerequisites=[p.strip() for p in
                            value("prerequisites").replace(";", ",").split(",") if p.strip()],
-            effort=value("effort"), workstream=value("workstream"),
+            effort=value("effort"), effort_hours=value("effort_hours"),
+            workstream=value("workstream"),
             deliverable=value("deliverable"), group=value("group"),
             spec_link=value("spec_link"), branch=value("branch"), started=value("started"),
             completed=value("completed"), evidence=value("evidence"),

@@ -43,10 +43,14 @@ _DEFAULT_HEADERS = {
     # Optional: the item's size word on the effort scale (xs … xl), as the register held
     # it at close-out. Not a duration. Read by pace's trailing points.
     "effort": ("effort",),
+    # Optional: the item's hours estimate, as the register held it at close-out
+    # (workRegister.fieldMappings.effort_hours). A number. Read by pace's trailing hours.
+    "effortHours": ("efforthours", "hours", "effort hours"),
 }
 
 #: The optional effort fields, and the markdown header each is found by.
-EFFORT_FIELDS = {"effortEstimate": "estimate", "effortActual": "actual", "effort": "effort"}
+EFFORT_FIELDS = {"effortEstimate": "estimate", "effortActual": "actual", "effort": "effort",
+                 "effortHours": "hours"}
 
 #: Fields a record cannot be appended without, because a record lacking them is
 #: not one any reader could use.
@@ -100,6 +104,7 @@ class LedgerRecord:
     effort_estimate: str = ""
     effort_actual: str = ""
     effort: str = ""
+    effort_hours: str = ""
     extra: dict = field(default_factory=dict)
 
     @property
@@ -121,6 +126,8 @@ class LedgerRecord:
             data["effortActual"] = self.effort_actual
         if self.effort:
             data["effort"] = self.effort
+        if self.effort_hours:
+            data["effortHours"] = self.effort_hours
         data.update(self.extra)
         return data
 
@@ -214,13 +221,16 @@ class TerminalLedger:
                                     result=cells[3], evidence=cells[4], corrects=cells[5],
                                     effort_estimate=effort["effortEstimate"],
                                     effort_actual=effort["effortActual"],
-                                    effort=effort["effort"]))
+                                    effort=effort["effort"],
+                                    effort_hours=effort["effortHours"]))
         return out
 
     def _markdown_effort_labels(self) -> dict:
         """``{effort field: its lower-cased markdown header}``."""
         return dict(EFFORT_FIELDS,
-                    effort=(self.field_mappings.get("effort") or "effort").strip().lower())
+                    effort=(self.field_mappings.get("effort") or "effort").strip().lower(),
+                    effortHours=(self.field_mappings.get("effortHours")
+                                 or "hours").strip().lower())
 
     def contains(self, record: LedgerRecord) -> bool:
         key = record.idempotency_key
@@ -276,7 +286,8 @@ class TerminalLedger:
                   "completed": record.completed, "result": record.result,
                   "evidence": record.evidence, "corrects": record.corrects,
                   "effortEstimate": record.effort_estimate,
-                  "effortActual": record.effort_actual, "effort": record.effort}
+                  "effortActual": record.effort_actual, "effort": record.effort,
+                  "effortHours": record.effort_hours}
         buffer = io.StringIO(newline="")
         if not existing:
             # The documented six columns; the optional effort columns only when this
@@ -312,7 +323,8 @@ class TerminalLedger:
             labels = self._markdown_effort_labels()
             extra = {labels["effortEstimate"]: record.effort_estimate,
                      labels["effortActual"]: record.effort_actual,
-                     labels["effort"]: record.effort}
+                     labels["effort"]: record.effort,
+                     labels["effortHours"]: record.effort_hours}
             cells += [extra.get(label, "") for label in header[6:]]
         row = "| %s |" % " | ".join(cells)
         if not existing:
@@ -350,7 +362,7 @@ def _from_payload(payload: dict, columns: dict | None = None) -> LedgerRecord:
         record_id=value("recordId"), item_id=value("itemId"), completed=value("completed"),
         result=value("result"), evidence=value("evidence"), corrects=value("corrects"),
         effort_estimate=value("effortEstimate"), effort_actual=value("effortActual"),
-        effort=value("effort"), extra={k: v for k, v in payload.items() if k not in used},
+        effort=value("effort"), effort_hours=value("effortHours"), extra={k: v for k, v in payload.items() if k not in used},
     )
 
 

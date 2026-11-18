@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import PLUGIN_ROOT
+from conftest import PLUGIN_ROOT, skill_text
 from tools.governance import guards, hosts
 from tools.governance import milestones as milestones_mod
 from tools.governance import progress as progress_mod
@@ -154,7 +154,7 @@ SKILLS = sorted(p for p in (ROOT / "skills").iterdir() if p.is_dir())
 
 def test_only_the_virtuoso_skill_writes_the_band_in_its_text():
     for skill in SKILLS:
-        body = (skill / "SKILL.md").read_text(encoding="utf-8")
+        body = skill_text(skill)
         writes = re.findall(r"progress --run\b", body)
         if skill.name == "virtuoso":
             assert writes, "the virtuoso skill feeds the band"
@@ -164,7 +164,7 @@ def test_only_the_virtuoso_skill_writes_the_band_in_its_text():
 
 @pytest.mark.parametrize("skill", ["next-dispatch", "epic", "dispatch-closeout"])
 def test_the_ceremonies_around_a_run_stay_out_of_the_band(skill):
-    body = (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+    body = skill_text(ROOT / "skills" / skill)
     assert "progress band" not in body.lower(), skill
 
 
@@ -178,7 +178,7 @@ def test_no_skill_names_a_removed_band_command():
 
 def test_the_ad_hoc_skills_do_not_write_the_band():
     for name in ("storyboard", "write-plan"):
-        body = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+        body = skill_text(ROOT / "skills" / name)
         assert " progress --" not in body, name
 
 

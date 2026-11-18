@@ -1,5 +1,75 @@
 # Virtuoso Release Notes
 
+## v1.17.3 (2026-11-18) — Google Antigravity support, and effort in hours
+
+### Any host, any model
+
+Virtuoso no longer presents itself as a plugin for one vendor's tools. Its skills are
+plain-language instructions and its tools are plain scripts and files, so they work with
+any capable LLM agent. It is packaged for Claude Code, Codex and now Google Antigravity.
+
+- **Google Antigravity (`agy` CLI, App and IDE).** A native manifest,
+  `.antigravity-plugin/plugin.json`, is bumped with every release alongside the others.
+  Install it with `agy plugin install <clone>/plugins/virtuoso`. All 20 skills and all 10
+  agents load.
+- **Antigravity hooks.** A root `hooks.json` runs the session-start check and the cost
+  guards in Antigravity. The new `antigravity` host adapter reads the hook payloads and
+  the transcripts Antigravity writes, including subagent runs. It was built from records
+  captured with agy 1.5.11. The session-start check takes the workspace from the hook
+  (`virtuoso_preflight.py --hook-input antigravity`).
+  - Two things Antigravity cannot do are declared and skipped. It cannot hold a prompt,
+    because a hook cannot tell a headless run from an interactive one. It cannot show a
+    turn-end notice.
+  - Antigravity caps each read at about 46 KB. On the default policy the big-read guard
+    never fires there.
+- **Agents declare `model: inherit`.** A vendor tier name made a host that does not know
+  it skip the agent. Each agent's tier now comes only from the Agents column of
+  `references/model-tiers.md`, and plan rows still show the tier's alias.
+- **Every skill fits a 24 KB loader.** Antigravity reads only the first 24,000 bytes of a
+  SKILL.md body. Ten long skills were condensed, and their detailed procedures, templates
+  and tables moved into each skill's own `references/`. Every move left a handoff line at
+  the point of use naming the file to read. Rules, gates, steps and section IDs are
+  unchanged, and promoted rule text is byte-for-byte the same. `validate.py` now fails a
+  body over the limit, and a test checks that every skill reference is linked from its
+  skill.
+
+### Effort in hours, beside the size word
+
+A register can now size work two ways at once: the size word it has always used (XS to
+XL, often an *LOE* column) and an hours estimate. When hours are present, every effort
+figure uses them. The size word stays readable throughout, so older rows still count.
+
+- **A second effort field.** `workRegister.fieldMappings.effort` keeps the size word.
+  The new `effort_hours` names an hours column: a number, or a select whose labels are
+  numbers (`0.5` … `40`). A column named *Hours* is recognized without mapping.
+  `create-item` and the mutation handshake accept both, so a new row can be sized in
+  hours when it is created.
+- **Choose the basis.** `policy.roadmap.effortBasis` is `auto` (the default: hours when
+  the register serves an hours field), `hours` or `size`. On hours, an item with only a
+  size word counts its scale value as hours. That figure is then marked *inferred*
+  rather than *measured*, and an item with neither is named as *not computable*.
+- **`kpis` in hours.** `total-effort`, `completed-effort` and `percent-complete-by-effort`
+  report their unit, kind, and how many items each source sized. A new `effort-basis`
+  figure says which effort governs. Setting `policy.roadmap.maxItemHours` (for example
+  40) adds `items-over-max-hours`, naming the open items to split before sizing.
+- **Pace in hours.** On the hours basis, remaining, blocked, required and trailing
+  rates are in hours a week, and the report names its `effortUnit`. Trailing hours come
+  from the ledger's new *Hours* column first, then the register's hours, then a size
+  word through the scale. Finished items that left the register therefore still count.
+  When every completion in the window has an *Actual* duration, `actualHours` a week is
+  shown alongside for comparison. The verdict compares estimated hours with estimated
+  hours.
+- **The ledger keeps hours.** `record-completion` writes the item's hours estimate to an
+  optional *Hours* column (`effortHours`), beside Effort. *Estimate* and *Actual* remain
+  the dispatch's own timing durations.
+- **The skills show both.** `/roadmap-review` covers item cards (`M — 6 h`), register
+  writes, the phase brief's buffer total, the pace basis, and items to split.
+  `/roadmap-status`, `/next-dispatch`, `/write-plan`, `/dispatch-closeout` and
+  `/virtuoso-init` name the unit and carry hours where the register has them. `combine`
+  adds an epic's hours when every member has them.
+
+A register with no hours field reads exactly as before, in points.
+
 ## v1.17.2 (2026-11-17) — every 3rd-party audit begins with its questions
 
 A 3rd-party audit now starts by agreeing what it must answer. Nothing is packaged, scoped

@@ -1,10 +1,15 @@
 # Virtuoso
 
-A Claude Code plugin that packages a complete **governance & dispatch system**: a planning
-surface that specifies and sequences work, hands dispatch-ready specifications to an
+A model-agnostic agent plugin that packages a complete **governance & dispatch system**: a
+planning surface that specifies and sequences work, hands dispatch-ready specifications to an
 implementer, and closes the loop with terminal records, retrospectives, audits, and
 documentation hygiene — driven by a **per-project governance registry** that each project
 declares for itself.
+
+Virtuoso's skills are plain-language instructions and its tools are plain scripts and files,
+so the method applies to any capable LLM agent, whoever makes the model. It is packaged today
+for the Claude Code, Codex and Google Antigravity hosts; host-specific conveniences (such as the progress band)
+are added only where a host supports them, and nothing in the method depends on them.
 
 ## What it is
 
@@ -26,16 +31,22 @@ that one host or model is inherently more capable than another.
 
 ## Install
 
+In Claude Code:
+
 ```
 /plugin marketplace add gorillabrown/virtuoso
 /plugin install virtuoso@virtuoso-marketplace
 ```
 
-Then register your project:
+In Google Antigravity (`agy` CLI, App or IDE), install from a clone of the public repository:
 
 ```
-/virtuoso:virtuoso-init
+git clone https://github.com/gorillabrown/virtuoso
+agy plugin install ./virtuoso/plugins/virtuoso
 ```
+
+Then register your project: `/virtuoso:virtuoso-init` in Claude Code, `/virtuoso-init` in
+Antigravity.
 
 ## The governance registry
 

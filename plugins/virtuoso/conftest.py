@@ -36,6 +36,21 @@ def project(tmp_path):
     return root
 
 
+def skill_text(skill_dir):
+    """A skill's full text: its SKILL.md followed by every file in its references/.
+
+    A skill is its folder, not one file. Long skills keep their core flow in SKILL.md
+    and hand off to references/ (Antigravity loads only the first 24,000 bytes of a
+    SKILL.md body), so a rule a test pins may live in either place.
+    """
+    skill_dir = Path(skill_dir)
+    parts = [(skill_dir / "SKILL.md").read_text(encoding="utf-8")]
+    refs = skill_dir / "references"
+    if refs.is_dir():
+        parts += [p.read_text(encoding="utf-8") for p in sorted(refs.glob("*.md"))]
+    return "\n".join(parts)
+
+
 def snapshot_tree(root):
     """{relative path: raw bytes} for every file under ``root``.
 

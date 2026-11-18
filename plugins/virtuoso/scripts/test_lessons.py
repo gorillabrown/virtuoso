@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import PLUGIN_ROOT, snapshot_tree
+from conftest import PLUGIN_ROOT, snapshot_tree, skill_text
 from tools.governance import lessons as lessons_mod
 from tools.governance import policy as policy_mod
 
@@ -454,7 +454,7 @@ def test_the_shipped_templates_carry_the_lessons_sections():
     ("mid-dispatch-decision", "lessons --open"),
 ])
 def test_each_ceremony_reads_or_checks_the_lessons(skill, fragment):
-    text = (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+    text = skill_text(ROOT / "skills" / skill)
     assert fragment in text, "%s does not run `%s`" % (skill, fragment)
 
 
@@ -472,7 +472,7 @@ def test_no_shipped_file_names_a_lessons_document_by_filename():
 def test_the_specification_format_the_review_ships_carries_the_section_u9_reads():
     """D.5.2's format is what authors copy. A specification shaped exactly like it
     must have the section U9 looks for, or every new specification fails at the gate."""
-    text = (ROOT / "skills" / "roadmap-review" / "SKILL.md").read_text(encoding="utf-8")
+    text = skill_text(ROOT / "skills" / "roadmap-review")
     start = text.index("**D.5.2**")
     block = text[text.index("```\n", start) + 4:]
     block = block[:block.index("```")]

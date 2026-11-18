@@ -265,6 +265,7 @@ def row_to_item(mapping, headers: list[str], index: dict, row: dict) -> base.Wor
         raw_written_status=raw_written,
         prerequisites=prerequisites,
         effort=value("effort"),
+        effort_hours=value("effort_hours"),
         workstream=value("workstream"),
         deliverable=value("deliverable"),
         group=value("group"),

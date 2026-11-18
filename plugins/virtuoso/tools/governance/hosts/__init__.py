@@ -199,9 +199,22 @@ class Adapter:
     #: Minutes, for a ``fixed`` lifetime when a transcript shows no cache write: the
     #: top-level conversation's and a subagent's.
     cache_minutes: tuple[int, int] | None = None
+    #: Whether a transcript can show that a session runs headless. Where it cannot, no
+    #: session is known to be interactive.
+    tells_headless = True
 
     def has(self, capability: str) -> bool:
         return capability in self.capabilities
+
+    def normalize(self, hook: dict) -> dict:
+        """The host's hook input in the guards' vocabulary (``hook_event_name``,
+        ``session_id``, ``transcript_path``, ``cwd``, ``tool_name``, ``tool_input``…). A
+        host whose hooks already speak it returns the input as it is."""
+        return hook
+
+    def project_dir(self, hook: dict) -> str:
+        """The project folder the host names for this hook, or ``""``."""
+        return os.environ.get("CLAUDE_PROJECT_DIR") or ""
 
     def read_transcript(self, path: str, tail_bytes: int | None = None) -> TranscriptFacts:
         raise NotImplementedError
@@ -480,8 +493,8 @@ def read_binding(dispatch: str) -> dict | None:
 
 def adapter(name: str) -> Adapter | None:
     """The adapter for a host name, or ``None`` for a host this plugin does not know."""
-    from . import claude_code, codex
-    for module in (claude_code, codex):
+    from . import antigravity, claude_code, codex
+    for module in (claude_code, codex, antigravity):
         if module.ADAPTER.name == name:
             return module.ADAPTER
     return None

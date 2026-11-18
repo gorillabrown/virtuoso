@@ -79,6 +79,13 @@ DEFAULTS: dict = {
         # size -> points for effort-weighted metrics. {} means the generic t-shirt
         # scale in providers/kpi.py; a project's own scale replaces it, never merges.
         "effortScale": {},
+        # Which effort governs the figures (providers/effort.py): "hours" (the register's
+        # hours estimate, workRegister.fieldMappings.effort_hours), "size" (the size word
+        # through effortScale), or "auto" — hours when the register serves an hours field.
+        "effortBasis": "auto",
+        # Items estimated above this many hours are flagged to split before sizing.
+        # 0 turns the check off.
+        "maxItemHours": 0,
         # Dated finish lines, keyed by a project-named id; each entry has the shape
         # of DEADLINE_TEMPLATE. None by default: a date is an owner's ruling.
         "deadlines": {},
@@ -182,7 +189,7 @@ COST_UNITS = ("both", "tokens", "dollars")
 
 #: The terminal ledger's fields, in the order the documented format lays them out.
 TERMINAL_LEDGER_FIELDS = ("recordId", "itemId", "completed", "result", "evidence", "corrects",
-                          "effortEstimate", "effortActual", "effort")
+                          "effortEstimate", "effortActual", "effort", "effortHours")
 
 
 def ledger_mapping_problems(mappings) -> list[str]:
@@ -505,6 +512,22 @@ def pace_problems(pace) -> list[str]:
     return problems
 
 
+EFFORT_BASES = ("auto", "hours", "size")
+
+
+def effort_problems(basis, max_hours) -> list[str]:
+    """Every reason ``roadmap.effortBasis`` or ``roadmap.maxItemHours`` is not usable."""
+    problems = []
+    if basis not in EFFORT_BASES:
+        problems.append("policy.roadmap.effortBasis=%s is not one of %s"
+                        % (_shown(basis), ", ".join(EFFORT_BASES)))
+    if (isinstance(max_hours, bool) or not isinstance(max_hours, (int, float))
+            or max_hours < 0):
+        problems.append("policy.roadmap.maxItemHours=%s is not a number of hours (0 turns "
+                        "the check off)" % _shown(max_hours))
+    return problems
+
+
 @dataclass
 class Policy:
     data: dict
@@ -546,6 +569,18 @@ class Policy:
             return max(0, int(self.get("roadmap.dispatchBuffer", 5)))
         except (TypeError, ValueError):
             return 5
+
+    @property
+    def effort_basis(self) -> str:
+        """``roadmap.effortBasis``, or ``auto`` when it is unusable."""
+        basis = self.get("roadmap.effortBasis", "auto")
+        return basis if basis in EFFORT_BASES else "auto"
+
+    @property
+    def max_item_hours(self) -> float:
+        """``roadmap.maxItemHours``, or 0 (off) when it is unusable."""
+        value = self.get("roadmap.maxItemHours", 0)
+        return 0 if effort_problems("auto", value) else value
 
     @property
     def lesson_prefix(self) -> str:
@@ -599,7 +634,9 @@ class Policy:
         problems.extend(lessons_problems(self.get("lessons", {})))
         problems.extend(deadline_problems(self.get("roadmap.deadlines", {})))
         problems.extend(pace_problems(self.get("roadmap.pace", {})))
-        units = self.get("cost.units", "both")
+        problems.extend(effort_problems(self.get("roadmap.effortBasis", "auto"),
+                                        self.get("roadmap.maxItemHours", 0)))
+        units =self.get("cost.units", "both")
         if units not in COST_UNITS:
             problems.append("policy.cost.units=%r is not one of %s" % (units, ", ".join(COST_UNITS)))
         minimum = self.get("results.minimum", {})

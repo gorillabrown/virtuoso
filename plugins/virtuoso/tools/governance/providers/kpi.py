@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from . import base
+from . import effort as effort_mod
 
 #: A generic t-shirt scale used when a project declares none. It is a *default*,
 #: not a requirement: set ``policy.roadmap.effortScale`` to your own.
@@ -140,7 +141,8 @@ class MetricSet:
 
 
 def compute(snapshot: base.Snapshot, *, effort_scale: dict | None = None,
-            dispatch_buffer: int = 5, spec_ready=None) -> MetricSet:
+            dispatch_buffer: int = 5, spec_ready=None, effort_basis: str = "auto",
+            max_item_hours: float = 0) -> MetricSet:
     """``spec_ready``: a callable ``item -> True / False / None`` saying whether the
     item's specification passes readiness check U9 (``None``: it cannot be located),
     or a string naming why that cannot be judged here. Omitted, the
@@ -170,29 +172,53 @@ def compute(snapshot: base.Snapshot, *, effort_scale: dict | None = None,
                               unit="%"))
 
     # -- effort-weighted progress ------------------------------------------
-    missing_effort = [i.id for i in items if not i.effort]
-    unscaled = sorted({i.effort for i in items if i.effort and i.effort.lower() not in scale})
-    if "effort" not in fields:
-        for name in ("total-effort", "completed-effort", "percent-complete-by-effort"):
-            metrics.append(Metric(name, computable=False, missing_inputs=["effort"]))
-    elif missing_effort or unscaled:
-        missing = []
-        if missing_effort:
-            missing.append("effort for %d item(s): %s"
-                           % (len(missing_effort), ", ".join(missing_effort[:5])
-                              + ("…" if len(missing_effort) > 5 else "")))
-        if unscaled:
-            missing.append("effort scale entries for: %s" % ", ".join(unscaled))
+    # Hours first when the basis is hours (effort.resolve); the size word through the
+    # scale otherwise, and for an hours-basis item that has no hours (then inferred).
+    basis = effort_mod.resolve(effort_basis, fields)
+    # Named whenever hours are in play: a register without hours, left on auto, reads
+    # exactly as before (its figures already say "points").
+    if effort_mod.HOURS_FIELD in fields or (effort_basis or "auto") != "auto":
+        metrics.append(Metric(
+            "effort-basis", basis, kind=MEASURED,
+            basis="policy.roadmap.effortBasis=%s; the register %s an hours field"
+                  % (effort_basis or "auto",
+                     "serves" if effort_mod.HOURS_FIELD in fields else "does not serve")))
+    whole = effort_mod.total(items, basis=basis, scale=scale, fields=fields)
+    if not whole.computable:
+        # A register with no effort field at all names the field, as it always has.
+        missing = ["effort"] if "effort" not in fields and effort_mod.HOURS_FIELD not in fields \
+            else whole.missing or ["effort"]
         for name in ("total-effort", "completed-effort", "percent-complete-by-effort"):
             metrics.append(Metric(name, computable=False, missing_inputs=missing))
     else:
-        total = sum(scale[i.effort.lower()] for i in items)
-        done = sum(scale[i.effort.lower()] for i in items if i.is_terminal)
-        metrics.append(Metric("total-effort", round(total, 2), unit="points"))
-        metrics.append(Metric("completed-effort", round(done, 2), unit="points"))
+        done = effort_mod.total([i for i in items if i.is_terminal], basis=basis,
+                                scale=scale, fields=fields)
+        kind = whole.kind
+        # On the size basis the figures read exactly as before 1.17.3: "points" says it.
+        hours = basis == effort_mod.HOURS
+        metrics.append(Metric("total-effort", round(whole.value, 2), unit=whole.unit,
+                              kind=kind, basis=whole.describe() if hours else ""))
+        metrics.append(Metric("completed-effort", round(done.value, 2), unit=whole.unit,
+                              kind=done.kind, basis=done.describe() if hours else ""))
         metrics.append(Metric(
             "percent-complete-by-effort",
-            round(100.0 * done / total, 1) if total else 0.0, unit="%"))
+            round(100.0 * done.value / whole.value, 1) if whole.value else 0.0, unit="%",
+            kind=kind,
+            basis="completed-effort / total-effort, in hours" if hours else ""))
+
+    if max_item_hours:
+        if effort_mod.HOURS_FIELD not in fields:
+            metrics.append(Metric("items-over-max-hours", computable=False,
+                                  missing_inputs=["effort_hours (policy.roadmap.maxItemHours "
+                                                  "is set; the register serves no hours)"]))
+        else:
+            over = effort_mod.over_limit([i for i in items if not i.is_terminal],
+                                         max_item_hours)
+            metrics.append(Metric(
+                "items-over-max-hours", len(over), unit="items",
+                basis="open items estimated above policy.roadmap.maxItemHours=%g; split "
+                      "before sizing%s" % (max_item_hours, (": " + ", ".join(
+                          "%s (%g h)" % pair for pair in over)) if over else "")))
 
     # -- dispatch buffer ----------------------------------------------------
     if dispatch_buffer <= 0:

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import PLUGIN_ROOT
+from conftest import PLUGIN_ROOT, skill_text
 from test_tooling import (  # noqa: F401 - fixtures are used by name
     COCKPIT, PREFLIGHT, REGISTRY_CLI, external_workspace, run, workspace)
 from tools.governance import registry as registry_mod, schema
@@ -766,7 +766,7 @@ def test_the_review_reads_and_resolves_board_comments(workspace):  # noqa: F811
 
 
 def test_the_review_reads_board_comments_in_b3():
-    text = (SKILLS / "roadmap-review" / "SKILL.md").read_text(encoding="utf-8")
+    text = skill_text(SKILLS / "roadmap-review")
     b3 = text.split("### B.3", 1)[1].split("\n### ", 1)[0]
     assert b3.count("comments") >= 2 and "board_comments" in b3
 
@@ -837,7 +837,7 @@ def test_the_board_missing_advisory(workspace):  # noqa: F811
 
 def test_every_ceremony_that_changes_the_register_names_the_board():
     for skill in ("dispatch-closeout", "next-dispatch", "roadmap-review"):
-        text = (SKILLS / skill / "SKILL.md").read_text(encoding="utf-8")
+        text = skill_text(SKILLS / skill)
         assert "generate_board" in text, skill
 
 

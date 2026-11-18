@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import PLUGIN_ROOT, snapshot_tree
+from conftest import PLUGIN_ROOT, snapshot_tree, skill_text
 from tools.governance import guards, hosts
 
 GUARD = str(Path(PLUGIN_ROOT) / "scripts" / "virtuoso_guard.py")
@@ -607,9 +607,9 @@ def test_a_failure_held_by_the_guard_reaches_every_carrier(project, tmp_path, is
     tried = cli(project, "guards", "--dispatch", "X-7", "--tried", "--json")
     assert json.loads(tried.stdout)["dropped"] == ["command failed 2 times in a row: make build"]
     skills = Path(PLUGIN_ROOT) / "skills"
-    issue = (skills / "virtuoso" / "SKILL.md").read_text(encoding="utf-8")
+    issue = skill_text(skills / "virtuoso")
     state = (skills / "epic" / "assets" / "state.template.md").read_text(encoding="utf-8")
-    handoff = (skills / "git-handoff" / "SKILL.md").read_text(encoding="utf-8")
+    handoff = skill_text(skills / "git-handoff")
     field3 = issue[issue.index("3. **Evidence of issue:**"):issue.index("4. **Possible cause")]
     assert "Tried and failed" in field3 and "guards --dispatch <DISPATCH-ID> --tried" in field3
     assert state.index("## Blockers") < state.index("## Tried and failed") < state.index(
@@ -642,3 +642,258 @@ def test_receipts_count_only_holds_that_stuck_and_copy_once(project, tmp_path, i
     first = copy()
     assert first.returncode == 0, first.stderr
     assert json.loads(first.stdout)["copied"] == 2 and json.loads(copy().stdout)["copied"] == 0
+
+
+# --- the antigravity host: its own hook input, its own answers --------------------------------
+
+AG_TRANSCRIPT = os.path.join(".system_generated", "logs", "transcript_full.jsonl")
+
+
+def _ag_step(i, kind, **fields):
+    return dict({"step_index": i, "source": "USER_EXPLICIT" if kind == "USER_INPUT" else "MODEL",
+                 "type": kind, "status": "DONE", "created_at": _ago(1)}, **fields)
+
+
+def _ag_run(i, command):
+    return _ag_step(i, "PLANNER_RESPONSE", model="gemini-4-argon-medium", input_tokens=10,
+                    output_tokens=5, cache_read_tokens=0,
+                    tool_calls=[{"name": "run_command", "args": {"CommandLine": command}}])
+
+
+def _ag_exit(i, code):
+    return _ag_step(i, "GENERIC", content="Command exited with code %d.\n\nNo output." % code)
+
+
+def ag_conversation(tmp_path, conversation, records, parent=None, role="") -> str:
+    """A conversation folder in a brain of its own; with ``parent``, spawned by it."""
+    brain = tmp_path / "brain"
+    path = brain / conversation / AG_TRANSCRIPT
+    if parent:
+        listing = brain / parent / ".system_generated" / "subagents" / (conversation + ".json")
+        listing.parent.mkdir(parents=True, exist_ok=True)
+        listing.write_text(json.dumps({"conversationId": conversation, "subagentDescriptor": {
+            "typeName": "self", "role": role}, "spawnStepIndex": 4}), encoding="utf-8")
+    return _transcript(path, records)
+
+
+def ag_hook(project, transcript, conversation, event="PreToolUse", **extra):
+    return dict({"conversationId": conversation, "workspacePaths": [str(project)],
+                 "cwd": str(project), "transcriptPath": transcript, "hookEventName": event,
+                 "modelName": "gemini-4-argon-medium"}, **extra)
+
+
+def ag_shell(command):
+    return {"toolCall": {"id": "call_1", "name": "run_command",
+                         "args": {"CommandLine": command}}, "stepIdx": 9}
+
+
+def ag_failing(tmp_path, conversation="c-top", times=2, command="make build", **spawned):
+    records = [_ag_step(0, "USER_INPUT", content="<USER_REQUEST>\ngo\n</USER_REQUEST>")]
+    for n in range(times):
+        records += [_ag_run(1 + 2 * n, command), _ag_exit(2 + 2 * n, 2)]
+    return ag_conversation(tmp_path, conversation, records, **spawned)
+
+
+def test_antigravity_a_third_identical_failing_command_is_denied_once(project, tmp_path,
+                                                                      isolated_home):
+    hook = ag_hook(project, ag_failing(tmp_path), "c-top", **ag_shell("make build"))
+    denied = guards.handle(hook, "antigravity")
+    assert denied["decision"] == "deny" and "failed 2 times in a row" in denied["reason"]
+    assert guards.handle(hook, "antigravity") is None               # the identical step: through
+    once = ag_hook(project, ag_failing(tmp_path / "o", times=1), "c-top", **ag_shell("make build"))
+    assert guards.handle(once, "antigravity") is None               # one failure: a re-run
+
+
+def test_antigravity_the_retry_guard_holds_inside_a_subagent(project, tmp_path, isolated_home):
+    top = ag_conversation(tmp_path, "c-top", [_ag_step(0, "USER_INPUT", content="go")])
+    sub = ag_failing(tmp_path, "c-sub", parent="c-top", role="row 2 - probe")
+    hook = ag_hook(project, sub, "c-sub", **ag_shell("make build"))
+    denied = guards.handle(hook, "antigravity")
+    assert denied["decision"] == "deny"
+    held = [r for r in receipts(isolated_home) if r["event"] == "hold"]
+    assert [(r["session"], r["agent"]) for r in held] == [("c-top", "c-sub")]
+    assert top                                                      # the top transcript exists
+
+
+def test_antigravity_binds_the_top_conversation_never_a_subagent(project, tmp_path,
+                                                                 isolated_home):
+    command = "virtuoso_registry --root . --actor virtuoso timing --dispatch X-21 --start 1"
+    top = ag_conversation(tmp_path, "c-top", [_ag_step(0, "USER_INPUT", content="go")])
+    sub = ag_conversation(tmp_path, "c-sub", [], parent="c-top")
+    guards.handle(ag_hook(project, sub, "c-sub", **ag_shell(command)), "antigravity")
+    assert hosts.read_binding("X-21") is None
+    guards.handle(ag_hook(project, top, "c-top", **ag_shell(command)), "antigravity")
+    binding = hosts.read_binding("X-21")
+    assert (binding["session"], binding["transcript"], binding["host"]) == (
+        "c-top", top, "antigravity")
+
+
+def test_antigravity_a_big_read_counts_only_what_the_capped_read_brings(project, tmp_path,
+                                                                        isolated_home):
+    wide = tmp_path / "wide.txt"
+    wide.write_bytes((b"w" * 119 + b"\n") * 1000)                    # 117 KB; a read: 45 KB
+    long = tmp_path / "long.txt"
+    long.write_bytes((b"x" * 29 + b"\n") * 3000)                     # 88 KB; 800 lines: 23 KB
+    read = lambda path, **args: ag_hook(project, "", "c-top", toolCall={
+        "id": "call_2", "name": "read_file", "args": dict({"Path": str(path)}, **args)})
+    assert guards.handle(read(wide), "antigravity") is None          # under the default 64 KB
+    manifest = project / "Virtuoso" / "workspace-layout.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data.setdefault("policy", {})["guards"] = {"bigRead": {"bytes": 30000}}
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+    denied = guards.handle(read(wide), "antigravity")
+    assert denied["decision"] == "deny" and "brings 45 KB of the file" in denied["reason"]
+    assert guards.handle(read(wide), "antigravity") is None
+    assert guards.handle(read(long), "antigravity") is None
+    assert guards.handle(dict(read(wide), conversationId="c-2"), "antigravity")["decision"] == \
+        "deny"
+    ranged = dict(read(wide, StartLine=1, EndLine=50), conversationId="c-3")
+    assert guards.handle(ranged, "antigravity") is None
+
+
+def test_antigravity_takes_its_project_from_the_hook_never_the_environment(
+        project, tmp_path, isolated_home, monkeypatch):
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))          # inherited, not this host's
+    hook = dict(ag_hook(plain, ag_failing(tmp_path), "c-top", **ag_shell("make build")))
+    assert guards.handle(hook, "antigravity") is None
+    assert guards.handle(dict(hook, workspacePaths=[str(project)], cwd=str(project)),
+                         "antigravity")["decision"] == "deny"
+    assert guards.handle({"hookEventName": "PreToolUse", **ag_shell("make build")},
+                         "antigravity") is None                     # no workspace: nothing
+
+
+def test_antigravity_never_holds_a_prompt_and_says_why_once(project, tmp_path, isolated_home):
+    transcript = ag_conversation(tmp_path, "c-top", [
+        _ag_step(0, "USER_INPUT", content="go"),
+        dict(_ag_step(1, "PLANNER_RESPONSE", model="gemini-4-argon-medium",
+                      input_tokens=170_000, output_tokens=10, cache_read_tokens=10_000,
+                      content="done"), created_at=_ago(90)),
+        _ag_step(2, "USER_INPUT", content="carry on")])
+    prompt = ag_hook(project, transcript, "c-top", "PreInvocation", invocationNum=0,
+                     lastUserInput="carry on")
+    assert guards.handle(prompt, "antigravity") is None             # cold, but never held here
+    guards.receipt("retry", "hold", {"session_id": "old"}, str(project))
+    start = ag_hook(project, transcript, "c-top", "SessionStart")
+    said = json.dumps(guards.handle(start, "antigravity", "1.17.9") or {})
+    assert "injectSteps" in said and "hold-prompt" in said and "turn-end-message" in said
+    assert "headless" in said
+    assert "Relay this one line" not in said                        # never known interactive
+    assert guards.handle(start, "antigravity", "1.17.9") is None    # said once per version
+
+
+def test_the_entry_script_answers_antigravity_and_fails_open(project, tmp_path):
+    hook = ag_hook(project, ag_failing(tmp_path), "c-top", **ag_shell("make build"))
+    for stdin, expected in ((json.dumps(hook), "deny"), ("not json", None),
+                            (json.dumps({"hookEventName": "Stop"}), None)):
+        done = subprocess.run([sys.executable, GUARD, "--host", "antigravity"], input=stdin,
+                              capture_output=True, text=True, encoding="utf-8",
+                              cwd=PLUGIN_ROOT, env=dict(os.environ))
+        assert done.returncode == 0
+        assert (json.loads(done.stdout)["decision"] if done.stdout else None) == expected
+
+
+def _preflight_hook(stdin, *args):
+    return subprocess.run([sys.executable, "./scripts/virtuoso_preflight.py", "--hook-input",
+                           "antigravity"] + list(args), input=stdin, capture_output=True,
+                          text=True, encoding="utf-8", cwd=PLUGIN_ROOT, env=dict(os.environ))
+
+
+def test_the_preflight_reads_the_project_from_the_antigravity_hook(project, tmp_path):
+    """The host runs the hook in the plugin folder: the project is the workspace the input
+    names, and the status lines become the session's context, with the project untouched."""
+    before = snapshot_tree(project)
+    done = _preflight_hook(json.dumps(ag_hook(project, "", "c-1", "SessionStart")),
+                           "--mode", "check", "--quiet")
+    assert done.returncode == 0, done.stderr
+    text = json.loads(done.stdout)["injectSteps"][0]["systemMessage"]["systemMessage"]
+    assert text.startswith("virtuoso-status: ") and "virtuoso-status: none" not in text
+    assert "writes: 0" in text
+    assert snapshot_tree(project) == before
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    done = _preflight_hook(json.dumps(ag_hook(plain, "", "c-1", "SessionStart")), "--quiet")
+    assert "virtuoso-status: none" in json.loads(done.stdout)["injectSteps"][0][
+        "systemMessage"]["systemMessage"]
+
+
+@pytest.mark.parametrize("stdin, args", [
+    ("not json", ()),
+    (json.dumps({"hookEventName": "SessionStart"}), ()),           # no workspace named
+    (json.dumps({"hookEventName": "SessionStart", "workspacePaths": ["/no/such/folder"]}), ()),
+])
+def test_the_hook_preflight_prints_nothing_and_exits_zero_without_a_project(stdin, args):
+    done = _preflight_hook(stdin, *args)
+    assert (done.returncode, done.stdout) == (0, "")
+
+
+def test_the_hook_preflight_runs_only_a_read_only_mode(project):
+    before = snapshot_tree(project)
+    done = _preflight_hook(json.dumps(ag_hook(project, "", "c-1", "SessionStart")),
+                           "--mode", "repair", "--apply")
+    assert (done.returncode, done.stdout) == (0, "")
+    assert snapshot_tree(project) == before
+
+
+def _validate_module():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("validate_root_hooks",
+                                                  str(Path(PLUGIN_ROOT) / "scripts" / "validate.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _root_hooks_fails(tmp_path, root_hooks, manifest=True):
+    module = _validate_module()
+    (tmp_path / "hooks").mkdir(exist_ok=True)
+    shutil = __import__("shutil")
+    shutil.copy(Path(PLUGIN_ROOT) / "hooks" / "hooks.json", tmp_path / "hooks" / "hooks.json")
+    if manifest:
+        (tmp_path / ".antigravity-plugin").mkdir(exist_ok=True)
+        (tmp_path / ".antigravity-plugin" / "plugin.json").write_text("{}", encoding="utf-8")
+    if root_hooks is not None:
+        (tmp_path / "hooks.json").write_text(json.dumps(root_hooks), encoding="utf-8")
+    module.ROOT = str(tmp_path)
+    module.oks.clear(), module.fails.clear()
+    module.check_session_hook()
+    return " ".join(module.fails)
+
+
+def _ag_handler(command, **extra):
+    return dict({"type": "command", "command": command, "timeout": 10}, **extra)
+
+
+SHIPPED_ROOT_HOOKS = json.loads((Path(PLUGIN_ROOT) / "hooks.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("root_hooks, manifest, problem", [
+    (SHIPPED_ROOT_HOOKS, True, ""),
+    (None, False, ""),                                              # no such host shipped
+    (None, True, "no hooks.json at the plugin root"),
+    ({"v": {"SessionStart": [_ag_handler(
+        'python "${CLAUDE_PLUGIN_ROOT}/scripts/virtuoso_preflight.py" --hook-input antigravity '
+        "--mode check")]}}, True, "never substitutes"),
+    ({"v": {"SessionStart": [_ag_handler(
+        'python "./scripts/virtuoso_preflight.py" --root . --mode check')]}}, True,
+     "without --hook-input"),
+    ({"v": {"SessionStart": [_ag_handler(
+        'python "./scripts/virtuoso_preflight.py" --hook-input antigravity --mode create')]}},
+     True, "must be read-only"),
+    ({"v": {"SessionStart": [_ag_handler(
+        'python "./scripts/virtuoso_preflight.py" --hook-input antigravity --mode check')],
+            "PreToolUse": [_ag_handler('python "./scripts/virtuoso_guard.py" --host x')]}},
+     True, "needs matcher groups"),
+    ({"v": {"SessionStart": [_ag_handler(
+        'python "./scripts/virtuoso_preflight.py" --hook-input antigravity --mode check')],
+            "UserPromptSubmit": [_ag_handler('python "./scripts/virtuoso_guard.py" --host x')]}},
+     True, "never fires"),
+    ({"v": {"SessionStart": [_ag_handler(
+        'python "./scripts/virtuoso_preflight.py" --hook-input antigravity --mode check'),
+        _ag_handler('python "./scripts/virtuoso_guard.py" --host no-such-host')]}},
+     True, "no adapter: no-such-host"),
+])
+def test_validate_checks_the_root_hook_file(tmp_path, root_hooks, manifest, problem):
+    found = _root_hooks_fails(tmp_path, root_hooks, manifest)
+    assert (problem in found) if problem else not found, found

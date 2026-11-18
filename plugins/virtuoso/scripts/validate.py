@@ -46,7 +46,8 @@ oks: list[str] = []
 
 #: The per-host plugin manifests this plugin ships. Each is an install surface,
 #: and every one of them must advertise the same version.
-INSTALL_MANIFESTS = (".claude-plugin/plugin.json", ".codex-plugin/plugin.json")
+INSTALL_MANIFESTS = (".claude-plugin/plugin.json", ".codex-plugin/plugin.json",
+                     ".antigravity-plugin/plugin.json")
 
 TEXT_SUFFIXES = (".md", ".json", ".py", ".txt", ".yaml", ".yml", ".ps1", ".sh")
 SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", ".venv", "node_modules"}
@@ -371,49 +372,142 @@ def check_host_frontmatter() -> None:
         else "frontmatter the hosts would refuse: %s" % "; ".join(problems))
 
 
+#: The hook file read from the plugin root (Antigravity's plugin loader reads no other), in
+#: its own schema: ``{"<name>": {"<Event>": [handler, …]}}``, where a tool event's entries
+#: are ``{"matcher", "hooks": [handler, …]}`` groups and every other event's are handlers.
+ROOT_HOOK_FILE = "hooks.json"
+#: The events that host fires, and whether each takes matcher groups.
+ROOT_HOOK_EVENTS = {"SessionStart": False, "PreInvocation": False, "PostInvocation": False,
+                    "Stop": False, "PreToolUse": True, "PostToolUse": True}
+#: The manifest whose host reads the root hook file.
+ROOT_HOOK_MANIFEST = ".antigravity-plugin/plugin.json"
+
+
+def _root_hook_commands(data) -> tuple[dict[str, list[str]], list[str]]:
+    """``(event -> commands, problems)`` of a root hook file. That host substitutes no
+    variable into a command and runs it in the plugin folder, so a command names its script
+    by a relative ``./scripts/`` path, and the preflight takes its project from the hook
+    input (``--hook-input``), never from ``--root``."""
+    events: dict[str, list[str]] = {}
+    problems: list[str] = []
+    if not isinstance(data, dict) or not data:
+        return events, ["it is not an object of named hooks"]
+    for group, spec in data.items():
+        if not isinstance(spec, dict):
+            problems.append("hook %r is not an object" % group)
+            continue
+        for event, entries in spec.items():
+            if event == "enabled":
+                continue
+            if event not in ROOT_HOOK_EVENTS:
+                problems.append("hook %r names an event the host never fires: %s"
+                                % (group, event))
+                continue
+            if not isinstance(entries, list):
+                problems.append("%s.%s is not a list" % (group, event))
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    problems.append("%s.%s holds a non-object" % (group, event))
+                    continue
+                grouped = "hooks" in entry or "matcher" in entry
+                if grouped != ROOT_HOOK_EVENTS[event]:
+                    problems.append("%s.%s %s" % (group, event, "needs matcher groups" if
+                                                  ROOT_HOOK_EVENTS[event] else
+                                                  "takes handlers, not matcher groups"))
+                    continue
+                handlers = entry.get("hooks") if grouped else [entry]
+                for handler in handlers if isinstance(handlers, list) else []:
+                    command = handler.get("command", "") if isinstance(handler, dict) else ""
+                    if not command:
+                        problems.append("%s.%s has a handler with no command" % (group, event))
+                        continue
+                    if "${" in command or "$CLAUDE" in command:
+                        problems.append("%s.%s uses a variable the host never substitutes: %s"
+                                        % (group, event, command))
+                    if "./scripts/" not in command:
+                        problems.append("%s.%s does not name its script by a ./scripts/ path "
+                                        "(hooks run in the plugin folder): %s"
+                                        % (group, event, command))
+                    if "virtuoso_preflight" in command and (
+                            "--hook-input" not in command or "--root" in command):
+                        problems.append("%s.%s runs the preflight without --hook-input, or "
+                                        "with --root (the hook runs in the plugin folder, so "
+                                        "the project comes from the hook input): %s"
+                                        % (group, event, command))
+                    events.setdefault(event, []).append(command)
+    return events, problems
+
+
+def _hook_file_commands(data) -> dict[str, list[str]]:
+    """``event -> commands`` of a ``hooks/`` file: ``{"hooks": {"<Event>": [{"hooks":
+    [handler, …]}]}}``."""
+    hooks = data.get("hooks", {}) if isinstance(data, dict) else {}
+    return {event: [h.get("command", "") for entry in entries for h in entry.get("hooks", [])]
+            for event, entries in hooks.items()}
+
+
 def check_session_hook() -> None:
     """Every shipped hook file's SessionStart command must run a read-only mode (item 2).
 
     The hook files are enumerated from the folder rather than named here: the
     plugin ships one install surface per host, each with its own hook file, and a
     rule that only covers the ones this function remembers is a rule the next
-    surface ships without.
+    surface ships without. The root ``hooks.json`` is one of them, in its host's own
+    schema, and must exist wherever that host's manifest does.
     """
     hooks_dir = os.path.join(ROOT, "hooks")
     hook_files = sorted(f for f in os.listdir(hooks_dir)) if os.path.isdir(hooks_dir) else []
-    hook_files = [f for f in hook_files if f.endswith(".json")]
+    hook_files = ["hooks/" + f for f in hook_files if f.endswith(".json")]
     if not hook_files:
         fail("no hook configuration found under hooks/")
         return
+    if os.path.isfile(os.path.join(ROOT, ROOT_HOOK_FILE)):
+        hook_files.append(ROOT_HOOK_FILE)
+    elif os.path.isfile(os.path.join(ROOT, *ROOT_HOOK_MANIFEST.split("/"))):
+        fail("%s ships, but no %s at the plugin root: that host reads hooks from there only"
+             % (ROOT_HOOK_MANIFEST, ROOT_HOOK_FILE))
+        return
 
+    from tools.governance import hosts
     for name in hook_files:
         try:
-            data = json.load(open(os.path.join(hooks_dir, name), encoding="utf-8"))
+            data = json.load(open(os.path.join(ROOT, *name.split("/")), encoding="utf-8"))
         except Exception as exc:  # noqa: BLE001
-            fail("hooks/%s unreadable: %s" % (name, exc))
+            fail("%s unreadable: %s" % (name, exc))
             return
-        commands = [h.get("command", "")
-                    for entry in data.get("hooks", {}).get("SessionStart", [])
-                    for h in entry.get("hooks", [])]
-        preflight = [c for c in commands if "virtuoso_preflight" in c]
+        if name == ROOT_HOOK_FILE:
+            events, problems = _root_hook_commands(data)
+            if problems:
+                fail("%s: %s" % (name, "; ".join(problems)))
+                return
+        else:
+            events = _hook_file_commands(data)
+        preflight = [c for c in events.get("SessionStart", []) if "virtuoso_preflight" in c]
         if not preflight:
-            fail("hooks/%s declares no SessionStart preflight command" % name)
+            fail("%s declares no SessionStart preflight command" % name)
             return
         for command in preflight:
             mode = re.search(r"--mode\s+(\S+)", command)
             if not mode or mode.group(1) not in ("check", "detect"):
-                fail("hooks/%s runs SessionStart with --mode %s; it must be read-only "
+                fail("%s runs SessionStart with --mode %s; it must be read-only "
                      "(check/detect)" % (name, mode.group(1) if mode else "<unset>"))
                 return
         # Every other hook command, in any event, is the cost-guard entry, which writes only
         # the user's own ~/.virtuoso/guard/ and nothing at all outside a Virtuoso project.
-        others = [h.get("command", "") for entries in data.get("hooks", {}).values()
-                  for entry in entries for h in entry.get("hooks", [])
-                  if "virtuoso_preflight" not in h.get("command", "")]
+        others = [c for commands in events.values() for c in commands
+                  if "virtuoso_preflight" not in c]
         stray = [c for c in others if not re.search(r"scripts/virtuoso_guard\.py\"? ", c + " ")]
         if stray:
-            fail("hooks/%s runs a command that is neither preflight (check/detect) nor the "
+            fail("%s runs a command that is neither preflight (check/detect) nor the "
                  "guard entry: %s" % (name, stray[0]))
+            return
+        # The host a hook names must have an adapter, or every guard there is silently off.
+        named = {m.group(1) for c in others + preflight
+                 for m in re.finditer(r"--(?:host|hook-input)\s+(\S+)", c)}
+        unknown = sorted(h for h in named if hosts.adapter(h) is None)
+        if unknown:
+            fail("%s names a host with no adapter: %s" % (name, ", ".join(unknown)))
             return
     ok("%d hook file(s); every SessionStart preflight runs a read-only mode, every other "
        "hook is the guard entry" % len(hook_files))
@@ -904,8 +998,40 @@ def check_promoted_rule_text() -> None:
              "`python scripts/skill_rules.py --hashes`): %s" % changed)
 
 
+#: Antigravity loads only this many bytes of a SKILL.md body (after the frontmatter);
+#: the rest is silently dropped. Counted with CRLF line endings, the larger form a
+#: Windows checkout writes.
+SKILL_BODY_LIMIT = 24000
+
+
+def skill_body_bytes(text: str) -> int:
+    """A SKILL.md body's size in bytes as a CRLF checkout stores it."""
+    text = text.replace("\r\n", "\n")
+    match = re.match(r"^---\s*\n.*?\n---[ \t]*\n", text, re.S)
+    body = text[match.end():] if match else text
+    return len(body.encode("utf-8")) + body.count("\n")
+
+
+def check_skill_body_size(skill_names: list[str]) -> None:
+    """Every SKILL.md body fits the smallest skill loader we ship to. A longer skill keeps
+    its core flow in SKILL.md and hands detail off to its references/."""
+    over = []
+    for name in skill_names:
+        path = os.path.join(ROOT, "skills", name, "SKILL.md")
+        if os.path.isfile(path):
+            size = skill_body_bytes(open(path, encoding="utf-8").read())
+            if size > SKILL_BODY_LIMIT:
+                over.append("%s (%d bytes)" % (name, size))
+    if over:
+        fail("SKILL.md bodies over %d bytes (move detail to the skill's references/): %s"
+             % (SKILL_BODY_LIMIT, ", ".join(over)))
+    else:
+        ok("every SKILL.md body within %d bytes" % SKILL_BODY_LIMIT)
+
+
 def main() -> int:
     skill_names = check_frontmatter_and_manifests(os.path.join(ROOT, "skills"))
+    check_skill_body_size(skill_names)
     check_host_frontmatter()
     check_session_hook()
     check_overlay_clause()

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import PLUGIN_ROOT
+from conftest import PLUGIN_ROOT, skill_text
 from tools.governance import timing
 from tools.governance.errors import GovernanceError
 
@@ -885,15 +885,15 @@ def test_the_close_out_takes_time_from_the_log_documented():
     assert "## Time" in template
     assert "timing --summary" in [line for line in template.splitlines()
                                   if line.startswith("runtime:")][0]
-    closeout = (ROOT / "skills" / "dispatch-closeout" / "SKILL.md").read_text(encoding="utf-8")
+    closeout = skill_text(ROOT / "skills" / "dispatch-closeout")
     assert "timing --summary --json" in section(closeout, "--state executed", "Step 6 verifies")
     assert "timing --summary --json" in section(closeout, "### Step 3", "### Step 4")
     assert "timing --summary --json" in section(closeout, "### Step 6", "### On partial failure")
     assert "the spec's effort, as a duration" not in closeout
-    virtuoso = (ROOT / "skills" / "virtuoso" / "SKILL.md").read_text(encoding="utf-8")
+    virtuoso = skill_text(ROOT / "skills" / "virtuoso")
     assert "Timing.<DISPATCH-ID>.jsonl" in section(virtuoso, "dispatch_guards artifacts-exist",
                                                  "For a held plan")
-    effort = (ROOT / "skills" / "effort-levels" / "SKILL.md").read_text(encoding="utf-8")
+    effort = skill_text(ROOT / "skills" / "effort-levels")
     assert "timing" in effort and "effort-calibration" in effort
 
 

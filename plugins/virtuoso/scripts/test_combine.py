@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import PLUGIN_ROOT, snapshot_tree
+from conftest import PLUGIN_ROOT, snapshot_tree, skill_text
 from tools.governance import combine as combine_mod
 
 ROOT = Path(PLUGIN_ROOT)
@@ -342,7 +342,7 @@ def test_combine_writes_nothing(game):
 
 
 def skill(name):
-    return (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+    return skill_text(ROOT / "skills" / name)
 
 
 def flat(text):

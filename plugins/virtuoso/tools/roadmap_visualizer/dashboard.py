@@ -17,6 +17,7 @@ SLICER_FIELDS = (
     ("deliverable", "Deliverable"),
     ("written_status", "Written"),
     ("effort", "Effort"),
+    ("effort_hours", "Hours"),
     ("group", "Group"),
 )
 #: An unmapped column becomes a slicer only when it reads like a category.
@@ -52,6 +53,8 @@ def facets(item, structured: bool = False, index: dict | None = None) -> dict:
         "effort": item.effort,
         "group": item.group,
     }
+    if item.effort_hours:                   # absent, not blank: a page without is unchanged
+        out["effort_hours"] = item.effort_hours
     if structured and deliverable:          # absent, not blank: a page without is unchanged
         out["deliverable"] = deliverable
     for header, value in item.extra.items():

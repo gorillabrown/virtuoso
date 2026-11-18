@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 
 from . import lessons as lessons_mod, textio
 from .providers import base
+from .providers import effort as effort_mod
 from .providers.kpi import DEFAULT_EFFORT_SCALE
 
 # --- finding codes --------------------------------------------------------------------
@@ -358,10 +359,16 @@ def _effort(members: list, scale: dict | None) -> dict:
         if unscaled:
             missing.append("effort scale entries for %s (policy.roadmap.effortScale)"
                            % ", ".join(unscaled))
-        return {"computable": False, "missingInputs": missing}
-    return {"computable": True, "points": float(sum(table[m.item.effort.lower()]
-                                                    for m in members)),
-            "scale": "policy.roadmap.effortScale" if scale else "the default t-shirt scale"}
+        out = {"computable": False, "missingInputs": missing}
+    else:
+        out = {"computable": True, "points": float(sum(table[m.item.effort.lower()]
+                                                       for m in members)),
+               "scale": "policy.roadmap.effortScale" if scale else "the default t-shirt scale"}
+    # The hours estimate, beside the points, when every member carries a readable one.
+    hours = [effort_mod.parse_hours(m.item.effort_hours) for m in members]
+    if members and all(h is not None for h in hours):
+        out["hours"] = round(sum(hours), 2)
+    return out
 
 
 def check(snapshot: base.Snapshot, chosen: list, *, unknown=(), selection: dict | None = None,

@@ -1,0 +1,28 @@
+{
+  "virtuoso": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "python \"./scripts/virtuoso_preflight.py\" --hook-input antigravity --mode check --quiet",
+        "timeout": 60
+      },
+      {
+        "type": "command",
+        "command": "python \"./scripts/virtuoso_guard.py\" --host antigravity",
+        "timeout": 10
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"./scripts/virtuoso_guard.py\" --host antigravity",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

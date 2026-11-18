@@ -89,6 +89,7 @@ def test_tripwire_derivation_matches_bump_config():
     # one left out is a host advertising the previous release.
     assert rp._expected_release_files() == {"plugins/virtuoso/.claude-plugin/plugin.json",
                                             "plugins/virtuoso/.codex-plugin/plugin.json",
+                                            "plugins/virtuoso/.antigravity-plugin/plugin.json",
                                             ".claude-plugin/marketplace.json"}
 
 

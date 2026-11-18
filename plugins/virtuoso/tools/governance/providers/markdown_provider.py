@@ -127,6 +127,7 @@ class MarkdownWorkRegister(base.WorkRegisterProvider):
             prerequisites=[p.strip() for p in
                            value("prerequisites").replace(";", ",").split(",") if p.strip()],
             effort=value("effort"),
+            effort_hours=value("effort_hours"),
             workstream=value("workstream"),
             deliverable=value("deliverable"),
             group=value("group"),

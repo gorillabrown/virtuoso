@@ -297,7 +297,8 @@ def pace_for(reg, snapshot) -> tuple[list, list[dict]]:
     reports = pace.compute_all(usable, snapshot, completion_source(reg, snapshot),
                                effort_scale=project_policy.get("roadmap.effortScale"),
                                trailing_weeks=settings.get("trailingWeeks", 4),
-                               tolerance=settings.get("tolerance", 0.1))
+                               tolerance=settings.get("tolerance", 0.1),
+                               effort_basis=project_policy.effort_basis)
     for report in reports:
         report.findings.extend(f.as_dict() for f in
                                deadlines_mod.anchor_findings(reg, [report.deadline]))

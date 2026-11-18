@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from conftest import PLUGIN_ROOT
+from conftest import skill_text as _skill_dir_text
 from tools.governance import policy as policy_mod, result as result_mod, schema
 from tools.governance.providers import base as provider_base
 
@@ -171,7 +172,8 @@ def _policy_table_keys(text: str) -> set[str]:
 def test_every_policy_table_key_exists():
     known = set(_policy_keys(policy_mod.DEFAULTS))
     documented = set()
-    for path in DOCS:
+    # A skill is its folder: a long skill keeps its tables in its own references/.
+    for path in DOCS + sorted((ROOT / "skills").glob("*/references/*.md")):
         documented |= _policy_table_keys(path.read_text(encoding="utf-8"))
     assert documented, "no policy table was found at all"
     unknown = sorted(k for k in documented if k not in known)
@@ -224,7 +226,7 @@ def test_no_ceremony_restates_the_rubrics_version_or_count():
 def test_the_specification_finding_matches_the_rubric():
     rubric = (ROOT / "references" / "readiness-rubric.md").read_text(encoding="utf-8")
     wanted = re.search(r"\*\*Specification readiness\*\* — ([^.]+?) plus", rubric).group(1)
-    kickoff = (ROOT / "skills" / "next-dispatch" / "SKILL.md").read_text(encoding="utf-8")
+    kickoff = _skill_dir_text(ROOT / "skills" / "next-dispatch")
     assert "| **Specification readiness** | %s plus" % wanted in kickoff
 
 
@@ -292,7 +294,7 @@ def test_the_rubric_reports_five_separate_findings():
 
 def test_the_ceremonies_defer_to_the_shared_rubric():
     for name in ("roadmap-review", "next-dispatch", "write-plan"):
-        text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+        text = _skill_dir_text(ROOT / "skills" / name)
         assert "references/readiness-rubric.md" in text, (
             "%s does not point at the shared rubric" % name)
 
@@ -346,9 +348,9 @@ def test_the_registry_contract_documents_every_lessons_finding():
 
 def test_the_ceremonies_read_pace_rather_than_derive_it():
     for name in ("roadmap-review", "roadmap-status", "next-dispatch"):
-        text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+        text = _skill_dir_text(ROOT / "skills" / name)
         assert "`pace` block" in text, "%s does not read the pace block" % name
-    review = (ROOT / "skills" / "roadmap-review" / "SKILL.md").read_text(encoding="utf-8")
+    review = _skill_dir_text(ROOT / "skills" / "roadmap-review")
     assert "policy-set roadmap.deadlines.<id>" in review
 
 
@@ -383,7 +385,7 @@ def test_ceremony_skills_run_the_read_only_preflight():
     ceremonies = ["roadmap-review", "roadmap-status", "next-dispatch", "dispatch-closeout",
                   "mid-dispatch-decision", "3rd-party-audit", "storyboard", "write-plan"]
     for name in ceremonies:
-        text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+        text = _skill_dir_text(ROOT / "skills" / name)
         assert "--mode check" in text, "%s does not run the read-only preflight" % name
         assert "--mode adopt\n" not in text.split("## Preflight")[1][:1200], (
             "%s runs adopt from its preflight" % name)
@@ -431,7 +433,7 @@ def test_the_preflight_docstring_lists_every_machine_line():
 
 
 def skill_text(name: str) -> str:
-    return (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+    return _skill_dir_text(ROOT / "skills" / name)
 
 
 def test_every_path_points_at_the_one_destination_contract():

@@ -91,8 +91,8 @@ project registers each by adding its entry to the manifest when it first needs i
 
 ### The progress band
 
-The plugin ships a hooks module (`hooks/progress-band.tsx`) that loads in every Claude Code
-session the plugin is enabled in, in any project, with nothing to register or opt into.
+The plugin ships a hooks module (`hooks/progress-band.tsx`) that loads in every session
+of a host that runs hooks modules (Claude Code today) where the plugin is enabled, in any project, with nothing to register or opt into.
 While the session runs a dispatch or an epic it draws two lines above the prompt and one
 status-line entry:
 
@@ -162,7 +162,7 @@ every turn; a file it cannot read draws one dim line naming the path and the err
 #### Feeding the band
 
 Only the `virtuoso` skill opens, feeds and ends a run, through one command, never a hand edit
-(the skill's *The Progress Band* says when). `next-dispatch`, `epic` and `dispatch-closeout`
+(the skill's `references/progress-band.md` says when). `next-dispatch`, `epic` and `dispatch-closeout`
 never touch it. Feeding never writes the registry or any project file.
 
 ```bash
@@ -270,6 +270,15 @@ One optional field records size: `effort`, the item's size word on the effort sc
 table header carries the column. `record-completion` writes it from the register item.
 Pace converts it through `policy.roadmap.effortScale`. A ledger without the column reads
 `effort` blank and appends exactly as before.
+
+One optional field records hours (1.17.3): `effortHours`, the item's hours estimate exactly as
+the register held it at close-out (`workRegister.fieldMappings.effort_hours`) — a number,
+kept apart from *Estimate* and *Actual*, which are the dispatch's own timing durations. Its
+header is *Hours* (or `effortHours`), or the column `fieldMappings.effortHours` names; a
+markdown ledger reads it only when its table header carries the column.
+`record-completion` writes it from the register item, beside Effort. When the effort basis
+is hours, pace reads trailing hours from it first. A ledger without the column reads it
+blank and appends exactly as before.
 
 ### The time log
 
@@ -384,6 +393,26 @@ names in `policy.workRegister.fieldMappings` and its own status words in
 in are `queued`, `in-flight`, `blocked`, `completed`, `dissolved`, `superseded`,
 `unknown`; the literal words "Queued", "In Flight", "Full Spec" are defaults, not
 requirements.
+
+**Effort: a size word and hours (1.17.3).** Two canonical fields size an item. `effort` is
+the size word on `policy.roadmap.effortScale` (XS … XL; recognized without mapping as
+*LOE*, *Size*, *Estimate*, *Points*). `effort_hours` is the hours estimate: a number, or a
+select whose labels are numbers (`0.5`, `1.5`, `40`; a trailing `h` reads too; recognized
+without mapping as *Hours*, *Effort Hours*, *Estimated Hours*). A register may carry
+either or both; `create-item` and the mutation handshake accept both. Which one governs
+the figures is `policy.roadmap.effortBasis`:
+
+| basis | effort figures are in | an item without hours |
+|---|---|---|
+| `auto` (default) | hours when the register serves `effort_hours`, else points | as `hours` or `size` |
+| `hours` | hours | its size word through the scale, **read as hours**; the figure is `inferred` |
+| `size` | points, through the scale | — (hours are not read) |
+
+An item with neither is named and the figure is **not computable**. Every effort figure
+states its basis (how many items each source sized) and its kind: `measured` when every
+item was read directly, `inferred` when any came through the scale. `kpis` reports the
+governing basis as `effort-basis`. `policy.roadmap.maxItemHours` (0 = off) adds
+`items-over-max-hours`: open items estimated above it, named, to split before sizing.
 
 **Migration note (1.15.0): `lane` is now `workstream`.** Each item may also carry a
 `deliverable`, and `policy.roadmap.workstreams` lists
@@ -794,19 +823,27 @@ labelled `policy-set` that names the ceremony which asked.
 its other figures. It is computed as of the **snapshot's** date, never the reader's clock.
 
 - **Scope** — every item in the register, or the items whose `scope.field` (canonical `id`,
-  `title`, `workstream`, `deliverable`, `group`, `effort`, `branch`, or a register column) holds one of
+  `title`, `workstream`, `deliverable`, `group`, `effort`, `effort_hours`, `branch`, or a register column) holds one of
   `scope.values`, in any case. A scope that matches nothing is **not computable** — never met.
-- **Remaining** — non-terminal items in scope, and their points through
-  `policy.roadmap.effortScale`. **Blocked** — the canonical `blocked` share of what remains.
-- **Required** — remaining ÷ weeks to the date, in items and in points.
+- **Remaining** — non-terminal items in scope, and their effort: hours when the effort basis
+  is hours (see *Effort: a size word and hours*), else points through
+  `policy.roadmap.effortScale`. The report names its `effortUnit` (`hours` or `points`), and
+  every figure in it uses that unit's name as its key. **Blocked** — the canonical `blocked`
+  share of what remains.
+- **Required** — remaining ÷ weeks to the date, in items and in the effort unit.
 - **Trailing** — distinct items completed in the last `policy.roadmap.pace.trailingWeeks`
   weeks, divided by that many weeks. It is the project's delivery capacity, not a per-scope
   rate. Completions come from the terminal ledger when one is registered (read through
   `policy.terminalLedger.fieldMappings`), with corrections
   applied and results read through `policy.workRegister.statusMappings`; only a project with no
   ledger uses the register's completion dates, and the two are never mixed. The output breaks
-  the count down by the result words recorded, and lists what it excluded. Trailing points
-  read each completion's effort from the ledger first and the register second.
+  the count down by the result words recorded, and lists what it excluded. Trailing effort
+  reads each completion's effort from the ledger first and the register second; in hours,
+  the ledger's *Hours*, then the register's hours, then a size word (ledger, then register)
+  through the scale. When every completion in the window carries an *Actual* duration, the
+  hours report adds `actualHours` a week, for comparison; the verdict uses the estimates,
+  so remaining and trailing are measured alike. `effort.remaining` and `effort.trailing`
+  give each figure's basis and kind.
 - **Verdict** — per unit: `ahead` above the required rate by more than
   `policy.roadmap.pace.tolerance`, `on track` within it, `behind` below it. The headline is the
   worse of the two units and names the unit. `met` when nothing in scope remains; `overdue`
@@ -826,7 +863,7 @@ A figure whose inputs are missing is **not computable**, with the inputs named �
 source that holds no recorded completion at all (a board that keeps only live items, or a
 ledger whose columns are not mapped), an undatable completion (append a correction that dates
 it), an unsized item, a completed item that left the
-register and whose ledger record carries no Effort (trailing points only), a scope that
+register and whose ledger record carries no Effort (or, in hours, no Hours either), a scope that
 matches nothing. Nothing is estimated, and nothing
 silently becomes zero.
 
@@ -1119,7 +1156,8 @@ returns:
 - the **workstreams**: groups with no prerequisite and no shared file between them, which may
   run side by side;
 - every ordering **edge** with its reason, the **effort** in points (or *not computable*,
-  naming the missing effort or scale entries), and the snapshot's provenance.
+  naming the missing effort or scale entries) and, when every member carries hours, in
+  hours, and the snapshot's provenance.
 
 Exit 0 means combinable, 1 means a blocking finding stands, and 3 means the question
 cannot be answered.
@@ -1253,7 +1291,7 @@ it until it is resolved. An external ledger is refused by name.
 **An external register: `--ledger-only`.** Without the flag an external register is
 refused, and the refusal names `--ledger-only`. With it, the command appends the terminal
 record exactly as above — next `TR-NNN`, the date, result, evidence, estimate and actual,
-and Effort taken from the item in the register snapshot — then reads the ledger back.
+and Effort and Hours taken from the item in the register snapshot — then reads the ledger back.
 Its two steps are `append-terminal-record` and `verify-results`; it never writes the
 register, which the `mutation-plan --operation record-completion` handshake closes
 afterwards. It previews without `--apply`, and a record already in the ledger for the

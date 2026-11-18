@@ -532,3 +532,249 @@ def test_codex_reads_task_complete_as_the_turn_close(path, tmp_path):
         rollout.write_text("\n".join(json.dumps(r) for r in [
             meta, dict(complete, ordinal=ordinal)]) + "\n", encoding="utf-8")
         assert cx_adapter().read_transcript(str(rollout)).turn_closed_at == expected
+
+
+# --- the "antigravity" adapter, from agy 1.5.11 captured 2026-11-18 -------------------------
+
+AG = FIXTURES / "antigravity"
+AG_BRAIN = AG / "brain"
+AG_LOGS = Path(".system_generated") / "logs" / "transcript_full.jsonl"
+AG_RUN1 = AG_BRAIN / "11111111-1111-4111-8111-111111111111" / AG_LOGS
+AG_PARENT = AG_BRAIN / "22222222-2222-4222-8222-222222222222" / AG_LOGS
+AG_SUB = AG_BRAIN / "33333333-3333-4333-8333-333333333333" / AG_LOGS
+AG_RUN5 = AG_BRAIN / "44444444-4444-4444-8444-444444444444" / AG_LOGS
+
+
+def ag_adapter():
+    from tools.governance.hosts import antigravity
+    return antigravity.ADAPTER
+
+
+def ag_hooks(run: str) -> list[dict]:
+    """The hook inputs of one capture run, in firing order, with each transcript path pointed
+    at the fixture brain instead of the capture machine's."""
+    text = (AG / "hooks" / ("stdin_%s.jsonl" % run)).read_text(encoding="utf-8")
+    brain = str(AG_BRAIN).replace("\\", "\\\\")
+    text = text.replace("<home>\\\\.gemini\\\\antigravity-cli\\\\brain", brain)
+    return [json.loads(line) for line in text.splitlines()]
+
+
+def _ag_copy(tmp_path, source: Path, keep: int) -> str:
+    """The first ``keep`` steps of a fixture transcript, in a brain folder of its own."""
+    path = tmp_path / "brain" / source.parents[2].name / AG_LOGS
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(source.read_text(encoding="utf-8").splitlines()[:keep]) + "\n",
+                    encoding="utf-8")
+    return str(path)
+
+
+def test_the_antigravity_adapter_claims_only_what_was_captured():
+    a = ag_adapter()
+    assert hosts.adapter("antigravity") is a
+    assert sorted(a.missing) == ["hold-prompt", "turn-end-message"]
+    assert set(a.capabilities) | set(a.missing) == set(hosts.CAPABILITIES)
+    assert not set(a.capabilities) & set(a.missing)
+    assert a.cache_lifetime == hosts.PROVIDER_DECIDED and a.lifetime(hosts.TranscriptFacts()) == (
+        None, hosts.INFERRED)
+    assert a.tells_headless is False                     # no headless marker anywhere
+    assert cc_adapter().tells_headless and cx_adapter().tells_headless
+
+
+def test_antigravity_usage_keeps_cache_reads_apart_from_input():
+    facts = ag_adapter().read_transcript(str(AG_RUN1))
+    first, second = facts.calls[:2]
+    assert (first.id, first.model) == ("11111111-1111-4111-8111-111111111111:2",
+                                       "gemini-4-argon-medium")
+    assert first.usage.as_tuple() == (16095, 91, 0, 0, 0, 0)
+    assert second.usage.as_tuple() == (2236, 68, 14041, 0, 0, 0)
+    assert second.usage.context == 2236 + 14041
+    # The run's own totals (its headless JSON output) are the sums: input excludes the cache.
+    total = json.loads((AG / "hooks" / "headless_output_run1.txt").read_text(
+        encoding="utf-8").splitlines()[0])["usage"]
+    assert (facts.usage.input, facts.usage.output, facts.usage.cache_read) == (
+        total["input_tokens"], total["output_tokens"], total["cache_read_tokens"])
+    assert len({c.id for c in facts.calls}) == len(facts.calls) == 7
+
+
+def test_an_antigravity_failing_command_streak_and_the_edit_that_ends_it(tmp_path):
+    command = 'python -c "import sys; sys.exit(3)"'
+    streak = ag_adapter().read_transcript(_ag_copy(tmp_path, AG_RUN1, 6))
+    assert streak.failing == {command: 2} and streak.last_change == ""
+    assert streak.dropped == ["command failed 2 times in a row: %s" % command]
+    assert streak.failure_seen[command] == ("", "2026-11-18T19:15:07Z")
+    whole = ag_adapter().read_transcript(str(AG_RUN1))
+    assert whole.commands == [command, command, "echo agyok", "echo AGYDENY"]
+    assert whole.failing == {}                           # write_file changed something since
+    assert whole.edited == ["<cwd>\\out.txt"]
+    assert whole.last_change == "11111111-1111-4111-8111-111111111111:12:0"
+    assert whole.last_prompt.startswith("This is a hook capture test.")
+    assert whole.turn_closed_at == "2026-11-18T19:16:03Z"
+
+
+def test_an_antigravity_denied_call_never_ran(tmp_path):
+    records = AG_RUN1.read_text(encoding="utf-8").splitlines()
+    denied = json.loads(records[9])
+    assert (denied["status"], denied["error"]) == (
+        "ERROR", "tool call denied by pre-tool hook: AGY probe deny: this command is held.")
+    assert ag_adapter().deny_tool("why") == {"decision": "deny", "reason": "why"}
+    # Two failures, then the same command denied: still two, the denied one never ran.
+    command = 'python -c "import sys; sys.exit(3)"'
+    use = json.loads(records[8])
+    use["tool_calls"][0]["args"]["CommandLine"] = command
+    path = tmp_path / "t.jsonl"
+    path.write_text("\n".join(records[:6] + [json.dumps(use), records[9]]) + "\n",
+                    encoding="utf-8")
+    assert ag_adapter().read_transcript(str(path)).failing == {command: 2}
+
+
+def test_the_antigravity_session_start_context_reached_the_model():
+    records = [json.loads(l) for l in AG_RUN1.read_text(encoding="utf-8").splitlines()]
+    injected = records[1]
+    assert (injected["source"], injected["type"]) == ("SYSTEM_SDK", "SYSTEM_MESSAGE")
+    assert "injected by a SessionStart hook:\nAGY-CTX-TOKEN-7731" in injected["content"]
+    assert records[-1]["content"].startswith("AGY-CTX-TOKEN-7731")
+    assert ag_adapter().session_context("x") == {
+        "injectSteps": [{"systemMessage": {"systemMessage": "x"}}]}
+
+
+def test_an_antigravity_held_prompt_is_written_then_errored():
+    records = [json.loads(l) for l in AG_PARENT.read_text(encoding="utf-8").splitlines()]
+    assert [(r["type"], r.get("error")) for r in records[-2:]] == [
+        ("USER_INPUT", None), ("ERROR_MESSAGE", "AGY probe block.")]
+    output = (AG / "hooks" / "headless_output_run4.txt").read_text(encoding="utf-8")
+    assert '"status":"ERROR"' in output and "AGY_ERROR" in output   # a headless run fails
+    assert ag_adapter().hold_prompt("why") == {
+        "injectSteps": [{"errorMessage": {"userMessage": "why"}}],
+        "terminationBehavior": "terminate"}
+    stop = ag_hooks("run4")[-1]
+    assert (stop["hookEventName"], stop["terminationReason"]) == ("Stop", "TERMINAL_CUSTOM_HOOK")
+
+
+def test_antigravity_reads_the_turn_close_and_what_reopens_it(tmp_path):
+    a = ag_adapter()
+    # A held prompt and its error leave the close where it was.
+    assert a.read_transcript(str(AG_PARENT)).turn_closed_at == "2026-11-18T19:20:38Z"
+    # "Waiting for the subagent" closes; the subagent's message reopens; the answer closes.
+    assert a.read_transcript(_ag_copy(tmp_path / "a", AG_PARENT, 6)).turn_closed_at == \
+        "2026-11-18T19:18:54Z"
+    assert a.read_transcript(_ag_copy(tmp_path / "b", AG_PARENT, 7)).turn_closed_at == ""
+    assert a.read_transcript(_ag_copy(tmp_path / "c", AG_PARENT, 8)).turn_closed_at == \
+        "2026-11-18T19:19:15Z"
+    # A response that calls a tool, and its result, are work in progress.
+    assert a.read_transcript(_ag_copy(tmp_path / "d", AG_RUN1, 3)).turn_closed_at == ""
+
+
+def test_an_antigravity_subagent_is_found_by_its_spawn_and_named_by_its_role():
+    parent = ag_adapter().read_transcript(str(AG_PARENT))
+    assert list(parent.spawns.values()) == ["row 7 - capture probe"]
+    assert list(parent.spawn_threads.values()) == ["33333333-3333-4333-8333-333333333333"]
+    found = ag_adapter().subagents(str(AG_PARENT), parent)
+    assert found == [(str(AG_SUB), "row 7 - capture probe", "")]
+    assert hosts.spawn_row(found[0][1]) == 7
+    assert ag_adapter().subagent_transcripts(str(AG_PARENT)) == [str(AG_SUB)]
+    sub = ag_adapter().read_transcript(str(AG_SUB))
+    assert sub.session_id == "33333333-3333-4333-8333-333333333333"
+    assert sub.last_prompt == ""                         # its task came as a message
+    assert sub.failing == {'python -c "import sys; sys.exit(4)"': 1}
+    assert [Path(p).parents[2].name for p in ag_adapter().top_level_transcripts(str(AG_BRAIN))] \
+        == ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222",
+            "44444444-4444-4444-8444-444444444444"]        # the subagent is not top level
+
+
+def test_the_compact_antigravity_transcript_reads_like_the_full_one():
+    compact = AG_PARENT.parent / "transcript.jsonl"
+    assert '"Role": "\\"row 7 - capture probe\\""' in compact.read_text(encoding="utf-8")
+    full, short = (ag_adapter().read_transcript(str(p)) for p in (AG_PARENT, compact))
+    assert short.spawns == full.spawns and short.spawn_threads == full.spawn_threads
+    assert [c.usage for c in short.calls] == [c.usage for c in full.calls]
+
+
+def test_antigravity_edits_and_ranged_reads_as_captured():
+    facts = ag_adapter().read_transcript(str(AG_RUN5))
+    assert facts.edited == ["<cwd>\\small.txt"] and facts.last_change.endswith(":2:0")
+    ranged = next(h for h in ag_hooks("run5") if h["hookEventName"] == "PreToolUse"
+                  and h["toolCall"]["name"] == "read_file")
+    hook = ag_adapter().normalize(ranged)
+    assert (hook["tool_name"], hook["tool_input"]["offset"], hook["tool_input"]["limit"]) == (
+        "Read", 10, 20)
+
+
+def test_an_antigravity_whole_file_read_is_capped_at_800_lines_and_46080_bytes(tmp_path):
+    shown = json.loads(AG_PARENT.read_text(encoding="utf-8").splitlines()[3])["content"]
+    assert "Showing lines 1-800 of 3000" in shown
+    capped = (AG / "hooks" / "live_read_capped.txt").read_text(encoding="utf-8")
+    assert "truncated at the 46080-byte limit" in capped
+    path = tmp_path / "f.txt"
+    path.write_bytes(b"abc\n" * 3000)
+    assert ag_adapter().read_bytes(str(path)) == 4 * 800
+    path.write_bytes(b"abc")
+    assert ag_adapter().read_bytes(str(path)) == 3
+    path.write_bytes((b"w" * 119 + b"\n") * 1000)
+    assert ag_adapter().read_bytes(str(path)) == 46080
+    shipped = json.loads((Path(PLUGIN_ROOT) / "hooks.json").read_text(encoding="utf-8"))
+    matchers = [g["matcher"] for g in shipped["virtuoso"]["PreToolUse"]]
+    assert matchers == ["run_command"]                  # a read never reaches the guard's 64 KB
+
+
+def test_antigravity_hook_input_reads_in_the_guards_vocabulary():
+    a = ag_adapter()
+    hooks = ag_hooks("run1")
+    start = a.normalize(hooks[0])
+    assert (start["hook_event_name"], start["source"], start["session_id"], start["cwd"],
+            a.project_dir(start)) == ("SessionStart", "startup",
+                                      "11111111-1111-4111-8111-111111111111", "<cwd>", "<cwd>")
+    assert hooks[0]["_hookCwd"] == "<cwd>\\.agents"     # hooks run where hooks.json is
+    shell = a.normalize(next(h for h in hooks if h["hookEventName"] == "PreToolUse"))
+    assert (shell["tool_name"], shell["tool_input"]) == (
+        "Bash", {"command": 'python -c "import sys; sys.exit(3)"'})
+    read = a.normalize(next(h for h in hooks if h.get("toolCall", {}).get("name") == "read_file"))
+    assert (read["tool_name"], read["tool_input"]["file_path"], read["tool_input"]["offset"]) == (
+        "Read", "<cwd>\\small.txt", None)
+    write = a.normalize(next(h for h in hooks if h.get("toolCall", {}).get("name") == "write_file"))
+    assert write["tool_name"] == "write_file"            # no guard acts on it
+    stop = a.normalize(hooks[-1])
+    assert (stop["hook_event_name"], stop["stop_hook_active"]) == ("Stop", False)
+    assert a.normalize({"hookEventName": "PreToolUse"}) == {}       # no project: nothing
+    assert a.normalize({"hook_event_name": "Stop", "x": 1}) == {"hook_event_name": "Stop", "x": 1}
+
+
+def test_an_antigravity_hook_inside_a_subagent_keeps_the_top_session():
+    hooks = ag_hooks("run2")
+    inside = [ag_adapter().normalize(h) for h in hooks
+              if h["conversationId"] == "33333333-3333-4333-8333-333333333333"]
+    assert inside and all(h["agent_id"] == "33333333-3333-4333-8333-333333333333"
+                          and h["session_id"] == "22222222-2222-4222-8222-222222222222"
+                          and h["transcript_path"] == str(AG_PARENT)
+                          and ag_adapter().subagent_transcript(h) == str(AG_SUB) for h in inside)
+    shell = [h for h in inside if h.get("tool_name") == "Bash"
+             and h["hook_event_name"] == "PreToolUse"]
+    assert [h["tool_input"]["command"] for h in shell] == [
+        "echo agysub", 'python -c "import sys; sys.exit(4)"']
+    top = ag_adapter().normalize(hooks[0])
+    assert "agent_id" not in top and not ag_adapter().is_subagent(top)
+
+
+def test_only_a_typed_prompt_reads_as_a_prompt(tmp_path):
+    """A pre-invocation hook fires before every model call. A typed prompt is the first call
+    of a run whose latest step is the prompt; a subagent's message also starts a run."""
+    a = ag_adapter()
+    run3 = ag_hooks("run3")
+    pre = next(h for h in run3 if h["hookEventName"] == "PreInvocation")
+    assert pre["_transcriptTailAtHook"][-1]["type"] == "USER_INPUT"   # as the hook saw it
+    typed = dict(pre, transcriptPath=_ag_copy(tmp_path / "a", AG_PARENT, 9))
+    assert a.normalize(typed)["hook_event_name"] == "UserPromptSubmit"
+    woken = dict(pre, transcriptPath=_ag_copy(tmp_path / "b", AG_PARENT, 7))
+    assert a.normalize(woken)["hook_event_name"] == "PreInvocation"
+    later = dict(typed, invocationNum=1)
+    assert a.normalize(later)["hook_event_name"] == "PreInvocation"
+    first = ag_hooks("run1")[1]                          # the session-start step comes after
+    assert first["hookEventName"] == "PreInvocation" and first["invocationNum"] == 0
+    assert a.normalize(dict(first, transcriptPath=_ag_copy(tmp_path / "c", AG_RUN1, 2)))[
+        "hook_event_name"] == "UserPromptSubmit"
+
+
+def test_the_antigravity_fixtures_carry_no_personal_data():
+    for path in AG.rglob("*"):
+        if path.is_file():
+            text = path.read_text(encoding="utf-8")
+            assert "Users\\\\" not in text and "Users/" not in text and "AppData" not in text, path

@@ -398,8 +398,11 @@ def big_read(hook: dict, adapter, pol, root: str):
     if not path or tool_input.get("offset") or tool_input.get("limit") \
             or path.lower().endswith(EXEMPT_READS):
         return None
+    # A host that caps a whole-file read says how much of the file the read brings in.
+    capped = hasattr(adapter, "read_bytes")
     try:
-        size, mtime = os.path.getsize(path), os.path.getmtime(path)
+        size = adapter.read_bytes(path) if capped else os.path.getsize(path)
+        mtime = os.path.getmtime(path)
     except OSError:
         return None
     limit = int(pol.get("guards.bigRead.bytes", 65536))
@@ -410,6 +413,11 @@ def big_read(hook: dict, adapter, pol, root: str):
         return None
     if not hold_once("bigRead", key, hook, root, bytes=size):
         return None
+    if capped:
+        return adapter.deny_tool(
+            "This read brings %d KB of the file into the main conversation, which every later "
+            "call pays for again. Search for the part, or read a range; read again to go ahead."
+            % (size // 1024))
     return adapter.deny_tool(
         "This reads the whole file (%d KB) into the main conversation, which every later call "
         "pays for again. Search for the part, or read a range; read again to read it whole."
@@ -521,7 +529,10 @@ def session_start(hook: dict, adapter, pol, root: str, version: str):
 
 def _interactive(adapter, hook: dict) -> bool:
     """Whether the session is known to be interactive (a transcript showing it was not
-    started headless); unknown is not interactive."""
+    started headless); unknown is not interactive, and so is every session on a host whose
+    transcripts cannot show a headless run."""
+    if not getattr(adapter, "tells_headless", True):
+        return False
     path = hook.get("transcript_path") or ""
     if not path or not os.path.isfile(path):
         return False
@@ -669,8 +680,11 @@ def handle(hook: dict, host: str, version: str = ""):
         adapter = hosts.adapter(host)
         if adapter is None or not isinstance(hook, dict):
             return None
+        hook = adapter.normalize(hook)
+        if not hook:
+            return None                               # nothing a guard can place
         cwd = os.path.abspath(hook.get("cwd") or os.getcwd())
-        project = os.path.abspath(os.environ.get("CLAUDE_PROJECT_DIR") or cwd)
+        project = os.path.abspath(adapter.project_dir(hook) or cwd)
         inside = os.path.normcase(cwd + os.sep).startswith(os.path.normcase(project + os.sep))
         root = (registry_root(project) if inside else "") or registry_root(cwd)
         if hook.get("hook_event_name") == "PreToolUse" and \

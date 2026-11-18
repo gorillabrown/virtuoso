@@ -56,9 +56,11 @@ Zeus (orchestrate only — zero implementation)
   └── [Project specialists as available]
 ```
 
-Each agent's frontmatter declares its `model` alias and its default `effort`; the
-plugin's `references/model-tiers.md` is the one table that maps an alias to a model. A
-plan row prints `[tier] {effort} ‹model›`, the model being the owner agent's alias.
+Each agent's frontmatter declares `model: inherit` and its default `effort`; the
+plugin's `references/model-tiers.md` is the one table that maps a tier to a model alias,
+and its Agents column names each agent's tier. A plan row prints `[tier] {effort} ‹model›`,
+the model being the alias that table gives the owner agent's tier; a row with no owner
+agent shows its tier's alias. Nothing depends on the host honouring `model` or `effort`.
 
 ---
 

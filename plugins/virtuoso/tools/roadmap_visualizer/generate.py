@@ -50,6 +50,8 @@ def read(root: Path | str) -> Reading:
         snapshot,
         effort_scale=project_policy.get("roadmap.effortScale"),
         dispatch_buffer=project_policy.dispatch_buffer,
+        effort_basis=project_policy.effort_basis,
+        max_item_hours=project_policy.max_item_hours,
     )
     metrics.pace, metrics.invalid_deadlines = providers.pace_for(reg, snapshot)
     health = summarize_health(roadmap, snapshot, buffer_target=project_policy.dispatch_buffer,

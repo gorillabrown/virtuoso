@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import PLUGIN_ROOT
+from conftest import PLUGIN_ROOT, skill_text
 from tools.governance import registry as registry_mod, textio
 
 ROOT = Path(PLUGIN_ROOT)
@@ -147,7 +147,7 @@ def test_session_start_reads_the_roadmap_once(workspace, monkeypatch):
 
 def test_the_ceremonies_read_the_line_the_preflight_prints():
     for skill in ("next-dispatch", "roadmap-status", "roadmap-review", "dispatch-closeout"):
-        text = (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+        text = skill_text(ROOT / "skills" / skill)
         assert "`roadmap-integrity:` line" in text, skill
         assert "exit 3" not in text and "exit 2" not in text, (
             "%s describes the line with --check-document's exit codes" % skill)
@@ -213,10 +213,10 @@ def test_a_new_workspace_carries_the_aligned_writers(workspace):
 # --- D5: the Decision block has a step and a reader --------------------------------------
 
 def test_the_decision_block_has_a_step_and_the_close_out_reads_it():
-    decide = (ROOT / "skills" / "mid-dispatch-decision" / "SKILL.md").read_text(encoding="utf-8")
+    decide = skill_text(ROOT / "skills" / "mid-dispatch-decision")
     assert "#### 6d. Record the Decision in the Issue File" in decide
     assert "## Decision — YYYY-MM-DD" in decide
-    close = (ROOT / "skills" / "dispatch-closeout" / "SKILL.md").read_text(encoding="utf-8")
+    close = skill_text(ROOT / "skills" / "dispatch-closeout")
     assert "`## Decision`" in close and "open decision" in close
 
 
@@ -260,7 +260,7 @@ def test_a_registered_epics_role_resolves(workspace):
 
 
 def test_the_epic_skill_names_no_conventional_path():
-    text = (ROOT / "skills" / "epic" / "SKILL.md").read_text(encoding="utf-8")
+    text = skill_text(ROOT / "skills" / "epic")
     assert "resolve epics" in text
     assert "2 operational" not in text and "`epics/` at the project root" not in text
 
@@ -372,7 +372,7 @@ def test_check_says_nothing_about_ignores_outside_a_repository(tmp_path):
 
 
 def test_the_close_out_runs_the_review_and_records_it():
-    skill = (ROOT / "skills" / "dispatch-closeout" / "SKILL.md").read_text(encoding="utf-8")
+    skill = skill_text(ROOT / "skills" / "dispatch-closeout")
     assert skill.count("dispatch_guards created-files") >= 1 and "created-files" in skill
     template = (ROOT / "skills" / "dispatch-closeout" / "assets" /
                 "CloseOut.template.md").read_text(encoding="utf-8")
@@ -380,7 +380,7 @@ def test_the_close_out_runs_the_review_and_records_it():
 
 
 def test_the_virtuoso_skill_runs_the_guards_through_the_launcher():
-    text = (ROOT / "skills" / "virtuoso" / "SKILL.md").read_text(encoding="utf-8")
+    text = skill_text(ROOT / "skills" / "virtuoso")
     assert "registry:scripts" not in text
     assert text.count('"$HOME/.virtuoso/bin/virtuoso" dispatch_guards') == 4
 
@@ -599,9 +599,9 @@ def test_kpis_carries_the_learning_group(catalog):
 
 
 def test_the_ceremonies_run_hygiene_and_candidates():
-    sweep = (ROOT / "skills" / "governance-sweep" / "SKILL.md").read_text(encoding="utf-8")
+    sweep = skill_text(ROOT / "skills" / "governance-sweep")
     assert "lessons --hygiene" in sweep and "--actor governance-sweep" in sweep
-    review = (ROOT / "skills" / "roadmap-review" / "SKILL.md").read_text(encoding="utf-8")
+    review = skill_text(ROOT / "skills" / "roadmap-review")
     assert "lessons --candidates" in review and "--record-status" in review
 
 
@@ -667,7 +667,7 @@ def test_one_hygiene_pass_migrates_a_prose_only_promotion(catalog):
 
 
 def test_the_sweep_and_contract_name_the_record_proposal():
-    sweep = (ROOT / "skills" / "governance-sweep" / "SKILL.md").read_text(encoding="utf-8")
+    sweep = skill_text(ROOT / "skills" / "governance-sweep")
     assert "**record**" in sweep and "lessons --hygiene" in sweep
     contract = (ROOT / "references" / "registry-contract.md").read_text(encoding="utf-8")
     assert "**record**" in contract and "list item" in contract
@@ -766,10 +766,10 @@ def test_a_manifest_without_the_findings_role_stays_ready(workspace):
 
 
 def test_the_findings_have_writers_and_a_reader_in_the_skills():
-    review = (ROOT / "skills" / "roadmap-review" / "SKILL.md").read_text(encoding="utf-8")
+    review = skill_text(ROOT / "skills" / "roadmap-review")
     assert "registered `findings` role" in review and "lessons-applied.md" in review
     for skill in ("governance-sweep", "adversarial-review"):
-        text = (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+        text = skill_text(ROOT / "skills" / skill)
         assert "`findings` role" in text and "F-NNN" in text, skill
     for agent in (ROOT / "agents").glob("*.md"):
         assert "findings document" not in agent.read_text(encoding="utf-8"), agent.name
@@ -843,7 +843,7 @@ def test_kpis_reports_effort_calibration(catalog):
 
 
 def test_effort_levels_prefers_the_measured_figure():
-    text = (ROOT / "skills" / "effort-levels" / "SKILL.md").read_text(encoding="utf-8")
+    text = skill_text(ROOT / "skills" / "effort-levels")
     assert "effort-calibration" in text
 
 

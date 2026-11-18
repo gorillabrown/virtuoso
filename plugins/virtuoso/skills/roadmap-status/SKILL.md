@@ -245,7 +245,7 @@ puts it back):
 | Total items | |
 | Counts by canonical status | queued, in-flight, blocked, completed, dissolved, superseded, unknown |
 | % complete by count | terminal ÷ total |
-| Effort totals and % complete by effort | requires an effort value on every item and a scale entry for every value; otherwise **not computable**, with the offending items named |
+| Effort totals and % complete by effort | in hours when `kpis` reports `effort-basis` hours (an item without hours counts its size word through the scale, and the figure is *inferred*), else in points; requires hours or a sized, scaled effort value on every item; otherwise **not computable**, with the offending items named. Say the unit and the kind |
 | Items remaining | blocked + queued + in-flight |
 | Dispatch-ready items | against `policy.roadmap.dispatchBuffer`; if the buffer is 0, report "eager specification disabled" |
 | Group progress | only if the project uses grouping |
@@ -315,9 +315,9 @@ Each becomes a Phase 2 candidate, never a Phase 1 edit.
 
 ### Where we stand
 - **Current group ([name]):** X% of the group's work remains. *(omit for a flat project)*
-- **Finish line:** Y% remains by effort; N items remain.
+- **Finish line:** Y% remains by effort ([hours | points]); N items remain.
   *(or: not computable — [missing inputs])*
-- **Deadline ([label], [date]):** N items / P points remain in its scope; at the
+- **Deadline ([label], [date]):** N items / P [hours | points] remain in its scope; at the
   trailing rate they finish [projected date]. *(one line per declared deadline;
   omit when none is declared)*
 

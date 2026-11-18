@@ -41,266 +41,53 @@ same thing — proceed on the shipped file alone.
 
 # Virtuoso
 
-You are about to execute a multi-step task. This skill keeps you disciplined throughout
-the entire run — not just the first few tool calls. The problem it solves: behavioral
-rules read at session start get deprioritized under context pressure after 10+ tool calls.
-This skill stays in active context because you reference it at every step boundary.
+Rules read at session start fade after 10+ tool calls; this skill holds because you return to
+it at every step boundary. This file is the flow, gates and stops; each phase names the
+`references/` file to read at its point of use.
 
 **Announce at start:** "Using the Virtuoso skill to maintain execution discipline."
 
-**The only skill that executes.** Every path to execution ends here
-(`references/execution-paths.md`). `/storyboard` scopes work to a draft stub.
-`/write-plan` and `/roadmap-review` write the full plan. `/next-dispatch` gates it, and
-`/epic` prepares a packet. None of them edits an edit site, creates the work branch, or
-runs the change. This skill does, and only from a written plan: a draft stub or an idea
-goes back to `/storyboard` and `/write-plan` first.
+**The only skill that executes** (`references/execution-paths.md`): `/storyboard` scopes,
+`/write-plan` and `/roadmap-review` plan, `/next-dispatch` gates, `/epic` prepares; none edits
+an edit site, creates the work branch, or runs the change. This skill does, only from a
+written plan; a draft stub or an idea goes back to `/storyboard` and `/write-plan`.
 
-## Dispatch Record Naming
-
-When Virtuoso starts a dispatch, the visible record must be named for the work, not for
-the trigger token. If the implementation agent's host creates a new chat/thread/record for the run,
-the desired title is:
-
-`[DISPATCH-ID] — [short dispatch name]`
-
-Examples:
-- `NARR-DEEPEN-2 — Chunk Timing Narration`
-- `POSTV2-REVIEW-1 — Review Closeout`
-- `DISPATCH-QUEUE-MIGRATE — Workbook Queue Transition`
-
-A kickoff that carries a `Session:` line gives the title already fixed: use that line's
-value up to ` · Remote Control:`, without the `Session:` label, as written.
-Title the session by the first means the host offers — a session-title tool, a title
-command, the first visible line — and do it before implementation begins. Try them in
-this order:
-
-1. **A session-title tool.** When the host exposes a tool that sets this session's own
-   title, call it with the title. Done.
-2. **A title command the owner types.** When the host has no such tool but has a command
-   the owner can type to rename the session, print that command filled in with the title,
-   ready to run, in the announcement, and ask the owner to run it. Carry on; do not wait.
-3. **The first visible line.** When the host offers neither, the title is the
-   first substantive visible line after the short Virtuoso announcement:
-
-`[DISPATCH-ID] — [short dispatch name]`
-
-Print that line in every case, even after a tool set the title, so the record reads the
-same on any host.
-
-Do not let the record remain titled `$virtuoso`, `/virtuoso`, "Virtuoso", or any
-other skill-trigger-only name when the dispatch or dispatch name is knowable. If the
-dispatch ID is unknown at intake, use a temporary descriptive title and update the
-first plan heading once the ID is discovered.
-
-### Remote Control: state it, prompt for it
-
-At dispatch start, right after the title is set, say whether Remote Control is on for this
-session, so the owner can follow and answer it from another device. Prompt; do not switch:
-
-- **On:** say so, and leave it as it is.
-- **Off:** print the one step that turns it on, ready to use: the host's switch or the
-  command the owner types. Carry on; do not wait.
-- **A Remote Control tool** the host exposes is called only when the owner asks for it,
-  on record for this dispatch: the owner said so in the session, or the kickoff asks for
-  it in so many words. The `Session:` line's Remote Control slot is the kickoff's
-  best-known state, not a request; restate the live state here.
-- **State unknown:** when the host has a switch but cannot report it, say so and print
-  the step.
-- **No switch at all:** say in one line that this host offers no Remote Control switch.
-
-A session never turns it off: not by a tool, and not by printing a step for a switch that
-is already on.
-
-## Architecture: Parent Chat + Optional Swarm
-
-Virtuoso runs inside the active parent conversation or the implementation agent's parent
-record. It is acceptable for the implementation agent to preserve a separate record per dispatch run, but
-that record must be named for the dispatch, not for the skill invocation. Do not create,
-request, or suggest an additional top-level chat just to re-run Virtuoso inside a
-dispatch record that already exists.
-
-Agent swarms are allowed when the user or dispatch spec authorizes parallel
-implementation. Child agents are workers attached to the current dispatch plan, not
-new `$virtuoso` parent chats. The parent thread reads the dispatch spec, builds the
-task plan, launches child agents only for concrete independent tasks, integrates
-their results, runs verification, and keeps the human oriented.
-
-**No orphan-chat rule:** Virtuoso may use `Agent()` / `spawn_agent` for bounded
-worker tasks, but never as a way to start a new parent chat, restart the dispatch in
-another conversation, or invoke `$virtuoso` recursively. If a legacy workflow says
-"open a new Virtuoso chat," ignore that instruction and continue in the current
-parent conversation.
-
-**The boundary that matters is parent vs worker.** The parent owns the plan,
-scope, narration, integration, and close-out. Workers own bounded task execution.
-All worker output returns to the one visible dispatch plan in the parent chat.
-
-## Effort Levels
-
-Every dispatch may declare a **default effort level** that controls how deeply the
-parent thread and child workers should reason. Effort is set when authoring the
-spec; Virtuoso respects it and records mismatches during close-out. The full
-decision framework, cost implications, and task-type reference live in the
-`effort-levels` skill. This section covers only what the parent thread needs
-to know during execution.
-
-### The Five Levels
-
-| Level | Thinking Budget | Behavior |
-|-------|----------------|----------|
-| **low** | Minimal | Pattern-match from trained knowledge. Answer from memory, don't work through it. |
-| **medium** | Moderate | Meaningful reasoning within capacity. Handles majority of standard tasks. |
-| **high** | Substantial | Traces complex logic, considers multiple approaches, backtracks when needed. |
-| **xhigh** | Deep | More deliberation than high, short of max: long traces across several modules. |
-| **max** | Full available | Reasons as extensively as context allows. Slowest, most expensive, highest quality. |
-
-### How Virtuoso Uses Effort Levels
-
-1. **Read the dispatch's declared effort** from the dispatch header (e.g., `Effort: Medium`).
-2. **Check for task-level overrides** — individual tasks may annotate `{high}`, `{xhigh}`
-   or `{max}` to override the dispatch default.
-3. **Record effort on the task plan** and pass it through to any child worker prompt.
-4. **Effort ↔ task-tier defaults** — when effort is not explicitly annotated on a task, it
-   inherits from the task tier: mechanical→low, bounded→medium, cross-cutting→high.
-5. **Print effort on every row.** A `[bounded]` task with no annotation is `{medium}`, and
-   its row says `{medium}`; a task that overrides says its own level, `[bounded] {high}`.
-
-### Close-out: Effort Mismatches
-
-In Phase 6 (Close Out), flag any task where the declared effort didn't match actual
-complexity. "Task #3 was spec'd as {low} but required 3 retries — recommend {medium}
-for similar tasks." This feedback helps the planner calibrate future dispatches.
-
----
+**Before implementation begins, read [references/session-setup.md](references/session-setup.md)
+and do it:** title the record `[DISPATCH-ID] — [short dispatch name]`, state Remote Control
+(prompt; never switch it, never turn it off), and keep one parent chat — workers are bounded,
+never a new parent. Effort is the header's default, a task's own override, or its tier's default.
 
 ## Phase 1: Load and Understand
 
 Before touching any file or running any command:
 
-1. **Read the full task specification.** If the task references external docs, read those too.
-   When the task is a governed dispatch, read its **origin line** as well
-   (`references/execution-paths.md`). The spec may be a roadmap item from `/next-dispatch`, a
-   held plan handed off by `/write-plan`, or an epic packet from `/epic`. All three arrive
-   meeting the same destination contract. The origin tells the intake below which checks
-   to run, and tells Phase 6 how the close-out runs.
-2. **Read the behavioral reference** — the bundled [`references/zeus.md`](references/zeus.md)
-   (Virtuoso's orchestration protocol: routing decision tree, agent hierarchy, escalation
-   rules), or the project's own lead-agent definition if it overrides — to load the routing
-   decision tree, escalation rules, and coordination protocol.
-3. **Identify every discrete deliverable.** A deliverable is something you can point to when done
-   (a file changed, a test passing, a document updated, a commit made).
-4. **Flag anything unclear.** If a step is ambiguous, a file path might be wrong, or a dependency
-   might not exist — stop and ask NOW. Guessing wastes 10x more time than asking.
-5. **Declare the workstream and its surface manifest** when the project runs workstream-based
-   concurrency. Read the workstream assignment from the dispatch spec; if the spec does not
-   name one, ask before touching a file.
-6. **Run the conflict check** (below) for a governed dispatch, and the **held-plan
-   intake** when the origin is a held plan. Both come before the first edit and before
-   the work branch exists.
-7. **Read the milestones** of a governed dispatch or epic, derive them if the specification
-   has none, show them, and open the progress band's run (*The Progress Band*, below).
-   The milestones group the task list Phase 2 builds.
+1. **Read the full task specification**, what it cites, and a governed dispatch's **origin
+   line** (`references/execution-paths.md`), which sets the intake and the Phase 6 close.
+2. **Read [`references/zeus.md`](references/zeus.md)**, or the project's overriding lead-agent definition.
+3. **Identify every discrete deliverable** — something you can point to when done.
+4. **Flag anything unclear** — stop and ask NOW. Guessing wastes 10x more time than asking.
+5. **Declare the workstream and surface manifest** when workstreams are in use; ask if the spec names none.
+6. **Run the conflict check** and, for a held plan, the **held-plan intake**, before the first
+   edit and the work branch. **Read [references/intake.md](references/intake.md) first.**
+7. **Read or derive the milestones**, show them, and open the band's run
+   ([references/progress-band.md](references/progress-band.md)).
 
-### The conflict check — before the first edit
-
-A written plan was safe to run when it was written. This check makes sure it is still
-safe now, against the roadmap and the work around it. It is read-only: lock-free git
-(`GIT_OPTIONAL_LOCKS=0 git --no-optional-locks …`) and the registry helper's read side
-(`items --all --json`, `holding --open`, `lessons --open`).
-
-| Direction | What to check | A conflict looks like |
-|---|---|---|
-| **Upstream** | Every prerequisite is terminal through the provider. A prerequisite in a held entry reads `executed` (`holding --check`). | A prerequisite that is still queued, in flight, or blocked |
-| **In flight** | Nothing else in flight touches these edit sites: in-flight register items, in-flight held entries, and other open branches and worktrees (`git worktree list`, then `git log --oneline <default>..<branch> -- <edit sites>` for each) | Another run changing the same files now |
-| **Roadmap order** | Where the plan sits against the current order: its kickoff's *Placement* line, or its sequence. Any item ahead of it that is not terminal and touches the same edit sites, or that it depends on. | Landing underneath work the roadmap put first, or jumping ahead of the head without a recorded reason |
-| **Downstream** | The items the plan's impact map and placement name as downstream, and any dispatch-ready specification that cites a location this plan moves (search the specification store for the edit sites' anchors) | A specification this run will make stale |
-| **Drift** | Commits at the edit sites since the base the kickoff names (`git log --oneline <kickoff's sha>..<default branch> -- <edit sites>`), and live lessons recorded since the plan was written | Code that moved under the plan |
-
-Straight from the ceremony that just gated the plan, in this session, the check is quick:
-it confirms what that ceremony read. From another session, or on a later day, it is the
-check that matters. For an epic packet, run it at the first session against the
-charter's scope. The packet's resume protocol covers the sessions after that.
-
-What a conflict does:
-
-- **Upstream pending, or in-flight work on the same edit sites** → stop before the first
-  edit. Render the issue (Phase 5) and route it to `/mid-dispatch-decision`. Two runs
-  never change the same edit sites at once.
-- **Roadmap order** → ask one bounded question: wait for the earlier item, run now with
-  the user's reason recorded in the plan, or send it back to be planned again.
-- **Drift, or a plan that no longer matches the code** → stop. A held plan goes back to
-  `/write-plan <entry>`, and a roadmap item to `/next-dispatch`. Never re-plan here.
-- **Downstream staleness** → not a stop. Name each affected item in Task #1's notes and
-  in the close-out, so the review acts on it. Another item's specification is not this
-  run's to edit.
-
-Print the result as one line under Task #1:
+**What a conflict does.** Upstream pending, or in-flight work on the same edit sites → stop
+before the first edit; issue (Phase 5) to `/mid-dispatch-decision`. Roadmap order → one
+bounded question: wait, run now with the user's reason recorded, or send it back. Drift, or a
+plan that no longer fits the code → stop: a held plan to `/write-plan <entry>`, a roadmap item
+to `/next-dispatch`; never re-plan here. Downstream staleness → not a stop: name each item in
+Task #1's notes and the close-out. Print under Task #1:
 `Conflict check: upstream ✓ · in flight ✓ · roadmap order ✓ · downstream [n flagged] · drift ✓`.
 
-### The held-plan intake
-
-A held plan (`Origin: held plan — <entry> (HB-<n>)`) comes straight from `/write-plan`'s
-hand-off, in this session or another. `/storyboard` scoped it and `/write-plan` specified
-it. Neither executed anything. As part of Task #1:
-
-1. **Read its state:** `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . holding --check <entry>`.
-   - `planned` → continue.
-   - `in-flight` → another run holds it. Stop and ask. Never run it twice.
-   - `storyboarded` → there is only a draft stub, and no plan. Route to `/write-plan <entry>`.
-   - `absorbed` → it is a roadmap item now. Route to `/next-dispatch`.
-   - `executed` or `withdrawn` → there is nothing to run. Say so and stop.
-2. **Run the conflict check** above, against the entry's kickoff, placement, and impact map.
-3. **Record the start of execution.** Preview first, then run it with `--apply`:
-
-       "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso holding --record <entry> --state in-flight --note "executing: <branch>" --apply
-
-   If the command refuses because `virtuoso` may not write the `holdingBay` role, the
-   project registered the role before this skill recorded there. Show the user the fix,
-   which is adding `virtuoso` to the role's `allowedWriters`, and stop until they make
-   it. Never record under another ceremony's name.
-4. **Run the kickoff's repository-reconciliation recipe first**, before the first edit.
-   Halt on any STOP it contains, and report the git output.
-5. The dispatch identifier is the `HB-<n>`. An item set runs every item, in prerequisite
-   order, in this one run.
-
-**If the run ends without completing**, and will not resume from `/mid-dispatch-decision`
-in this run, hand the entry back to the bay:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso holding --record <entry> --state planned --note "stopped: <why>; <what is preserved, where>" --apply
-
-Name any item of a set that did close out, so the review absorbs it as completed. The
-holding bay lets this skill record `planned` only out of `in-flight`: it hands a run
-back, and it never plans. A finished run goes to `/dispatch-closeout`, which records the
-entry `executed`.
+**Phase 1 rules** bind as written. Before writing or accepting any criterion, gate, or null
+result, read their riders in [references/verification-rules.md](references/verification-rules.md).
 
 <!-- rule:lane-declaration (lane-concurrency) -->
 **Workstream discipline.** Under workstream-based concurrency the dispatch declares, at Phase 1 and
 before any edit:
 
-| Declaration | What it is |
-|---|---|
-| **Workstream** | Which workstream this dispatch occupies. A project with an exclusive engine workstream admits exactly one engine dispatch at a time. |
-| **Surface manifest** | The explicit set of paths this dispatch may write. Anything outside it is another workstream's surface. |
-| **Merge slot** | The per-workstream serialization token claimed at integration, not at dispatch. |
-
-The manifest is what makes a dirty file someone else's problem rather than a blocker:
-dirt inside the manifest stops the dispatch, dirt outside it is disclosed and ignored.
-A dispatch that cannot state its workstream and manifest is not ready to dispatch — stop and
-ask, do not infer one from the files the spec happens to mention.
-
-**Resolve the concurrency cap from the project's own gate; never assume one, and never
-restate a number here.** The cap and the workstream set are project configuration, enforced by
-the project's worktree/workstream tooling. Read them from that tool at dispatch time. A cap
-written into this skill body would be a restatement that goes stale the moment a project
-changes its workstream count — which is the failure this skill's own citation discipline exists
-to prevent.
-
-**Concurrency supersedes serialization — do not re-introduce "one dispatch at a time."**
-Workstream-based concurrency with serialized *integration* replaced the older
-one-dispatch-in-flight rule. A project that has adopted workstreams has retired serialization-first
-deliberately; re-adding it contradicts both that project's governance and its shipped
-tooling. Serialized mode survives only as the **default for a dispatch that declares no
-workstream**, which is a different rule.
+workstream, surface manifest, and merge slot (`references/intake.md`); none stated → stop and ask.
 
 <!-- rule:mechanical-acceptance-criteria (mechanical-criteria) -->
 **Every acceptance criterion and stop gate must be mechanical.** A criterion is
@@ -310,31 +97,14 @@ met: a numeric threshold, a boolean check, or an enumerable list. Words like
 from a completion condition — if the spec uses one, resolve it to a number before
 Task #1 is marked ✓, or stop and ask.
 
-Two riders:
-
-- **A stop gate that names a rollback must also name what happens when the rollback
-  fails.** An unhandled failed rollback is how a gate turns into an improvised
-  decision under pressure.
-- **A contingency is pre-registered as a decision table covering every axis the
-  measured fact touches** — not only the axis that prompted the contingency. If the
-  measurement can come back high, low, or unreadable, all three rows exist before the
-  measurement runs.
-
 <!-- rule:red-base-procedure (red-base) -->
 **If completion depends on a suite gate, measure the base before implementing.**
 Capture the base branch's suite result as its own step, before the first edit, so
 attribution is unambiguous later. Then:
 
-- **Base green** → proceed; any new failure is yours.
-- **Base red** → do **not** diagnose it in-dispatch. File it as an issue via the Phase 5
-  contract, escalate, and continue only against the pre-existing-failure list. Verify
-  each suspected pre-existing failure against the base before spending a single debug
-  cycle on it.
-
-A dispatch that discovers a red base halfway through cannot tell its own breakage from
-the base's, and every hour after that point is spent on the wrong question.
-
-### Verification integrity — how you know a check is telling the truth
+**base green** → proceed; new failures are yours. **Base red** → do **not** diagnose it
+in-dispatch: file a Phase 5 issue, escalate, and continue only against the verified
+pre-existing-failure list.
 
 <!-- rule:instrument-positive-control (INSTRUMENT-CONTROL) -->
 **Never trust a null result from an unvalidated instrument.** "No change", "zero",
@@ -342,33 +112,11 @@ the base's, and every hour after that point is spent on the wrong question.
 until the instrument has been shown capable of reporting the opposite. A green check
 and a check that examines nothing report the same symbol.
 
-Before a null result is allowed to close anything:
-
-- **Show the check fail.** Run it against a deliberately broken fixture, or against a
-  known-bad input, and observe the failure. A check whose red state was never observed
-  is unproven coverage.
-- **Say which real inputs it fires on today.** A rule that matches no real row is not
-  protecting anything, however correct its logic.
-- **Distinguish a structural zero from a guarded one.** "This cannot happen" and "this
-  is currently prevented" are different claims with different blast radii; a zero used
-  as proof of unreachability must say which it is.
-- **A verifier must exercise the real thing.** A check that reimplements the logic it
-  is checking, or hardcodes a copy of the data it is validating, can pass while the
-  production path is broken — and can be wrong on its own.
-
 <!-- rule:identity-not-counts (GATE-IDENTITY) -->
 **Gates and acceptance criteria state identities, not counts.** A gate that tolerates
 known failures records the failing **node IDs** and compares them against the expected
 waived set. A matching count with a narrative attribution is not a pass — it is a
 coincidence that has been argued for.
-
-- Never state a suite criterion as a count, or as "passes". State it as the failing
-  node-ID set measured against the base.
-- A numeric carve-out ("up to N failures allowed") is a licence that widens silently as
-  its baseline goes stale. Enumerate instead.
-- **Name the tested tree by hash.** When workstreams stay unsynchronised during implementation,
-  "the combined tree" describes nothing; a result whose tested-tree hash differs from the
-  tree proposed for merge is a result about a different tree.
 
 <!-- rule:name-the-fork-under-test (FORK-SURFACE) -->
 **Name which fork the acceptance test runs against.** When a fix lands on a path that
@@ -376,318 +124,42 @@ forks by backend, environment, or deployment target, the spec names the fork the
 exercises, plus a check that the suite is not entirely the blind fork. "Tests pass" is
 not a completion condition when two forks exist and only one is covered.
 
-Two corollaries with teeth: verification must run against **the artifact that ships**,
-not a convenient local stand-in; and a gate's trigger must cover the **union** of the
-paths it guards, or it sits vacuous over whatever it does not reach.
-
 <!-- rule:cite-searchable-anchor (CITE-ANCHOR) -->
 **Cite a searchable anchor, not a line number.** Any `file:line` inherited from a
 document older than the current session is **unverified by default** — citation drift is
 structural, not careless. Cite a function name, a constant, a heading, or a verbatim
 fragment: an anchor survives edits above it, a line number does not.
 
-The same applies to a cited rule or lesson **number**: verify it by content, not by
-existence. A number that resolves to unrelated text is worse than a missing citation,
-because it reads as verified.
-
 <!-- rule:state-integrity-by-hash (content-not-presence) -->
 **Prove state by content, not by presence.** A recovery, health check, or "did it land"
 check that confirms a file or row *exists* accepts a truncated, tampered, or
 half-completed state as clean. Compare the actual hash against the recorded expectation.
 
-- **Capture evidence at the right point in the lifecycle.** A hash taken before flush,
-  checkpoint, or close reproduces the pre-change value and proves nothing — a "before"
-  and "after" that match after a real change is a measurement error, not a finding.
-- **Hash canonical content, not local bytes.** A pin computed over working-tree bytes
-  fails on a fresh checkout for line-ending reasons alone, which makes the pin useless
-  precisely where it matters.
-- **Truncated output read as absence is a false negative.** An existence check piped
-  through `head` reports "not found" for something present further down.
-
-If you have concerns about the plan, raise them before proceeding. Plans are not sacred —
-they're starting points. But once you start executing, follow the plan unless you hit a
-genuine blocker.
-
----
+Raise concerns about the plan now; once executing, follow it unless genuinely blocked.
 
 ## Phase 2: Build the Task Plan
 
-Print a numbered task plan with checkbox markers. Every deliverable from Phase 1 gets a line.
-Use these markers consistently throughout:
-
-```
-□ = not started
-■ = in progress
-✓ = completed
-✗ = blocked (with reason)
-```
-
-### Task format
-
-Every task line follows this format: `□ N. owner-label: Task description [tier] {effort} ‹model› @kind  M min (basis)`
-
-- **Task tier** in square brackets: `[mechanical]`, `[bounded]`, or `[cross-cutting]`.
-  The tier describes the *task*, not the capability of whoever runs it; a host maps a tier
-  to whatever model or agent it has available.
-- **Effort level** in curly braces, on every row: `{low}`, `{medium}`, `{high}`,
-  `{xhigh}` or `{max}`. A task the specification leaves blank takes its tier's default
-  (mechanical→low, bounded→medium, cross-cutting→high), and the row prints it.
-- **Model** in angle quotes: the owner agent's `model` alias from its frontmatter, which
-  the plugin's `references/model-tiers.md` maps to a model. A row with no owner agent yet
-  shows its tier's alias from that table. A host that reads neither `model` nor `effort`
-  still runs the plan: the row says what the planner intended.
-- **Kind** after an `@`, optional: a name for a row that recurs across dispatches
-  (`@merge-slot`, `@fix-round`, `@gate-3-calibration`). A recurring row is priced from its
-  kind's own history, so reuse a name `timing --kinds` already lists rather than coin a
-  near-duplicate. Names are normalized to lowercase words joined by hyphens.
-- **Prediction** last: the row's predicted working minutes and their basis, `38 min (median
-  of 6 runs)` or `90 min (estimated)`. `timing --open` prices every row when the task list
-  is first listed. It uses the median of at least 3 measured rows of the same kind, else
-  of the same tier and effort, else the row's own `estimate`, labelled `estimated`. Only
-  rows that ran to `done` count. A prediction is fixed once its row is listed, so the
-  first listing's total never moves. A run's own finished rows price the rows added
-  after them, and every later dispatch. Never type a prediction in yourself, and never
-  label a guess as measured.
-- **Task #1 is always `Zeus: Load spec, build plan, assign owners [cross-cutting]`.** Non-negotiable.
-  This represents Phases 1–3 combined. Task #1 is marked ✓ only after the lead has:
-  1. Read and understood the full dispatch spec (Phase 1)
-  2. Built the numbered task plan (Phase 2)
-  3. Assigned parent-owned tasks and child-worker candidates (Phase 3)
-  4. Recorded the repository starting point when the spec requires one
-  5. For a governed dispatch, printed the conflict check, and for a held plan, recorded
-     the entry `in-flight`
-  6. Printed the final assignment table
-  Task #1 is the parent thread's setup work. Everything after Task #1 is either
-  executed by the parent or delegated to child workers under this same dispatch plan.
-- Every subsequent task starts with `unassigned:` as a placeholder — Phase 3 replaces
-  these with owner labels.
-- The dispatch's declared effort level is the default. Task-level annotations override it.
-
-### Task tiers
-
-Annotate each task with the **lowest tier that can carry it without sacrificing accuracy**.
-A tier is a property of the task, not a ranking of hosts, products, or models. The host
-maps a tier onto whatever agents or models it actually has.
-
-**mechanical** — deterministic steps with a known correct answer: running a test suite,
-formatting a file, updating a version number, committing. Speed and reliability, not
-reasoning depth.
-
-**bounded** — single-domain work requiring judgment inside one scope: writing a function,
-tuning a constant, fixing a bug in one module, updating documentation to match code.
-Domain knowledge, but no cross-cutting awareness required.
-
-**cross-cutting** — work touching multiple modules, requiring an understanding of
-interactions between subsystems, or involving architectural decisions. Root-cause analysis
-across files, interpreting measurements, resolving conflicting requirements.
+**Read [references/task-plan.md](references/task-plan.md)**, then print one numbered row per
+deliverable (`□` not started · `■` in progress · `✓` done · `✗` blocked, with reason):
+`□ N. owner-label: Task description [tier] {effort} ‹model› @kind  M min (basis)`.
+**Task #1 is always `Zeus: Load spec, build plan, assign owners [cross-cutting]`**, ✓ only
+when the conflict check and the assignment table are printed. One row per deliverable: **no
+collapsing tasks into batches or waves**, no silently absorbed step; add a step found later
+(`+N`) and park, never delete, one not to be done. **Open the time log** as the list is first
+listed; if `timing` refuses, stop and report the message.
 
 <!-- rule:tier-by-blast-radius (blast-radius) -->
 **Blast-radius override — ask what breaks if this output is wrong, not how hard it is
 to produce.** Cheapness is the right axis only when a wrong answer is cheap to detect
 and cheap to redo. Three cases where it is not:
 
-- **An output that becomes a baseline.** A figure that later work is measured against
-  is load-bearing even when producing it is a single command. A baseline capture
-  assigned to the cheapest tier returned figures that could not be reproduced under any
-  invocation, and an entire merge gate had to be re-derived. Baselines go to a tier that
-  can notice its own output is wrong.
-- **An interpretation wearing a mechanical label.** "Re-run the tool and report" sizes
-  as mechanical, but is reasoning-dense whenever the deliverable is an *interpretation*
-  rather than an *artifact*. Classify by the shape of the output, not by the phrasing
-  of the task.
-- **Cross-module work at the top effort tier.** These systematically trigger critical
-  review findings. Pre-allocate a **fix round as its own planned task**, so it appears
-  in the plan as a step rather than arriving as an overrun.
-
-### Example (Phase 2 output — tasks enumerated, agents not yet assigned)
-
-```
-## Task Plan — Effort: Medium | Override: tasks #6, #8 → High
-□ 1. Zeus: Load spec, build plan, assign owners                [cross-cutting] {high} ‹model›  20 min (median of 5 runs)
-□ 2. unassigned: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [bounded] {medium} ‹model›  25 min (estimated)
-□ 3. unassigned: Update constants.toml default                          [mechanical] {low} ‹model›  6 min (median of 9 runs)
-□ 4. unassigned: Run fast test suite — all shards pass                  [mechanical] {low} ‹model› @fast-suite  14 min (median of 4 runs)
-□ 5. unassigned: Run the full verification sweep                           [mechanical] {low} ‹model›
-□ 6. unassigned: Interpret cal results + decide if tuning needed        [cross-cutting] {max} ‹model›
-□ 7. unassigned: Generate profiler snapshot with pathway metrics        [mechanical] {low} ‹model›
-□ 8. unassigned: Analyze profiler — does freed space flow to both?      [cross-cutting] {max} ‹model›
-□ 9. unassigned: Update CLAUDE.md with constants and cal results        [bounded] {medium} ‹model›
-□ 10. unassigned: Commit, merge to main, push                          [mechanical] {low} ‹model›
-```
-
-(Rows 5–10 carry their predictions the same way; they are elided here.)
-
-Note: Tasks #6 and #8 override to `{max}` because interpreting calibration results
-and analyzing profiler output across subsystems are genuinely hard analytical problems
-where getting it wrong has real downstream consequences. All other tasks use their
-task-tier defaults (mechanical→low, bounded→medium, cross-cutting→high).
-
-**Governance task rewrite (worktree-resident dispatches):** Task #9 targets CLAUDE.md,
-which is a protected governance document. In a worktree-resident dispatch, the lead rewrites
-this task at plan time:
-```
-□ 9. unassigned: Write staging fold-ins for CLAUDE.md (constants + cal results) [bounded]
-```
-The implementation agent writes fold-in entries to the staging file instead of editing CLAUDE.md
-directly. See §Worktree Governance Staging for the full pattern.
-
-Also create a TodoWrite to track the same tasks programmatically. The printed plan is for
-human readability; TodoWrite is for persistent tracking.
-
-### Rules
-
-- Task #1 is always parent-thread setup work (Phases 1–3). No exceptions — except a plan
-  opened from a specification's task list, whose numbers stand (the setup row is added).
-- One task per logical deliverable. Don't bundle "edit file AND run tests" into one line.
-- **No collapsing tasks into batches or waves.** Every task from Phase 1 stays its own
-  numbered line item in the plan. If you need to batch dispatches for practical reasons
-  (e.g., tool-count ceilings), that is a dispatch optimization inside Phase 4 — but the
-  task plan still tracks each deliverable individually. Never merge tasks like
-  "implement tasks 1-6 + write tests" into a single line. Each task is executed or
-  delegated, tracked, and reported on independently.
-- If the spec says to do it, it gets a line. Don't silently absorb steps.
-- If you discover a new required step during execution, ADD it to the plan with
-  `timing --kinds`, then `timing --dispatch <DISPATCH-ID> --add --rows-file <row.json>`, and reprint. It takes the next number and shows as
-  `+N`, the mark of a row the first listing missed. A row a review or an audit raised says
-  so: `--add --origin review` shows `RN`, `--origin audit` shows `AN` (the default origin
-  is `added`). Plan review and fix rounds as rows from the start (they are priced from
-  history), so they are not the ones added later.
-- **A row the run will not do is parked, not deleted:** `timing --dispatch <DISPATCH-ID>
-  --park N --reason "<why>"`, for a row not yet started (a started row ends `--result
-  cancelled`). It shows `◇` under *Parked* in `--status` and `--summary`, and at the
-  close-out each parked row becomes a `findings` entry with Disposition `open`.
-
-### Open the time log
-
-As the task list is first listed, open the dispatch's time log. The log prices every
-row and records its working time from the machine clock. First list the kind names
-already in use, so a recurring row reuses one:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . timing --kinds
-
-Then write the rows to a scratch JSON file, one object
-per row: `id`, `title`, `owner`, `tier`, `effort`, `item` (the item the row belongs to,
-for a combined epic), `parallel`, an optional `kind`, and an `estimate` in minutes for
-any row history cannot price. Record what the log can never backfill: `class`
-(`calculable`, `repeat` or `frontier`), `specRevision` (the specification's commit),
-and `group` (the parallel group's id). A frontier row is never estimated: it carries a
-`timebox` in minutes and `onTimebox`, the action when the budget runs out, and is
-priced at its timebox (`timeboxed`). Then run:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing --dispatch <DISPATCH-ID> --open --rows-file <rows.json>
-
-When the specification carries a `##### Task list` (`references/task-rows.md`), open
-from it instead, so its rows keep their numbers and the specification's price stays
-beside the launch-time one:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso timing --dispatch <DISPATCH-ID> --open --from-spec <spec> --item <ITEM-ID>
-
-The specification's numbers are the plan's numbers. Rows it does not list, Task #1's
-setup row among them, go in with `--add`, take the next numbers, and are measured like
-any other row.
-
-The log is `Timing.<DISPATCH-ID>.jsonl` in the registry's `closeOuts` role. The row
-numbers it holds are the plan's numbers from here through close-out. `--open` refuses a
-row it cannot price, naming it. Give that row an `estimate` and open again. Print the
-plan with the predictions `timing --status` shows, so they are not retyped. No flag takes a
-time or a duration: every stamp comes from the clock, so never write the log by hand.
-The `closeOuts` directory must exist. In a project with no close-out yet, create it
-first with `closeout --item <DISPATCH-ID> --date <YYYY-MM-DD> --prepare`. A step
-discovered mid-run is registered before its first `--start` with
-`timing --dispatch <DISPATCH-ID> --add --rows-file <row.json>`. It takes the next number.
-If `timing` refuses (no `closeOuts` role, no open log, an unknown row), stop and report
-the message.
-
----
+a baseline, an interpretation labelled mechanical, and top-effort cross-module work (`references/task-plan.md`).
 
 ## Phase 3: Assign Parent And Worker Owners
 
-With the task plan built, the parent thread decides which tasks it should do locally
-and which tasks are good child-worker candidates. This gives the human a clear
-execution map without creating a fresh parent chat for the dispatch.
-
-### The Owner Hierarchy
-
-```
-Zeus — owns plan, scope, integration, verification, close-out [cross-cutting]
-  ├── hermes-worker  — mechanical execution, known-correct changes   [mechanical]
-  ├── hercules-worker — single-domain implementation, bounded judgment [bounded]
-  ├── aristotle-worker — cross-system implementation, architectural  [cross-cutting]
-  └── specialist workers — bounded job descriptions
-        ├── Hippocrates — test execution                          [mechanical]
-        ├── MarcusAurelius — spec compliance, chronicles, docs    [bounded]
-        ├── Plato — code quality review                           [bounded]
-        └── [Project specialists as available]
-```
-
-Workers are child agents under the current dispatch run when delegation is authorized.
-They are not standalone `$virtuoso` chats and they do not own the parent plan.
-
-### Step 1: Scan for available workers
-
-Search the project directory for role/agent definitions if they help preserve local
-language. Look in:
-- `.claude/agents/` — project agent definitions
-- The plugin's bundled `agents/` (e.g., `Socrates`, the calibration specialist)
-- The dispatch spec or task description for named roles
-- The bundled behavioral reference [`references/zeus.md`](references/zeus.md) for the routing decision tree
-
-Build a compact inventory. Do not spawn yet; spawning only happens during Phase 4
-after the plan identifies a concrete worker task.
-
-**Worker Name Resolution:** For every worker/agent file discovered, read its YAML
-frontmatter `name:` field and use that label in the plan when helpful. The `name:`
-field is authoritative for worker naming.
-
-### Step 2: Analyze each worker's intent and tier
-
-For every discovered worker role, read its definition and extract:
-- **Intent**: what is this worker designed to do?
-- **Tier**: which task tier is it built for (mechanical / bounded / cross-cutting)?
-- **Type**: doer (general implementation) or specialist (bounded job)?
-- **Constraints**: any specializations, limitations, or scoping rules?
-
-Print the roster:
-
-```
-## Worker Roster
-Doers:
-- hermes [mechanical] — mechanical execution, prescribed changes
-- hercules [bounded] — single-domain implementation with judgment
-- aristotle [cross-cutting] — cross-system implementation, architectural decisions, root-cause analysis
-
-Specialists:
-- hippocrates [mechanical] — runs test suites, reports pass/fail
-- marcusaurelius [bounded] — spec compliance, documentation, governance updates
-- plato [bounded] — code quality review
-```
-
-If doer roles are not defined in the project, use the generic labels above. The
-concept (cheap/mid/expensive work tiers) applies regardless of whether formal role
-files are present.
-
-### Step 3: Pair owners to tasks — the routing decision tree
-
-For every task in the plan, walk this tree top-to-bottom. Take the FIRST match.
-
-**0. Parent-owned?**
-Is this task on the critical path, tightly coupled to current integration work,
-mostly orchestration, or unsafe to hand off because the parent needs the result
-immediately?
-→ **Zeus**
-
-**1. Specialist match?**
-Does a specialist label match this task exactly?
-- Running tests → **hippocrates**
-- Running a calibration / measurement harness → **socrates**
-- Verifying spec compliance → **marcusaurelius**
-- Reviewing code quality → **plato**
-- Updating governing docs → **marcusaurelius**
-- Diagnosing unknown bug → **aristotle**
-- Project specialist exists and matches → **that specialist**
-
-If yes and the task is independent enough to hand off → assign to the specialist
-worker. Stop.
+**Read [references/owners.md](references/owners.md)** and route each task by its tree, first
+match wins: Zeus for critical-path work, then an exact specialist, then hermes (exact diff),
+hercules (one domain), aristotle (cross-system). Reprint with owners; that completes Task #1.
 
 <!-- rule:calibration-routing (measurement-dispatch) -->
 **Measurement is not regression.** A run whose output is a *distribution compared
@@ -698,132 +170,18 @@ it has a measured value that someone has to interpret. Routing it to the
 execution-only tier produces numbers nobody can defend and a gate that has to be
 re-derived. This holds for small-sample sanity runs and full multi-seed runs alike.
 
-**The tell is the output shape, not the vocabulary.** Renaming a measurement run
-"quick verification" or "acceptance verification" does not convert it into a
-regression check — if a seed count or a target band appears anywhere in its
-definition, it is measurement. A grep tuned to the old words will certify a clean
-bill on an intact defect, which is how this rule was violated after it was written.
-
-**2. Exact diff known?**
-Can you write the precise file + old text + new text right now, with zero judgment?
-(Config value changes, renames, version bumps, git stage/commit/push, file copies)
-→ **hermes-worker**
-
-**3. Single module / single domain?**
-Does the work only need to understand ONE area of the codebase?
-(Write a function, fix a known bug, implement a scoped feature, apply a fix spec,
-write tests for one module)
-→ **hercules-worker**
-
-**4. Cross-system / architectural?**
-Does the work need to hold multiple subsystems in mind? Could a change in file A
-break file B? (Multi-module refactors, interface changes, pipeline integration,
-data flow redesigns)
-→ **aristotle-worker**
-
-**5. When in doubt:** Default to **Zeus** for urgent/blocking work, or
-**hercules-worker** for independent implementation work with bounded scope.
-
-The parent may execute any task directly when that keeps the critical path moving.
-Use workers for bounded sidecar tasks that materially advance the dispatch.
-
-### Step 4: Print the assignment table
-
-Reprint the task plan with owner labels replacing `unassigned:`. This is the
-final plan that governs execution.
-
-```
-## Task Plan (single parent chat — child workers allowed)
-✓ 1. Zeus: Load spec, build plan, assign owners                [cross-cutting]
-□ 2. hercules-worker: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0 [bounded]
-□ 3. hermes-worker: Update constants.toml default                      [mechanical]
-□ 4. hippocrates-worker: Run fast test suite — all shards pass         [mechanical]
-□ 5. hippocrates-worker: Run the full verification sweep                   [mechanical]
-□ 6. Zeus: Interpret cal results + decide if tuning needed     [cross-cutting]
-□ 7. hippocrates-worker: Generate profiler snapshot with pathway metrics [mechanical]
-□ 8. aristotle-worker: Analyze profiler — does freed space flow to both? [cross-cutting]
-□ 9. marcusaurelius-worker: Update CLAUDE.md with constants and cal results [bounded]
-□ 10. Zeus: Commit, merge to main, push                        [mechanical]
-```
-
-The header states that the parent chat remains singular even when child workers are
-used. Note: Task #1 is already ✓ because printing this table IS the completion of
-Task #1.
-
----
-
 ## Phase 4: Execute With Parent-Owned Swarm Control
 
-The parent thread walks through the task plan in order. For every task after Task
-#1, the parent either executes locally or launches a child worker, then integrates
-the result back into the one parent plan.
-
-### Execution model
-
-For each task, the parent:
-1. Takes the next task from the plan
-2. **Set effort level** — if this task has an effort override (e.g., `{max}`),
-   note the override before starting and pass it through to any worker prompt.
-3. **Starts the row's clock:** `timing --dispatch <DISPATCH-ID> --start N --model <model id>
-   --host <host>`, naming the model and host that run the row. Where the band tracks the
-   dispatch, mark the row's step active: `progress --run <DISPATCH-ID> --step N --state
-   active` (*The Progress Band*).
-4. Decides whether to execute locally or launch a child worker.
-5. If launching a worker, gives it a bounded task, explicit file/module ownership,
-   success criteria, and instructions not to revert others' edits. **Name the row in the
-   spawn:** `row N` in the description (`row 4 — fix the parser`), and where the host takes
-   a task name, a task name starting `row_N_`. That is how the worker's calls count as the
-   row's cost; a spawn naming no row, or naming two rows that disagree, counts as
-   orchestration. Change models at worker boundaries: a model change in the top-level
-   session re-reads the whole conversation on the new model, so it is a priced decision —
-   state its reload cost before making it: the current context rewritten at the new model's
-   cache-write rate (`guards --dispatch <DISPATCH-ID> --context --model <new model>`).
-6. Verifies the result meets the task spec — mechanically, per the rule below.
-7. If the result includes information needed by downstream tasks, records the relevant
-   summary for later steps.
-8. **Ends the row's clock:** `timing --dispatch <DISPATCH-ID> --end N --evidence "<what
-   proves it>"` — the test, the command output or the commit step 6 checked (add
-   `--result blocked` or `--result cancelled` when it did not complete, and
-   `--tokens <count>` when the host reported the row's token usage), and marks the
-   task ✓ or ✗. A row ended `done` without evidence is a `timing --check` finding. Mark the
-   row's step on the band to match: `--state done` for a row ended done, `blocked` for one
-   ended blocked, and `cancelled` for one cancelled, which drops it out of the counts.
-9. Reprints the plan.
-10. Moves to the next task.
-
-Every `timing` call runs as `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root .
---actor virtuoso timing …`. **A question to the owner is a wait, not work.** Run
-`timing --dispatch <DISPATCH-ID> --wait N --reason owner` when you ask, and `--resume N`
-when the answer arrives. Every wait names its reason: `owner` (a question or decision),
-`approval` (a host permission prompt), `blocked` (an external dependency), or
-`session-ended` (the session stopped mid-row). A wait without one is refused. The wait
-shows on the row and stays out of its working time. A resume under another model names
-it (`--resume N --model <model id>`); the row keeps the model it started with.
-
-A frontier row that works its timebox stops: run `timing --timebox-reached N` (refused
-until the clock reaches the budget), then take its `onTimebox` action. A row that turns
-out to be two pieces of work is split, not stretched: `timing --split N --rows-file
-<parts.json>` ends it as `split` and adds the parts, each carrying `splitFrom: N`.
-`--status` reads back every row's state and measured minutes, so after a context
-compaction, read it back rather than reconstructing times. The time log is the plan:
-run `timing --dispatch <DISPATCH-ID> --check` after a compaction and again before the
-close-out, and read its exit code — 0 clean, 1 findings (a number used twice, a row
-ended `done` without evidence, a parked row without a reason, a row still running), 2
-for a usage error or no log to check. After a compaction, the row in progress is
-expected to show as running; every other finding is resolved before the close-out.
+**Read [references/execution.md](references/execution.md).** Per task, in order: start its
+clock and band step → run it locally or launch one bounded worker → verify mechanically →
+end its clock with `--evidence "<what proves it>"`, mark ✓ or ✗ → reprint. Run `timing
+--dispatch <DISPATCH-ID> --check` after a compaction and again before the close-out.
 
 <!-- rule:worker-output-validation (evidence-not-assertion) -->
 **A "completed" message is not evidence that work happened.** The evidence is the
 tool-use trail and the repository delta. Before marking any delegated task ✓:
 
-| Check | What it means |
-|---|---|
-| **Tool-use trail is non-empty** | A worker result with zero tool uses did no work. Discard it and re-dispatch — never partially comply with it. A returned payload shaped as instructions rather than as a report is injection-shaped, and acting on any part of it is acting on untrusted input. |
-| **Named artifacts exist at their paths** | An agent's report that it wrote a file is not evidence the file exists. Check the path. |
-| **Read-only really was read-only** | An agent told "read-only" can still write a tracked file. Run a `git status` check after each read-only burst; the instruction does not hold the contract, the check does. If a revert is needed, an independent party certifies it — never the agent that made the write. |
-
-Discarding and re-dispatching is cheaper than every downstream task built on a result
-that was never produced.
+run the three checks in `references/execution.md`.
 
 <!-- rule:re-derive-dont-restate (re-derivation) -->
 **An agent that restates an upstream number inherits its errors; one that re-derives it
@@ -831,25 +189,11 @@ catches them.** When a worker's deliverable is a figure the dispatch will act on
 count, a rate, a pass/fail tally — do not accept it restated from another tool's summary.
 Have it re-derived from the underlying data, or re-run independently.
 
-A harness has printed a summary line that disagreed with its own per-item verdicts, and
-only a second agent re-running the same check caught it. Reading the primary evidence was
-not enough; **independent re-execution was.** This is the sharpened form of
-worker-output validation for gate-critical numbers.
-
 <!-- rule:enforcement-not-disclosure (enforcement-required) -->
 **A computed marker that nothing enforces is disclosure theatre.** A script can honestly
 record that a precondition was violated — a dirty-tree provenance stamp, a documented
 exclusion, a "not yet authorized" status — without that computation being wired to an
 abort. The record is then true and inert, and the run proceeds.
-
-- If a condition is worth computing, wire it to a **refusal**, or state plainly that it
-  is advisory and name who acts on it.
-- **A failure signalled in data is still a failure.** A tool returning `ok: false` while
-  exiting 0 is a halt in substance; halt-detection that keys only on exceptions treats it
-  as success and skips cleanup.
-- Per-stage checks refuse **per stage**. Falling back to a soft status that still exits 0
-  is unsafe for any caller that branches on exit codes rather than waiting for a final
-  aggregate.
 
 <!-- rule:orchestrator-owns-long-runs (long-run-ownership) -->
 **The orchestrator owns any run that outlives the sub-agent tool timeout.** This is a
@@ -857,39 +201,6 @@ real exception to "the parent coordinates, workers implement", and it exists bec
 sub-agent holding a long handle is a single point of silent failure: the sub-agent's
 background process dies when the sub-agent returns, and the parent inherits a handle
 to nothing.
-
-- A suite, calibration, or build expected to exceed the sub-agent tool timeout is run
-  **by the parent**, in the parent's own background, with the parent polling it.
-- A backgrounded multi-arm compute launch in a sibling worktree dies silently and can
-  leave a stale result file that reads as fresh. Plan **foreground per-arm splits**
-  from the start rather than discovering this at the results-reading step.
-- If you are unsure whether a run will exceed the timeout, it will. Split it or own it.
-
-Owning the run does not make the parent an implementer: it still does not read source,
-edit code, or decide the fix. It holds a handle, which is coordination work.
-
-**Effort level management:** Effort controls how deeply the parent and child workers
-reason. Set the dispatch's default effort at the start of Phase 4 (read from the dispatch
-header's `Effort:` field), then note before/after any task with a `{curly brace}`
-override. The five levels are: `low`, `medium`, `high`, `xhigh`, `max`.
-```
-/effort-levels medium          ← set dispatch default at start of Phase 4
-/effort-levels max             ← before a {max} override task
-  [execute locally or launch bounded child worker]
-/effort-levels medium          ← revert after override task completes
-```
-
-**Worker prompts should be concise, not exhaustive.** Specify WHAT to do, WHERE, the
-owned files/modules, and the success criteria. Avoid copying large source blocks into
-the prompt. Example:
-
-```
-Good: "Modify calc_defense_effectiveness() in engine/scoring.py — change WEIGHT from
-3.0 to 2.0. Run tests after to confirm no regression."
-
-Bad: [200 lines of inlined source code, data structure definitions, and API docs
-that the worker can read from the filesystem when needed]
-```
 
 <!-- rule:inline-safety-into-worker-prompts (safety-inlined) -->
 **Brevity applies to context, never to safety.** A rule that lives behind a pointer
@@ -903,73 +214,14 @@ is what gets violated:
   belong to the orchestrator, not to the worker that hit the wall.
 - **Git scope fence, stated affirmatively.** When another agent owns commit and merge:
   "You may edit files under `<manifest>`. You may not run `git add`, `git commit`,
-  `git merge`, `git push`, or `git checkout`. Leave your changes in the working tree"
-. State what is permitted, not only what is forbidden.
+  `git merge`, `git push`, or `git checkout`. Leave your changes in the working tree."
+  State what is permitted, not only what is forbidden.
 - **Working-directory assertion as the first action.** Any dispatch that writes to the
   filesystem opens by printing its resolved working directory and confirming it matches
   the expected worktree, before the first edit.
 
-These three are additive to the task text, not a substitute for it. They cost a few
-lines and they are the difference between a worker that stops and one that forces.
-
-**Governance-task dispatch gate (worktree-resident dispatches only).** Before dispatching
-any task that updates a document listed in CLAUDE.md §Main Governance Documents:
-
-1. The implementation agent rewrites the task description to target the staging file instead of the
-   governance document. Example: "Update CLAUDE.md with constants and cal results"
-   becomes "Write fold-in entries to the staging file for CLAUDE.md updates (constants,
-   cal results, phase status)."
-2. The parent includes the staging file path in the task note or worker prompt:
-   `"Write fold-ins to <closeOuts>/Memo.<dispatch-id>.GovernanceStaging.<date>.md"` —
-   `<closeOuts>` resolved through the registry
-3. The parent records the constraint:
-   `"Do NOT edit CLAUDE.md directly — this dispatch runs in a worktree. All governance
-   updates go to the staging file as fold-in entries."`
-
-If the task plan includes a governance-update task and the implementation agent is in a worktree, the task
-MUST include these three elements.
-
-**Downstream dependency handling:** When Task #8 depends on Task #4's output
-(e.g., test results inform which files to fix), the parent extracts the relevant
-information from Task #4's result and carries it into Task #8. The parent is the
-information bridge between sequential tasks.
-
-Independent tasks should be parallelized when the user or dispatch spec authorizes
-agent swarms and the write scopes do not conflict. Never bundle multiple tasks into
-a single mega-task like "implement tasks 1-6." Each worker gets one bounded task and
-returns to the parent plan.
-
-### Before each action
-
-Print what you're about to do. Use a consistent prefix so the human can scan the log:
-
-```
-> Launching worker: hercules — task #2, modify calc_defense_effectiveness()
-> Executing locally: Zeus — task #6, interpret calibration results
-> Launching worker: hippocrates — task #4, run fast test suite
-> Integrating worker result: aristotle — task #8, profiler analysis
-```
-
-The prefix tells the human whether work is local or delegated, which task number is
-active, and what it does.
-
-### Respect the model annotations
-
-`[mechanical]` tasks get executed quickly without extended reasoning. `[cross-cutting]` tasks get
-deliberate thinking — read the relevant context, think through interactions, and
-narrate your reasoning before acting. If a `[mechanical]` task turns out to need real
-reasoning, update the annotation and note the change.
-
-### During each action
-
-Stay within scope. If you notice something unrelated that needs fixing, note it for later —
-don't context-switch. Scope creep is how 30-minute tasks become 90-minute tasks.
-
-### After completing each task
-
-1. Mark the task ✓ in TodoWrite
-2. **Reprint the full task plan** with updated markers
-3. **Commit the task's work before starting the next one**
+Narrate before each action, stay in scope, and check
+[references/rationalizations.md](references/rationalizations.md) before any shortcut.
 
 <!-- rule:checkpoint-commits (task-boundary-commit) -->
 **A task boundary is a commit boundary.** Commit when a task completes, and push at
@@ -978,95 +230,21 @@ plan. An uncommitted working tree is not a git-verified state: a crashed session
 reverted edit, or a worktree removed early takes everything that was never committed,
 and no amount of correct work survives that.
 
-This applies to the worked examples in this skill as much as to real dispatches. A plan
-whose only commit is its last task teaches the failure — the example's final task is the
-*merge*, not the dispatch's first save.
-
-Two consequences worth stating, because both have been observed:
-
-- **Commit before running tests, not after.** Verify `git status` shows the changes
-  landed before a suite runs against them; a green suite on an uncommitted tree proves
-  nothing about what will merge.
-- **Committed is not the same as pushed.** Commits sitting on one machine are invisible
-  to every other workstream and to the merge slot. Count them at burst end:
+**After each task, reprint the FULL plan** under `timing --status`'s header, never "see
+above"; Past 12 rows, `timing --status --compact`, and the full list every fifth task. One
+plan only. **Three-call rule:** three tool calls without narration → stop and narrate. At
+every burst end, count what has not left the machine (exit 2: no upstream):
 
 ```bash
 "$HOME/.virtuoso/bin/virtuoso" dispatch_guards unpushed --root <project-root>
 ```
-
-This is the most important habit. Reprinting the plan after each task:
-- Proves you're tracking progress (not just blazing through tool calls)
-- Gives the human a clear snapshot at any interruption point
-- Forces you to notice if something got skipped
-
-**The reprinting rule:** After completing each task, reprint the FULL checklist
-with a status bar. Not "see above." Not a partial update. The full list with
-current markers plus a one-line status bar at the top. Past 12 rows, the reprint
-after each task is `timing --status --compact` — the header, every row not done and
-the last 3 done; the full list is reprinted at each phase gate and every fifth task.
-
-**Single plan rule:** There is exactly ONE task plan. Do not maintain a second
-copy (e.g., a "tracking" list that echoes the plan without updating). When
-you reprint, you are reprinting THE plan — the same one, updated in place.
-If the human sees two plans on screen with different completion states, one
-of them is wrong.
-
-**Status bar format:** the header `timing --dispatch <DISPATCH-ID> --status` prints, then one
-sentence on the current state. Reprint its output. Never sum the minutes yourself:
-
-`[D/N ✓ · R ■ · X ✗ · O □ · P ◇] Remaining M (sequential rows a, b, c; row p parallel, excluded) → est. finish HH:MM local (±HH:MM) · HH:MM UTC. Now: row r running.`
-
-The count is per marker: ✓ done, ■ running or waiting, ✗ blocked, cancelled or split,
-□ not started, ◇ parked. Only a row ended `done` counts as ✓. Remaining is the predicted
-minutes left over the unfinished rows that run one after another. A running row counts
-only what is left of its prediction, and parallel rows are named and left out. Finish is now plus remaining. While a row waits on the owner, the
-header says so, and the finish time moves later with the clock.
-
-```
-## Task Plan — [3/10 ✓ · 1 ■ · 0 ✗ · 6 □ · 0 ◇] Remaining 112 min (sequential rows 4, 5, 6, 8, 9, 10; row 7 parallel, excluded) → est. finish 16:40 local (-05:00) · 21:40 UTC. Now: row 4 running.
-✓ 1. Zeus: Load spec, build plan, assign owners                [cross-cutting] {high} ‹model›
-✓ 2. hercules: Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0  [bounded] {medium} ‹model›
-✓ 3. hermes: Update constants.toml default                              [mechanical] {low} ‹model›
-■ 4. hippocrates: Run fast test suite — all shards pass                 [mechanical] {low} ‹model›
-□ 5. hippocrates: Run the full verification sweep                          [mechanical] {low} ‹model›
-□ 6. aristotle: Interpret cal results + decide if tuning needed          [cross-cutting] {high} ‹model›
-□ 7. hippocrates: Generate profiler snapshot with pathway metrics       [mechanical] {low} ‹model›
-□ 8. aristotle: Analyze profiler — does freed space flow to both?       [cross-cutting] {high} ‹model›
-□ 9. marcusaurelius: Update CLAUDE.md with constants and cal results    [bounded] {medium} ‹model›
-□ 10. hermes: Commit, merge to main, push                              [mechanical] {low} ‹model›
-```
-
-### Three-call rule
-
-If you make 3 consecutive tool calls without printing narration text between them,
-something has gone wrong. Stop, reorient, and narrate what you're doing and why.
-Silent chains of tool calls are where plans go off the rails.
-
-**At the end of every burst, count what has not left the machine.**
-
-```bash
-"$HOME/.virtuoso/bin/virtuoso" dispatch_guards unpushed --root <project-root>
-```
-
-A non-zero count is not automatically wrong — a dispatch mid-flight legitimately holds
-local commits. It is wrong to *not know*. Exit 2 means there is no upstream at all,
-which makes every commit on this branch invisible to other workstreams and to the merge slot.
-
----
 
 ## Phase 5: Handle Blockers
 
-When you hit something unexpected:
-
-**STOP executing immediately when:**
-- A test fails that the plan expected to pass
-- A file or function referenced in the plan doesn't exist
-- You're unsure which of two approaches is correct
-- The results of a step contradict the plan's assumptions
-- You've been working on a single task for significantly longer than expected
-- An external dependency is missing or broken
-- A required tool, file, dependency, or instruction is unavailable
-- The environment cannot satisfy a required isolation or permission boundary
+**STOP immediately** when an expected pass fails, a named file or function is missing, you
+are unsure between two approaches, results contradict the plan, a task runs far over, a
+needed dependency, tool or instruction is missing, or a required isolation or permission
+boundary cannot be met. **Read [references/blockers.md](references/blockers.md).**
 
 <!-- rule:user-gate-is-success (operator-gate) -->
 **Reaching a decision that belongs to the operator is a SUCCESS terminal, not a failure.**
@@ -1075,16 +253,6 @@ the question, state precisely what it unblocks, advance every front that does no
 it, and stop cleanly. Do not treat the stop as incompleteness to be worked around, and do
 not manufacture a decision to keep moving.
 
-Two riders, both observed:
-
-- **Halt rather than degrade.** When the environment cannot satisfy a required isolation
-  or permission boundary, stop — do not substitute a dirty tree, an unregistered worktree,
-  or a bypassed safety helper. A capability shortfall is not permission to lower the
-  boundary.
-- **Autonomy grants and STOP conditions must be disjoint.** A pre-registered halt names
-  which grants it suspends; no grant may cover a condition that is also a STOP trigger,
-  or the run can authorise itself past its own gate.
-
 <!-- rule:git-separation-of-duties (separation-of-duties) -->
 **The entity that performed a change is never the sole certifier that git reflects it.**
 Self-grading invites bias. The worker performs mutating git inside its own worktree; an
@@ -1092,108 +260,16 @@ independent reader verifies state with **read-only** git — and read-only git m
 invoked lock-free (`git --no-optional-locks status`, or `GIT_OPTIONAL_LOCKS=0`) so it
 never writes `.git/index.lock` or races a concurrent mutation.
 
-- **Every dispatch verifies live git state as its first action** — current branch and
-  tree — before its first edit, not only the dispatch that commits.
-- **Feature branches are created by the orchestrator**, never inside a worker's transient
-  worktree.
-- **Committed is not pushed**, and a long-lived branch that becomes the de-facto trunk
-  leaves `main` stale — check what a new dispatch would actually branch from.
-
-**What to do when stopped:**
-1. Mark the current task ✗ (blocked).
-2. Reprint the full task plan showing current state.
-3. **Render the issue in the 7-field format below** and **save an identical `.md`** to
-   the `issues` directory from `Virtuoso/workspace-layout.json` as
-   `Issue.<DISPATCH-ID>.<YYYY-MM-DD>.md` (append `-N` if more than one on a date).
-4. Hand the saved path to **`/mid-dispatch-decision`** — it reads the file and returns the
-   call. Do not pick a path yourself without approval.
-
-**Issue format** — every stop / hold / block / elevation routed to `/mid-dispatch-decision`
-is defined with these seven fields (the saved `.md` holds fields 1–6; field 7 is its path):
-
-1. **tl;dr:** one line.
-2. **Executive Summary:** 2–4 sentences — what happened and why it blocks.
-3. **Evidence of issue:** errors, failing test, contradicted assumption, file:line, logs —
-   and a **Tried and failed** list: what was tried and dropped, read mechanically from the
-   transcripts by `virtuoso_registry guards --dispatch <DISPATCH-ID> --tried`, so the next
-   session does not retry it.
-4. **Possible cause(s):** ranked hypotheses.
-5. **Likely solution(s):** candidate fixes/paths.
-6. **Confidence in cause and solution identification (1–10):** integer + one-line justification.
-7. **Exported issue documentation path:** the saved `.md` path.
-
-The saved file IS the handoff token — `/mid-dispatch-decision` expects a path to it.
-
-**Do not:**
-- Guess and keep going ("it's probably fine")
-- Try a different approach without saying so
-- Skip the blocked task and come back later (unless explicitly told to)
-- Retry the same thing more than twice (the retry guard holds a third identical failing
-  command once, in workers too; sending it again unchanged goes through)
-- Silently change scope or absorb a failed task without updating the plan
-
----
+**When stopped:** mark the task ✗, reprint, and write the 7-field issue
+(`references/blockers.md`) to the registry's `issues` directory as
+`Issue.<DISPATCH-ID>.<YYYY-MM-DD>.md`. Hand its path to **`/mid-dispatch-decision`**; never
+choose a path without approval, guess on, or retry a failure more than twice.
 
 ## Phase 6: Close Out
 
-After all tasks show ✓ (or the dispatch reaches a defined stop condition), print the
-close-out. The close-out begins with the dispatch ID and follows this exact structure:
+Print the close-out block per **[references/closeout.md](references/closeout.md)**, then end
+the band (`--complete` only once the completion check passes, else `--stop`).
 
-```
-[DISPATCH-ID]   Phase 6: Close-Out — DISPATCH-NAME (Outcome Type)
-
-Problem: 1-2 sentences — what was broken, missing, or inadequate before this work
-started, or what opportunity/goal motivated it. Restate from the dispatch spec in
-plain language.
-
-Result: 1-2 sentences — what was done and what happened. Name the specific changes
-(constants tuned, functions added, architecture decisions made) and whether the
-outcome was success, partial, or pivot stop. If the work was empirically falsified
-or a gate triggered early stop, say so directly.
----
-Task Plan — DISPATCH-NAME | [X% of authorized scope] Outcome summary.
-✓ 1.   Zeus:   Load spec, build plan, assign owners                  [cross-cutting] — 20 → 24 min
-✓ 2.   hercules:       Modify calc_defense_effectiveness() — WEIGHT 3.0→2.0 [bounded] — 25 → 31 min
-...
-✗ 9.   socrates:       Full verification sweep — CANCELLED (pivot stop)          [bounded]
----
-Worker Utilization Summary
-┌─────────────┬────────────────┬──────────────────────────────────────────────┐
-│    Owner    │     Tasks      │                  Key output                   │
-├─────────────┼────────────────┼──────────────────────────────────────────────┤
-│ Zeus        │ #1, #6, #10   │ Coordination, integration, decisions          │
-│ hermes      │ #3, #10        │ 2 commits; repository updates                │
-│ hercules    │ #2             │ Single-line constant edit                     │
-│ aristotle   │ #6, #8         │ Cal interpretation; profiler analysis         │
-│ hippocrates │ #4, #7         │ 1,990 tests; 1 stale-bound catch             │
-│ socrates    │ #5, #9         │ Cal run; #9 full-cal cancelled at gate       │
-│ marcusaurelius │ #9          │ CLAUDE.md + cal results documented            │
-└─────────────┴────────────────┴──────────────────────────────────────────────┘
-Effort mismatch to flag: [specific mismatch if any — model annotation vs actual
-complexity, disproportionate token consumption, or task that needed a different
-role/effort level than planned, etc.]
----
-Repository state: [commit hash, merge/push status, notable remaining changes]
-Key engineering finding for the planner: [the single most important technical insight
-from this dispatch that affects future work — not a summary of what was done, but
-what was learned]
-```
-
-**Outcome types** (use in the header after the dispatch name):
-- **(Complete)** — all tasks ✓, tests pass, merged to main
-- **(Partial)** — some tasks complete, changes preserved for later integration
-- **(Pivot Stop)** — work empirically falsified or gate triggered early stop
-- **(Blocked)** — escalated to user, awaiting direction
-
-**Close-out rules:**
-- The dispatch ID appears first, before "Phase 6" — it anchors the entire block
-- Task Plan uses the dispatch name (not generic), with the percentage reflecting
-  authorized scope completed (100% is valid even with cancelled tasks if the
-  cancellation was the authorized response to a gate trigger)
-- Worker Utilization uses a compact summary table (owner → tasks → key output),
-  not the verbose duration/tokens/tool-calls breakdown. The detail matters for
-  performance analysis but not for the close-out record. If performance
-  recommendations are warranted, append them after the close-out block.
 <!-- rule:closeout-is-an-artifact (closeout-artifact) -->
 - **The printed block is not the deliverable — three artifacts are, and each needs its
   own numbered task in the plan, created back in Phase 2:**
@@ -1216,17 +292,9 @@ what was learned]
      Removing the worktree before this check passes destroys the evidence that would
      have caught the gap.
 
-     Name the dispatch's time log among those paths: `<closeOuts>/Timing.<DISPATCH-ID>.jsonl`.
-     Before close-out, end every row that never ran with `timing --end N --result
-     cancelled`: a log with a row still open never counts as closed in `kpis`.
-     A log left behind in a worktree never becomes history, so no later dispatch can
-     price from it. The close-out's Task Plan shows each row's predicted → actual
-     minutes, as `timing --status` prints them.
-
-- **For a held plan, the ledger row waits on purpose.** `/dispatch-closeout` records the
-  held entry `executed`, and the `/roadmap-review` that absorbs it runs the recording
-  crossing (`references/execution-paths.md`). The close-out file and the
-  deliverable-existence check above still happen now.
+  Include `<closeOuts>/Timing.<DISPATCH-ID>.jsonl`, with every unrun row ended `--result cancelled`.
+- **For a held plan, the ledger row waits on purpose:** `/dispatch-closeout` records it
+  `executed`; the absorbing `/roadmap-review` runs the recording crossing. The file and check happen now.
 
 <!-- rule:verification-spawns-remediation (verification-scope) -->
 - **A verification task that finds more than a handful of issues stops and spawns a
@@ -1242,190 +310,22 @@ what was learned]
   integration exists because two workstreams that each pass their own gate can still break
   the combined tree:
 
-  1. **Claim the merge slot** for this workstream. Block until it is free; never merge without it.
-  2. **Merge the base branch into the feature branch** — not the other direction.
-  3. **Re-run the full gate on the combined tree.** The pre-merge gate result is stale
-     the moment the base moves; a gate that ran only on the feature branch has not
-     tested what is about to land.
-  4. **Merge** to base.
-  5. **Push.** An unpushed merge is invisible to every other workstream and to the slot.
-  6. **Remove the worktree** — only after the artifact-existence check has passed.
-  7. **Release the merge slot.**
-
-  If any step fails, release the slot before escalating. A held slot blocks every other
-  workstream on a dispatch that is no longer progressing.
-
-- Git state and Key engineering finding close the block — these are what the planner
-  reads first when processing a close-out into a Dispatch Close-Out Report. Run
-  **`/dispatch-closeout`** on this block to fold the result into the roadmap, dispatch queue,
-  and retrospective. (The spec arrived through one of the three paths in
-  `references/execution-paths.md`: `/next-dispatch`'s kickoff, `/write-plan`'s held plan,
-  or `/epic`'s packet. `/dispatch-closeout` reads the origin line to close each one
-  correctly.)
-
-**Performance Recommendations** (append after the close-out block when warranted):
-Focus on three dimensions with concrete task references:
-- **Tool efficiency**: redundant or collapsible tool-call sequences
-- **Token efficiency**: tasks consuming disproportionate tokens relative to
-  task complexity; model annotation changes needed
-- **Speed**: critical-path bottlenecks; parallelizable tasks that ran sequentially
-
-Be concrete — "Tasks #4 and #7 were both labeled hippocrates and ran
-sequentially, but have no dependency — run them in parallel to save ~1m 20s."
-
----
-
-## The Rationalization Table
-
-Before skipping narration, skipping a reprint, or taking a shortcut, check this table.
-
-| What you'll think | Why it's wrong |
-|---|---|
-| "I'll narrate the next one, this one's trivial" | Trivial actions compound. Skip one, skip ten. |
-| "Reprinting the plan again is redundant" | Redundancy IS the point. It's a forcing function. |
-| "I know what I'm doing, don't need the checklist" | Confidence without tracking is how steps get skipped. |
-| "I'll fix this unrelated thing while I'm here" | Scope creep. Note it, finish the plan, then address it. |
-| "This blocker is minor, I can work around it" | Minor blockers become major regressions. Stop and report. |
-| "The human can see what I'm doing from the tool calls" | Tool calls show WHAT. Narration shows WHY. Both matter. |
-| "I'll just skip the role label; this one's obvious" | The role label tells the human what kind of work is happening. Keep the label, even for small tasks. |
-| "This task needs my full attention, so I'll ignore the checklist" | Serious tasks need more structure, not less. Keep the plan visible while doing the hard part. |
-| "This step failed, but I can quietly work around it" | Mark it blocked or revise the plan explicitly. Silent workarounds create false confidence. |
-| "There's no doer role defined, so I'll invent a new process" | Use the generic role labels: hermes, hercules, aristotle, hippocrates, marcusaurelius, plato. |
-| "I need to preload everything before I can start" | Read enough context to act safely, then proceed. Planning should reduce drift, not become the work. |
-| "I'm running low on tool budget, I'll stop tracking the plan" | The plan becomes more important under pressure. Trim scope only by explicitly updating the task list. |
-| "I need to keep a second copy of the plan for tracking" | One plan, one location. The reprinted plan IS the tracking mechanism. A second plan drifts from the first and confuses both you and the human. |
-
----
-
-## The Progress Band
-
-The plugin draws a progress band above the prompt of every session running a dispatch or an
-epic, in any project (format in `references/registry-contract.md`, *The progress band*):
-
-    <bar over this milestone's steps> Step X/Y      ( P% complete; milestone ETA) <step>
-    <bar over the run's milestones>   Milestone X/Y ( Q% complete; dispatch ETA) <milestone>
-
-This skill is the band's only writer: it opens the run, feeds it, and ends it. Nothing else
-does, not `/next-dispatch`, `/epic` or `/dispatch-closeout`. Every change goes through one
-command, never a hand edit; the command stamps the time, and each ETA is measured from those
-stamps. Its files live in your own state folder, never in the project, and it never touches
-the registry. The plugin's hook points the session that runs a feeding command at that run,
-so each session shows only its own, even when two share one folder.
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor virtuoso progress --run <ID> <change>
-
-- **Phase 1 — milestones.** The milestones are the plan's phases: a specification's
-  `##### Milestones` table grouping its task rows (rubric U11; check it with
-  `progress --check-milestones <spec> --item <ITEM-ID>`), an epic charter's `## Milestones`.
-  A ready specification with no milestones is not refused: derive them from its task rows
-  and *Done when* (two to five, each a group of consecutive rows ending in something
-  checkable; one milestone where the plan has no phases), write them to a scratch JSON file
-  outside the project as `[{"id": "M1", "label", "steps": [{"id": "<row #>", "label"}]}]`,
-  and say they were derived. Show the milestones, with their steps, before Phase 2.
-- **Phase 1 — open.** `progress --run <DISPATCH-ID> --from-spec <spec> --item <ITEM-ID>
-  --title "<short title>"`, or `--plan <file>` for derived milestones. Phase 2's task list
-  follows the milestones. If the plan changes mid-run, open it again the same way: the
-  milestone list follows the plan, and every stamp already made stays.
-- **Phase 4 — steps.** A step is a task row, its id the row number, so the band moves with
-  the time log: beside `timing --start <n>` run `progress --run <DISPATCH-ID> --step <n>
-  --state active`, and beside `timing --end <n>` run `--state done` (or `blocked`, or
-  `cancelled`: a cancelled step or milestone drops out of X/Y). Mark a
-  milestone `done` with `--milestone <M#> --state done` when its *Done when* holds; the next
-  milestone's steps then take over line one. A row added mid-run is added to the band with
-  `--step <n> --label "<task>"`.
-- **Phase 5.** A pause to wait on a decision is not an end: mark the active step `blocked`,
-  and `active` again when the decision releases it. The band stays live throughout.
-- **Phase 6 — end.** `progress --run <DISPATCH-ID> --complete --evidence "<the check>"`
-  only once this skill's own completion check has passed and every milestone is done; the
-  band then shows `✓ COMPLETE`. Any other end (failed, aborted, halted) is
-  `--stop <one-word reason>`, shown as `■ STOPPED`, never COMPLETE and never hidden. The run
-  is archived either way, and its end line stays until the session's next run starts or the
-  user runs `progress --clear`.
-- **An epic.** The run id is the epic's id, carried in its launch and state. Its first
-  session opens it with `--from-charter <charter>`; each step is a charter checkpoint
-  (`1.1`, `1.2`, …). After context loss or in a later session, open it again the same way:
-  that re-attaches to the same run and continues its milestones and stamps; never start a
-  second run for one epic. End it only when the epic ends.
-
-A run with no feed for 30 minutes (longer where its steps run long) is drawn dim with when
-it last moved. Work with no
-dispatch or epic id is not tracked. The band never blocks work: a refusal from the command
-is reported as it stands, never worked around by editing a file.
+  1 claim the slot · 2 merge base into the feature branch · 3 re-run the full gate on the
+  combined tree · 4 merge · 5 push · 6 remove the worktree after the existence check · 7
+  release the slot (release it first if any step fails).
+- Then run **`/dispatch-closeout`** on the block.
 
 ## Project-Specific Overlays
 
-This skill provides the generic execution framework. A project layers its own requirements
-on top of it without copying or editing this file. Copying it forks it, and a fork drifts
-from the plugin in both directions while both copies load at once.
-
-**The durable mechanism — a registered overlay.** The project registers an `overlays` role
-and puts its additions at this file's own mirror path, `skills/virtuoso/SKILL.md`, beneath
-that directory. Every session reads it automatically; nothing has to be restated per
-dispatch. Check what is in force:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . overlays
-
-The overlay inherits everything here and adds to it, winning on conflict — except that it
-may not loosen a shared-contract safety rule. See the overlay clause at the top of this file
-and the plugin's `references/registry-contract.md`.
-
-**For one run only — an `EXECUTION RULES` block.** When a constraint applies to a single
-dispatch rather than to the project, state it in the dispatch prompt or agent brief instead
-of registering it:
-
-```
-### EXECUTION RULES (Virtuoso + this dispatch)
-- All rules from the Virtuoso skill and any registered overlay apply
-- Additional: <constraint that is true for this run only>
-```
-
-A constraint that turns out to be true every time belongs in the registered overlay, not
-re-pasted into every brief.
-
----
+Never copy or edit this file for a project: register an `overlays` role with additions at
+`skills/virtuoso/SKILL.md`. A one-run rule goes in an `EXECUTION RULES` block in the prompt
+(both in `references/session-setup.md`).
 
 ## Worktree Governance Staging
 
-Worktree-resident dispatches (any virtuoso-executed work running in a `git worktree`-
-isolated directory) have a structural conflict surface: if the dispatch edits main
-governance documents directly, those edits conflict with any concurrent planner-side
-governance work on canonical main. The conflict either surfaces at pre-merge rebase
-(friction) or produces silent-revert behavior (governance content lost undetected).
-
-This section eliminates that conflict surface by making worktree-resident dispatches
-structurally incapable of editing main governance documents.
-
-### Rule 1 — Worktree-Resident Dispatches MUST NOT Edit Main Governance Documents
-
-During worktree-resident execution, virtuoso's task plan must not include direct
-edits to documents classified as "main governance." The classification is
-project-specific. Locate it by searching the project's CLAUDE.md (or equivalent)
-for a **worktree edit prohibition** section and reading its list of protected
-documents — do not match on a section title verbatim, because titles drift and a
-restated title silently reads as "no such section, no prohibition."
-
-Virtuoso reads that list at dispatch start (Phase 1). If no such section exists in
-CLAUDE.md, the prohibition still applies to any document that:
-- Spans multiple dispatches (roadmaps, dispatch queues, constitutions)
-- Is edited by the planner between dispatches (SRL catalogs, debt logs, technical references)
-- Contains the dispatch spec for the currently-running dispatch (the inline full spec)
-- Defines how agents work: the plugin's agent files (`agents/<Agent>.md`), their
-  registered overlays (`<overlays>/agents/<Agent>.md`), and project copies of agent
-  briefs (`.claude/agents/`), unless the dispatch's own specification
-  names the file as an edit site. A correction found mid-dispatch is a staging fold-in
-  (Rule 2), which the planner applies between dispatches.
-
-If a task in the task plan would edit a main governance document, virtuoso rewrites
-that task to write to the staging file instead (see Rule 2).
-
-### Rule 2 — All Governance-Change Intent Goes to a Staging File
-
-For every governance change the dispatch would otherwise make to a main governance
-document, virtuoso writes the change-intent to a staging file in the worktree:
-
-```
-<close-out-directory>/Memo.<dispatch-id>.GovernanceStaging.<YYYY-MM-DD>.md
-```
+A worktree-resident dispatch never edits a main governance document; it stages each change
+as a fold-in for `/dispatch-closeout`. **Read
+[references/governance-staging.md](references/governance-staging.md)** (Rules 1–7) first.
 
 <!-- rule:registry-resolved-staging (AMEND-THE-RESTATEMENTS) -->
 **`<close-out-directory>` is resolved through the registry, never guessed.** Read the
@@ -1436,177 +336,9 @@ is the declared authority for exactly this lookup. Do not infer the directory fr
 where memos happen to sit, and do not hardcode a conventional path — a guessed
 location writes an open obligation somewhere close-out will never sweep.
 
-The staging file is created on first governance-change-intent and appended to
-throughout the dispatch. It contains all the changes that would normally land in
-main governance docs — formatted as **fold-in instructions**, not as raw edits.
-
-### Rule 3 — Staging File Structure
-
-The staging file is organized so dispatch-closeout can mechanically apply each entry.
-Section headers name the target document; entries within name the target section
-and the fold-in action.
-
-```markdown
-# Dispatch Close-Out Governance Staging — <dispatch-id>
-
-This file enumerates every governance change the dispatch would have made to
-main governance documents during execution, but staged here per virtuoso's
-worktree-edit prohibition. dispatch-closeout processes this file at dispatch
-close to apply the fold-ins to canonical main.
-
-## Target: <document-name>
-
-### Fold-in N — <short description>
-Section: §<target section heading>
-Action: <Append row | Replace | Insert after | Remove>
-Content:
-<exact content to fold in — verbatim, ready to paste>
-```
-
-**Fold-in action types:**
-
-| Action | Meaning |
-|--------|---------|
-| **Append row** | Add content at the end of a table or section |
-| **Replace** | Overwrite existing content with new content (include `Old:` and `New:` blocks) |
-| **Insert after** | Add content after a named anchor (line, heading, or entry) |
-| **Remove** | Delete specified content (include the exact content to remove) |
-| **Migrate** | Move content from one location to another (include source and destination) |
-
-**Ordering rule:** Within a single target document, fold-ins are numbered
-sequentially and processed in order. Dependencies between fold-ins within the
-same target are implicit in the numbering. Cross-target fold-ins have no ordering
-constraint unless explicitly noted.
-
-**Mid-Dispatch Amendment fold-ins:** When the mid-dispatch-decision skill adds
-amendment entries, they use the `Migrate` action type with source = inline spec
-subsection and destination = close-out memo §Mid-Dispatch Decisions. These must
-be processed BEFORE inline spec collapse fold-ins (so amendment content is
-preserved before the spec containing it gets collapsed).
-
-### Rule 4 — dispatch-closeout Processes the Staging File as Wave 2 Step 0
-
-dispatch-closeout's existing Wave 2 procedure gains a new first step:
-
-**Step 0 (NEW): Read and process the dispatch's staging file.**
-
-If `Memo.<dispatch-id>.GovernanceStaging.<date>.md` exists in the worktree (or has
-already merged from the worktree), dispatch-closeout:
-
-1. Parses all fold-in instructions
-2. Applies them to canonical main as Edit calls against the named target documents
-3. Processes Mid-Dispatch Amendment migrations BEFORE inline spec collapses
-4. After applying all fold-ins, deletes the staging file (it has served its purpose)
-
-The close-out memo is the durable record. The staging file is transient infrastructure.
-
-**Discrepancy handling:** If a fold-in instruction conflicts with current canonical
-main state (e.g., the target section no longer exists, or content has changed since
-the fold-in was staged), dispatch-closeout surfaces the discrepancy as a reconciliation
-prompt to the user rather than silently overwriting or failing.
-
-### Rule 5 — Mid-Dispatch Amendments Use the Staging File
-
-The mid-dispatch-decision skill currently writes amendment blocks directly to the
-dispatch spec (which is in a main governance document). Per Rule 1, this is the
-exact write virtuoso forbids.
-
-**Integration:** mid-dispatch-decision writes the amendment to the staging file
-under a fold-in entry, NOT to the inline spec. Specifically:
-
-```markdown
-## Target: <roadmap-document>
-
-### Fold-in N — Mid-Dispatch Amendment (<amendment title>)
-Section: §<dispatch-id> (inline full spec)
-Action: Migrate
-Source: This amendment block (below)
-Destination: Close-out memo §Mid-Dispatch Decisions
-Content:
-##### Mid-Dispatch Amendment — <date> — <title>
-Decision Type: <type>
-Context: <what the implementation agent reported>
-Decision: <what was decided>
-Rationale: <why>
-```
-
-The mid-dispatch-decision skill's Step 6b becomes: "Append amendment to the dispatch's
-staging file under the appropriate target document section." The Close-Out Preservation
-field becomes implicit — the staging file IS the preservation contract. The conflict-
-surface check becomes unnecessary because the conflict surface no longer exists.
-
-### Rule 6 — Planner-Side Dispatches Follow the Same Pattern by Default
-
-planner-side governance work that runs in a single session (e.g., /dispatch-closeout,
-/roadmap-review, /governance-sweep) doesn't have a worktree boundary, so the conflict
-surface doesn't apply in the same way. But the staging-file pattern still has value:
-
-- The planner's mid-session governance edits become recoverable if the session crashes
-- The staging file documents WHAT changed and WHY for the change summary
-- It provides an audit trail of governance mutations within the session
-
-**Enforcement level:**
-- **Worktree-resident dispatches:** staging file is **mandatory**. Virtuoso
-  rejects any task plan that edits main governance documents directly.
-- **planner-side sessions:** staging file is **optional** (best practice, not enforced).
-  The planner may edit main governance documents directly since there's no worktree
-  boundary to create conflicts.
-
-### Rule 7 — A Resident Staging Memo Is an Open Obligation
-
 <!-- rule:staging-memo-lifecycle (staging-lifecycle) -->
 Rule 4 says the staging file is deleted once processed. That makes any memo still
 resident in the close-outs directory an **open obligation**, not an archive artifact —
 and the failure mode is that nobody ever looks. Four lifecycle hazards:
 
-- **Sweep the directory at every close-out.** Enumerate every resident
-  `Memo.*.GovernanceStaging.*.md` and confirm each is processed **by checking the
-  destination documents, not by reading the memo's claims about them.** A memo that
-  says its fold-ins were applied is a claim; the target document containing them is
-  the evidence. Run:
-  ```bash
-  "$HOME/.virtuoso/bin/virtuoso" dispatch_guards staging-sweep --root <project-root>
-  ```
-  A non-zero exit means resident memos exist. Report them; do not delete a memo you
-  did not verify against its targets.
-- **A gate claim needs a backing artifact before it is folded in.** A staging memo
-  asserting "gate approved" is not approval. Locate the artifact — the gate log, the
-  run output, the signed check — before that claim reaches a canonical document. An
-  unverified "approved" has come within one edit of being written into governance
-.
-- **Lesson numbers proposed inside a worktree are provisional labels only.** The
-  worktree's view of the catalog is frozen at branch time, so any number it proposes
-  collides with numbers consumed since. Treat every in-worktree lesson number as a
-  placeholder to be reassigned at fold-in.
-- **Pass the current catalog tip into the authoring agent's prompt.** The paired fix
-  for the above: an agent that is told the tip proposes from it instead of from a
-  stale snapshot.
-
-### Migration — Dispatches Already in Flight
-
-Dispatches started before this pattern was introduced continue under the old pattern
-(mid-dispatch-decision writes amendments inline to the roadmap). The new staging-file
-pattern starts with the next dispatch started after this skill update.
-
-When processing a close-out for a grandfathered dispatch, dispatch-closeout checks for
-BOTH: a staging file (new pattern) and inline Mid-Dispatch Amendment blocks with
-Close-Out Preservation instructions (old pattern). If both exist, surface as a
-reconciliation prompt. The transition point should be noted in CLAUDE.md so it's
-clear which dispatches used which pattern.
-
-### What This Prevents
-
-The pattern of:
-1. The planner edits canonical main governance doc
-2. Worktree edits same file from a stale base
-3. Pre-merge rebase produces conflict (visible) OR silent revert (invisible)
-4. Governance content potentially lost or scrambled
-
-Under the new pattern: the worktree NEVER edits canonical main governance documents.
-Conflicts on those files between the worktree and the planner are structurally impossible.
-The staging file consolidates intent; dispatch-closeout applies it once at close-out,
-with full visibility of any concurrent planner edits at that moment.
-
-**Trade-off:** dispatch-closeout becomes mechanically heavier (more fold-ins to process)
-and the staging file is one more artifact per dispatch. Both are small costs for the
-structural elimination of a recurring failure mode.
+Rule 7, `references/governance-staging.md`.

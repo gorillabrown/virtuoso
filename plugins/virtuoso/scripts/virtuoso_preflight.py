@@ -37,6 +37,8 @@ Usage:
     python virtuoso_preflight.py --root <dir> [--mode check|adopt|create|repair]
         [--authorize] [--apply] [--json] [--quiet] [--strict]
     python virtuoso_preflight.py --check-document <path>
+    python virtuoso_preflight.py --hook-input <host> [--mode check|detect] [--quiet]
+        (a session-start hook: the project comes from the host's hook input on stdin)
 """
 from __future__ import annotations
 
@@ -527,6 +529,37 @@ def emit(outcome: result_mod.Result, *, quiet: bool, as_json: bool) -> None:
             _say(quiet, "  [%s] %s" % (finding["severity"], finding["message"]))
 
 
+def run_from_hook(host: str, mode: str, *, quiet: bool = True, stdin=None) -> int:
+    """The session-start preflight for a host whose hook runs outside the project and reads
+    its output as structured JSON: the project is the folder the hook input names, and the
+    status lines become the host's session context. Only a read-only mode runs. Any error,
+    unknown host or input without a project prints nothing; it always exits 0, so a hook
+    never fails on it."""
+    if mode not in ("check", "detect"):
+        return 0
+    try:
+        import contextlib
+        import io
+        from tools.governance import hosts
+        adapter = hosts.adapter(host)
+        hook = json.loads((stdin or sys.stdin).read() or "{}")
+        if adapter is None or not isinstance(hook, dict):
+            return 0
+        hook = adapter.normalize(hook)
+        root = adapter.project_dir(hook) or hook.get("cwd") or ""
+        if not root or not os.path.isdir(root):
+            return 0
+        lines = io.StringIO()
+        with contextlib.redirect_stdout(lines):
+            emit(preflight(root, mode, quiet=quiet), quiet=quiet, as_json=False)
+        text = lines.getvalue().strip()
+        if text:
+            sys.stdout.write(json.dumps(adapter.session_context(text)))
+    except Exception:  # noqa: BLE001 - a session-start hook never fails the session
+        return 0
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     textio.utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
@@ -552,10 +585,17 @@ def main(argv: list[str] | None = None) -> int:
                         help="integrity-check one document and exit (0 ok / 2 warn / 3 fail)")
     parser.add_argument("--check-roadmap", dest="check_document", default=None,
                         help=argparse.SUPPRESS)   # retained alias
+    parser.add_argument("--hook-input", dest="hook_input", default="", metavar="HOST",
+                        help="read HOST's session-start hook input on stdin: the project is "
+                             "the folder it names (not --root), and the status lines are "
+                             "printed as HOST's session context. Read-only modes only; "
+                             "always exits 0")
     args = parser.parse_args(argv)
 
     if args.check_document is not None:
         return check_document(args.check_document)
+    if args.hook_input:
+        return run_from_hook(args.hook_input, args.mode, quiet=args.quiet)
 
     outcome = preflight(args.root, args.mode, quiet=args.quiet, authorized=args.authorize,
                         apply=args.apply, layout=args.layout, register=args.register,

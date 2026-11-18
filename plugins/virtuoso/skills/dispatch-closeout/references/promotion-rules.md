@@ -1,7 +1,20 @@
 # Promotion Rules
 
-Use this reference when deciding whether a retrospective lesson stays an observation or
-becomes a standing workflow rule.
+Serves dispatch-closeout SKILL.md, Deliverable 2 and *Acceptance and evidence
+reconciliation*: whether a retrospective lesson stays an observation or becomes a
+standing workflow rule.
+
+## Retrospective lessons from a gate
+
+When close-out reveals an inefficient or invalid gate, distinguish:
+
+- a one-time specification correction;
+- a repeated workflow pattern;
+- an existing rule that needs reconciliation;
+- a new candidate standing rule.
+
+Prefer updating an existing rule over creating a duplicate. Promote a new standing
+rule only after the project's repetition threshold is met (below).
 
 ## Default Rule
 
@@ -33,3 +46,5 @@ becomes a standing workflow rule.
 - lessons learned for workflow patterns
 
 Do not promote one-off anecdotes.
+
+Return to SKILL.md, the step you came from.

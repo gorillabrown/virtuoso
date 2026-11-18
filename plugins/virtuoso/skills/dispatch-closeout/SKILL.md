@@ -39,54 +39,32 @@ same thing — proceed on the shipped file alone.
 
 ## Preflight — read-only registry check (run first)
 
-Resolve the plugin through its launcher, then run the **read-only** check. It performs
-discovery and validation with zero project writes.
+Resolve the plugin through its launcher, then run the **read-only** check (zero project writes):
 
-**Unix-like shell**
+    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode check        # Unix-like shell
+    & "$HOME/.virtuoso/bin/virtuoso.ps1" virtuoso_preflight --root . --mode check  # Windows PowerShell
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_preflight --root . --mode check
+Add `--json` for the structured result. Branch on the `virtuoso-status:` line:
 
-**Windows PowerShell**
+- `ready` — continue. `warning` — surface the findings and continue; not blockers.
+- `repair-needed` — **STOP.** Run `--mode repair` for the preview, show the user the
+  proposed paths, semantic changes, files affected, and backup location, and apply it
+  with `--apply` only after they approve.
+- `adoptable` — offer `--mode adopt`: it registers what exists, in place; nothing is
+  moved, duplicated, or rewritten.
+- `none` — route the user to `/virtuoso-init`. `failed` — report the error verbatim and stop.
 
-    & "$HOME/.virtuoso/bin/virtuoso.ps1" virtuoso_preflight --root . --mode check
+If neither launcher resolves, report that the plugin could not be located and stop; do
+not guess a path. Never create a parallel document for a registered role, write to a
+role whose `allowedWriters` does not name this ceremony, or treat a `mirror`, `report`,
+`archive`, or `unknown` role as truth.
 
-Add `--json` when you want the structured result (status, writes, findings, and the full
-resolved role table). Read the `virtuoso-status:` line and branch:
+Read the `roadmap-integrity:` line (after `deadlines:`; `roadmapIntegrity` in `--json`). `fail` (missing, not text, or null bytes): STOP and report the corruption; never migrate or rewrite a corrupt roadmap. `warn` (empty or unusually large): surface it and confirm with the user first. `ok` or `external`: continue. Before rewriting the roadmap, re-check it with `virtuoso_preflight --check-document <path>`.
 
-- `ready` — the registry is valid. Continue.
-- `warning` — usable; surface the findings to the user and continue. Warnings are not blockers.
-- `repair-needed` — **STOP.** Run `--mode repair` to produce the preview, show the user the
-  proposed paths, semantic changes, files affected, and backup location, and apply it only
-  with `--apply` after they approve.
-- `adoptable` — the project has governance documents but is not registered. Offer
-  `--mode adopt`: it registers what exists, in place. Nothing is moved, duplicated, or rewritten.
-- `none` — no registry and nothing to adopt. Route the user to `/virtuoso-init`.
-- `failed` — report the error verbatim and stop.
-
-If neither launcher resolves, report that the plugin could not be located and stop. Do not
-guess a path.
-
-**Governance authority.** Resolve every document you need through the registry
-(`references/registry-contract.md`). Never create a parallel document for a registered role;
-never write to a role whose `allowedWriters` does not name this ceremony; never treat a
-`mirror`, `report`, `archive`, or `unknown` role as truth.
-
-Read the `roadmap-integrity:` line the preflight printed (it follows the `deadlines:` line; `--json` carries it as `roadmapIntegrity`). On `fail` (missing, not text, or null bytes), STOP and report the corruption to the user; do not migrate or rewrite a corrupt roadmap. On `warn` (empty or unusually large), surface it and confirm with the user before proceeding. On `ok`, or `external` (a roadmap the preflight does not read), continue. Before rewriting the roadmap, re-check it: `virtuoso_preflight --check-document <path>` prints the same state for one file.
-
-**Bookend with `/next-dispatch`.** That skill opens a dispatch; this one closes it. It
-closes a held plan from `/write-plan` and an epic from `/epic` too; see *Held plans*
-below and `references/execution-paths.md`.
-
-Two waves:
-
-- **Wave 1 — Draft & Confirm** (writes nothing): the brief, findings,
-  interpretation, proposed dispositions, governance updates, retrospective
-  entries, and the proposed register and roadmap changes. The user confirms.
-- **Wave 2 — The transactional crossing** (writes, in a fixed order, verifying
-  each step): create the artifact, append the terminal record, persist local
-  governance, close the item in the live register, verify everything.
-
-This skill never prints a next dispatch kickoff — that is `/next-dispatch`.
+**Bookend with `/next-dispatch`**: it opens a dispatch, this closes it — and a held plan
+from `/write-plan` or an epic from `/epic` (`references/execution-paths.md`). Wave 1
+writes nothing until the user confirms; Wave 2 writes in a fixed order, verifying each
+step. Never print a next dispatch kickoff — that is `/next-dispatch`.
 
 ## Resolve roles and capabilities before Wave 1
 
@@ -94,19 +72,11 @@ This skill never prints a next dispatch kickoff — that is `/next-dispatch`.
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . closeout --item "<ITEM-ID>" --date "<YYYY-MM-DD>"
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --open
 
-The second command is **read-only**: it resolves paths and the next lesson
-identifier (`nextLessonId`, prefixed per `policy.lessons.idPrefix`) without
-creating anything. Pass `--prepare` only in Wave 2, when the user has approved
-the crossing and the directory actually needs to exist. The third lists the live
-lessons: the ones this item's specification applied, whose outcome the close-out
-records, and the ones a new lesson may repeat — a second occurrence is what
-promotes an observation to a rule.
-
-It **fails loudly** rather than guessing: no registry, or a registry with
-error-severity findings, is an error naming the fix — never a silent fallback to
-a conventional close-out directory.
-
-Confirm before drafting:
+`closeout` is **read-only** — paths and `nextLessonId` (per `policy.lessons.idPrefix`),
+nothing created; `--prepare` waits for the approved crossing. It **fails loudly**, never
+falling back to a conventional directory. `lessons --open` lists the live lessons: those
+the specification applied, and those a new lesson may repeat (a second occurrence
+promotes an observation to a rule).
 
 | Step | Requires |
 |---|---|
@@ -116,268 +86,102 @@ Confirm before drafting:
 | append lessons | `lessons` writable by this ceremony |
 | persist to version control | whatever `policy.git.policy` permits |
 
-Any of these that is unavailable changes the plan **before** Wave 1 drafts
-anything. Say what will happen instead — a hand-off, or a manual step — rather
-than discovering it mid-crossing.
+Anything unavailable changes the plan **before** Wave 1 drafts: say what happens instead
+(a hand-off, a manual step) rather than discovering it mid-crossing.
 
-## Held plans — ad hoc work that is not on the roadmap yet
+## Held plans, combined epics, and retirements
 
-Every execution path ends here (`references/execution-paths.md`). Read the dispatch's
-origin line first. `Origin: held plan — <entry> (HB-<n>)`, or a provisional `HB-<n>`
-identifier, means the work came through `/storyboard` and `/write-plan`. It has no
-register row yet, because bringing work onto the roadmap is `/roadmap-review`'s job. The
-close-out adapts in exactly these ways:
+Read the dispatch's origin line first. These change which Wave 1 items and Wave 2 steps
+run; for each, **read [references/other-origins.md](references/other-origins.md)**
+under its heading before Wave 1:
 
-| Step | For a held plan |
-|---|---|
-| Wave 1, item 6 | Propose no register or roadmap change. The crossing plan says those wait for the review that absorbs the entry. |
-| Step 1 — evidence | Unchanged. Verify every *Done when* row of the held specification. |
-| Step 2 — artifact | Unchanged, keyed by `HB-<n>`: `closeout --item "HB-<n>"`. A staging fold-in that targets the roadmap or the register is not applied. List it in the report for the review. |
-| Step 3 — terminal record | Deferred. There is no register item for the record to name yet. |
-| Step 4 — persist | Lessons and the close-out only. The roadmap is not touched. |
-| Step 5 — register | Deferred to the absorbing review. |
-| Then | Record the entry `executed`, once every item of the entry has closed out, with the note naming each close-out, its result, and its date: |
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor dispatch-closeout holding --record <entry> --state executed --note "HB-<n>: <close-out path>, <result>, <YYYY-MM-DD>, estimate <e>, actual <a>" --apply
-
-Take `<e>` and `<a>` from `timing --summary --json --dispatch <DISPATCH-ID> --item HB-<n>`
-(its `estimate` and `actual`). A log whose rows name no item is one item's run, and
-`--item` then takes every row. With no time log, or when the summary says
-`"complete": false`, leave them out of the note. Never type
-a runtime in their place.
-
-Step 6 verifies the close-out, the lessons gate, and that `holding --check <entry>` reads
-`executed`. It does not verify a terminal record or a register status, because there are
-none yet. The buffer check is skipped, since ad hoc work never drew on the buffer. If an
-item set stops partway, the entry is not `executed`. The `virtuoso` skill, which
-recorded it `in-flight`, returns it to `planned`, and the note names which items closed
-out.
-
-**The recording crossing.** When `/roadmap-review` absorbs an `executed` entry (its
-A.4b), it creates each register item and then invokes this ceremony for **Steps 3, 5,
-and 6 only**. Those steps append the terminal record and close the item:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor dispatch-closeout record-completion --item "<ITEM-ID>" --date "<close-out date>" --result "<result>" --evidence "<close-out path>" --estimate "<e>" --actual "<a>" --revision "<revision>" --apply
-
-The values come from the entry's `executed` row. The evidence was verified, and the
-lessons were recorded, when the work ran. Nothing is re-verified, and nothing is taught
-twice. The item never stood on the conveyor belt, so Step 5 retires it and elevates
-nothing.
-
-## Combined epics — one run, several items
-
-An epic packet whose charter names `items:` ran several roadmap items as one run
-(`/epic`, Step 1b). Its origin line reads
-`Origin: epic packet — <directory> (<PACKET-ID>: <ITEM-ID>, <ITEM-ID>, ...)`. It closes
-once, as one crossing, and the crossing retires each item:
-
-| Step | For a combined epic |
-|---|---|
-| Wave 1 | One brief and one findings table for the run. The register and roadmap changes name every item. |
-| Step 1 — evidence | Every charter DoD row, fresh: each item's own *Done when* rows, and the row that proves they pass together. An item is complete only when all of its rows pass. The packet's done.md is on the default branch (Step 1). |
-| Step 2 — artifact | One report, keyed by the packet: `closeout --item "<PACKET-ID>"`. |
-| Step 3 — terminal record | One record per item, in the charter's serial order, each naming the one report as its evidence (`--ledger-only` for an external register). |
-| Step 4 — persist | Lessons and the report once. A lesson's heading names the item that taught it, or the packet when the run as a whole taught it. |
-| Step 5 — register | Each item closed, in serial order: `record-completion --item <ITEM-ID>` for a local register, the mutation handshake for an external one — one plan per connector call, each read back before its confirm. |
-| Step 6 — verify | Every item terminal in the register, one record each in the ledger, and the lessons gate run for the whole run: `lessons --check "<report>" --closeout --item "<PACKET-ID>,<ITEM-ID>,<ITEM-ID>"`. |
-
-A run that stopped before `done.md` is not a completion. When the user closes it anyway,
-retire only the items whose rows all pass, with their evidence. Return the rest to the
-belt, say why for each in the report, and set the charter's `status: aborted`. A charter
-left active keeps its items out of `/next-dispatch`'s reach.
-
-## Retirement records routed here
-
-A roadmap review retires items at audit (its A.4): work that finished without a
-close-out, and work it dissolves or supersedes. A status check's straggler migration
-(roadmap-status, 2.1) retires finished work the same way. Each retirement needs one
-terminal record, and a retirement is an *ordinary* record. Only an actor
-`policy.terminalLedger.writers` names may append one, and by default that is this
-ceremony alone. `correctionWriters` covers corrections only: records that name the
-record they correct. So the retiring ceremony invokes this one, and what runs depends
-on what the item already has:
-
-| The retired item | What runs here |
-|---|---|
-| Completed, never closed out | The full crossing, both waves. No record is appended without verified evidence and lessons. |
-| Completed and closed out, with the record missing | The recording crossing (above): Steps 3, 5 and 6, from the existing close-out, with `record-completion`. |
-| Dissolved or superseded | Step 3 alone: one record whose result is `dissolved` or `superseded`, with the review's decision as its evidence, appended in the ledger's own format. `record-completion` is not used, because it closes the item as completed. The retiring ceremony sets the register status. |
-
-Every case stays idempotent: a record already in the ledger for the item is a no-op.
+- **Held plans — ad hoc work that is not on the roadmap yet** (`Origin: held plan`, or
+  `HB-<n>`): Steps 3 and 5 wait for the absorbing review's **recording crossing**.
+- **Combined epics — one run, several items** (`Origin: epic packet`): one crossing,
+  one record per item.
+- **Retirement records routed here**: a review's A.4 or roadmap-status 2.1 retiring an item.
 
 ## Wave 1 — Draft & Confirm
 
-1. **Lead with the five-line brief** (below).
+**Before item 1, read [references/closeout-report-format.md](references/closeout-report-format.md)**
+— the five-line brief, findings and dispositions, and the *Files Created* rules.
+
+1. **Lead with the five-line brief.** Name the actual things, never aggregates.
 2. Findings table.
 3. Interpret non-pass results; propose dispositions.
 4. Draft the net-new governance updates still needed.
-5. Draft the lessons (deliverable 2): what this dispatch taught, as entries ready
-   to append — or the one line saying it taught nothing, and why — and how each
-   lesson the specification applied turned out.
+5. Draft the lessons (Deliverable 2).
 6. Propose the register and roadmap changes.
-7. **Review every file the dispatch created.** Run, against the ref the
-   specification's *Branch* field says the dispatch started from:
+7. **Review every file the dispatch created** (base: the specification's *Branch* ref)
+   and what it left outside the repository:
 
        "$HOME/.virtuoso/bin/virtuoso" dispatch_guards created-files --root . --base "<base ref>"
-
-   Draft the report's *Files Created* section from it: each **temporary** (scratch,
-   backup, cache, log, anything under the registered `temp` role) proposed for
-   removal — committed ones included; each **untracked** file proposed to commit,
-   add to the ignore file, or name for the user's decision; each **uncommitted**
-   change proposed to commit or revert. Nothing is left unreconciled by default: a
-   close-out that leaves litter makes the next merge a forensic exercise.
-   A record under `Virtuoso/.recovery/` is always proposed to commit, never to remove
-   or ignore, and is never a fault by itself: it is the trail that keeps an external
-   write from repeating, and a confirmed write marks its record resolved and keeps
-   it. Only `virtuoso_registry recovery` says whether anything is outstanding.
-   Then review what the run left **outside** the repository:
-
        "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . footprint --dispatch <ITEM-ID>
 
-   It writes nothing, and lists the run's own worktrees (branch `<ITEM-ID>` or
-   `<ITEM-ID>-*`), and the pytest basetemps and `temp` role children made since the
-   branch left its base, each with its size, class and reason. Propose each `redundant`
-   or `regenerable` one for removal with the `footprint --remove <path> --apply` command
-   it prints, after the merge and the deliverable check. Name each `unique`, `evidence`
-   or `in-flight` one for the user's decision with its reason (extract first for
-   `unique`). Record the result as the *Files Created* section's `- **Footprint:**` line:
-   what was removed, what was kept and why, and free space before and after.
+   Draft *Files Created* from both: every file a disposition, plus the `- **Footprint:**` line.
 8. State the **crossing plan**: the exact ordered steps Wave 2 will perform, the
    roles each touches, and what happens on a partial failure.
 9. Ask the user to confirm dispositions, lessons, file dispositions, and the crossing plan.
 
 Wave 1 writes nothing.
 
-## The five-line brief
-
-```
-# [Item title] Close-Out  *(ITEM-ID)*
-
-**Goal:** [What the dispatch set out to do — one sentence.]
-**Result:** [What actually happened — name the things, no aggregates.]
-**Learned:** [The durable lesson, by identifier: <prefix>-NNN — title. Or: No new lesson — reason.]
-**Recommend:** [Recommended next direction — prose only, no kickoff.]
-**Bottom line:** [One-sentence takeaway.]
-```
-
-Optional one-line add-ons where they materially sharpen the story: **By the
-numbers**, **Between the lines**, **Yes, but**, **What's at risk**. Past ~10
-lines, cut.
-
-**Substance rule:** name the actual things. "Shipped three fixes" hides the
-conclusion — write which three, in one clause. Lead with the descriptive name;
-the identifier is secondary.
-
 ## Deliverables
 
-### 1. Close-out report
+**1. Close-out report** — results interpreted, findings classified, dispositions,
+governance updates, next work. One per completed item, named per the project's
+convention, in the registered `closeOuts` directory, from
+[assets/CloseOut.template.md](assets/CloseOut.template.md), with its cost and guards
+(`references/closeout-report-format.md`).
 
-Interprets results, classifies findings, confirms dispositions, identifies
-governance updates, and points at the next work.
-
-One per completed item, named per the project's convention, written into the
-registered `closeOuts` directory.
-
-- Template: [assets/CloseOut.template.md](assets/CloseOut.template.md)
-- Structure and the finding/disposition model:
-  [references/closeout-report-format.md](references/closeout-report-format.md)
-- **Cost and guards.** Report the dispatch's cost from `virtuoso_registry cost --dispatch
-  <ITEM-ID>` — orchestration apart, each row beside its time, cold returns and model changes,
-  every figure with its kind (*not computable* when the dispatch has no binding, naming it).
-  Copy the guards' receipts into the project with `virtuoso_registry --actor
-  dispatch-closeout guards --dispatch <ITEM-ID> --copy --apply` when a `guardLog` role is
-  registered (hooks never write the project; this does, in this tree). A finding that
-  carries a cost or a saving uses the one finding format (tier, confidence, what happened,
-  why it matters, what to do, now → after, kind).
-
-### 2. Lessons
-
-What this dispatch taught, recorded where the next specification will read it: the
-registered `lessons` role. Offer what it tried and dropped
-(`virtuoso_registry guards --dispatch <ITEM-ID> --tried`) as lesson candidates — offered,
-never recorded without the owner's yes. This is not optional, and it is not prose in the report
-alone — a lesson that exists only in a close-out is one no specification will ever
-apply. Every close-out produces one of two things:
-
-- **New lessons**, one entry each, appended to the registered `lessons` role under
-  the identifier `closeout` resolved (`nextLessonId`), in the standard shape:
-  [assets/SpecRetro.entry.template.md](assets/SpecRetro.entry.template.md).
-  `Applies to` is the field the next author matches against new work — say *when*
-  the lesson bears, not only what happened. Its heading names this item **by
-  identifier**, `(<ITEM-ID>, <date>)`: that is how the gate knows this dispatch
-  recorded it. A heading that describes the item in words links only by name, with a
-  `lesson-linked-by-name` warning; a lesson already appended that way is linked with
-  `lessons --record-link <prefix>-NNN --item <ITEM-ID> --actor dispatch-closeout
-  --apply`, never by editing it (see `references/spec-retro-format.md`).
-- Or the line **`No new lesson — <reason>`** in the report's Lessons section. The
-  reason is evidence, and it names what was examined by identifier: "followed
-  <prefix>-NNN exactly", "both risks were covered by <prefix>-NNN and standing rule
-  <rule id>", "the same change as <ITEM-ID>, which taught <prefix>-NNN". Whenever the
-  catalog or the standing rules hold anything, a reason that names none of it fails
-  the gate (`lesson-reason-unanchored`). A close-out that names neither is not finished.
-
-And in either case, **the outcome of every lesson the specification applied** (its
-*Lessons applied* section): each held, or did not. A lesson that failed to prevent
-the trap it names is the second occurrence that promotes it, or the evidence that
-retires it — append a status record under its identifier; never edit the original.
-
-The retrospective evaluates the specification too: effort calibration, sizing,
-routing, dispatch precision, discovery yield.
-
-- Entry shape, status records, and the append-only rule:
-  [references/spec-retro-format.md](references/spec-retro-format.md)
-- When an observation becomes a standing rule:
-  [references/promotion-rules.md](references/promotion-rules.md)
+**2. Lessons** — in the registered `lessons` role, where the next specification reads
+them; a lesson only in a close-out is one no specification will apply. Every close-out
+produces **new lessons**, headed with this item **by identifier**
+([assets/SpecRetro.entry.template.md](assets/SpecRetro.entry.template.md)), **or**
+**`No new lesson — <reason>`**, the reason naming by identifier what was examined; with
+neither it is not finished. Either way it records **the outcome of every lesson the
+specification applied**, by status record, never an edit, and evaluates the
+specification (effort calibration, sizing, routing, precision, discovery yield).
+**Before item 5, read [references/spec-retro-format.md](references/spec-retro-format.md)**
+and [references/promotion-rules.md](references/promotion-rules.md) (when a lesson, or a
+gate found invalid, becomes a rule).
 
 ---
 
 ## Wave 2 — The transactional crossing
 
-Run the six steps **in this order**. Each step verifies before the next begins.
-Local, reversible work happens before anything irreversible or external.
+Run the six steps **in this order**; each verifies before the next begins. Local,
+reversible work happens before anything irreversible or external.
 
 ### Step 1 — Verify completion evidence
 
 Before writing anything, confirm the work is actually done:
 
 - the deliverables the specification named exist;
-- its acceptance criteria are mechanically satisfied — run the commands the
-  specification recorded and read their output, do not accept a summary;
-- the repository state matches what was claimed (read-only inspection:
-  `GIT_OPTIONAL_LOCKS=0 git --no-optional-locks status -sb`, `log --oneline -5`,
-  `show <commit> --stat`);
+- its acceptance criteria are mechanically satisfied — run the recorded commands, read
+  the output, never accept a summary;
+- the repository state matches the claim (read-only: `GIT_OPTIONAL_LOCKS=0 git
+  --no-optional-locks status -sb`, `log --oneline -5`, `show <commit> --stat`);
 - any mid-dispatch amendments are accounted for;
-- for an epic packet, its done.md is on the default branch:
+- for an epic packet, `dispatch_guards artifacts-exist --ref <default branch> <packet directory>/done.md`
+  exits 0. On exit 1 the crossing waits for a `--no-ff` merge of the run branch, or of its
+  docs-only completion commit, into the default branch. The close-out runs the record
+  merge's scope check itself and reports it
+  ([references/evidence-reconciliation.md](references/evidence-reconciliation.md), *Epic packets*);
+- a connector-backed register's snapshot is fresh before the Wave-1 revision read: read
+  every item with the session's connector, write the rows keyed by the register's own
+  column names, and run
+  `virtuoso_registry --root . snapshot --import <rows.json>` (or `--import <page>
+  --columns <columns>`). Report each `[DRIFT]` line as a finding.
 
-      "$HOME/.virtuoso/bin/virtuoso" dispatch_guards artifacts-exist --ref <default branch> <packet directory>/done.md
-
-  exits 0. Exit 1 means the record sits only on the run branch: the crossing waits for a
-  merge into the default branch — the run branch's, or, where its code is already
-  merged, its docs-only completion commit's, with `--no-ff` — made as far as `policy.git`
-  permits, or handed with the exact command to whoever it names. For the docs-only merge,
-  check that it touches only the packet directory (`git diff --name-only <merge>^1
-  <merge>` lists nothing outside it), then run the guard again. It
-  runs the record merge's scope check itself (`git diff --name-only <record merge>^1
-  <record merge> -- . ":(exclude)<packet directory>"` prints nothing) and reports it in
-  the close-out: the run cannot record a check of its own last merge;
-- a connector-backed register's snapshot is fresh, before the Wave-1 revision read:
-  read every item with the session's connector, write the rows keyed by the register's
-  own column names and import them with `virtuoso_registry --root . snapshot --import
-  <rows.json>` (or a raw items page: `--import <page> --columns <columns>`). Report each
-  `[DRIFT]` line as a finding.
-
-Evidence that does not hold **stops the crossing**. Report exactly which
-criterion failed, with its output. A close-out is a claim about reality; do not
-make one you have not checked.
+Evidence that does not hold **stops the crossing**: report which criterion failed, with
+its output. A close-out is a claim about reality; do not make one you have not checked.
 
 ### Acceptance and evidence reconciliation
 
-Not a seventh step. This governs how the six steps read evidence; their order and
-every confirmation they require are unchanged.
-
-Before verifying completion, identify the currently authorized acceptance contract,
-including every published mid-execution amendment. Superseded criteria stay visible
-in the history but are not applied as current gates.
+Not a seventh step; it governs how the six read evidence. First identify the currently
+authorized acceptance contract, with every published amendment; superseded criteria stay
+in the history but are not current gates. What each rule requires:
+[references/evidence-reconciliation.md](references/evidence-reconciliation.md).
 
 <!-- rule:closeout-never-amends-acceptance (acceptance-amendment) -->
 **Never amend acceptance criteria during close-out.** If the active criteria
@@ -385,69 +189,23 @@ conflict with superior governance, a known-red baseline, or the delivered scope,
 stop the crossing and route a concrete amendment for owner approval and independent
 review.
 
-#### Failure classification
-
 <!-- rule:classify-before-completion (failure-classification) -->
 **Classify every non-pass result before deciding whether completion evidence holds:**
 
-1. **In-scope regression** — the candidate fails behavior within its changed
-   dependency surface. Completion is blocked.
-2. **Inherited baseline failure** — the same deterministic failure occurs at the
-   accepted baseline and at the candidate, with the relevant implementation
-   unchanged. Preserve the failure, link or create a separate bounded issue through
-   the issue contract, and apply only an authorized acceptance amendment.
-3. **Admission or custody failure** — repository identity, import isolation,
-   protected inputs, or evidence collection cannot be trusted. Completion is blocked
-   even if test assertions passed.
-4. **Infrastructure failure** — the test produced no valid behavioral result because
-   of environment, runner, storage, permission, or provider failure. Repair or rerun
-   the affected operation; do not classify it as a product failure.
-5. **Authorized exclusion** — an owner-approved, published exclusion exists. Report
-   it explicitly and never describe the excluded population as passed.
-
-An inherited failure requires evidence, not inference: reproduce it at the accepted
-baseline when practical, compare the candidate's relevant dependency surface, and
-verify that protected inputs remained unchanged.
-
-#### Proportional evidence
+in-scope regression and admission or custody failure block completion; an inherited
+baseline failure needs evidence and an authorized amendment; an infrastructure failure
+is repaired or rerun; an authorized exclusion is never reported as passed.
 
 <!-- rule:proportional-evidence (evidence-proportionality) -->
 **Use the least expensive evidence that proves each integrity property.**
-
-- Commit and tree identities prove tracked-content identity.
-- Exact-path diffs prove implementation scope.
-- Clean index and working-tree checks detect checkout drift; `virtuoso_registry repo`
-  reports both, read-only.
-- Hash protected inputs and configuration surfaces directly.
-- Use multiple independent repositories only when the proof depends on distinct
-  repository identities.
-- Use one fresh isolated runner for ordinary regression unless the governing
-  contract requires more.
-- Do not repeatedly hash complete repositories when version-control identities and a
-  targeted protected-file inventory establish the same property.
-- Do not rerun an accepted final test merely to produce another summary. Read and
-  verify its raw evidence unless the contract explicitly requires a fresh close-out
-  execution.
-
-Evidence reduction is never invented during close-out. Any change to a binding gate
-goes through the project's amendment and review process first.
-
-#### Exact integrated identity
 
 <!-- rule:tested-tree-is-the-published-tree (integrated-identity) -->
 **Completion evidence must identify the exact integrated commit and tree tested.**
 Before publication, verify:
 
-- the complete candidate diff matches the authorized manifest;
-- the tested tree equals the tree selected for publication;
-- the published local, tracking, and authoritative remote references agree;
-- no unreviewed change landed between final acceptance and publication.
-
-A later governance-only commit does not retroactively invalidate a properly recorded
-implementation acceptance, but the close-out distinguishes the tested implementation
-commit from any subsequent documentation commit.
-
-#### Protected-state custody
+the diff matches the authorized manifest, the tested tree is the published tree, local,
+tracking and authoritative remote references agree, and nothing unreviewed landed since
+final acceptance.
 
 <!-- rule:protected-state-over-test-result (protected-custody) -->
 **A passing test result cannot override protected-state drift.** Where protected
@@ -455,319 +213,145 @@ inputs exist, record their configured integrity properties immediately before an
 after the accepted test session — hashes, sizes, modification times, database
 sidecars, generated-file provenance, or whatever else the project declares.
 
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . protected --json
-
-#### Completion scope
-
 <!-- rule:close-only-what-was-verified (completion-scope) -->
 **Close only the item whose deliverables and acceptance criteria were verified.** Do
 not mark a parent epic, program, milestone, or release complete unless its own
 separate completion conditions also pass.
-
-Record remaining dependencies, inherited defects, authorized exclusions, and
-unresolved owner decisions without converting them into completion claims.
-
-#### Close-out language
 
 <!-- rule:name-populations-not-aggregates (population-naming) -->
 **Name the accepted test population and the excluded population separately.** Avoid
 aggregate statements such as "all tests passed" when any tested or excluded
 population contains a known failure.
 
-The report distinguishes:
-
-- what passed;
-- what failed;
-- what was excluded under authority;
-- what remained unchanged;
-- what was published;
-- what remains open.
-
-#### Resource and provider completion
-
-After publication, verify every registered terminal operation through its source:
-
-- item retirement or terminal status;
-- terminal-ledger entry;
-- worktree completion;
-- workstream, lock, or merge-slot release;
-- authoritative remote publication;
-- recovery state.
-
-Use the exact recorded holder, branch, item, and revision identities. A partial
-crossing remains incomplete and receives a recovery record describing what succeeded
-and what remains.
-
-#### Retrospective lessons
-
-When close-out reveals an inefficient or invalid gate, distinguish:
-
-- a one-time specification correction;
-- a repeated workflow pattern;
-- an existing rule that needs reconciliation;
-- a new candidate standing rule.
-
-Prefer updating an existing rule over creating a duplicate. Promote a new standing
-rule only after the project's repetition threshold is met
-([references/promotion-rules.md](references/promotion-rules.md)).
-
 ### Step 2 — Create the close-out artifact
-
-Write the close-out report into the registered `closeOuts` directory.
 
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . closeout --item "<ITEM-ID>" --date "<YYYY-MM-DD>" --prepare
 
-**Idempotent:** if the artifact already exists for this item and date, do not
-duplicate it. Update it in place, or stop and ask — never write a second one.
+Write the report into the registered `closeOuts` directory. **Idempotent:** if it
+already exists for this item and date, update it in place or stop and ask — never write
+a second one. Fill its `runtime:` line and `## Time` section by pasting `timing --summary
+--dispatch <DISPATCH-ID>` (plus `--item <ITEM-ID>` for a combined epic) as printed. With
+no time log, write `runtime: not measured (no time log)` and leave the section out.
 
-Fill the report's `runtime:` line and its `## Time` section from the time log. Run
-`timing --summary --dispatch <DISPATCH-ID>` (add `--item <ITEM-ID>` for a combined epic), which prints the row table (predicted, actual,
-wait, kind, added, flag) and the two totals, and paste it as printed. With no time log,
-write `runtime: not measured (no time log)` and leave the section out.
+Process any governance staging file: apply its fold-ins to the registered targets,
+amendment migrations before inline collapses; delete it only after every fold-in lands.
+A fold-in that conflicts with current state is a reconciliation question, never a
+silent overwrite.
 
-Also process a governance staging file if the project uses one (a worktree-
-resident dispatch stages its governance changes rather than editing main
-documents directly). Parse the fold-in instructions, apply them to the registered
-targets, process amendment migrations before inline collapses, and delete the
-staging file only after every fold-in lands. A fold-in that conflicts with current
-state becomes a reconciliation question, not a silent overwrite.
-
-Read the item's issue files in the registered `issues` role (`Issue.<ITEM-ID>.*`,
-per `policy.issues.filenameTemplate`). Each carries the `## Decision` block
-`mid-dispatch-decision` appended in its step 6d; summarize every block into the
-report's *Mid-Dispatch Decisions* section. An issue file with no `## Decision`
-block is an open decision, not a settled one: stop and route it to
-`/mid-dispatch-decision` before the crossing continues.
+Summarize each `## Decision` block in the item's issue files (`Issue.<ITEM-ID>.*` in the
+registered `issues` role, appended by `mid-dispatch-decision` step 6d) into *Mid-Dispatch
+Decisions*. An issue file with no `## Decision` block is an open decision: stop and route
+it to `/mid-dispatch-decision` before the crossing continues.
 
 ### Step 3 — Append the terminal record
 
-Append **one** record to the registered `terminalLedger`:
+Append **one** record to the registered `terminalLedger`, only if
+`policy.terminalLedger.writers` names `dispatch-closeout` (else hand it to a permitted
+ceremony or the user). **Append-only:** never reorder, rewrite, or delete a record; a
+correction is a **new** record naming the one it corrects
+(`policy.terminalLedger.correctionWriters`). **Idempotent:** an existing record is a no-op.
 
-- Only if `policy.terminalLedger.writers` names `dispatch-closeout`. If it does
-  not, stop and hand the record to a permitted ceremony or to the user.
-- **Append-only.** Never reorder, rewrite, or delete an existing record. A
-  correction is a **new** record that names the record it corrects, appended
-  under `policy.terminalLedger.correctionWriters`.
-- **Idempotent.** A record whose content already appears in the ledger is a
-  no-op. Re-running a close-out never duplicates history.
-
-**For a local register and ledger, Steps 3 and 5 are one command**, run here — it
-appends the record, closes the item at the revision you read in Wave 1, and verifies
-both; Step 4 then persists the ledger and the register with everything else:
+**A local register and ledger: Steps 3 and 5 are one command**, run here (it appends,
+closes the item at the Wave-1 revision, and verifies both; Step 4 persists them).
+**An external register: add `--ledger-only`** and drop `--revision`; Step 5 closes the item.
 
     "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor dispatch-closeout record-completion --item "<ITEM-ID>" --date "<YYYY-MM-DD>" --result "<result>" --evidence "<close-out file>" --estimate "<estimate>" --actual "<actual>" --revision "<revision>" --apply
 
-`--estimate` and `--actual` are what effort calibration learns from. Take both from the
-dispatch's time log: `virtuoso_registry timing --summary --json --dispatch <DISPATCH-ID>`
-(add `--item <ITEM-ID>` for a combined epic). `estimate` is the first listing's
-predicted total, and `actual` is the measured working total, both over the rows that ran
-one after another. When the dispatch kept no time log, or the summary says
-`"complete": false` (a row ran without a measured time), pass neither. Settle the
-summary's `flagged` rows with the owner before this step: the Actual includes their time
-either way, and a confirmation returns them to pricing history, not to the ledger. A typed runtime is
-never an actual.
-
-The record's Effort (the item's size word, which pace reads trailing points from) is the
-register's: `record-completion` records it itself, and reports `effortRecorded: false`
-when the ledger has no Effort column. Then add the *Effort* header and separator cell to
-the ledger's table, never touching a record row, and append a correction of the new
-record carrying its Effort.
-
-**For an external register**, append the record alone here; the item is closed in Step 5:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor dispatch-closeout record-completion --ledger-only --item "<ITEM-ID>" --date "<YYYY-MM-DD>" --result "<result>" --evidence "<close-out file>" --estimate "<estimate>" --actual "<actual>" --apply
-
-It records Effort from the register snapshot, so refresh the snapshot first if the item's
-size changed in the register since Wave 1. Re-running it is a no-op that still verifies.
-
-Run it once without `--apply` to preview. If the register refuses after the ledger
-append, or the ledger record does not read back, the command leaves a recovery record
-naming what remains — follow *On partial failure*. An external register closes the item through the handshake in Step 5: one plan
-per connector call, the item read back before each confirm, and `mutation-abandon` for a
-plan that will not be executed.
+Preview once without `--apply`. Take `--estimate` and `--actual` from
+`timing --summary --json --dispatch <DISPATCH-ID>`, never a typed runtime, and pass neither when there is
+no time log or it says `"complete": false`. Effort and Hours come from the register;
+**read [references/ledger-and-register.md](references/ledger-and-register.md)** for
+both values, flagged rows, and a ledger missing its Effort or Hours column. If the
+register refuses after the append, or the record does not read back, the command leaves
+a recovery record — follow *On partial failure*.
 
 ### Step 4 — Persist local governance changes
 
-Apply the confirmed roadmap changes and append the lessons — new entries and
-status records, each appended under the next or the existing identifier, none
-edited — then persist per `policy.git`.
+Apply the confirmed roadmap changes and append the lessons (new entries and status
+records, none edited).
 
-**Parked rows become findings.** Each row `timing --summary --json` lists under
-`parked` — a row the run set aside and did not do — is appended to the registered
-`findings` role as its own entry: `### F-NNN — <row title> (<dispatch-id> parked row,
-YYYY-MM-DD)`, **Source:** the dispatch, **Severity:** `info` unless Wave 1 confirmed
-otherwise, **Where:** the time log and row label, **Finding:** the park reason, and
-**Disposition:** `open`, so the roadmap review decides it. A project without the role
-gets the entries in the close-out instead, with the manifest entry to add.
+**Parked rows become findings.** Each row `timing --summary --json` lists under `parked`
+is appended to the registered `findings` role as its own entry, **Disposition:** `open`,
+for the roadmap review (entry format:
+[references/ledger-and-register.md](references/ledger-and-register.md)).
 
-Then persist:
-
-| `policy.git.policy` | What happens |
-|---|---|
-| `read-only` | Report the exact changed paths; someone else commits. |
-| `prepare-no-stage` | Leave the changes in the working tree; report the paths. |
-| `explicit-path-stage` | `git add "<exact paths>"`; verify the cached set; report. |
-| `explicit-path-commit` | Stage the exact paths and commit. |
-| `push` | As above, then push, subject to `policy.git.networkOperations`. |
-
-Carry out the confirmed file dispositions first: delete each untracked temporary,
-`git rm` each committed one (exact paths), add confirmed ignore patterns, and stage
-the files confirmed for commit with everything else.
-
-Stage **exact paths** — never `git add .` or `-A`. Verify
-`git diff --cached --name-only` matches the expected set before committing, and
-stop on anything unexpected. Unrelated dirty paths are reported and left alone.
-
-If `policy.git.separationOfDuties` is true, hand the commit to another actor with
-the exact file list. That is a project choice, not a rule of this plugin.
-
-If the project declares no git policy and the default applies, say plainly which
-files were written and whether they are committed. The close-out is not finished
-while the changes are unpersisted.
+Carry out the confirmed file dispositions (delete untracked temporaries, `git rm`
+committed ones, add ignore patterns, stage the files confirmed for commit). Then persist
+as far as `policy.git.policy` allows (`references/git-policy.md`): `read-only` and
+`prepare-no-stage` report the exact changed paths for someone else to commit;
+`explicit-path-stage` stages them and verifies the cached set; `explicit-path-commit`
+also commits; `push` also pushes, subject to `policy.git.networkOperations`. Stage
+**exact paths**, never `git add .` or `-A`; verify `git diff --cached --name-only`
+before committing and stop on anything unexpected; report unrelated dirty paths and
+leave them. Under `policy.git.separationOfDuties`, hand the commit over with the file
+list. With no git policy, say which files were written and whether they are committed.
+The close-out is not finished while changes are unpersisted.
 
 ### Step 5 — Close the item in the live register
 
-Through the provider, not by editing a file:
+Through the provider, never by editing a file: pass the Wave-1 `revision` (a concurrent
+change is refused, not clobbered), set the terminal status per
+`policy.workRegister.statusMappings`, and record the completion date and, where
+`policy.workRegister.fieldMappings` names `evidence`, the close-out link. **An external
+register is mutated by this ceremony, not the plugin:** run the provider's instruction
+through the connector, one plan per call, read back, then `mutation-confirm` or
+`mutation-abandon` ([references/ledger-and-register.md](references/ledger-and-register.md)).
 
-- pass the `revision` read in Wave 1, so a concurrent change is refused rather
-  than clobbered;
-- set the terminal status using the project's own vocabulary
-  (`policy.workRegister.statusMappings`);
-- record the completion date and the evidence link (the close-out artifact) — the
-  link only where the register has a column for it (`policy.workRegister.fieldMappings`
-  names `evidence`); otherwise the ledger row and the close-out carry it.
-
-**External registers are mutated by this ceremony, not by the plugin.** The
-provider returns a structured instruction — operation, item, fields, expected
-revision, idempotency key. Execute it with the host's connector — one plan per
-connector call — read the item back, then confirm what the read-back shows:
-`mutation-confirm --recovery-id <ID>` with `--succeeded`, `--failed`, or `--partial
---written <fields>` when only some landed. A plan that will not be executed is closed
-with `mutation-abandon --recovery-id <ID> --reason <why>`. A field the register has no
-column for (`policy.workRegister.fieldMappings`) is refused at planning; leave it out.
-Re-running with the same idempotency key must not repeat the change.
-
-**Two mandatory register outcomes** — the belt moves forward by exactly one:
-
-- **Retire the closed item.** It leaves the active pipeline and no longer reads as
-  in flight or pending.
-- **Elevate the next item** into the vacated head position, so it becomes the
-  active target. This is a sequence change, not a dispatch kickoff.
+**Two mandatory register outcomes** — the belt moves by exactly one: **retire the
+closed item** (no longer in flight or pending); **elevate the next item** to the head —
+a sequence change, not a dispatch kickoff.
 
 ### Step 6 — Verify every result
 
 Re-read each thing you wrote, from its source:
 
-- the close-out artifact exists at the resolved path and carries the expected content;
-- the terminal ledger carries exactly one new record for this item, and prior
-  records are byte-identical to before;
-- the record's Estimate and Actual equal `estimate` and `actual` from
-  `timing --summary --json --dispatch <DISPATCH-ID>`. This matters most on an external
-  register. The summary's `flagged` rows ran
-  over 3× their prediction and may hide a wait nobody saw, such as a host approval
-  prompt. Ask the owner about each one: `timing --confirm N --dispatch <DISPATCH-ID> --actor dispatch-closeout` returns it to the history
-  as real work. Otherwise it stays out, and the report names it;
-- the record's Effort equals the register item's effort;
+- the close-out artifact exists at the resolved path with the expected content;
+- the ledger has exactly one new record for this item; prior records are byte-identical;
+- its Estimate and Actual equal `timing --summary --json --dispatch <DISPATCH-ID>`'s,
+  `flagged` rows settled with the owner (`references/ledger-and-register.md`); its Effort
+  is the item's;
 - the roadmap and lessons changes are present, and committed if policy required it;
-- the report's Lessons section passes the lessons gate — every lesson it names is
-  now in the registered role, or it says "No new lesson" with a reason:
+- the Lessons section passes the gate (a combined epic: `--item "<PACKET-ID>,<ITEM-ID>,..."`):
 
       "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . lessons --check "<close-out path>" --closeout --item "<ITEM-ID>"
 
-  A combined epic's close-out names the packet and every item it closes:
-  `--item "<PACKET-ID>,<ITEM-ID>,<ITEM-ID>"`.
-
-- the item's status in the live register, re-read through the provider, is terminal;
-- the next item is now at the head;
-- `dispatch_guards created-files --base "<base ref>"` exits 0 — or lists exactly the
-  files `policy.git` leaves for someone else to commit and the ones the user chose
-  to decide later, each named in the report's *Files Created* section.
+- the item, re-read through the provider, is terminal, and the next item is at the head;
+- every other terminal operation (worktree, lock or merge-slot release, remote
+  publication, recovery state) holds at its source (`references/evidence-reconciliation.md`);
+- `dispatch_guards created-files --base "<base ref>"` exits 0, or lists only files
+  *Files Created* leaves for someone else or for the user's decision.
 
 ### On partial failure
 
-If a step succeeds and a later one fails — most commonly, local files commit but
-the external register update does not — **write a recovery record** naming
-precisely what completed and what remains:
-
-    "$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . recovery
-
-Report it to the user in the close-out summary. Never silently retry the whole
-crossing: the completed steps are idempotent, so re-running is safe, but the user
-must know the crossing is incomplete before it happens again.
+If a later step fails after an earlier one succeeded — most often, local files commit
+but the external register does not update — **write a recovery record** naming what
+completed and what remains (`"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root .
+recovery`) and report it in the summary. Never silently retry the whole crossing: the
+steps are idempotent, but the user must know it is incomplete before it runs again.
 
 ---
 
 ## After the crossing
 
-### Regenerate the roadmap board
+- **Board.** A local register's `record-completion` regenerates it (`board regenerated:
+  <path>`); otherwise, or without that line, run `"$HOME/.virtuoso/bin/virtuoso"
+  generate_board --root .`. No `board` role: skip (creating one is `/roadmap-review`
+  D.7's). A failure is reported and never undoes the crossing.
+- **Buffer check, governance gates, optional adversarial pass.** Read
+  [references/governance-gates.md](references/governance-gates.md): recommend
+  `/roadmap-review` when the buffer runs below `policy.roadmap.dispatchBuffer` (never
+  author a specification here); surface any audit, milestone, or release gate; and,
+  before Wave 2 writes, offer `/adversarial-review` only when the close-out carries
+  something the project will inherit unexamined.
 
-The crossing changed the register and the ledger, so a registered board follows them:
+## Guardrails and anti-patterns
 
-    "$HOME/.virtuoso/bin/virtuoso" generate_board --root .
-
-`record-completion` already did this for a local register (its output ends with
-`board regenerated: <path>`); run it here after an external register's crossing, or
-when that line is missing. A project with no `board` role skips this — creating the
-board is `/roadmap-review` D.7's job, not this one. A failure here is reported in the
-summary and never undoes the crossing.
-
-### Buffer check
-
-Every close-out drains the dispatch buffer by one. Count the remaining
-dispatch-ready active items and compare against `policy.roadmap.dispatchBuffer`.
-If the count is below target, or the newly elevated head item is a stub,
-recommend `/roadmap-review` plainly in the summary.
-
-If `policy.roadmap.dispatchBuffer` is 0 or `policy.roadmap.eagerSpec` is false,
-skip this check — the project has deliberately disabled eager specification. Do
-not recommend replenishing a buffer the project does not keep.
-
-Never author a specification here. Flagging depletion is this skill's whole job in
-that loop.
-
-### Governance gates
-
-After the report is drafted, check whether any lesson belongs in a governance
-document, and whether an audit, milestone review, or release gate should be
-surfaced. Read [references/governance-gates.md](references/governance-gates.md).
-
-### Optional adversarial pass
-
-Before Wave 2 writes anything, offer `/adversarial-review` over the drafted
-report and retrospective **when the close-out carries something the project will
-inherit unexamined**: a lesson being promoted to a standing rule, an item declared
-complete on partial evidence, or a change that retires scope. Skip the offer for
-a routine close-out — a reflexive offer trains the user to decline it. If the pass
-runs, fold its blocking concerns into the findings before the crossing begins.
-
-### Next dispatch kickoff — out of scope
-
-This skill does not print one. Wave 1's *Recommend* line names a direction in
-prose. Wave 2 ends at verification.
-
----
-
-## Guardrails
-
-- Propose dispositions; do not decide them unilaterally.
-- Prefer net-new governance updates over ceremonial rewrites.
-- Promote a lesson to a standing rule only after the same pattern appears twice.
-- Change a lesson's status by appending a status record under its identifier; never
-  edit an earlier entry. The role is append-only, and its history is how a second
-  occurrence is recognized.
-- A close-out without its Lessons section is not a close-out. "No new lesson" is an
-  answer; silence is not.
-- Never leave output only in conversation.
-- Never write to a role whose `allowedWriters` does not name this ceremony.
+- Propose dispositions; never decide them. Prefer net-new governance updates over
+  ceremonial rewrites. Promote a lesson only after the same pattern appears twice.
+- A close-out without its Lessons section is not a close-out: "No new lesson" is an
+  answer; silence is not. Never leave output only in conversation.
 - Never edit a generated artifact — regenerate it through its registered generator.
-- Never treat a mirror, report, archive, or unclassified role as truth.
-
-## Anti-patterns
-
-- Declaring completion from a summary rather than from evidence.
-- Appending a terminal record before the artifact exists, or before evidence holds.
-- Editing existing terminal records instead of appending a correction.
-- Closing the external register before local governance is persisted — that is the
-  ordering that produces an unrecoverable split.
-- Duplicating a terminal record by re-running the close-out.
-- Silently creating directories while merely resolving paths.
+- Never declare completion from a summary, append a record before the artifact exists or
+  evidence holds, edit an existing record, or create directories while resolving paths.
+- Never close an external register before local governance is persisted — the ordering
+  that produces an unrecoverable split.
