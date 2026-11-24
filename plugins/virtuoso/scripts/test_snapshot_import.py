@@ -259,7 +259,7 @@ def test_a_malformed_rows_file_is_unanswerable(board):
 FIXTURES = Path(PLUGIN_ROOT) / "scripts" / "fixtures"
 PAGE = str(FIXTURES / "monday_board_page.json")
 COLUMNS = str(FIXTURES / "monday_board_columns.json")
-MONDAY = "monday:board/18432510412"
+MONDAY = "monday:board/9876543210"
 MONDAY_POLICY = {"workRegister": {
     "snapshot": "workRegisterSnapshot",
     "fieldMappings": {"id": "Item ID", "title": "Name", "status": "Status",
@@ -306,8 +306,8 @@ def test_a_raw_monday_page_imports_without_hand_built_rows(project):
     assert (item["sequence"], item["status"], item["written_status"], item["effort"],
             item["group"]) == (19, "queued", "stub", "L", "Up next")
     assert item["extra"] == {
-        "providerId": "13122472255", "revision": "2026-10-09T04:15:32Z",
-        "url": "https://estrattbrown.monday.com/boards/18432510412/pulses/13122472255"}
+        "providerId": "1000000001", "revision": "2026-10-09T04:15:32Z",
+        "url": "https://example-workspace.monday.com/boards/9876543210/pulses/1000000001"}
 
 
 def test_drift_names_a_mapped_column_the_board_lacks(project):
@@ -361,7 +361,7 @@ def test_a_page_from_another_board_is_refused(project):
     monday_project(project, external="monday:board/1234567890")
     refused = run("--root", str(project), "snapshot", "--import", PAGE, "--columns", COLUMNS)
     assert refused.returncode == 3
-    assert "18432510412" in refused.stderr and "1234567890" in refused.stderr
+    assert "9876543210" in refused.stderr and "1234567890" in refused.stderr
     assert not (project / "Virtuoso" / "board.snapshot.json").exists()
 
 

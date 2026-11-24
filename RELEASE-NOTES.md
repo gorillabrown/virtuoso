@@ -1,5 +1,12 @@
 # Virtuoso Release Notes
 
+## v1.17.4 (2026-11-24) — neutral test fixtures
+
+- **Test fixtures carry placeholder identifiers.** The monday snapshot-import fixtures
+  and `test_snapshot_import.py` used a real account subdomain, board, workspace and item
+  IDs. They now use neutral placeholders (`example-workspace.monday.com`, board
+  `9876543210`). No behavior changes.
+
 ## v1.17.3 (2026-11-18) — Google Antigravity support, and effort in hours
 
 ### Any host, any model
