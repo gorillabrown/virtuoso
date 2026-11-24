@@ -121,6 +121,8 @@ class ImportReport:
     items: int = 0
     parent_column: str = ""
     subitems: list = field(default_factory=list)       # {"id", "title", "parent"}
+    #: Nested rows kept as work items, because an epic charter names them as members.
+    members: list = field(default_factory=list)        # {"id", "title", "epicRow"}
     without_id: int = 0
     unknown_status: list = field(default_factory=list)  # {"id", "status"}
     unmapped_fields: list = field(default_factory=list)  # canonical fields no column fed
@@ -131,7 +133,8 @@ class ImportReport:
 
     def as_dict(self) -> dict:
         return {"rows": self.rows, "items": self.items, "parentColumn": self.parent_column,
-                "subitemsExcluded": list(self.subitems), "withoutId": self.without_id,
+                "subitemsExcluded": list(self.subitems),
+                "epicMembers": list(self.members), "withoutId": self.without_id,
                 "unknownStatus": list(self.unknown_status),
                 "unmappedFields": list(self.unmapped_fields),
                 "missingColumns": list(self.missing_columns),
@@ -265,16 +268,21 @@ def page_to_rows(pages: list[dict], columns, mapping,
 
 
 def from_rows(rows: list[dict], mapping, *, source: str, taken_at: str,
-              parent_column: str = "") -> tuple[base.Snapshot, ImportReport]:
+              parent_column: str = "",
+              members: dict | None = None) -> tuple[base.Snapshot, ImportReport]:
     """Build a canonical snapshot from rows a host connector read.
 
     Each row is keyed by the register's own column names; the project's field and
     status mappings turn it into a canonical item exactly as a local CSV row would
     be. A row whose parent column holds a value is a subitem: it is left out of the
-    items and listed in the report. A row with no identifier is skipped and counted.
-    Duplicate identifiers are refused, because the head of the belt would be
-    ambiguous.
+    items and listed in the report — unless ``members`` (``{item id: epic row id}``,
+    read from the epic charters) names it. A member nested under its epic row is a
+    work item of its own, kept with ``member_of`` set to the epic row, so its status
+    still answers prerequisites and its close-out still finds it; it is never the
+    head of the belt. A row with no identifier is skipped and counted. Duplicate
+    identifiers are refused, because the head of the belt would be ambiguous.
     """
+    members = dict(members or {})
     report = ImportReport(rows=len(rows))
     headers: list[str] = []
     for row in rows:
@@ -302,7 +310,13 @@ def from_rows(rows: list[dict], mapping, *, source: str, taken_at: str,
         row = {str(k): _cell(v) for k, v in raw.items()}
         item = row_to_item(mapping, headers, index, row)
         parent = row.get(parent_header, "").strip() if parent_header else ""
-        if parent:
+        if parent and item.id in members:
+            # The register's parent cell may hold a page link, not the row's id: the
+            # charter says which epic row this member belongs to.
+            item.member_of = members[item.id]
+            report.members.append({"id": item.id, "title": item.title,
+                                   "epicRow": item.member_of})
+        elif parent:
             report.subitems.append({"id": item.id, "title": item.title, "parent": parent})
             continue
         if not item.id:

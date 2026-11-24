@@ -116,6 +116,7 @@ belongs to `/roadmap-review`.
 |---|---|
 | No approved storyboard for this work | `/storyboard`, which this skill runs for you (Step 0) |
 | The entry is epic-scale | It stays held; the next `/roadmap-review` places it as `Path: epic`, then `/epic` charters it. |
+| The entry reads `paused` | Its storyboard stopped before alignment: Step 0 resumes it (`/storyboard <entry>`), and the plan waits for the *Aligned* verdict |
 | The entry reads `absorbed` | A roadmap item now: `/next-dispatch` |
 | The work is already a roadmap item | `/next-dispatch` if it is the head, otherwise `/roadmap-review` |
 | The entry reads `in-flight` | The `virtuoso` skill is executing it, here or elsewhere. Do not plan over it. |
@@ -153,8 +154,9 @@ belongs to `/roadmap-review`.
 
 1. Check it and read its state
    (`"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . holding --check <entry>`).
-   Route per the table above for `absorbed`, `in-flight`, `withdrawn`, `executed`, and
-   epic-scale. For `planned`, go on to 2 (a re-plan, or a resume from another session).
+   Route per the table above for `absorbed`, `in-flight`, `withdrawn`, `executed`,
+   `paused`, and epic-scale. If a re-alignment here stops before the verdict, record the
+   entry `paused` as `/storyboard` does. For `planned`, go on to 2 (a re-plan, or a resume from another session).
 2. **Re-anchor.** Restate the alignment record in three to five lines (outcome, frames,
    approach, items), then look for **drift** since the verdict's date: commits at the
    expected edit sites (`git log --since=<date> -- <paths>`), live lessons recorded

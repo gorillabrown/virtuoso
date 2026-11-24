@@ -27,4 +27,5 @@ This index maps the old section numbers to their new homes.
 - **delayed-start** — defer execution to a clock time / delay
 - **catfish** — recurring probing questions on a plan owner's waits and sequencing, followed up until decided and reported; asks, never decides
 - **git-handoff** — legacy git handoff packet (manual only)
+- **preserve-session** — before a long session is cleared: refuse while anything runs, file every keeper in its registered home, verify each in a dated session record, then report it safe to clear (manual only)
 - **virtuoso-init** — create/repair this workspace

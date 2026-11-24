@@ -138,6 +138,7 @@ class MarkdownWorkRegister(base.WorkRegisterProvider):
             evidence=value("evidence"),
             description=value("description"),
             notes=value("notes"),
+            member_of=value("member_of"),
             revision=textio.sha256_bytes("|".join(cells).encode("utf-8")),
         )
 
@@ -216,6 +217,11 @@ class MarkdownWorkRegister(base.WorkRegisterProvider):
         self.require_columns("workstream", "deliverable")
         self._write_cell(item_id, "workstream", workstream, revision)
         return self._write_cell(item_id, "deliverable", deliverable, "")
+
+    def set_member_of(self, item_id: str, epic_row: str, *, revision: str = "") -> base.WorkItem:
+        self.require(base.WRITE_STATUS)
+        self.require_columns("member_of")
+        return self._write_cell(item_id, "member_of", epic_row, revision)
 
     def record_completion(self, item_id: str, *, completed: str = "", evidence: str = "",
                           revision: str = "") -> base.WorkItem:

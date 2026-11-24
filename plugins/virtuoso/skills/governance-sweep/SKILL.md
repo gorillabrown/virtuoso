@@ -129,7 +129,12 @@ Compare what is on disk against the structural authority chosen above.
 Under `registry` authority:
 - **A registered role whose target is absent** → report it. Never search for a
   similarly named file and never repoint the role (item 20).
-- **A file in a registered directory that no role covers** → orphan; classify it.
+- **A file in a registered directory that no role covers** → orphan; classify it. A
+  file inside a registered directory role — `sessionRecords`, `holdingBay`, `epics`,
+  `closeOuts`, `issues` — is covered by that role and is never an orphan.
+- **`sessionRecords`** (opt-in) → each record is append-only evidence of what a cleared
+  session kept and where. List every record older than 90 days, by the date in its
+  name, as an **Archive** candidate for Phase 2; never edit or delete one in place.
 - **A registry role pointing outside the project, into an archive while claiming
   live authority, or at the wrong type** → a registry finding; the fix is
   `virtuoso_preflight.py --mode repair`, previewed, not a file move.

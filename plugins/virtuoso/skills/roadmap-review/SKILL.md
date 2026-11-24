@@ -198,7 +198,9 @@ fails is a gap for D.4 — a lesson nobody recorded, or nothing recorded and no 
 Classify each item *likely complete*, *likely dissolved*, or *definitely live*, citing
 the signal. Route each open held entry by trail state: `executed` → A.4b; `storyboarded`
 or `planned` → C.3 (a `planned` entry whose trail names closed-out items sends those to
-A.4b first); `in-flight` → report only (the review after its close-out absorbs it); `unrecorded` or with problems → A.3, repaired
+A.4b first); `paused` (a storyboard or plan stopped before alignment) → A.3, asking
+whether to resume it (`/storyboard <entry>`, which aligns it first) or withdraw it; it is
+never absorbed while unaligned; `in-flight` → report only (the review after its close-out absorbs it); `unrecorded` or with problems → A.3, repaired
 through its owner or withdrawn.
 
 ### A.3 Confirm with the user
@@ -304,7 +306,9 @@ review), and every item already on the roadmap gets its `Path` set:
 ### C.4 Sequence the conveyor belt
 Prerequisites first → risk-first → hardest-first; the register's sequence field mirrors
 it. Write it through the provider only if it supports `write-status` on the sequence
-field; otherwise give a recommendation and say why.
+field; otherwise give a recommendation and say why. An epic row (`/epic`) is sequenced as
+one item; the items nested under it (`member_of`) ride with it and are never sequenced
+apart.
 
 ### C.5 Answer the pace verdict
 A `behind` or `overdue` verdict gets a stated response in the plan, at least one of:

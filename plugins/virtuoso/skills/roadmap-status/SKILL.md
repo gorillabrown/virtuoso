@@ -303,7 +303,7 @@ Each becomes a Phase 2 candidate, never a Phase 1 edit.
 - [Dispatch buffer: N of [policy target] — or: eager specification is disabled.]
 - [If stragglers: N items look complete and need migration.]
 - [If drift: the roadmap and the register disagree about N items.]
-- [If anything is held: N ad hoc plans are waiting for the next roadmap review (N planned, N storyboarded, N executed, N in flight).]
+- [If anything is held: N ad hoc plans are waiting for the next roadmap review (N planned, N storyboarded, N paused, N executed, N in flight).]
 
 ### Recently completed (since YYYY-MM-DD)
 - **[Item title]** — summary. *(ITEM-ID)*

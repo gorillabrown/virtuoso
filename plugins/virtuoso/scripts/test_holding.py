@@ -248,7 +248,8 @@ def test_every_recorder_is_a_default_writer_of_the_role():
 def test_the_role_is_opt_in():
     assert "holdingBay" not in schema.CREATE_ROLE_ORDER
     assert schema.DEFAULT_ROLES["holdingBay"]["allowedWriters"] == [
-        "storyboard", "write-plan", "virtuoso", "dispatch-closeout", "roadmap-review"]
+        "storyboard", "write-plan", "virtuoso", "dispatch-closeout", "roadmap-review",
+        "preserve-session"]
 
 
 def test_provisional_identifiers_are_never_reused():
@@ -366,15 +367,24 @@ def test_a_role_registered_without_the_executor_refuses_it(workspace):
     assert path.read_bytes() == before
 
 
-@pytest.mark.parametrize("state, actor, why", [
-    ("planned", "write-plan", "held-transition-illegal"),        # unrecorded → planned
-    ("storyboarded", "roadmap-review", "held-recorder-wrong"),
-    ("storyboarded", "next-dispatch", "may not write the holdingBay role"),
+NOT_ALIGNED = ALIGNED.replace('**Aligned** — 2026-09-24. The user approved: "yes, that is it".',
+                              "Not aligned — frames F1–F6, approach")
+PAUSED_TRAIL = with_trail(NOT_ALIGNED, ("2026-09-24", "paused", "preserve-session",
+                                        "stopped before the verdict"))
+
+
+@pytest.mark.parametrize("state, actor, why, text", [
+    ("planned", "write-plan", "held-transition-illegal", None),  # unrecorded → planned
+    ("storyboarded", "roadmap-review", "held-recorder-wrong", None),
+    ("storyboarded", "next-dispatch", "may not write the holdingBay role", None),
+    ("planned", "preserve-session", "held-recorder-wrong", None),  # not its state
+    ("planned", "write-plan", "held-transition-illegal", PAUSED_TRAIL),  # paused → planned
+    ("paused", "virtuoso", "held-recorder-wrong", NOT_ALIGNED),  # not its owner
 ])
-def test_a_move_the_rules_forbid_is_refused(workspace, state, actor, why):
+def test_a_move_the_rules_forbid_is_refused(workspace, state, actor, why, text):
     bay = register(workspace)
     path = bay / ("%s.md" % ENTRY)
-    path.write_text(ALIGNED + PLAN, encoding="utf-8")
+    path.write_text(text or ALIGNED + PLAN, encoding="utf-8")
     before = path.read_bytes()
     completed = record(workspace, ENTRY, state, actor, "--apply")
     assert completed.returncode == 3
@@ -389,6 +399,64 @@ def test_a_storyboard_that_is_not_aligned_cannot_be_recorded(workspace):
                     encoding="utf-8")
     completed = record(workspace, ENTRY, "storyboarded", "storyboard", "--apply")
     assert completed.returncode == 3 and "held-not-aligned" in completed.stderr
+
+
+def test_a_paused_storyboard_is_held_with_its_open_items(workspace):
+    bay = register(workspace)
+    path = bay / ("%s.md" % ENTRY)
+    path.write_text(NOT_ALIGNED, encoding="utf-8")
+    completed = record(workspace, ENTRY, "paused", "preserve-session", "--apply")
+    assert completed.returncode == 0, completed.stderr
+    entry = holding_mod.load(str(path), path.read_text(encoding="utf-8"))
+    assert entry.state == "paused"
+    assert entry.open
+    assert entry.problems == []
+    listing = run(REGISTRY_CLI, "--root", str(workspace), "--json", "holding", "--open")
+    assert listing.returncode == 0, listing.stderr
+    assert [e["id"] for e in json.loads(listing.stdout)["entries"]] == [ENTRY]
+
+
+@pytest.mark.parametrize("verdict", ["Not aligned —", "Not aligned — .", "Not aligned"])
+def test_paused_needs_its_open_items_named(workspace, verdict):
+    bay = register(workspace)
+    path = bay / ("%s.md" % ENTRY)
+    path.write_text(NOT_ALIGNED.replace("Not aligned — frames F1–F6, approach", verdict),
+                    encoding="utf-8")
+    before = path.read_bytes()
+    completed = record(workspace, ENTRY, "paused", "storyboard", "--apply")
+    assert completed.returncode == 3
+    assert holding_mod.PAUSED_UNNAMED in completed.stderr
+    assert path.read_bytes() == before
+
+
+def test_an_aligned_entry_is_not_paused(workspace):
+    bay = register(workspace)
+    path = bay / ("%s.md" % ENTRY)
+    path.write_text(ALIGNED, encoding="utf-8")
+    before = path.read_bytes()
+    completed = record(workspace, ENTRY, "paused", "preserve-session", "--apply")
+    assert completed.returncode == 3
+    assert holding_mod.PAUSED_ALIGNED in completed.stderr
+    assert "storyboarded" in completed.stderr
+    assert path.read_bytes() == before
+
+
+def test_a_paused_entry_resumes_through_its_owners(workspace):
+    bay = register(workspace)
+    path = bay / ("%s.md" % ENTRY)
+    # Aligned later: storyboard resumes it.
+    path.write_text(with_trail(ALIGNED, ("2026-09-24", "paused", "preserve-session", "")),
+                    encoding="utf-8")
+    resumed = record(workspace, ENTRY, "storyboarded", "storyboard", "--apply")
+    assert resumed.returncode == 0, resumed.stderr
+    assert holding_mod.load(str(path), path.read_text(encoding="utf-8")).state == "storyboarded"
+    # Nobody resumed it: the review withdraws it.
+    path.write_text(PAUSED_TRAIL, encoding="utf-8")
+    withdrawn = record(workspace, ENTRY, "withdrawn", "roadmap-review", "--note",
+                       "never resumed", "--apply")
+    assert withdrawn.returncode == 0, withdrawn.stderr
+    entry = holding_mod.load(str(path), path.read_text(encoding="utf-8"))
+    assert entry.state == "withdrawn" and not entry.open
 
 
 def test_a_crlf_entry_keeps_its_line_endings(workspace):

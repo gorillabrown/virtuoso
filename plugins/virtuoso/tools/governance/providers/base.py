@@ -86,6 +86,10 @@ class WorkItem:
     evidence: str = ""
     description: str = ""
     notes: str = ""
+    #: The epic row this item is nested under (the register's own parent / sub-item
+    #: link). A member rides with its epic row: it stays a work item of its own, closed
+    #: with its own record, but it is never the head of the belt.
+    member_of: str = ""
     #: Opaque token identifying the version of this item that was read.
     #: A mutation passes it back so the provider can detect a concurrent change.
     revision: str = ""
@@ -95,10 +99,16 @@ class WorkItem:
     def is_terminal(self) -> bool:
         return self.status in TERMINAL_STATUSES
 
+    @property
+    def is_member(self) -> bool:
+        return bool(self.member_of)
+
     def as_dict(self) -> dict:
         data = asdict(self)
         if not data["effort_hours"]:        # absent, not blank: a register without hours
             del data["effort_hours"]        # reads exactly as it did before 1.17.3
+        if not data["member_of"]:           # likewise for a register with no epic rows
+            del data["member_of"]
         return data
 
 
@@ -148,6 +158,15 @@ def header_map(headers: list, index: dict) -> dict:
 
 def utc_now() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def work_items(items) -> list["WorkItem"]:
+    """The items that carry work, for counts and effort: every item but an epic row that
+    has members nested under it. The members carry the run's effort; counting the row
+    too would count the run twice, and its empty effort would leave totals uncomputable."""
+    items = list(items)
+    epic_rows = {i.member_of for i in items if i.member_of}
+    return [i for i in items if i.id not in epic_rows]
 
 
 def _in_sequence(items) -> list["WorkItem"]:
@@ -377,17 +396,20 @@ class WorkRegisterProvider:
         snap = self.snapshot()
         terminal = {i.id for i in snap.items if i.is_terminal}
         active = _in_sequence(i for i in snap.items
-                              if not i.is_terminal and i.status not in (BLOCKED, IN_FLIGHT))
+                              if not i.is_terminal and not i.is_member
+                              and i.status not in (BLOCKED, IN_FLIGHT))
         for item in active:
             if all(p in terminal for p in item.prerequisites if p):
                 return item
         return None
 
     def in_flight(self) -> list[WorkItem]:
-        """Active items already in flight, in sequence order: never the next item."""
+        """Active items already in flight, in sequence order: never the next item. A
+        member is reported through its epic row, never on its own."""
         self.require(NEXT_ELIGIBLE)
         return _in_sequence(i for i in self.snapshot().items
-                            if not i.is_terminal and i.status == IN_FLIGHT)
+                            if not i.is_terminal and not i.is_member
+                            and i.status == IN_FLIGHT)
 
     def missing_prerequisites(self) -> dict[str, list[str]]:
         """For each active item, the prerequisite ids no item in the register carries."""
@@ -414,6 +436,10 @@ class WorkRegisterProvider:
                revision: str = "") -> WorkItem:
         """Write an item's workstream and deliverable (capability ``write-status``)."""
         raise CapabilityError("provider %r cannot assign workstreams" % self.name)
+
+    def set_member_of(self, item_id: str, epic_row: str, *, revision: str = "") -> WorkItem:
+        """Nest an item under an epic row (capability ``write-status``)."""
+        raise CapabilityError("provider %r cannot nest items under an epic row" % self.name)
 
     def require_columns(self, *names: str) -> None:
         """Refuse before any write when the register serves no column for ``names``."""

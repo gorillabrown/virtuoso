@@ -162,6 +162,19 @@ class CsvWorkRegister(base.WorkRegisterProvider):
 
         return self._mutate(item_id, revision, apply_row)
 
+    def set_member_of(self, item_id: str, epic_row: str, *, revision: str = "") -> base.WorkItem:
+        self.require(base.WRITE_STATUS)
+        self.require_columns("member_of")
+
+        def apply_row(row, headers, index, current):
+            column = headers[index["member_of"]]
+            if str(row.get(column, "") or "").strip() == epic_row:
+                return False        # idempotent (item 33)
+            row[column] = epic_row
+            return True
+
+        return self._mutate(item_id, revision, apply_row)
+
     def record_completion(self, item_id: str, *, completed: str = "", evidence: str = "",
                           revision: str = "") -> base.WorkItem:
         self.require(base.RECORD_COMPLETION)
@@ -276,6 +289,7 @@ def row_to_item(mapping, headers: list[str], index: dict, row: dict) -> base.Wor
         evidence=value("evidence"),
         description=value("description"),
         notes=value("notes"),
+        member_of=value("member_of"),
         revision=_row_revision(row),
         extra={k: v for k, v in row.items() if k not in known},
     )

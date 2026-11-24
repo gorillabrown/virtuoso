@@ -425,7 +425,7 @@ def _missing_reason(missing: dict) -> str:
 
 
 def _select(snapshot: base.Snapshot, deadline: Deadline):
-    items = list(snapshot.items)
+    items = base.work_items(snapshot.items)     # an epic row's members carry its work
     if not items:
         return [], ["the register has no work items"]
     if not deadline.scope_field:

@@ -8,7 +8,8 @@ description: >
   next-dispatch), or a combination of dispatch-ready roadmap items run together, serialized
   where they share files ("/epic ID ID ID", "/epic --workstream checkout 11-15"). An outcome stated
   ad hoc ("keep working until it's done", "run this overnight") goes to /storyboard first.
-  Every session runs under the virtuoso skill, and the run closes through /dispatch-closeout.
+  It goes on the belt as one epic row: /next-dispatch prints its kickoff, sessions run
+  under the virtuoso skill, and /dispatch-closeout closes it.
   Trigger on: "epic", "/epic", "run the epic", "batch these items", "long-running goal",
   "autonomous run", "keep going until done". NOT for one dispatch-sized item (next-dispatch),
   single-session tasks (virtuoso skill), or interval jobs (loop/schedule).
@@ -79,8 +80,8 @@ the files are the memory. You are producing the materials, not executing the goa
 
 Work that is not epic-scale: say so in one sentence; route a single item to
 `/next-dispatch` (or `/roadmap-review` when it needs a path or specification), and a
-one-sitting combination to `/next-dispatch`, item by item. This skill does not edit the
-roadmap. Never scaffold a packet for an afternoon task.
+one-sitting combination to `/next-dispatch`, item by item. This skill writes nothing to
+the roadmap but its run's epic row (Step 5). Never scaffold a packet for an afternoon task.
 
 ## The packet
 
@@ -152,8 +153,9 @@ cards it waits on") is Step 1b with those items.
 - No such item: route to `/storyboard`. `Path` is dispatch or absent: the item is one
   dispatch, so route it to `/next-dispatch`, or run it in a combination (Step 1b) with the
   items it belongs with. A prerequisite is pending: name it and stop.
-- A charter whose `item:` or `items:` already names this item means the run exists: point
-  to its launch file, and do not scaffold a second packet.
+- A charter whose `item:` or `items:` already names this item means the packet exists: do
+  not scaffold a second. Finish Step 5's items 3 and 4 if it is not yet on the default
+  branch or the belt, then route to `/next-dispatch` for its kickoff.
 
 #### Step 1b — A combination of roadmap items
 
@@ -272,20 +274,25 @@ checkpoints are not such a list: they say what will be true along the way, never
      the run merges its own code and the policy commits.
    - **charter.md** — the branch and commit rules, under Constraints.
    - **state.md** — the run's branch, base, and remote, in the Working set.
-3. Print the walk-away readiness verdict: preflight table status + open assumptions.
-4. Print the kickoff/resume prompt from launch.md in a fenced code block. It carries the
-   git work and the epic's instructions, so one paste carries both, and it is the same
-   prompt for the first session and every later one.
-5. Straight after it, print the **goal line** from launch.md in its own fenced block,
-   ready for the CLI's `/goal` command. It is one line: what the epic must achieve (the
-   charter's outcome) and how completion is proven (every Definition-of-Done row in the
-   charter verified fresh and `done.md` written). It also names the one other clean stop,
-   every front blocked on a recorded BLOCKER(USER); without that, `/goal` would keep a
-   blocked run going.
-6. If the user is present, offer to hand off now: the first session starts under the
-   virtuoso skill, the only skill that executes, from the kickoff prompt; this skill
-   executes nothing itself. Otherwise, end with the packet path, the code-boxed prompt,
-   and the goal line.
+3. **Land the packet on the default branch**, as one docs-only commit of the five files
+   (exact paths), where `policy.git` commits; otherwise hand that commit to the repository
+   operator. The run branch is cut from a base that carries its packet, and
+   `/next-dispatch` reads it there: a packet only on a run branch, or in another clone,
+   is invisible to it.
+4. **Put the run on the belt as one row:**
+   `"$HOME/.virtuoso/bin/virtuoso" virtuoso_registry --root . --actor epic epic-row --packet <packet>`
+   previews it; `--apply` writes it. A combination gets one **epic row** (the packet's
+   identifier, the charter's title, its earliest member's sequence slot, the
+   prerequisites its members wait on outside the set, the charter as its specification)
+   and every member nested under it, so the belt offers the run once, never item by
+   item. A `Path: epic` item's own row already stands for the run. An external register
+   gets one plan per connector call: execute each, `mutation-confirm` each, then refresh
+   the snapshot. A refusal names its own fix (a parent column to nest in, or `epic` in the
+   register's `allowedWriters`).
+5. Print the walk-away readiness verdict: preflight table status + open assumptions.
+6. Hand off to `/next-dispatch`. It gates the packet and prints the kickoff — launch.md's
+   prompt, which carries the git work, and its goal line for the CLI's `/goal` — for the
+   first session and every resume alike. This skill prints neither, and executes nothing.
 
 ## Scaffolding budget
 
@@ -328,7 +335,8 @@ embeds its own run rules, so a session on a host without this plugin keeps them.
 
 The run ends through `/dispatch-closeout [PACKET-ID]` once `done.md` exists on the default
 branch, as launch.md's completion protocol says. That crossing retires the item on the
-master roadmap, or every item of a combination, and records what the epic taught.
+master roadmap, or every item of a combination and its epic row, and records what the
+epic taught.
 
 - `mid-dispatch-decision` — process a BLOCKER(USER) when the user returns to one.
 - `adversarial-review` — red-team the charter before committing days to it.
@@ -342,6 +350,8 @@ master roadmap, or every item of a combination, and records what the epic taught
 - Pre-baked task backlogs or starter code for a project nobody has inspected yet
 - A 9-or-22-file bespoke kit instead of the five-file contract
 - Deferring "where is the repo?" / "is gh authenticated?" into the unattended run
+- A packet left off the default branch, or a combination left on the belt item by item:
+  `/next-dispatch` then offers the members as dispatches of their own
 - Executor-only materials — no kickoff prompt, no monitoring guide, no completion protocol
 - "Done" on stale or hearsay evidence; DoD rows nobody can execute
 - state.md growing history (journal's job) or how-to lore (executor's job)

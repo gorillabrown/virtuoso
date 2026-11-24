@@ -500,12 +500,17 @@ def test_the_roadmap_paths_open_only_on_the_master_roadmap():
 
 def test_the_epic_packet_carries_its_git_work_and_a_goal_line():
     """D6 says an epic carries a reconciliation recipe; the skill must fill one into the
-    kickoff prompt, and print a one-line goal for `/goal` straight after it."""
+    kickoff prompt. Since 1.17.5 `/next-dispatch` prints that prompt, with a one-line goal
+    for `/goal` straight after it, as the epic's kickoff."""
     epic = " ".join(skill_text("epic").split())
     assert "**Fill the run's git work**" in epic
     assert "`policy.git.branchNameTemplate`" in epic and "Leave no placeholders" in epic
-    assert "print the **goal line** from launch.md in its own fenced block" in epic
+    assert "Hand off to `/next-dispatch`" in epic and "goal line" in epic
     assert "`/goal`" in epic and "BLOCKER(USER)" in epic
+    gate = " ".join((ROOT / "skills" / "next-dispatch" / "references" / "epic-dispatch.md")
+                    .read_text(encoding="utf-8").split())
+    assert "print the launch file's goal line in its own fenced block" in gate
+    assert "*Kickoff / resume prompt* verbatim" in gate
 
     assets = ROOT / "skills" / "epic" / "assets"
     launch = (assets / "launch.template.md").read_text(encoding="utf-8")
@@ -833,3 +838,35 @@ def test_the_1_16_migration_note_names_the_rename():
     note = (ROOT.parents[1] / "docs" / "MIGRATION-1.16.md").read_text(encoding="utf-8")
     assert any(line.startswith("|") and "`dispatch-kickoff`" in line and "`next-dispatch`" in line
                for line in note.splitlines())
+
+
+# --- preserving a session -------------------------------------------------------------
+
+
+def test_the_paused_state_is_resumed_and_reconciled():
+    """A storyboard stopped before alignment is held `paused`: storyboard records and
+    resumes it, write-plan routes it back there, the review reconciles it; the sweep and
+    init know the session-record role."""
+    for name in ("storyboard", "write-plan", "roadmap-review"):
+        assert "`paused`" in " ".join(skill_text(name).split()), name
+    for name in ("governance-sweep", "virtuoso-init"):
+        assert "`sessionRecords`" in " ".join(skill_text(name).split()), name
+
+
+def test_the_preserve_session_skill_is_shipped():
+    path = ROOT / "skills" / "preserve-session" / "SKILL.md"
+    raw = path.read_text(encoding="utf-8")
+    front = raw.split("---", 2)[1]
+    assert re.search(r"(?m)^name:\s*preserve-session\s*$", front)
+    text = " ".join(skill_text("preserve-session").split())
+    for needed in ("session --gate", "session --record", "/dispatch-closeout",
+                   "/git-handoff", "/clear"):
+        assert needed in text, needed
+    # host-neutral: /compact only where a host has it, otherwise the host's own means
+    assert "on a host that has `/compact`" in text
+    assert "by the host's own means" in text
+    assert not re.search(r"\bSRL-\d|\bSR-\d", text)
+    assert len(raw.encode("utf-8")) < 24000
+    readme = (ROOT.parents[1] / "README.md").read_text(encoding="utf-8")
+    workflow = (ROOT / "references" / "WORKFLOW_REFERENCE.md").read_text(encoding="utf-8")
+    assert "preserve-session" in readme and "preserve-session" in workflow

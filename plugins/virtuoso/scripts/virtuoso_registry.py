@@ -73,7 +73,10 @@ Subcommands:
            --ledger-only    EXTERNAL register: append and verify the terminal record
                             only; the mutation handshake closes the item
   create-item               bring a new item into a LOCAL register (a write)
-  mutation-plan             emit a revision-aware host connector instruction
+  epic-row --packet P       put an epic run on the belt as one row: the epic row, with
+                            the combination's members nested under it (preview;
+                            --apply writes a LOCAL register, or emits the handshake)
+  mutation-plan            emit a revision-aware host connector instruction
                             (operations: set-status, store-spec-link,
                             record-completion, create-item)
   mutation-confirm          durably record the host connector result (succeeded,
@@ -104,7 +107,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.governance import (  # noqa: E402
-    backup as backup_mod, combine as combine_mod, holding as holding_mod,
+    backup as backup_mod, combine as combine_mod, epicrow as epicrow_mod,
+    holding as holding_mod,
     learning as learning_mod,
     footprint as footprint_mod, lessons as lessons_mod, move as move_mod,
     overlays as overlays_mod,
@@ -114,6 +118,7 @@ from tools.governance import (  # noqa: E402
 )
 from tools.governance.errors import CapabilityError, GovernanceError, RoleNotRegistered  # noqa: E402
 from tools.governance import dependencies, integrity, repostate  # noqa: E402
+from tools.governance import guards as guards_mod, session as session_mod  # noqa: E402
 from tools.governance.providers import (  # noqa: E402
     base as provider_base, kpi, ledger as ledger_mod, mapping as provider_mapping, recovery,
     snapshot_provider,
@@ -289,6 +294,14 @@ def _active_charters(reg) -> tuple[dict, str]:
             os.path.relpath(epics, reg.root).replace(os.sep, "/"))
 
 
+def _epic_members(reg) -> dict:
+    """``{member: epic row}`` from every combination charter in the ``epics`` role."""
+    try:
+        return combine_mod.epic_members(reg.resolve("epics"))
+    except RoleNotRegistered:
+        return {}
+
+
 def cmd_next(args) -> int:
     reg = _load(args.root)
     selection = providers.work_register(reg, actor=args.actor)
@@ -300,9 +313,12 @@ def cmd_next(args) -> int:
                "inFlight": [i.as_dict() for i in in_flight],
                "missingPrerequisites": missing,
                "provenance": snap.provenance(), "selection": selection.as_dict()}
-    packet = _active_charters(reg)[0].get(item.id, "") if item else ""
+    claimed, epics_dir = _active_charters(reg)
+    packet = claimed.get(item.id, "") if item else ""
+    launch = "%s/%s/launch.md" % (epics_dir, packet) if packet else ""
     if packet:
         payload["inEpicPacket"] = packet
+        payload["epicLaunch"] = launch
     if args.as_json:
         return _emit(payload, True)
     for flight in in_flight:
@@ -313,8 +329,8 @@ def cmd_next(args) -> int:
         return EXIT_OK
     print("%s — %s" % (item.title or "(untitled)", item.id))
     if packet:
-        print("  in epic run:   %s — an active charter names this item; resume the run "
-              "from its launch file, never dispatch the item on its own" % packet)
+        print("  in epic run:   %s — dispatch the epic from its packet: the kickoff is the "
+              "prompt in %s, never a dispatch of one item on its own" % (packet, launch))
     print("  sequence:      %s" % (item.sequence if item.sequence is not None else "unsequenced"))
     print("  status:        %s (%s)" % (item.status, item.raw_status or "—"))
     print("  specification: %s" % (item.written_status or "unknown"))
@@ -1387,6 +1403,199 @@ def cmd_holding(args) -> int:
     return EXIT_OK
 
 
+def _session_gate(args) -> int:
+    result = session_mod.gate(args.root, args.marker)
+    if args.as_json:
+        print(json.dumps(result.as_dict(), indent=2, ensure_ascii=True))
+        return result.code
+    if result.code == session_mod.GATE_CLEAR:
+        print("gate: nothing running in this session (%s, %s)" % (result.host, result.transcript))
+    elif result.code == session_mod.GATE_RUNNING:
+        print("gate: still running in this session — nothing is saved until it settles:")
+        for held in result.running:
+            print("  %-18s %s  %s" % (held["kind"], held["id"], held["detail"]))
+    else:
+        print("gate: cannot tell (%s) — treated as running: %s" % (result.case, result.reason))
+    return result.code
+
+
+def _session_inventory(args) -> int:
+    located = session_mod.locate(args.marker)
+    if located.code != session_mod.GATE_CLEAR:
+        payload = {"code": session_mod.GATE_UNKNOWN, "reason": located.reason,
+                   "case": located.case}
+        print(json.dumps(payload, indent=2) if args.as_json
+              else "inventory: cannot tell (%s): %s" % (located.case, located.reason))
+        return session_mod.GATE_UNKNOWN
+    edited = session_mod.session_edits(located.host, located.transcript)
+    try:
+        found = session_mod.inventory(args.root, edited,
+                                      session_mod._first_stamp(located.transcript))
+    except LookupError as exc:
+        raise GovernanceError("inventory: %s" % exc)
+    found["shared"] = session_mod.shared_paths(
+        found["repository"], found["uncommitted"] + found["untracked"], located.transcript)
+    if found["shared"]:
+        found["notes"].append("also named by another recent session, so never staged here: "
+                              "%s" % ", ".join(found["shared"]))
+    try:
+        import dispatch_guards
+        found["unpushed"] = dispatch_guards.unpushed_count(found["repository"])
+    except ImportError:
+        found["unpushed"] = None
+    if found["unpushed"] is None:
+        found["notes"].append("unpushed: no upstream is configured for HEAD")
+    try:
+        report = footprint_mod.audit(_footprint_context(args))
+        found["leftovers"] = [{"path": c["path"], "class": c["class"]}
+                              for c in report["candidates"]]
+    except (GovernanceError, OSError, ValueError) as exc:
+        found["leftovers"] = None
+        found["notes"].append("leftovers outside the tree: not computable (%s)" % exc)
+    found["stage"] = session_mod.stage_paths(found)
+    found["transcript"], found["host"] = located.transcript, located.host
+    if args.as_json:
+        return _emit(found, True)
+    print("inventory: %s (%s); base %s" % (located.transcript, located.host,
+                                           found["base"] or "not computable"))
+    for label in ("uncommitted", "untracked", "committed", "outside"):
+        values = found[label]
+        print("  %-12s %s" % (label + ":", "not computable" if values is None
+                              else ", ".join(values) or "none"))
+    print("  %-12s %s" % ("others:", (", ".join(found["others"]) + " — not edited in this "
+                                      "transcript (another session's, or changed by a command "
+                                      "here): left alone, never staged")
+                          if found["others"] else "none"))
+    print("  %-12s %s" % ("unpushed:", "no upstream" if found["unpushed"] is None
+                          else found["unpushed"]))
+    print("  %-12s %s" % ("leftovers:", "not computable" if found["leftovers"] is None
+                          else len(found["leftovers"])))
+    for note in found["notes"]:
+        print("note: %s" % note)
+    return EXIT_OK
+
+
+def _session_record(args) -> int:
+    if args.actor != session_mod.ACTOR:
+        raise GovernanceError("session --record runs as --actor %s only" % session_mod.ACTOR)
+    reg = _load(args.root)
+    role = session_mod.ROLE
+    spec = reg.role(role)
+    if spec is None or spec.is_external or not reg.writable(role, args.actor):
+        why = ("no `%s` role is registered" % role if spec is None else
+               "the `%s` role is external" % role if spec.is_external else
+               "%s may not write the `%s` role (allowedWriters)" % (args.actor, role))
+        message = ("%s, so no session record can be kept and nothing is safe to clear. "
+                   "Register it in %s (you choose the directory): %s"
+                   % (why, schema.MANIFEST_RELPATH, session_mod.role_entry()))
+        print(json.dumps({"code": session_mod.RECORD_NO_ROLE, "reason": message}, indent=2)
+              if args.as_json else message)
+        return session_mod.RECORD_NO_ROLE
+    directory = reg.resolve(role)
+    if not os.path.isdir(directory):
+        message = ("the `%s` role is registered at %s, but that directory does not exist; "
+                   "create it, then run again" % (role, os.path.relpath(directory, args.root)))
+        print(json.dumps({"code": session_mod.RECORD_NO_ROLE, "reason": message}, indent=2)
+              if args.as_json else message)
+        return session_mod.RECORD_NO_ROLE
+    text = textio.read_text(args.record)
+    if text is None:
+        raise GovernanceError("%s cannot be read as a session record" % args.record)
+    rec = session_mod.parse_record(text)
+    # Safe to clear only if nothing started running since Step 1: the gate runs again on
+    # the record's own marker, and the session it resolves is the one whose note drops.
+    gated = None
+    try:
+        gated = session_mod.gate(args.root, session_mod.check_marker(rec.fields.get("marker", "")))
+    except ValueError as exc:
+        rec.problems.append(str(exc))
+    if gated is not None and gated.code != session_mod.GATE_CLEAR:
+        rec.problems.append("the gate no longer passes (%s): %s" % (
+            gated.case or "running", gated.reason or ", ".join(
+                "%s %s" % (h["kind"], h["id"]) for h in gated.running)))
+    elif gated is not None and rec.fields.get("session") != gated.session:
+        rec.problems.append("the record names session %r, but its marker is in session %r"
+                            % (rec.fields.get("session"), gated.session))
+    checked = [dict(item, problem=session_mod.verify(args.root, reg, item["dest"]))
+               for item in rec.items]
+    unverified = [c for c in checked if c["problem"]]
+    secrets = session_mod.credentials(text)
+    refused = bool(rec.problems or unverified or secrets)
+    payload = {"record": args.record, "items": checked, "problems": rec.problems,
+               "credentials": secrets, "safe": False, "written": None}
+    if refused:
+        payload["code"] = session_mod.RECORD_REFUSED
+        if args.as_json:
+            print(json.dumps(payload, indent=2, ensure_ascii=True))
+        else:
+            print("record: not safe to clear — fix each line, then run again:")
+            for problem in rec.problems:
+                print("  format: %s" % problem)
+            for item in unverified:
+                print("  unverified: %s -> %s (%s)" % (item["item"], item["dest"],
+                                                       item["problem"]))
+            for line in secrets:
+                print("  credential: %s — never copy one into a document" % line)
+        return session_mod.RECORD_REFUSED
+    if not args.apply:
+        payload["code"] = EXIT_OK
+        if args.as_json:
+            print(json.dumps(payload, indent=2, ensure_ascii=True))
+        else:
+            print("preview — %d destination(s) verified; run again with --apply to keep the "
+                  "record in %s" % (len(checked), os.path.relpath(directory, args.root)))
+        return EXIT_OK
+    name = session_mod.record_name(rec.title, _dt_now())
+    target = os.path.join(directory, name)
+    if os.path.exists(target):
+        raise GovernanceError("%s already exists; session records are append-only" % target)
+    body = session_mod.with_verified(text, rec)
+    with open(target, "x", encoding="utf-8", newline="") as handle:
+        handle.write(body)
+    if textio.read_text(target) != body:
+        raise GovernanceError("%s was written but does not read back as written; inspect "
+                              "it before clearing" % target)
+    guards_mod.drop_handoff(args.root, gated.session)
+    try:
+        written = os.path.relpath(target, args.root).replace(os.sep, "/")
+    except ValueError:                      # another drive
+        written = target
+    payload.update(code=EXIT_OK, safe=True, written=written)
+    if args.as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+    else:
+        print("record kept: %s (%d destination(s) verified)" % (payload["written"],
+                                                                len(checked)))
+        print(session_mod.SAFE_LINE)
+    return EXIT_OK
+
+
+def _dt_now():
+    import datetime
+    return datetime.datetime.now()
+
+
+def cmd_session(args) -> int:
+    """Preserve a session before it is cleared: ``--gate`` (is anything still running?),
+    ``--inventory`` (this session's files apart from another's), ``--record FILE``
+    (verify every destination a session record names; ``--apply`` keeps it and says
+    safe to clear).
+
+    Exit 0 clear / safe, 1 running or refused, 3 cannot tell or no sessionRecords role.
+    """
+    chosen = [flag for flag, on in (("--gate", args.gate), ("--inventory", args.inventory),
+                                    ("--record", bool(args.record))) if on]
+    if len(chosen) != 1:
+        raise GovernanceError("session needs exactly one of --gate, --inventory, --record FILE")
+    if not args.record:
+        try:
+            session_mod.check_marker(args.marker)
+        except ValueError as exc:
+            raise GovernanceError(str(exc))
+        return _session_gate(args) if args.gate else _session_inventory(args)
+    return _session_record(args)
+
+
 _TIMING_WRITES = ("open", "add", "start", "wait", "resume", "end", "confirm", "split",
                   "timebox_reached", "park")
 
@@ -1943,7 +2152,8 @@ def _import_snapshot(args) -> int:
     try:
         snap, report = snapshot_provider.from_rows(rows, mapping, source=source,
                                                    taken_at=taken_at,
-                                                   parent_column=args.parent_column)
+                                                   parent_column=args.parent_column,
+                                                   members=_epic_members(reg))
     except ValueError as exc:
         raise GovernanceError("%s: %s" % (args.import_rows, exc))
     report.missing_columns = drift["missingColumns"]
@@ -1956,6 +2166,10 @@ def _import_snapshot(args) -> int:
     print("snapshot imported: %s (%d item(s) from %d row(s), taken %s)"
           % (label, report.items, report.rows, taken_at))
     print("  source: %s" % source)
+    if report.members:
+        print("  %d epic member(s) kept, nested under their epic row: %s"
+              % (len(report.members),
+                 ", ".join("%s under %s" % (m["id"], m["epicRow"]) for m in report.members)))
     if report.subitems:
         print("  %d subitem(s) kept out of the work list (parent column %r): %s"
               % (len(report.subitems), report.parent_column,
@@ -2430,6 +2644,124 @@ def cmd_create_item(args) -> int:
     print("  status:        %s (%s)" % (item.status, item.raw_status or "—"))
     print("  specification: %s" % (item.written_status or "unknown"))
     return EXIT_OK
+
+
+def cmd_epic_row(args) -> int:
+    """Put an epic run on the belt as one row: create the epic row and nest its members
+    under it. Preview by default; ``--apply`` writes a LOCAL register, or emits the host
+    handshake (one plan per connector call) for an EXTERNAL one."""
+    if not args.actor:
+        raise CapabilityError("an explicit ceremony actor is required to place an epic row")
+    reg = _load(args.root)
+    try:
+        epics = reg.resolve("epics")
+    except RoleNotRegistered:
+        raise CapabilityError("no epics role is registered, so no charter can be read; "
+                              "register one (epic skill, *The packet*)")
+    charter = epicrow_mod.find_charter(epics, args.packet)
+    if charter is None:
+        raise GovernanceError("no charter under %s names packet %r"
+                              % (os.path.relpath(epics, reg.root), args.packet))
+    selection = providers.work_register(reg, actor=args.actor)
+    provider = selection.provider
+    snap = provider.snapshot()
+    if args.release:
+        return _epic_row_release(args, charter, provider, snap)
+    result = epicrow_mod.plan(charter, snap, root=reg.root)
+    result["provenance"] = snap.provenance()
+    external = hasattr(provider, "plan_mutation")
+    if snap.stale:
+        result["problems"].append("the register snapshot is stale (%s): refresh it first"
+                                  % snap.stale_reason)
+    work = bool(result["create"] or result["nest"])
+    if work and not result["problems"]:
+        try:        # every check that can refuse runs before the first write
+            if result["create"]:
+                provider.require(provider_base.CREATE_ITEM)
+            if result["nest"]:
+                provider.require(provider_base.WRITE_STATUS)
+                provider.require_columns("member_of")
+        except CapabilityError as error:
+            result["problems"].append(str(error))
+    result["applied"] = False
+    result["plans"] = []
+    if result["problems"] or not args.apply or not work:
+        def text() -> str:
+            lines = ["epic row %s for packet %s (%s)"
+                     % (result["epicRow"] or "?", result["packet"], result["kind"])]
+            if result["kind"] == epicrow_mod.KIND_ITEM and not result["problems"]:
+                lines.append("  the item's own row stands for the run; nothing to write")
+            if result["create"]:
+                lines.append("  create: %s" % json.dumps(result["create"], ensure_ascii=True))
+            elif result["exists"] and result["kind"] == epicrow_mod.KIND_COMBINATION:
+                lines.append("  epic row already in the register")
+            for dropped in result.get("dropped") or []:
+                lines.append("  no column for %s: left off the epic row" % dropped)
+            for member in result["nest"]:
+                lines.append("  nest:   %s under %s" % (member["item"], result["epicRow"]))
+            for member in result["nested"]:
+                lines.append("  nested: %s (already)" % member)
+            for problem in result["problems"]:
+                lines.append("  [BLOCKED] %s" % problem)
+            if work and not result["problems"]:
+                lines.append("preview only: --apply writes it")
+            return "\n".join(lines)
+        _emit(result, args.as_json, text)
+        return EXIT_CHECK_FAILED if result["problems"] else EXIT_OK
+
+    epic_id = result["epicRow"]
+    if external:
+        if result["create"]:
+            result["plans"].append(provider.plan_mutation(
+                "create-item", epic_id, dict(result["create"])).as_dict())
+        for member in result["nest"]:
+            result["plans"].append(provider.plan_mutation(
+                "set-status", member["item"], {"member_of": epic_id},
+                revision=member["revision"]).as_dict())
+    else:
+        if result["create"]:
+            provider.create_item(dict(result["create"]))
+        for member in result["nest"]:
+            provider.set_member_of(member["item"], epic_id, revision=member["revision"])
+    result["applied"] = True
+
+    def applied_text() -> str:
+        if external:
+            return ("%d plan(s) for %s: execute each with the host's connector, in order, "
+                    "then `mutation-confirm --recovery-id <id>` each, then refresh the "
+                    "snapshot\n%s" % (len(result["plans"]), provider.source,
+                                      json.dumps(result["plans"], indent=2, ensure_ascii=True)))
+        lines = ["epic row %s placed in %s" % (epic_id, provider.source)]
+        lines += ["  nested %s" % m["item"] for m in result["nest"]]
+        return "\n".join(lines)
+    return _emit(result, args.as_json, applied_text)
+
+
+def _epic_row_release(args, charter, provider, snap) -> int:
+    """Return a stopped run's unfinished members to the belt: clear their nesting. The
+    epic row itself is retired by the close-out, never here."""
+    epic_id = charter["id"]
+    release = [{"item": i.id, "revision": i.revision} for i in snap.items
+               if i.member_of == epic_id and not i.is_terminal]
+    result = {"packet": charter["packet"], "epicRow": epic_id, "release": release,
+              "applied": False, "plans": [], "provenance": snap.provenance()}
+    if args.apply and release:
+        provider.require(provider_base.WRITE_STATUS)
+        for member in release:
+            if hasattr(provider, "plan_mutation"):
+                result["plans"].append(provider.plan_mutation(
+                    "set-status", member["item"], {"member_of": ""},
+                    revision=member["revision"]).as_dict())
+            else:
+                provider.set_member_of(member["item"], "", revision=member["revision"])
+        result["applied"] = True
+    return _emit(result, args.as_json, lambda: "\n".join(
+        ["release from epic row %s:" % epic_id]
+        + ["  %s back on the belt" % m["item"] for m in release]
+        + ([] if release else ["  nothing nested and unfinished"])
+        + ([] if result["applied"] or not release else ["preview only: --apply writes it"])
+        + ([json.dumps(result["plans"], indent=2, ensure_ascii=True)]
+           if result["plans"] else [])))
 
 
 def cmd_move_register(args) -> int:
@@ -2917,6 +3249,19 @@ def build_parser() -> argparse.ArgumentParser:
                          help="append the row (without it, --record previews)")
     holding.set_defaults(func=cmd_holding)
 
+    session = sub.add_parser("session", parents=[common])
+    session.add_argument("--gate", action="store_true",
+                         help="name what still runs in this session (read-only)")
+    session.add_argument("--inventory", action="store_true",
+                         help="this session's files, apart from another session's (read-only)")
+    session.add_argument("--record", default="", metavar="FILE",
+                         help="verify a session record's destinations (--actor preserve-session)")
+    session.add_argument("--marker", default="",
+                         help="the preserve-session:<8 hex> marker printed in this session")
+    session.add_argument("--apply", action="store_true",
+                         help="keep the verified record in sessionRecords and say safe to clear")
+    session.set_defaults(func=cmd_session)
+
     timing = sub.add_parser("timing", parents=[common])
     timing.add_argument("--dispatch", default="",
                         help="the dispatch the log belongs to (every action but --kinds)")
@@ -3066,6 +3411,15 @@ def build_parser() -> argparse.ArgumentParser:
     create_item.add_argument("--fields-json", required=True,
                              help="canonical field names; extra keys are project columns")
     create_item.set_defaults(func=cmd_create_item)
+
+    epic_row = sub.add_parser("epic-row", parents=[common])
+    epic_row.add_argument("--packet", required=True,
+                          help="the packet's directory name or identifier")
+    epic_row.add_argument("--apply", action="store_true",
+                          help="write it (a LOCAL register) or emit the host handshake")
+    epic_row.add_argument("--release", action="store_true",
+                          help="un-nest a stopped run's unfinished members instead")
+    epic_row.set_defaults(func=cmd_epic_row)
 
     mutation_plan = sub.add_parser("mutation-plan", parents=[common])
     mutation_plan.add_argument("--operation", required=True, choices=MUTATION_OPERATIONS)

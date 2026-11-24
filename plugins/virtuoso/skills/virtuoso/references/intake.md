@@ -76,6 +76,7 @@ it. Neither executed anything. As part of Task #1:
    - `planned` → continue.
    - `in-flight` → another run holds it. Stop and ask. Never run it twice.
    - `storyboarded` → there is only a draft stub, and no plan. Route to `/write-plan <entry>`.
+   - `paused` → its storyboard stopped before alignment. Route to `/storyboard <entry>`.
    - `absorbed` → it is a roadmap item now. Route to `/next-dispatch`.
    - `executed` or `withdrawn` → there is nothing to run. Say so and stop.
 2. **Run the conflict check** above, against the entry's kickoff, placement, and impact map.

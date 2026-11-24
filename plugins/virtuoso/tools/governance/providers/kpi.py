@@ -148,7 +148,7 @@ def compute(snapshot: base.Snapshot, *, effort_scale: dict | None = None,
     or a string naming why that cannot be judged here. Omitted, the
     ``dispatch-buffer-ready`` figure is not computed at all."""
     scale = {str(k).lower(): v for k, v in (effort_scale or DEFAULT_EFFORT_SCALE).items()}
-    items = snapshot.items
+    items = base.work_items(snapshot.items)     # an epic row's members carry its work
     fields = set(snapshot.fields)
     metrics: list[Metric] = []
 
@@ -229,7 +229,8 @@ def compute(snapshot: base.Snapshot, *, effort_scale: dict | None = None,
         metrics.append(Metric("dispatch-buffer-filled", computable=False,
                               missing_inputs=["written_status"]))
     else:
-        active = [i for i in items if not i.is_terminal]
+        # The belt: an epic row stands for its run once; its members are not on the belt.
+        active = [i for i in snapshot.items if not i.is_terminal and not i.is_member]
         active.sort(key=lambda i: (i.sequence is None, i.sequence or 0, i.id))
         head = active[:dispatch_buffer]
         filled = sum(1 for i in head if i.written_status == base.FULL_SPEC)

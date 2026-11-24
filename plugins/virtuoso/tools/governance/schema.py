@@ -287,7 +287,8 @@ DEFAULT_ROLES: dict[str, dict] = {
         "authority": "live",
         "mutability": "read-write",
         "owner": "roadmap-review",
-        "allowedWriters": ["roadmap-review", "next-dispatch", "dispatch-closeout"],
+        # epic writes exactly one thing here: its run's epic row and the members it nests.
+        "allowedWriters": ["roadmap-review", "next-dispatch", "dispatch-closeout", "epic"],
         "validation": "csv-headers",
         "classification": "active",
         "origin": "authored",
@@ -326,7 +327,8 @@ DEFAULT_ROLES: dict[str, dict] = {
         "mutability": "append-only",
         "owner": "governance-sweep",
         "allowedWriters": ["governance-sweep", "adversarial-review", "virtuoso",
-                           "dispatch-closeout", "roadmap-review", "3rd-party-audit"],
+                           "dispatch-closeout", "roadmap-review", "3rd-party-audit",
+                           "preserve-session"],
         "validation": "markdown",
         "classification": "active",
         "origin": "authored",
@@ -351,7 +353,7 @@ DEFAULT_ROLES: dict[str, dict] = {
         "mutability": "read-write",
         "owner": "mid-dispatch-decision",
         "allowedWriters": ["mid-dispatch-decision", "next-dispatch", "dispatch-closeout",
-                           "roadmap-review", "virtuoso"],
+                           "roadmap-review", "virtuoso", "preserve-session"],
         "validation": "exists",
         "classification": "active",
         "origin": "authored",
@@ -434,11 +436,26 @@ DEFAULT_ROLES: dict[str, dict] = {
         "mutability": "read-write",
         "owner": "write-plan",
         "allowedWriters": ["storyboard", "write-plan", "virtuoso", "dispatch-closeout",
-                           "roadmap-review"],
+                           "roadmap-review", "preserve-session"],
         "validation": "exists",
         "classification": "active",
         "origin": "authored",
         "label": "Holding bay — ad hoc plans awaiting roadmap review (directory)",
+    },
+    "sessionRecords": {
+        # One dated record per cleared session: every item it kept, where each went,
+        # and what it dropped. `preserve-session` writes one, verified, before it says
+        # a session is safe to clear; a later session finds its context from here.
+        # Opt-in: registered on first use.
+        "provider": "directory",
+        "authority": "reference",
+        "mutability": "append-only",
+        "owner": "preserve-session",
+        "allowedWriters": ["preserve-session", "governance-sweep"],
+        "validation": "exists",
+        "classification": "active",
+        "origin": "authored",
+        "label": "Session records — what each cleared session kept, and where (directory)",
     },
     "changeLedger": {
         # When each change took effect, one JSON line per change, never rewritten (an undo
@@ -571,8 +588,8 @@ DEFAULT_ROLES: dict[str, dict] = {
 
 #: Roles created by ``create`` on a brand-new workspace, in readme order.
 #:
-#: ``overlays``, ``epics``, ``holdingBay``, ``board`` and ``boardComments`` are deliberately
-#: not here. Each is opt-in: a
+#: ``overlays``, ``epics``, ``holdingBay``, ``sessionRecords``, ``board`` and
+#: ``boardComments`` are deliberately not here. Each is opt-in: a
 #: project registers it when it first has something to put there, and until then `create`
 #: lays down no empty directory for it. Leaving a role out of this tuple is how the plugin says
 #: "supported, not assumed".

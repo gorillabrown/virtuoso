@@ -258,8 +258,9 @@ def cold_return(hook: dict, adapter, pol, root: str):
                       "the calls after it cheaper." % dispatch)
     else:
         write_handoff(hook, adapter, root, facts)
-        lines[-1] += (", or /clear and continue from a handoff note of this conversation, "
-                      "which the next session starts with.")
+        lines[-1] += (", or run /preserve-session and then /clear, or /clear now and "
+                      "continue from a handoff note of this conversation, which the next "
+                      "session starts with.")
     return adapter.hold_prompt(" ".join(lines))
 
 

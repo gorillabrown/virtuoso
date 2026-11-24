@@ -28,8 +28,9 @@
 
 ## Kickoff / resume prompt
 
-Paste into any session — first or fiftieth; it self-orients either way. It carries the
-run's git work, so one paste carries both the git work and the epic's instructions.
+`/next-dispatch` prints this prompt, after its gate, as the epic's kickoff. Paste it into
+any session — first or fiftieth; it self-orients either way. It carries the run's git
+work, so one paste carries both the git work and the epic's instructions.
 
 <!-- Fill the GIT WORK block at scaffold time from policy.git and the detected repository,
      as /next-dispatch fills its reconciliation recipe. Keep only the lines the policy
@@ -148,7 +149,7 @@ achieve, and how completion is proven.
    circumstances.
 6. Close the epic through `/dispatch-closeout [PACKET-ID]`, with journal.md and done.md as
    its evidence. A combination's close-out retires every item the charter's `items:`
-   names. That ceremony records what the epic taught in the registered `lessons`
+   names, and its epic row. That ceremony records what the epic taught in the registered `lessons`
    role — where the next charter reads it — or says why it taught nothing. An epic
    that ends without it leaves its lessons in a journal no future run consults.
 

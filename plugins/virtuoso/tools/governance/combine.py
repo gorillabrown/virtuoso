@@ -218,23 +218,73 @@ def charter_items(text: str) -> tuple[list[str], str]:
     return items, status
 
 
-def active_charters(directory: str) -> dict[str, str]:
-    """``{item id: packet directory name}`` for every charter under ``directory`` whose
-    status is not ``complete`` or ``aborted``."""
-    claimed: dict[str, str] = {}
+def charter_id(text: str) -> str:
+    """The packet identifier a charter's frontmatter declares (``id:``); ``""`` when it
+    declares none or only the unfilled template."""
+    match = _FRONTMATTER_RE.match(text or "")
+    if not match:
+        return ""
+    for line in match.group(1).splitlines():
+        key, _, value = line.partition(":")
+        if key.strip().lower() == "id":
+            value = value.split("#", 1)[0].strip().strip("\"'")
+            return "" if not value or value.startswith("[") else value
+    return ""
+
+
+def charter_title(text: str) -> str:
+    """The charter's title: its ``# Epic Charter — <title>`` heading, without the prefix."""
+    for line in (text or "").splitlines():
+        if line.startswith("# "):
+            title = line[2:].strip()
+            return re.sub(r"^Epic Charter\s*[—–-]\s*", "", title).strip()
+    return ""
+
+
+def charters(directory: str) -> list[dict]:
+    """Every charter under ``directory``, any status, in directory order:
+    ``{"packet", "id", "items", "status", "title", "path"}``."""
+    found: list[dict] = []
     if not directory or not os.path.isdir(directory):
-        return claimed
+        return found
     for name in sorted(os.listdir(directory)):
         charter = os.path.join(directory, name, "charter.md")
         text = textio.read_text(charter) if os.path.isfile(charter) else None
         if text is None:
             continue
         items, status = charter_items(text)
-        if status in ("complete", "aborted"):
+        found.append({"packet": name, "id": charter_id(text), "items": items,
+                      "status": status, "title": charter_title(text), "path": charter})
+    return found
+
+
+def is_combination(charter: dict) -> bool:
+    """A charter whose identifier is not its one item: an epic row stands for its items."""
+    return bool(charter["id"]) and charter["items"] != [charter["id"]]
+
+
+def active_charters(directory: str) -> dict[str, str]:
+    """``{item id: packet directory name}`` for every charter under ``directory`` whose
+    status is not ``complete`` or ``aborted``: each item it names, and a combination's
+    own identifier, which is its epic row on the belt."""
+    claimed: dict[str, str] = {}
+    for charter in charters(directory):
+        if charter["status"] in ("complete", "aborted"):
             continue
-        for item in items:
-            claimed.setdefault(item, name)
+        for item in charter["items"] + ([charter["id"]] if charter["id"] else []):
+            claimed.setdefault(item, charter["packet"])
     return claimed
+
+
+def epic_members(directory: str) -> dict[str, str]:
+    """``{member item id: epic row id}`` for every combination charter, any status: a
+    finished member still answers its dependants' prerequisites."""
+    members: dict[str, str] = {}
+    for charter in charters(directory):
+        if is_combination(charter):
+            for item in charter["items"]:
+                members.setdefault(item, charter["id"])
+    return members
 
 
 # --- the combination ---------------------------------------------------------------------

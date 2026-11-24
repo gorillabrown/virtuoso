@@ -33,6 +33,8 @@ DEFAULT_FIELDS = {
     "evidence": "evidence",
     "description": "description",
     "notes": "notes",
+    # The epic row an item is nested under: the register's parent / sub-item link.
+    "member_of": "member_of",
 }
 
 #: Column names the plugin also recognizes without configuration, so an existing
@@ -58,6 +60,8 @@ DEFAULT_ALIASES = {
     "evidence": ["close-out", "close out file", "artifact", "proof"],
     "description": ["desc", "details"],
     "notes": ["note", "comment", "comments"],
+    "member_of": ["member of", "epic row", "parent", "parent item", "parent_item",
+                  "parent id", "parent_id", "parentid", "parent item id", "parent_item_id"],
 }
 
 #: Canonical status -> the project spellings recognized by default.

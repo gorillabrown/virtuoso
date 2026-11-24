@@ -49,23 +49,29 @@ nothing.
 
 An epic packet whose charter names `items:` ran several roadmap items as one run
 (`/epic`, Step 1b). Its origin line reads
-`Origin: epic packet — <directory> (<PACKET-ID>: <ITEM-ID>, <ITEM-ID>, ...)`. It closes
-once, as one crossing, and the crossing retires each item:
+`Origin: epic packet — <directory> (<PACKET-ID>: <ITEM-ID>, <ITEM-ID>, ...)`. On the belt
+it is one **epic row**, `<PACKET-ID>`, with each item nested under it. It closes once, as
+one crossing, and the crossing retires each item, then the epic row:
 
 | Step | For a combined epic |
 |---|---|
 | Wave 1 | One brief and one findings table for the run. The register and roadmap changes name every item. |
 | Step 1 — evidence | Every charter DoD row, fresh: each item's own *Done when* rows, and the row that proves they pass together. An item is complete only when all of its rows pass. The packet's done.md is on the default branch (Step 1). |
 | Step 2 — artifact | One report, keyed by the packet: `closeout --item "<PACKET-ID>"`. |
-| Step 3 — terminal record | One record per item, in the charter's serial order, each naming the one report as its evidence (`--ledger-only` for an external register). |
+| Step 3 — terminal record | One record per item, in the charter's serial order, then one for the epic row, each naming the one report as its evidence (`--ledger-only` for an external register). The epic row's record carries no estimate or actual: its items carry the effort. |
 | Step 4 — persist | Lessons and the report once. A lesson's heading names the item that taught it, or the packet when the run as a whole taught it. |
-| Step 5 — register | Each item closed, in serial order: `record-completion --item <ITEM-ID>` for a local register, the mutation handshake for an external one — one plan per connector call, each read back before its confirm. |
-| Step 6 — verify | Every item terminal in the register, one record each in the ledger, and the lessons gate run for the whole run: `lessons --check "<report>" --closeout --item "<PACKET-ID>,<ITEM-ID>,<ITEM-ID>"`. |
+| Step 5 — register | Each item closed, in serial order, then the epic row: `record-completion --item <ID>` for a local register, the mutation handshake for an external one — one plan per connector call, each read back before its confirm. |
+| Step 6 — verify | Every item and the epic row terminal in the register, one record each in the ledger, and the lessons gate run for the whole run: `lessons --check "<report>" --closeout --item "<PACKET-ID>,<ITEM-ID>,<ITEM-ID>"`. |
+
+A packet from before epic rows (1.17.5) has none in the register: its rows are skipped.
 
 A run that stopped before `done.md` is not a completion. When the user closes it anyway,
 retire only the items whose rows all pass, with their evidence. Return the rest to the
-belt, say why for each in the report, and set the charter's `status: aborted`. A charter
-left active keeps its items out of `/next-dispatch`'s reach.
+belt — `epic-row --packet <packet> --release` previews un-nesting them, `--apply` writes it
+or emits the handshake — and say why for each in the report. Retire the epic row as
+`dissolved` (a Step 3 record with the user's decision as its evidence, then its register
+status), and set the charter's `status: aborted`. A charter left active keeps its items
+out of `/next-dispatch`'s reach.
 
 ## Retirement records routed here
 

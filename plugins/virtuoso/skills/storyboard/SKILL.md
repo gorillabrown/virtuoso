@@ -335,6 +335,14 @@ Reopening a held entry (`/storyboard <entry>`) edits that same file and records
 say so, because `/write-plan` must rewrite the plan before the entry can be planned
 again.
 
+**Stopping before the verdict.** When the user stops before the storyboard is aligned,
+hold what is agreed so far rather than lose it: write the alignment record as it stands,
+with the verdict `Not aligned — <the items still open>`, and record the entry `paused`
+(`--state paused --note "<what is still open>"`). The record is refused unless the
+verdict names at least one open item. A `paused` entry is open: `/storyboard <entry>`
+resumes it from its alignment record and records `storyboarded` once it is aligned, and
+the next `/roadmap-review` reconciles it if nobody does.
+
 ## Step 11 — Hand the draft stub to /write-plan
 
 This skill ends here. The only way forward is `/write-plan`: there is no option to start

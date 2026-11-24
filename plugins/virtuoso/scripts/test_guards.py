@@ -134,7 +134,19 @@ def test_mid_dispatch_the_hold_offers_the_compact_line_never_a_fresh_start(proje
         encoding="utf-8")
     transcript = cold_transcript(tmp_path)                  # unbound: the project's one open log
     reason = guards.handle(prompt_hook(project, transcript), "claude-code")["reason"]
-    assert "/compact keep X-1, the time log, open decisions" in reason and "/clear" not in reason
+    assert "/compact keep X-1, the time log, open decisions" in reason and "/clear" not in reason \
+        and "/preserve-session" not in reason
+
+
+def test_a_cold_return_without_a_dispatch_suggests_preserving_first(project, tmp_path,
+                                                                     isolated_home):
+    held = guards.handle(prompt_hook(project, cold_transcript(tmp_path)), "claude-code")
+    reason = " ".join(held["reason"].split())
+    assert "run /preserve-session and then /clear" in reason
+    assert "continue from a handoff note" in reason
+    assert reason.index("/preserve-session") < reason.index("handoff note")
+    handoffs = Path(isolated_home) / ".virtuoso" / "guard" / "handoffs"
+    assert handoffs.is_dir() and any(handoffs.iterdir())
 
 
 @pytest.mark.parametrize("case", ["warm", "small", "injected", "cross-session", "side-sessions",

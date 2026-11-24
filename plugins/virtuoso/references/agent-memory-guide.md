@@ -12,6 +12,7 @@ Stated once, here, for every agent:
 | How *this agent* works in *this project* — preferences, workflow pointers, external references | agent memory, `.claude/agent-memory/{agent-name}/` — outside the registry | the agent |
 | A discovery a future specification should apply | the registered `lessons` role, `<prefix>-NNN` (`policy.lessons.idPrefix`), appended by the ceremony that records it | every specification (rubric U9), every charter |
 | Something wrong that is not dispositioned yet | the registered `findings` role, `F-NNN`, disposition by appended record | the roadmap review |
+| What a cleared session kept, and where each item went | the registered `sessionRecords` role, one dated record per session, written by `preserve-session` | a later session |
 
 Nothing else: no feedback log, no memory YAML, no per-agent findings file, and no fixed
 lesson prefix (`LL-`, `SRL-`) — the project's prefix is the one its policy declares.

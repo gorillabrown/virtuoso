@@ -53,6 +53,7 @@ ID_PREFIX = "HB"
 
 UNRECORDED = "unrecorded"
 STORYBOARDED = "storyboarded"
+PAUSED = "paused"
 PLANNED = "planned"
 IN_FLIGHT = "in-flight"
 EXECUTED = "executed"
@@ -60,16 +61,20 @@ ABSORBED = "absorbed"
 WITHDRAWN = "withdrawn"
 
 #: Every state a trail row may record, in lifecycle order.
-STATES = (STORYBOARDED, PLANNED, IN_FLIGHT, EXECUTED, ABSORBED, WITHDRAWN)
-#: States that end an entry's life in the bay.
+STATES = (STORYBOARDED, PAUSED, PLANNED, IN_FLIGHT, EXECUTED, ABSORBED, WITHDRAWN)
+#: States that end an entry's life in the bay. ``paused`` is open: the next review
+#: reconciles it if nobody resumes it first.
 CLOSED_STATES = (ABSORBED, WITHDRAWN)
 
 #: The legal next states. A state may repeat where a revision is meaningful: a
 #: storyboard re-approved after a change, a plan rewritten after a re-audit.
+#: ``paused`` holds a storyboard or plan stopped before alignment. It resumes to
+#: ``storyboarded`` once aligned, never straight to ``planned``.
 TRANSITIONS = {
-    UNRECORDED: (STORYBOARDED,),
-    STORYBOARDED: (STORYBOARDED, PLANNED, ABSORBED, WITHDRAWN),
-    PLANNED: (STORYBOARDED, PLANNED, IN_FLIGHT, ABSORBED, WITHDRAWN),
+    UNRECORDED: (STORYBOARDED, PAUSED),
+    STORYBOARDED: (STORYBOARDED, PAUSED, PLANNED, ABSORBED, WITHDRAWN),
+    PAUSED: (PAUSED, STORYBOARDED, ABSORBED, WITHDRAWN),
+    PLANNED: (STORYBOARDED, PAUSED, PLANNED, IN_FLIGHT, ABSORBED, WITHDRAWN),
     IN_FLIGHT: (PLANNED, EXECUTED),
     EXECUTED: (ABSORBED,),
     ABSORBED: (),
@@ -79,8 +84,11 @@ TRANSITIONS = {
 #: Which ceremony records which state. ``write-plan`` may re-open alignment
 #: (``storyboarded``) because anything that changes what was agreed goes back there.
 #: Only the ``virtuoso`` skill executes, so only it records ``in-flight``.
+#: ``preserve-session`` records ``paused`` only: it saves a scoping conversation the
+#: user stopped before the verdict, and never aligns or plans one.
 RECORDED_BY = {
     STORYBOARDED: ("storyboard", "write-plan"),
+    PAUSED: ("storyboard", "write-plan", "preserve-session"),
     PLANNED: ("write-plan", "virtuoso"),
     IN_FLIGHT: ("virtuoso",),
     EXECUTED: ("dispatch-closeout",),
@@ -121,9 +129,12 @@ NOTE_MISSING = "held-note-missing"
 NOT_ALIGNED = "held-not-aligned"
 PLAN_MISSING = "held-plan-missing"
 EPIC_PLANNED = "held-epic-planned"
+PAUSED_UNNAMED = "held-paused-unnamed"
+PAUSED_ALIGNED = "held-paused-aligned"
 FINDING_CODES = (MARKER_MISSING, NAME_INVALID, ENTRY_MISMATCH, SIZE_INVALID, TRAIL_MISSING,
                  UNRECORDED_ENTRY, STATE_UNKNOWN, TRANSITION_ILLEGAL, RECORDER_WRONG,
-                 DATE_INVALID, NOTE_MISSING, NOT_ALIGNED, PLAN_MISSING, EPIC_PLANNED)
+                 DATE_INVALID, NOTE_MISSING, NOT_ALIGNED, PLAN_MISSING, EPIC_PLANNED,
+                 PAUSED_UNNAMED, PAUSED_ALIGNED)
 
 _NAME_RE = re.compile(r"^(?P<date>\d{4}-\d{2}-\d{2})-(?P<slug>[a-z0-9]+(?:-[a-z0-9]+)*)$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -169,6 +180,7 @@ class Entry:
     trail_found: bool = False
     trail_end: int = -1          # index of the last line of the trail table
     aligned: bool = False
+    verdict: str = ""            # the verdict line, leading emphasis stripped
     has_alignment_record: bool = False
     has_plan: bool = False
     items: list = field(default_factory=list)          # provisional ids in the plan
@@ -285,8 +297,8 @@ def parse(text: str, entry_id: str, path: str = "") -> Entry:
         if (section.startswith("storyboard") and subsection.startswith("alignment verdict")
                 and not verdict_seen and stripped):
             verdict_seen = True
-            low = stripped.lstrip("*_ ").lower()
-            entry.aligned = low.startswith("aligned")
+            entry.verdict = stripped.lstrip("*_ ")
+            entry.aligned = entry.verdict.lower().startswith("aligned")
     return entry
 
 
@@ -353,6 +365,8 @@ def content_problems(entry: Entry, state: str) -> list[dict]:
     problems = []
     if state in (UNRECORDED, WITHDRAWN) or state not in STATES:
         return problems
+    if state == PAUSED:
+        return _paused_problems(entry)
     if not entry.has_alignment_record or not entry.aligned:
         problems.append(_problem(NOT_ALIGNED, "no `## Storyboard` alignment record with an "
                                               "\"Aligned\" verdict: nothing is held until the "
@@ -365,6 +379,24 @@ def content_problems(entry: Entry, state: str) -> list[dict]:
             problems.append(_problem(PLAN_MISSING, "no `## Plan` section with an %s-<n> item "
                                                    "heading" % ID_PREFIX))
     return problems
+
+
+_NOT_ALIGNED_RE = re.compile(r"^not[ \t]+aligned[*_ \t]*[—–:-]+[ \t]*(?P<open>.*)$",
+                             re.IGNORECASE)
+
+
+def _paused_problems(entry: Entry) -> list[dict]:
+    """A paused entry carries its alignment record so far and a ``Not aligned —``
+    verdict naming what is still open. An aligned one is ``storyboarded`` instead."""
+    if entry.has_alignment_record and entry.aligned:
+        return [_problem(PAUSED_ALIGNED, "the verdict is Aligned: record storyboarded, "
+                                         "not paused")]
+    match = _NOT_ALIGNED_RE.match(entry.verdict)
+    if not entry.has_alignment_record or not match or not match.group("open").strip(" .*_"):
+        return [_problem(PAUSED_UNNAMED, "a paused entry needs a `## Storyboard` alignment "
+                                         "record whose verdict reads \"Not aligned — <the "
+                                         "items still open>\"")]
+    return []
 
 
 # --- the directory -----------------------------------------------------------
@@ -406,7 +438,8 @@ def record_problems(entry: Entry, state: str, actor: str, note: str, date: str) 
         return [_problem(STATE_UNKNOWN, "%r is not one of: %s" % (state, ", ".join(STATES)))]
     problems = []
     blocking = [p for p in entry.problems
-                if p["code"] not in (UNRECORDED_ENTRY, NOT_ALIGNED, PLAN_MISSING, EPIC_PLANNED)]
+                if p["code"] not in (UNRECORDED_ENTRY, NOT_ALIGNED, PLAN_MISSING, EPIC_PLANNED,
+                                     PAUSED_UNNAMED, PAUSED_ALIGNED)]
     problems.extend(blocking)
     if state not in TRANSITIONS.get(entry.state, ()):
         problems.append(_problem(TRANSITION_ILLEGAL, "%s -> %s is not a legal move (from %s: %s)"

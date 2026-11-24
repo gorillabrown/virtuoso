@@ -314,6 +314,7 @@ Invoked through the plugin namespace, e.g. `/virtuoso:roadmap-review`.
 | `effort-levels` | — | Effort sizing (modifier) |
 | `adversarial-review` | — | Structured red-team review (modifier) |
 | `git-handoff` | — | Hand-off packet for a session that cannot mutate the repository |
+| `preserve-session` | `/virtuoso:preserve-session` | Save a settled session before it is cleared: file every keeper in its registered home, write a verified session record, then say it is safe to clear |
 | `delayed-start` | `/virtuoso:delayed-start` | Defer execution to a clock time or delay |
 | `catfish` | `/virtuoso:catfish` | Put a curious, well-informed challenger on a plan's owner: each interval, probing questions on its waits and sequencing, followed up until decided and reported, while the owner keeps every decision |
 | `virtuoso-init` | `/virtuoso:virtuoso-init` | Register a project, or initialize a workspace |

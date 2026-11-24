@@ -1,5 +1,55 @@
 # Virtuoso Release Notes
 
+## v1.17.5 (2026-11-24) — preserve a session before it is cleared, and epics as one register row
+
+### Epics are one row that `/next-dispatch` pulls
+
+- **`/epic` creates one epic row.** After writing the packet, `/epic` commits it to the
+  default branch and runs the new `virtuoso_registry epic-row` command. That writes one
+  `EPIC-<SLUG>` row with the charter's title, the earliest member's queue position, the
+  prerequisites the members wait on from outside the set, and a link to the charter, and
+  nests each member under it. It previews by default; `--apply` writes it. For an external
+  register it emits one connector request per change. `/epic` no longer prints the kickoff
+  itself; it hands off to `/next-dispatch`.
+- **`/next-dispatch` pulls the epic row.** It runs the five readiness checks against the
+  packet, then prints `launch.md` with a one-line goal as the kickoff, for the first
+  session and every resume. It never dispatches a nested item on its own, and routes to
+  `/epic` only for a `Path: epic` head item that has no charter yet.
+- **Nested items stay real items.** They still satisfy other items' prerequisites and get
+  their own close-outs, but are never next in line. Summary figures count their work once
+  and the epic row once on the queue. Close-out retires each member and then the epic row;
+  `epic-row --release` un-nests unfinished members when a run is aborted. Roadmap review
+  re-orders the epic row as one item.
+- **Two changes for existing projects.** `epic` is now a default writer of the work
+  register; a project whose registry lists that role's writers explicitly must add `epic`.
+  A register column named Parent, Parent item, or Member of now means "nested under this
+  row" (`member_of`): items in a column with another meaning stop appearing in the queue.
+
+### `preserve-session`
+
+- **`preserve-session`: save a session before it is cleared.** Clearing a long session
+  loses its temporary work; archiving it loses its name and settings. The new manual skill
+  refuses while anything in the session still runs (a background command, a subagent, a
+  scheduled check-in, an open dispatch or progress run) and offers compaction instead;
+  when it cannot tell, it refuses. Otherwise it files every keeper in the registered home
+  that owns its kind, writes one dated session record of what was kept, where, and what
+  was dropped, verifies every destination, and only then prints `Safe to clear: run
+  /clear`. It never clears, stops, deletes or pushes anything, and never changes a session
+  setting. Its spine is a new `virtuoso_registry session` subcommand: `--gate`,
+  `--inventory`, and `--record` (`--apply` to keep the record).
+- **A new opt-in role, `sessionRecords`**, holds those records (append-only; writers
+  `preserve-session` and `governance-sweep`). `virtuoso-init` offers it, and
+  `governance-sweep` lists records older than 90 days as archive candidates.
+- **A new actor, `preserve-session`**, is a default writer of `findings`, `issues`,
+  `holdingBay` and `sessionRecords`, and of nothing else. **Existing layouts keep their
+  writer lists:** a project that already registered those roles must add
+  `preserve-session` to each one's `allowedWriters` before the skill can save there; until
+  then the write is refused and the refusal names the entry to add.
+- **A new holding state, `paused`**, holds a storyboard or plan stopped before alignment,
+  with a `Not aligned — <the items still open>` verdict. `storyboard`, `write-plan` and
+  `preserve-session` record it; `/storyboard <entry>` resumes it to `storyboarded` once
+  aligned (never straight to `planned`); the next roadmap review reconciles it.
+
 ## v1.17.4 (2026-11-24) — neutral test fixtures
 
 - **Test fixtures carry placeholder identifiers.** The monday snapshot-import fixtures

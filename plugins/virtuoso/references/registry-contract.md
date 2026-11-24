@@ -84,7 +84,8 @@ project registers each by adding its entry to the manifest when it first needs i
 |---|---|---|---|
 | `overlays` | project additions to shipped skills and agents (see *Project overlays*) | none (read-only) | when the project has something to overlay |
 | `epics` | one directory per epic packet, `<yyyy-mm-dd>-<slug>/` | `epic` | when the project runs its first epic |
-| `holdingBay` | one held plan per piece of ad hoc work, `<yyyy-mm-dd>-<slug>.md` (see *The holding bay*) | `storyboard`, `write-plan`, `virtuoso`, `dispatch-closeout`, `roadmap-review` | when the project storyboards its first piece of ad hoc work |
+| `holdingBay` | one held plan per piece of ad hoc work, `<yyyy-mm-dd>-<slug>.md` (see *The holding bay*) | `storyboard`, `write-plan`, `virtuoso`, `dispatch-closeout`, `roadmap-review`, `preserve-session` | when the project storyboards its first piece of ad hoc work |
+| `sessionRecords` | one dated record per cleared session, `<yyyy-mm-dd>-<hhmm>-<slug>.md`: every item it kept, where each went, and what it dropped (append-only) | `preserve-session`, `governance-sweep` | when the project first preserves a session before clearing it |
 | `board` | the roadmap board, one generated page | `roadmap-review`, `dispatch-closeout`, `next-dispatch` | the first roadmap review (`generate_board --create`) |
 | `boardComments` | row comments people leave on the board (JSON) | `roadmap-review` | with the board |
 | `guardLog` | the cost guards' receipts for each dispatch (`jsonl`, append-only), copied in at close-out by `guards --copy`; hooks never write it | `dispatch-closeout` | when the project wants guard figures in its own tree |
@@ -1114,7 +1115,9 @@ in a report, the same finding reads as one block:
 A disposition changes only by appending a record under the same id —
 `**Disposition:** fixed by <item or commit>`, `accepted — <reason>`, `lesson <prefix>-NNN`.
 Writers by default: `governance-sweep`, `adversarial-review`, `virtuoso` (for the agents it
-dispatches), `dispatch-closeout`, `roadmap-review`, `3rd-party-audit`. **Reader:**
+dispatches), `dispatch-closeout`, `roadmap-review`, `3rd-party-audit`, `preserve-session`
+(what a session decided or learned that lives only in its conversation, lesson candidates
+flagged, never appended as lessons). **Reader:**
 `roadmap-review` B.3 reads every finding whose latest disposition is `open`, with the
 previous review's lessons-applied — the set `virtuoso_registry review --date <YYYY-MM-DD>`
 names as `previous`, latest by date, then run — and carries each into the plan.
@@ -1208,8 +1211,9 @@ and never edited. The last row is the current state.
 
 | State | Recorded by | The entry must carry | Next |
 |---|---|---|---|
-| `storyboarded` | `storyboard`, `write-plan` | an alignment record whose verdict reads *Aligned* | `storyboarded`, `planned`, `absorbed`, `withdrawn` |
-| `planned` | `write-plan`; `virtuoso` only out of `in-flight` | a `## Plan` with at least one `HB-<n>` specification; never epic-scale | `storyboarded`, `planned`, `in-flight`, `absorbed`, `withdrawn` |
+| `storyboarded` | `storyboard`, `write-plan` | an alignment record whose verdict reads *Aligned* | `storyboarded`, `paused`, `planned`, `absorbed`, `withdrawn` |
+| `paused` | `storyboard`, `write-plan`, `preserve-session` | an alignment record whose verdict reads `Not aligned — <the items still open>`, naming at least one; never *Aligned* | `paused`, `storyboarded`, `absorbed`, `withdrawn` |
+| `planned` | `write-plan`; `virtuoso` only out of `in-flight` | a `## Plan` with at least one `HB-<n>` specification; never epic-scale | `storyboarded`, `paused`, `planned`, `in-flight`, `absorbed`, `withdrawn` |
 | `in-flight` | `virtuoso` | as `planned` | `planned`, `executed` |
 | `executed` | `dispatch-closeout` | as `planned`; the note names the close-out and its result | `absorbed` |
 | `absorbed` | `roadmap-review` | a note naming the register item(s) it became | — |
@@ -1219,7 +1223,10 @@ and never edited. The last row is the current state.
 goes back to the storyboard, and the plan is rewritten after it. Only the `virtuoso`
 skill executes, so only it records `in-flight`. It may record `planned` only out of
 `in-flight`, to hand back a run that stopped: it never plans. A trail row an earlier
-release allowed stays valid history. In 1.11.0 `write-plan` recorded `in-flight`
+release allowed stays valid history. A storyboard or plan the user stopped before the
+verdict is held `paused`, with its alignment record so far: `/storyboard <entry>` resumes
+it to `storyboarded` once it is aligned, never straight to `planned`, and the next review
+reconciles it if nobody does. In 1.11.0 `write-plan` recorded `in-flight`
 itself, and `holding --check` still reads such a row as legal. A new row is held to the
 table above. An entry that is neither
 `absorbed` nor `withdrawn` is **open**, and the next roadmap review reconciles every open
@@ -1255,6 +1262,8 @@ to add, which also means nothing is held.
 | `held-not-aligned` | the entry stands past `unrecorded` without an *Aligned* verdict |
 | `held-plan-missing` | the entry stands at `planned` or later without a plan |
 | `held-epic-planned` | an epic-scale entry was planned here; it waits for review, then `/epic` |
+| `held-paused-unnamed` | a `paused` entry's verdict does not read `Not aligned — <the items still open>` |
+| `held-paused-aligned` | the verdict is *Aligned*: record `storyboarded`, not `paused` |
 
 ## Standing rules
 

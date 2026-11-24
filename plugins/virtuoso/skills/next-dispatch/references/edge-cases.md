@@ -28,21 +28,25 @@ buffer ([policy.roadmap.dispatchBuffer]). Then run /next-dispatch again.
 
 ## Edge case: Epic at head
 
+**Chartered** — a charter in the registered `epics` role claims the head (an epic row,
+or an item its `item:` or `items:` names): dispatch the run from its packet, as
+[epic-dispatch.md](epic-dispatch.md) says. The kickoff is the packet's own prompt, for the
+first session and every resume alike.
+
+**Not chartered** — the head declares `Path: epic` and no charter claims it:
+
 ```
 # Route to Epic — [Item title]
 
 The item at the head of the conveyor belt is epic-scale (Path: epic). It is
-chartered for a long-horizon run rather than dispatched.
+chartered for a long-horizon run before it is dispatched.
 
 ## Required action
 
 Run **/epic [ITEM-ID]**. It builds the packet from this item's roadmap entry,
-and from the storyboard it was absorbed from, if there is one.
+and from the storyboard it was absorbed from, if there is one. Then run
+/next-dispatch again for its kickoff.
 ```
-
-If a packet for this item already exists in the registered `epics` role (a charter
-whose `item:` or `items:` names it), the run is under way. Do not route it to `/epic` again. Name
-the packet, and point to its launch file's resume prompt.
 
 ---
 
@@ -155,4 +159,4 @@ registry change) or create the document at the registered path, then run
 /roadmap-review.
 ```
 
-Return to SKILL.md at the step that branched here. A halting edge case (stub, epic, queue empty, no register, no specification store, or a structural gap answered (c) or (d)) ends the run with its output.
+Return to SKILL.md at the step that branched here. A halting edge case (stub, an epic not yet chartered, queue empty, no register, no specification store, or a structural gap answered (c) or (d)) ends the run with its output.

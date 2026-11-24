@@ -6,8 +6,9 @@ description: |
   finalizes its specification against the shared readiness rubric,
   drives every pre-flight check to a resolved state, and prints a
   dispatch kickoff with a repository-reconciliation recipe matched to
-  the project's declared git policy. Routes a head item whose path is
-  epic to /epic. Triggered by "/next-dispatch", "next dispatch",
+  the project's declared git policy. An epic at the head is dispatched
+  from its packet, with the packet's own kickoff; one not yet chartered
+  routes to /epic. Triggered by "/next-dispatch", "next dispatch",
   "show next", or "what's next". Does NOT replan, re-sequence, or author new
   items — that is /roadmap-review; new work that is not on the roadmap
   starts at /storyboard.
@@ -130,8 +131,9 @@ the live register.
    a structural gap (a bounded question; never improvise the decision).
 2. **The provider is the register.** Never open a register file directly, or treat a
    mirror, a generated report, or an archive as the live pipeline.
-3. **Writes are narrow:** the head item's specification and its own register row — never
-   re-sequencing, new items, or other items' specifications (`/roadmap-review`). Every write
+3. **Writes are narrow:** the head item's specification and its own register row, plus an
+   epic run's epic row (`epic-row`) — never re-sequencing, new items, or other items'
+   specifications (`/roadmap-review`). Every write
    goes through the provider with the `revision` read, and only when the role's
    `allowedWriters` names `next-dispatch`.
 4. **Descriptive names first** (item 38): an item's human title leads, the identifier
@@ -194,15 +196,17 @@ sequence order, with provenance (lacking `next-eligible`, compute it the same wa
 `items`). In-flight items it skips are listed in `inFlight` (an `in flight:` line each); name
 each in *What's next* as in flight, never as the head. No active items → **Queue empty**.
 
-### 1.2 Hard-halt checks (epic path, stub at head)
+### 1.2 Epic at head, stub at head
 
-- Roadmap entry declares `Path: epic` → STOP; **Epic at head**. An epic is chartered, not
-  dispatched, and this rubric is not its gate.
-- An active charter in the registered `epics` role names the head item, in its
-  `item:` or its `items:` → STOP; it is already part of an epic run (`next` reports
-  `inEpicPacket` in the JSON, an `in epic run:` line in the text). Name the packet and point
-  to its launch file's resume prompt: a combined epic runs its items itself, in its own
-  order, and a separate dispatch would collide with it.
+- An active charter in the registered `epics` role claims the head — it is a
+  combination's epic row, or an item its `item:` or its `items:` names (`next`
+  reports `inEpicPacket` and `epicLaunch` in the JSON, an `in epic run:` line in the
+  text) → **Epic at head**: dispatch the run from its packet. **Read
+  [references/epic-dispatch.md](references/epic-dispatch.md)** for its five findings and
+  its print, which replace Phases 2–4's for this head. Never dispatch a member alone: the
+  run takes its items in its own order, and a separate dispatch would collide with it.
+- Roadmap entry declares `Path: epic` and no charter claims it → STOP; it is not
+  chartered yet: route to `/epic [ITEM-ID]`.
 - Specification state is not `full-spec` → STOP; **Stub at head**.
 
 ### 1.3 Locate the specification
@@ -388,8 +392,8 @@ filled inside the one block, and the Session line present.
 ## Edge cases
 
 **When one applies, read [references/edge-cases.md](references/edge-cases.md)** for its
-output and handling: **Stub at head** (halt → `/roadmap-review`); **Epic at head** (halt →
-`/epic [ITEM-ID]`, or the existing packet's resume prompt); **Queue empty** (→
+output and handling: **Stub at head** (halt → `/roadmap-review`); **Epic at head**
+(chartered: dispatch it from its packet; not chartered: halt → `/epic [ITEM-ID]`); **Queue empty** (→
 `/roadmap-review`); **No work register registered** (halt); **Structural gap** (bounded
 question; halt on pause or escalation); **Prerequisites pending** ("Not ready", plus an
 alternative dispatch if one qualifies); **Blocker escalation** (an issue document per

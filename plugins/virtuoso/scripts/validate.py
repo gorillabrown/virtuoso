@@ -792,7 +792,8 @@ _NOT_AGENT_WORDS = {"the", "a", "an", "type", "deep", "cross", "user", "planner"
 
 #: Slash commands the host CLI provides, not this plugin. A shipped file may name one;
 #: it resolves to the host, so it is never a missing skill. Kept to the ones named.
-HOST_COMMANDS = {"goal"}   # /goal: the CLI's run-until-achieved command (epic Step 5)
+HOST_COMMANDS = {"goal",   # /goal: the CLI's run-until-achieved command (epic Step 5)
+                 "compact", "clear"}   # preserve-session: compaction, and the clear it enables
 
 _COMMAND_REF_RE = re.compile(r"`/(?:virtuoso:)?([a-z][a-z0-9-]*)`")
 _SKILL_CALL_RE = re.compile(r"(?:\bInvoke|\(use) `([a-z][a-z0-9-]*)`")

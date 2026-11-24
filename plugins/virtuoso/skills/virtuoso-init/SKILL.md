@@ -165,6 +165,13 @@ The local CSV is **optional** and it is **not special**. It is authoritative her
 only because `create` explicitly declared it so; a project may make it a generated
 mirror or drop it entirely.
 
+**Opt-in roles are offered, never laid down.** `create` registers none of the opt-in
+roles (`references/registry-contract.md`, *Opt-in roles*). After it finishes, offer the
+two a working project usually wants soon: `holdingBay`, for ad hoc work between roadmap
+reviews, and `sessionRecords`, the dated record `preserve-session` writes before a long
+session is cleared. On the user's yes, add the role's entry to the manifest as the
+contract shows it (its default writers included), then run `--mode check` again.
+
 ## Move the work register to another tool
 
 A project that already has a register can move it — from a CSV to a connected tool,
