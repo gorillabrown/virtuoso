@@ -1,16 +1,6 @@
 ---
 name: project-profile
-description: >
-  Establish or revisit what makes THIS project different from every other one Virtuoso
-  governs — its phases and workstreams, its status vocabulary, its extra readiness checks, its
-  standing rules, its git policy, its actor names, and what its agents must know that the
-  plugin cannot. Reports the project's current specificity surface, interviews from a fixed
-  catalogue, previews every change, and writes only the machine-readable half. Use when the
-  user says "set up this project", "configure Virtuoso for us", "what's configured here?",
-  "add a readiness check", "our status words are different", "teach the agents our rules",
-  "why isn't my overlay being applied", or after preflight reports declared identifiers with
-  no definition. NOT for registering or creating a workspace (virtuoso-init), and not for
-  planning work (roadmap-review).
+description: "Establish or revisit what makes THIS project different from every other one Virtuoso governs — its phases and workstreams, its status vocabulary, its extra readiness checks, its standing rules, its git policy, its actor names, and what its agents must know that the plugin cannot. Reports the project's current specificity surface, interviews from a fixed catalogue, previews every change, and writes only the machine-readable half. Use when the user says \"set up this project\", \"configure Virtuoso for us\", \"what's configured here?\", \"add a readiness check\", \"our status words are different\", \"teach the agents our rules\", \"why isn't my overlay being applied\", or after preflight reports declared identifiers with no definition. NOT for registering or creating a workspace (virtuoso-init), and not for planning work (roadmap-review)."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

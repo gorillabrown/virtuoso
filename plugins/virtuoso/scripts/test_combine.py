@@ -363,7 +363,7 @@ def test_the_epic_skill_charters_a_combination_without_a_marker_or_a_holding_bay
 def test_the_charter_template_carries_the_items_of_a_combination():
     charter = (ROOT / "skills" / "epic" / "assets" / "charter.template.md").read_text(
         encoding="utf-8")
-    assert "# items: [ITEM-ID, ITEM-ID, ITEM-ID]" in charter
+    assert "`items: [ITEM-ID, ITEM-ID, ITEM-ID]`" in charter
     assert "id: [PACKET-ID]" in charter
     launch = (ROOT / "skills" / "epic" / "assets" / "launch.template.md").read_text(
         encoding="utf-8")

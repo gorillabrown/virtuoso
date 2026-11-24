@@ -1,12 +1,20 @@
----
+**Frontmatter — write this block as the file's opening frontmatter, between two `---` lines:**
+
+```yaml
 epic: [SLUG]
-id: [PACKET-ID]   # the item's id; for a combination, EPIC- plus the slug in capitals
-item: [ITEM-ID]   # the master-roadmap item this epic executes (Path: epic)
-# items: [ITEM-ID, ITEM-ID, ITEM-ID]   # a combination instead: every item, in serial order
-origin: roadmap — [ITEM-ID]   # a combination: roadmap — [ITEM-ID], [ITEM-ID], ...
+id: [PACKET-ID]
+item: [ITEM-ID]
+origin: roadmap — [ITEM-ID]
 created: [YYYY-MM-DD]
-status: active   # active | complete | aborted — set complete only per launch.md Completion protocol
----
+status: active
+```
+
+- `id` — the item's id; for a combination, EPIC- plus the slug in capitals.
+- `item` — the master-roadmap item this epic executes (Path: epic). A combination writes
+  `items: [ITEM-ID, ITEM-ID, ITEM-ID]` instead: every item, in serial order.
+- `origin` — a combination: `roadmap — [ITEM-ID], [ITEM-ID], ...`.
+- `status` — `active`, `complete` or `aborted`; set `complete` only per launch.md
+  Completion protocol.
 
 # Epic Charter — [TITLE]
 

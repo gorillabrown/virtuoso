@@ -202,6 +202,145 @@ def test_an_interim_notification_is_not_a_completion(workspace, isolated_home):
     assert [h["id"] for h in json.loads(completed.stdout)["running"]] == ["t2"]
 
 
+def test_a_task_stopped_by_its_task_id_is_finished(workspace, isolated_home):
+    """TaskStop names the task id the launch's result reported, never the tool-use id."""
+    launches = [
+        _said(MARKER),
+        _tool(8, "Monitor", {"command": "tail -f log", "description": "watch log",
+                             "timeout_ms": 1800000}),
+        _returned(8, {"taskId": "m8", "timeoutMs": 1800000}),
+        _tool(9, "Bash", {"command": "sleep 1800", "run_in_background": True,
+                          "description": "timer"}),
+        _returned(9, {"backgroundTaskId": "b9", "stdout": ""}),
+    ]
+    # One stop succeeds; the other fails for another reason, so its task still runs.
+    claude_transcript(isolated_home, launches + [
+        _tool(10, "TaskStop", {"task_id": "m8"}),
+        _returned(10, {"message": "Successfully stopped task: m8", "task_id": "m8"}),
+        _tool(11, "TaskStop", {"task_id": "b9"}),
+        {"type": "user", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "t11", "is_error": True,
+             "content": "<tool_use_error>Failed to stop task b9: access denied</tool_use_error>"}]}},
+    ])
+    completed = gate(workspace)
+    assert completed.returncode == 1, completed.stdout + completed.stderr
+    assert [h["id"] for h in json.loads(completed.stdout)["running"]] == ["t9"]
+
+    # A stop the host refuses because the task is already gone is the host's word it ended.
+    for answer in ("<tool_use_error>No task found with ID: b9</tool_use_error>",
+                   "<tool_use_error>Task b9 is not running (status: completed)</tool_use_error>"):
+        claude_transcript(isolated_home, launches + [
+            _tool(10, "TaskStop", {"task_id": "m8"}),
+            _returned(10, {"message": "Successfully stopped task: m8"}),
+            _tool(11, "TaskStop", {"task_id": "b9"}),
+            {"type": "user", "message": {"content": [
+                {"type": "tool_result", "tool_use_id": "t11", "is_error": True,
+                 "content": answer}]}},
+        ])
+        completed = gate(workspace)
+        assert completed.returncode == 0, answer + completed.stdout + completed.stderr
+
+    # A stop that names the launch's tool-use id instead of its task id proves nothing.
+    claude_transcript(isolated_home, launches + [
+        _tool(14, "TaskStop", {"task_id": "t9"}),
+        {"type": "user", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "t14", "is_error": True,
+             "content": "No task found with ID: t9"}]}},
+    ])
+    completed = gate(workspace)
+    assert sorted(h["id"] for h in json.loads(completed.stdout)["running"]) == ["t8", "t9"]
+
+    # Both stopped, their results in one record beside a parallel call's: still finished.
+    claude_transcript(isolated_home, launches + [
+        _tool(12, "TaskStop", {"task_id": "m8"}),
+        _tool(13, "KillShell", {"shell_id": "b9"}),
+        {"type": "user", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "t12", "content": "stopped"},
+            {"type": "tool_result", "tool_use_id": "t13", "content": "stopped"},
+            {"type": "tool_result", "tool_use_id": "t99", "content": "ok"}]}},
+    ])
+    completed = gate(workspace)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert json.loads(completed.stdout)["running"] == []
+
+
+def _batched(*results):
+    """One user record carrying several tool results, so its toolUseResult is unreadable."""
+    return {"type": "user", "toolUseResult": None, "message": {"content": [
+        {"type": "tool_result", "tool_use_id": "t%d" % i, "content": text}
+        for i, text in results]}}
+
+
+def test_a_cron_listing_that_no_longer_shows_a_job_ends_it(workspace, isolated_home):
+    """Batched creations carry their job ids only in text; a later listing is the host's
+    own word on which jobs still exist."""
+    created = [
+        _said(MARKER),
+        _tool(20, "CronCreate", {"cron": "22 22 13 11 *", "recurring": False, "prompt": "a"}),
+        _tool(21, "CronCreate", {"cron": "26 23 13 11 *", "recurring": False, "prompt": "b"}),
+        _tool(22, "CronCreate", {"cron": "bad", "prompt": "c"}),
+        _batched((20, "Scheduled one-shot task 537e7ce6 (22 22 13 11 *). Next run: Nov 13."),
+                 (21, "Scheduled one-shot task 9fb807cd (26 23 13 11 *). Next run: Nov 13.")),
+        {"type": "user", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "t22", "is_error": True,
+             "content": "Invalid cron expression"}]}},
+    ]
+    claude_transcript(isolated_home, created)
+    completed = gate(workspace)
+    assert completed.returncode == 1, completed.stdout + completed.stderr
+    # the refused creation is no holding; the two scheduled ones are
+    assert sorted(h["id"] for h in json.loads(completed.stdout)["running"]) == ["t20", "t21"]
+
+    # A listing that still shows one job ends only the other.
+    claude_transcript(isolated_home, created + [
+        _tool(23, "CronList", {}),
+        _returned(23, {"jobs": [{"id": "9fb807cd", "cron": "26 23 13 11 *"}]},
+                  "9fb807cd · 26 23 13 11 * (one-shot) [session-only]: b")])
+    completed = gate(workspace)
+    assert [h["id"] for h in json.loads(completed.stdout)["running"]] == ["t21"]
+
+    # An empty listing, read from its text alone, ends both.
+    claude_transcript(isolated_home, created + [
+        _tool(23, "CronList", {}), _tool(24, "Bash", {"command": "true"}),
+        _batched((23, "No scheduled jobs."), (24, "ok"))])
+    completed = gate(workspace)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+    # A listing taken before a job was created says nothing about it.
+    claude_transcript(isolated_home, [_said(MARKER), _tool(25, "CronList", {}),
+                                      _returned(25, {"jobs": []}, "No scheduled jobs.")]
+                      + created[1:])
+    completed = gate(workspace)
+    assert sorted(h["id"] for h in json.loads(completed.stdout)["running"]) == ["t20", "t21"]
+
+
+def test_an_output_file_end_line_ends_a_background_task(workspace, isolated_home, tmp_path):
+    """No notification reached the transcript, but the host ended the task's output file."""
+    output = tmp_path / "b30.output"
+    output.write_text("still going\n", encoding="utf-8")
+    records = [
+        _said(MARKER),
+        _tool(30, "Bash", {"command": "pytest", "run_in_background": True,
+                           "description": "suite"}),
+        _tool(31, "Bash", {"command": "ls"}),
+        _batched((30, "Command running in background with ID: b30. Output is being written "
+                      "to: %s" % output), (31, "ok")),
+    ]
+    claude_transcript(isolated_home, records)
+    completed = gate(workspace)
+    assert completed.returncode == 1, completed.stdout + completed.stderr
+    assert [h["id"] for h in json.loads(completed.stdout)["running"]] == ["t30"]
+
+    for end in ("[exited with code 1]", "[killed]"):
+        output.write_text("still going\n\n%s\n" % end, encoding="utf-8")
+        completed = gate(workspace)
+        assert completed.returncode == 0, end + completed.stdout + completed.stderr
+
+    # An end line that is not the last line is output, not the host's end.
+    output.write_text("[exited with code 0]\nmore output\n", encoding="utf-8")
+    assert gate(workspace).returncode == 1
+
+
 def _antigravity_transcript(home: Path, text: str) -> None:
     from tools.governance.hosts import antigravity
     path = home / ".gemini" / antigravity.APP_DATA_DIRS[0] / "brain" / "conv-1" / \

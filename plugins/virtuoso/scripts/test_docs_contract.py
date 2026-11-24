@@ -870,3 +870,77 @@ def test_the_preserve_session_skill_is_shipped():
     readme = (ROOT.parents[1] / "README.md").read_text(encoding="utf-8")
     workflow = (ROOT / "references" / "WORKFLOW_REFERENCE.md").read_text(encoding="utf-8")
     assert "preserve-session" in readme and "preserve-session" in workflow
+
+
+# --- templates carry their frontmatter as a labelled block --------------------------------
+
+_FRONTMATTER_LABEL = ("**Frontmatter — write this block as the file's opening frontmatter, "
+                      "between two `---` lines:**")
+
+_TEMPLATE_KEYS = {
+    ("dispatch-closeout", "CloseOut.template.md"): ["dispatch", "date", "runtime", "tokens",
+                                                    "status"],
+    ("epic", "charter.template.md"): ["epic", "id", "item", "origin", "created", "status"],
+    ("epic", "plan.template.md"): ["epic", "charter"],
+    ("epic", "state.template.md"): ["epic", "last_updated", "updated_by"],
+}
+
+
+def _labelled_block(text: str) -> list[str]:
+    """The lines of the fenced block directly under the frontmatter label."""
+    after = text.split(_FRONTMATTER_LABEL, 1)[1]
+    assert after.lstrip("\n").startswith("```yaml\n"), "the fence must follow the label"
+    fence = after.split("```yaml\n", 1)[1].split("\n```", 1)[0]
+    return fence.splitlines()
+
+
+@pytest.mark.parametrize("skill,name", sorted(_TEMPLATE_KEYS))
+def test_templates_carry_frontmatter_as_a_labelled_block(skill, name):
+    """A template opens with no frontmatter of its own: its keys sit in a labelled block
+    the skill writes as the produced file's frontmatter, so the template itself carries
+    no keys a plugin catalog would read as its own."""
+    text = (ROOT / "skills" / skill / "assets" / name).read_text(encoding="utf-8")
+    assert not text.startswith("---")
+    assert "write this block as the file's opening frontmatter" in " ".join(text.split())
+    lines = _labelled_block(text)
+    assert [line.split(":", 1)[0] for line in lines] == _TEMPLATE_KEYS[(skill, name)]
+    assert not any("#" in line for line in lines)
+
+
+def test_a_charter_written_from_the_template_block_parses():
+    """The charter a skill writes from the block reads exactly as one written from the
+    old frontmatter did."""
+    from tools.governance import combine
+    text = (ROOT / "skills" / "epic" / "assets" / "charter.template.md").read_text(
+        encoding="utf-8")
+    values = {"epic": "demo", "id": "EPIC-DEMO", "item": "VIR-1", "status": "active"}
+    lines = []
+    for line in _labelled_block(text):
+        key = line.split(":", 1)[0]
+        lines.append("%s: %s" % (key, values[key]) if key in values else line)
+    body = text.split("# Epic Charter", 1)[1]
+    charter = "---\n" + "\n".join(lines) + "\n---\n\n# Epic Charter" + body
+    assert combine.charter_items(charter) == (["VIR-1"], "active")
+    assert combine.charter_id(charter) == "EPIC-DEMO"
+    assert combine.charter_title(charter) == "[TITLE]"
+
+
+@pytest.mark.parametrize("skill", ["epic", "dispatch-closeout"])
+def test_the_skills_write_the_labelled_block_as_frontmatter(skill):
+    flat = " ".join(skill_text(skill).split())
+    assert "labelled frontmatter block" in flat
+    assert "between two `---` lines" in flat and "not copied" in flat
+
+
+def test_skill_descriptions_are_single_lines():
+    """A plugin catalog reads frontmatter as plain `key: value` lines, so a skill's
+    description is one line, never a folded or literal block."""
+    import validate
+    for path in sorted((ROOT / "skills").glob("*/SKILL.md")):
+        text = path.read_text(encoding="utf-8")
+        head = text.split("\n---", 1)[0]
+        assert not re.search(r"(?m)^description:\s*[>|]", head), path.parent.name
+        line = next(l for l in head.splitlines() if l.startswith("description:"))
+        assert line.split(":", 1)[1].strip(), path.parent.name
+        value = validate.frontmatter_fields(text)["description"]
+        assert value and "<" not in value and ">" not in value, path.parent.name

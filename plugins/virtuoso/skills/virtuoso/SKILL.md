@@ -1,17 +1,6 @@
 ---
 name: virtuoso
-description: >
-  Structural execution discipline for multi-step tasks in one parent conversation. Use this
-  skill whenever running a dispatch, executing a checklist, or performing any work that involves
-  3+ sequential tool calls. This skill enforces task planning, narration, progress tracking, and
-  optional child-agent swarms while preserving each dispatch as a clearly named dispatch record.
-  Trigger on: "execute this plan", "run this dispatch", "implement these changes", any dispatch
-  prompt with multiple steps, or any task where completion quality depends on maintaining focus
-  across many tool calls. When in doubt, use this skill — the overhead is minimal and the
-  discipline prevents regressions. It is the only skill in the plugin that executes:
-  storyboard scopes, write-plan and roadmap-review plan, next-dispatch and epic prepare,
-  and all of them hand off here. Before the first edit on a written plan it checks for
-  upstream, downstream, in-flight, and roadmap-order conflicts.
+description: "Structural execution discipline for multi-step tasks in one parent conversation. Use this skill whenever running a dispatch, executing a checklist, or performing any work that involves 3+ sequential tool calls. This skill enforces task planning, narration, progress tracking, and optional child-agent swarms while preserving each dispatch as a clearly named dispatch record. Trigger on: \"execute this plan\", \"run this dispatch\", \"implement these changes\", any dispatch prompt with multiple steps, or any task where completion quality depends on maintaining focus across many tool calls. When in doubt, use this skill — the overhead is minimal and the discipline prevents regressions. It is the only skill in the plugin that executes: storyboard scopes, write-plan and roadmap-review plan, next-dispatch and epic prepare, and all of them hand off here. Before the first edit on a written plan it checks for upstream, downstream, in-flight, and roadmap-order conflicts."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

@@ -1,17 +1,6 @@
 ---
 name: next-dispatch
-description: |
-  MANUAL INVOCATION ONLY. The dispatch gate. Reads the next eligible
-  work item from the project's configured work-register provider,
-  finalizes its specification against the shared readiness rubric,
-  drives every pre-flight check to a resolved state, and prints a
-  dispatch kickoff with a repository-reconciliation recipe matched to
-  the project's declared git policy. An epic at the head is dispatched
-  from its packet, with the packet's own kickoff; one not yet chartered
-  routes to /epic. Triggered by "/next-dispatch", "next dispatch",
-  "show next", or "what's next". Does NOT replan, re-sequence, or author new
-  items — that is /roadmap-review; new work that is not on the roadmap
-  starts at /storyboard.
+description: "MANUAL INVOCATION ONLY. The dispatch gate. Reads the next eligible\nwork item from the project's configured work-register provider,\nfinalizes its specification against the shared readiness rubric,\ndrives every pre-flight check to a resolved state, and prints a\ndispatch kickoff with a repository-reconciliation recipe matched to\nthe project's declared git policy. An epic at the head is dispatched\nfrom its packet, with the packet's own kickoff; one not yet chartered\nroutes to /epic. Triggered by \"/next-dispatch\", \"next dispatch\",\n\"show next\", or \"what's next\". Does NOT replan, re-sequence, or author new\nitems — that is /roadmap-review; new work that is not on the roadmap\nstarts at /storyboard."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

@@ -1,19 +1,6 @@
 ---
 name: roadmap-review
-description: |
-  MANUAL INVOCATION ONLY. Heavyweight roadmap recalibration ceremony
-  (~30-45 min). ONLY runs when the user types "/roadmap-review",
-  "run roadmap review", or "perform roadmap review". DO NOT
-  auto-trigger on conversational mentions of roadmaps, planning,
-  work items, phases, or specs — those belong to other skills. When
-  invoked: reconciles the roadmap document against the project's
-  configured work register through its provider, migrates completed
-  work to the terminal record, reconciles the ad hoc plans waiting
-  in the holding bay, assesses progress and scope
-  discipline, replans and re-sequences remaining work, replenishes
-  the dispatch buffer to the size the project's policy declares —
-  each specification passing the shared versioned readiness rubric —
-  reviews lessons learned, and produces a phase brief.
+description: "MANUAL INVOCATION ONLY. Heavyweight roadmap recalibration ceremony\n(~30-45 min). ONLY runs when the user types \"/roadmap-review\",\n\"run roadmap review\", or \"perform roadmap review\". DO NOT\nauto-trigger on conversational mentions of roadmaps, planning,\nwork items, phases, or specs — those belong to other skills. When\ninvoked: reconciles the roadmap document against the project's\nconfigured work register through its provider, migrates completed\nwork to the terminal record, reconciles the ad hoc plans waiting\nin the holding bay, assesses progress and scope\ndiscipline, replans and re-sequences remaining work, replenishes\nthe dispatch buffer to the size the project's policy declares —\neach specification passing the shared versioned readiness rubric —\nreviews lessons learned, and produces a phase brief."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

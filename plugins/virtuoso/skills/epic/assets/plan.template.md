@@ -1,7 +1,9 @@
----
+**Frontmatter — write this block as the file's opening frontmatter, between two `---` lines:**
+
+```yaml
 epic: [SLUG]
 charter: charter.md
----
+```
 
 # Phase Plan — [TITLE]
 

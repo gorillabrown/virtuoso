@@ -1,16 +1,6 @@
 ---
 name: catfish
-description: >
-  Put a curious, well-informed challenger on whoever owns a plan. Every interval, review the
-  plan and its evidence, develop probing questions that test its waits and sequencing ("Why
-  can't we do X while Y completes?", "Is it possible to do A and B, even though C is not
-  decided?") and the model and effort level set for each agent's active and future work,
-  then go back and forth with the plan owner until each question is decided, and
-  report the decisions. The owner keeps every decision. Use this skill whenever the user
-  says "catfish", "be the catfish", "catfish this session", "keep them on their toes", "keep
-  them honest", or asks you to check in on another session, agent or planner at intervals to
-  make it faster, more parallel or less complacent, even if they never say the word. Not for
-  doing the work, deciding the plan, reviewing finished work, or passive status polling.
+description: "Put a curious, well-informed challenger on whoever owns a plan. Every interval, review the plan and its evidence, develop probing questions that test its waits and sequencing (\"Why can't we do X while Y completes?\", \"Is it possible to do A and B, even though C is not decided?\") and the model and effort level set for each agent's active and future work, then go back and forth with the plan owner until each question is decided, and report the decisions. The owner keeps every decision. Use this skill whenever the user says \"catfish\", \"be the catfish\", \"catfish this session\", \"keep them on their toes\", \"keep them honest\", or asks you to check in on another session, agent or planner at intervals to make it faster, more parallel or less complacent, even if they never say the word. Not for doing the work, deciding the plan, reviewing finished work, or passive status polling."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

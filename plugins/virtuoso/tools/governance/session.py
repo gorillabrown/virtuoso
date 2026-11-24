@@ -140,6 +140,23 @@ _INTERIM_RE = re.compile(r"<status>\s*(?:running|pending)\s*</status>|waiting on
                          r"background work|background work of its own still running", re.I)
 _JOB_ID_RE = re.compile(r"\b(?:id|job(?:[ _-]?id)?)\b[\"']?\s*[:=]?\s*[\"']?([A-Za-z0-9_-]{4,})",
                         re.IGNORECASE)
+#: A cron job's id in its creation result's text ("Scheduled one-shot task 537e7ce6 (...)"),
+#: read when the record batches several results and its toolUseResult cannot be told apart.
+_CRON_TEXT_ID_RE = re.compile(r"\bscheduled\b[\w -]*?\b(?:task|job)\s+([0-9a-f]{6,})\b",
+                              re.IGNORECASE)
+#: A cron listing's text: one job per line, its id first; or a plain "No scheduled jobs."
+_CRON_LIST_LINE_RE = re.compile(r"^\s*([0-9a-f]{6,})\b", re.MULTILINE)
+_CRON_LIST_EMPTY_RE = re.compile(r"\bno scheduled jobs\b", re.IGNORECASE)
+#: A background task's id and output file in its launch result's text.
+_TASK_TEXT_ID_RE = re.compile(r"\bin background with ID:\s*([A-Za-z0-9_-]+)|"
+                              r"\(task\s+([A-Za-z0-9_-]+)", re.IGNORECASE)
+_BACKGROUND_TEXT_RE = re.compile(r"\brunning in background with ID:", re.IGNORECASE)
+_OUTPUT_PATH_RE = re.compile(r"Output is being written to:\s*(.+?\.output)\b")
+#: A stop the host refused because the task is already gone: that answer is the host's own
+#: word that the task ended ("No task found with ID: x", "Task x is not running").
+_STOP_GONE_RE = re.compile(r"\bno task found with ID\b|\bis not running\b", re.IGNORECASE)
+#: The line the host appends to a background task's output file when the task ends.
+_OUTPUT_END_RE = re.compile(r"^\[(?:exited with code -?\d+|killed)\]$")
 
 
 def _all_text(value) -> str:
@@ -153,17 +170,58 @@ def _all_text(value) -> str:
     return ""
 
 
+def _output_ended(path: str) -> bool:
+    """True when a background task's output file ends with the line the host appends as
+    the task ends (``[exited with code N]`` or ``[killed]``). Read-only; a missing or
+    unreadable file proves nothing."""
+    try:
+        with open(path, "rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            handle.seek(max(0, handle.tell() - 512))
+            tail = handle.read().decode("utf-8", errors="replace")
+    except OSError:
+        return False
+    lines = [line.strip() for line in tail.splitlines() if line.strip()]
+    return bool(lines) and bool(_OUTPUT_END_RE.match(lines[-1]))
+
+
+def _task_output_files(transcript: str, task: str, named: str | None) -> list[str]:
+    """Where a background task's output file can be: the path its launch result named,
+    then the host's own task folder for this session under the system temp directory."""
+    import glob
+    import tempfile
+    found = [named] if named else []
+    if task and re.fullmatch(r"[A-Za-z0-9_-]+", task):
+        session = os.path.splitext(os.path.basename(transcript))[0]
+        found += glob.glob(os.path.join(glob.escape(tempfile.gettempdir()), "claude", "*",
+                                        glob.escape(session), "tasks", task + ".output"))
+    return found
+
+
 def _claude_launches(path: str) -> list[dict]:
     """The ``claude-code`` adapter's transcripts: background shells, subagents and
     workflows with no completion; cron
     jobs created and not deleted; a wakeup still scheduled. Launches pair with completions
-    by tool-use id, never by description."""
+    by tool-use id, never by description. The host's own word that something ended counts
+    as its completion too, and nothing else does:
+
+    * a stop call (``TaskStop``) on the task id the launch's result reported, when it
+      succeeded or when the host answered that no such task runs;
+    * the end line the host appends to a background task's output file;
+    * a cron listing (``CronList``) taken after a job was created that no longer shows it."""
     from .hosts import claude_code as cc
     launched: dict[str, dict] = {}          # tool-use id -> holding
     background: set[str] = set()            # launched ids that wait for a notification
     done: set[str] = set()
+    task_of: dict[str, str] = {}            # background task id -> its launch's tool-use id
+    outputs: dict[str, str] = {}            # launch's tool-use id -> output file it named
+    stopping: dict[str, str] = {}           # stop call's tool-use id -> the task id it names
+    stopped: set[str] = set()               # task ids the host says are stopped or gone
     crons: dict[str, dict] = {}             # tool-use id -> holding (job id resolved later)
     cron_ids: dict[str, str] = {}           # tool-use id -> job id from its result
+    created: set[str] = set()               # crons whose creation the host confirmed
+    listing: set[str] = set()               # CronList tool-use ids
+    gone: set[str] = set()                  # crons a later listing no longer shows
     deleting: dict[str, str] = {}           # CronDelete tool-use id -> the job id it names
     deleted: set[str] = set()               # job ids a CronDelete removed successfully
     names: dict[str, tuple] = {}            # tool-use id -> (tool name, its input)
@@ -204,6 +262,11 @@ def _claude_launches(path: str) -> list[dict]:
                     wakeup = None if args.get("stop") else {
                         "kind": "scheduled wakeup", "id": use,
                         "detail": str(args.get("reason") or "")[:120]}
+                elif name in cc.STOP_TOOLS:
+                    stopping[use] = str(args.get("task_id") or args.get("shell_id") or
+                                        args.get("bash_id") or "")
+                elif name == "CronList":
+                    listing.add(use)
         if kind == "user" and isinstance(message, dict):
             content = message.get("content")
             blocks = [b for b in (content if isinstance(content, list) else [])
@@ -213,19 +276,43 @@ def _claude_launches(path: str) -> list[dict]:
             result = record.get("toolUseResult") if len(blocks) == 1 else None
             for block in blocks:
                 use = block.get("tool_use_id")
-                if use in deleting and not block.get("is_error"):
+                text = _all_text(block.get("content"))
+                failed = bool(block.get("is_error"))
+                if use in deleting and not failed:
                     deleted.add(deleting[use])
+                if use in stopping and stopping[use] and (
+                        not failed or _STOP_GONE_RE.search(text)):
+                    stopped.add(stopping[use])
                 if use in crons:
+                    if failed:
+                        crons.pop(use)          # never scheduled, so nothing to wait for
+                        continue
+                    created.add(use)
                     own = result.get("id") if isinstance(result, dict) else None
                     if own:
                         cron_ids[use] = str(own)
                     else:
-                        match = _JOB_ID_RE.search(_all_text(block.get("content")))
+                        match = _CRON_TEXT_ID_RE.search(text) or _JOB_ID_RE.search(text)
                         if match:
                             cron_ids[use] = match.group(1)
-                is_async = isinstance(result, dict) and bool(
+                if use in listing and not failed:
+                    jobs = None
+                    if isinstance(result, dict) and isinstance(result.get("jobs"), list):
+                        jobs = {str(j.get("id")) for j in result["jobs"]
+                                if isinstance(j, dict) and j.get("id")}
+                    elif _CRON_LIST_EMPTY_RE.search(text):
+                        jobs = set()
+                    elif _CRON_LIST_LINE_RE.search(text):
+                        jobs = set(_CRON_LIST_LINE_RE.findall(text))
+                    if jobs is not None:
+                        # Only a job created before this listing can be missing from it;
+                        # one whose id was never read is gone only from an empty listing.
+                        gone.update(c for c in created if (
+                            cron_ids[c] not in jobs if c in cron_ids else not jobs))
+                is_async = (isinstance(result, dict) and bool(
                     result.get("backgroundTaskId") or result.get("isAsync")
-                    or result.get("status") == "async_launched")
+                    or result.get("status") == "async_launched")) or bool(
+                    _BACKGROUND_TEXT_RE.search(text))
                 if is_async and use not in launched:
                     # moved to the background after it started (by the person or the
                     # host), whatever its own arguments said
@@ -236,6 +323,18 @@ def _claude_launches(path: str) -> list[dict]:
                                                  args.get("command") or "")[:120]}
                 if use not in launched:
                     continue
+                task = None
+                if isinstance(result, dict):
+                    task = (result.get("backgroundTaskId") or result.get("taskId")
+                            or result.get("agentId"))
+                if not task:
+                    match = _TASK_TEXT_ID_RE.search(text)
+                    task = match and (match.group(1) or match.group(2))
+                if task:
+                    task_of[str(task)] = use
+                named = _OUTPUT_PATH_RE.search(text)
+                if named:
+                    outputs[use] = named.group(1).strip()
                 if is_async:
                     background.add(use)
                 elif use not in background and len(blocks) == 1:
@@ -245,9 +344,17 @@ def _claude_launches(path: str) -> list[dict]:
             if _INTERIM_RE.search(notification):
                 continue                        # it stopped with its own work still running
             done.update(_NOTIFY_ID_RE.findall(notification))
+    done.update(task_of[task] for task in stopped if task in task_of)
+    task_by_use = {use: task for task, use in task_of.items()}
+    for use in launched:
+        if use in done or use not in background:
+            continue
+        files = _task_output_files(path, task_by_use.get(use, ""), outputs.get(use))
+        if any(_output_ended(f) for f in files):
+            done.add(use)
     running = [h for use, h in launched.items() if use not in done]
-    running += [h for use, h in crons.items() if cron_ids.get(use) is None
-                or cron_ids[use] not in deleted]
+    running += [h for use, h in crons.items() if use not in gone and (
+        cron_ids.get(use) is None or cron_ids[use] not in deleted)]
     if wakeup:
         running.append(wakeup)
     return running

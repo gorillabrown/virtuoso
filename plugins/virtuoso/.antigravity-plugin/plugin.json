@@ -2,7 +2,7 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "virtuoso",
   "displayName": "Virtuoso",
-  "version": "1.17.5",
+  "version": "1.17.6",
   "description": "A living roadmap that makes every task your agents finish improve the next one, with scoped dispatches, evidence-backed close-outs and lessons that become rules.",
   "author": {
     "name": "Evan Brown",

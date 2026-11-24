@@ -1,8 +1,10 @@
----
+**Frontmatter — write this block as the file's opening frontmatter, between two `---` lines:**
+
+```yaml
 epic: [SLUG]
 last_updated: [YYYY-MM-DD HH:MM]
 updated_by: session [N]
----
+```
 
 # State — single source of current truth
 

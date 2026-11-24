@@ -1,19 +1,6 @@
 ---
 name: storyboard
-description: |
-  MANUAL INVOCATION ONLY. SCOPING ONLY, never execution. Step one of the ad hoc path:
-  Storyboard scopes, Write-Plan writes the full plan, and only the virtuoso skill
-  executes. For work the user wants handled now that is not on the roadmap, it holds a
-  question-and-answer scoping conversation that ends in a draft stub. It sizes the work
-  out loud, investigates the code, roadmap, register, and holding bay, then asks one
-  bounded question at a time about outcome, placement, touchpoints, externalities,
-  upstream, and downstream impact. It writes back what the user said apart from what it
-  assumed, walks concrete frames of the finished work, and proposes approaches. Only on
-  the user's approval does it record an Aligned verdict and hold the draft stub in the
-  holding bay, never the roadmap or the register, for /write-plan. It never writes a
-  specification, edits code, or starts the work, however small. Triggered by
-  "/storyboard", "storyboard this", "scope this", "I want to do X now", or "let's get
-  aligned on X".
+description: "MANUAL INVOCATION ONLY. SCOPING ONLY, never execution. Step one of the ad hoc path:\nStoryboard scopes, Write-Plan writes the full plan, and only the virtuoso skill\nexecutes. For work the user wants handled now that is not on the roadmap, it holds a\nquestion-and-answer scoping conversation that ends in a draft stub. It sizes the work\nout loud, investigates the code, roadmap, register, and holding bay, then asks one\nbounded question at a time about outcome, placement, touchpoints, externalities,\nupstream, and downstream impact. It writes back what the user said apart from what it\nassumed, walks concrete frames of the finished work, and proposes approaches. Only on\nthe user's approval does it record an Aligned verdict and hold the draft stub in the\nholding bay, never the roadmap or the register, for /write-plan. It never writes a\nspecification, edits code, or starts the work, however small. Triggered by\n\"/storyboard\", \"storyboard this\", \"scope this\", \"I want to do X now\", or \"let's get\naligned on X\"."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

@@ -1,5 +1,52 @@
 # Virtuoso Release Notes
 
+## v1.17.6 (2026-11-24) — a stopped background task no longer blocks preserve-session, and fixes for the Claude plugin directory
+
+### preserve-session
+
+- **The `preserve-session` gate no longer jams on work that has already ended.** It
+  refused sessions whose background work had long finished, because it accepted only one
+  kind of evidence: a completion notice in the transcript. It now also accepts the host's
+  own word that something ended:
+  - a stop (`TaskStop`, or the earlier `KillShell`) that the host confirmed, or answered
+    with "No task found" or "is not running". The gate follows the stop's task id back to
+    the launch's result; before, it compared tool-use ids only;
+  - the `[exited with code N]` or `[killed]` line the host appends to a background task's
+    output file, for a task whose completion notice never reached the transcript;
+  - a scheduled-job listing (`CronList`), taken after a check-in was created, that no
+    longer shows it. Job ids are now also read from a creation result's text
+    ("Scheduled one-shot task 537e7ce6"), so check-ins scheduled several at a time can
+    be paired. A creation the host refused is no longer counted as a holding.
+
+  Anything else still counts as running: a stop that failed for another reason, an
+  output file without its end line, or a check-in no listing has dropped. The skill now
+  has the agent list scheduled jobs (read-only) before refusing on a check-in, and never
+  stop or delete anything just to clear the gate.
+
+### Fixes for the Claude plugin directory
+
+The directory's automatic policy check refused v1.17.3. This release clears every finding
+the plugin can clear itself. Nothing changes in what the plugin does.
+
+- **The listing icon.** `.claude-plugin/icon.png` is the new conductor logo: a square PNG,
+  1709 px a side, which the directory reads as the listing icon.
+- **No SVG.** The alternate host's composer icon is now `assets/virtuoso-small.png`, the
+  same rings drawn as a 512 px PNG. The directory accepts no SVG apart from the plugin's
+  own icon.
+- **Template frontmatter.** The close-out, epic charter, plan and state templates no
+  longer open with frontmatter of their own. Each carries its keys in a labelled block,
+  which `/epic` and `/dispatch-closeout` write as the opening frontmatter of the file they
+  make. Every charter, plan, state and close-out file reads exactly as before.
+- **Skill descriptions on one line.** Each skill's description is one quoted line instead
+  of a folded block, in the same words.
+- **The launcher's loop variable.** A variable named `pass` in `bin/virtuoso` read to the
+  check as a password. It's now `round`, and the launcher behaves as before.
+
+**Still waiting on Verified status.** The directory accepts command hooks, mods, a `bin/`
+folder and scripts only from a Verified organization. The two findings about running or
+downloading code point at those same hooks and launchers. Virtuoso's engine is those
+parts, so they stay, and the listing waits on the Verified application.
+
 ## v1.17.5 (2026-11-24) — preserve a session before it is cleared, and epics as one register row
 
 ### Epics are one row that `/next-dispatch` pulls

@@ -36,6 +36,9 @@ from . import (DROPPED_AFTER, FIXED, Adapter, Call, TranscriptFacts, Usage, coun
 SHELL_TOOLS = frozenset({"Bash", "PowerShell"})
 EDIT_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
 SPAWN_TOOLS = frozenset({"Agent", "Task"})
+#: Tools that stop a background task by its task id (current name first, then earlier
+#: names); a successful result ends that task as surely as its completion notice.
+STOP_TOOLS = frozenset({"TaskStop", "KillShell", "KillBash"})
 DECLINED = frozenset({"user-rejected", "cancelled"})
 SYNTHETIC_MODEL = "<synthetic>"
 #: Prompt text Claude Code writes itself, never typed by the person.

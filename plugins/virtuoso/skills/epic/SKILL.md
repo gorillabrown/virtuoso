@@ -1,18 +1,6 @@
 ---
 name: epic
-description: >
-  Produce the launch materials for a long-horizon autonomous run from the master roadmap: a
-  multi-phase epic spanning hours or days of an agent working alone, across context loss and
-  sessions, until a completion condition is verifiably met. Epics start only from the
-  roadmap: one item a review placed with Path: epic ("/epic ITEM-ID", or routed here by
-  next-dispatch), or a combination of dispatch-ready roadmap items run together, serialized
-  where they share files ("/epic ID ID ID", "/epic --workstream checkout 11-15"). An outcome stated
-  ad hoc ("keep working until it's done", "run this overnight") goes to /storyboard first.
-  It goes on the belt as one epic row: /next-dispatch prints its kickoff, sessions run
-  under the virtuoso skill, and /dispatch-closeout closes it.
-  Trigger on: "epic", "/epic", "run the epic", "batch these items", "long-running goal",
-  "autonomous run", "keep going until done". NOT for one dispatch-sized item (next-dispatch),
-  single-session tasks (virtuoso skill), or interval jobs (loop/schedule).
+description: "Produce the launch materials for a long-horizon autonomous run from the master roadmap: a multi-phase epic spanning hours or days of an agent working alone, across context loss and sessions, until a completion condition is verifiably met. Epics start only from the roadmap: one item a review placed with Path: epic (\"/epic ITEM-ID\", or routed here by next-dispatch), or a combination of dispatch-ready roadmap items run together, serialized where they share files (\"/epic ID ID ID\", \"/epic --workstream checkout 11-15\"). An outcome stated ad hoc (\"keep working until it's done\", \"run this overnight\") goes to /storyboard first. It goes on the belt as one epic row: /next-dispatch prints its kickoff, sessions run under the virtuoso skill, and /dispatch-closeout closes it. Trigger on: \"epic\", \"/epic\", \"run the epic\", \"batch these items\", \"long-running goal\", \"autonomous run\", \"keep going until done\". NOT for one dispatch-sized item (next-dispatch), single-session tasks (virtuoso skill), or interval jobs (loop/schedule)."
 ---
 
 <!-- virtuoso-shared-contract v2 -->
@@ -119,6 +107,10 @@ Templates (copy, then fill every `[BRACKET]`):
 [assets/state.template.md](assets/state.template.md) ·
 [assets/journal.template.md](assets/journal.template.md) ·
 [assets/launch.template.md](assets/launch.template.md)
+
+A template that carries a labelled frontmatter block gives the file it makes that block as
+its opening frontmatter, between two `---` lines; the label, the fence and the notes under
+it are not copied.
 
 **Exactly these five files.** No sixth file, no bespoke names, no "reference" split across
 playbooks/runbooks/facts files: verified project facts live in state.md's Working set, and

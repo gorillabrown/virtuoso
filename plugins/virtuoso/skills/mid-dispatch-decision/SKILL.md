@@ -1,14 +1,6 @@
 ---
 name: mid-dispatch-decision
-description: >
-  Decision protocol for when a Virtuoso execution (Zeus) pauses mid-dispatch and routes a
-  structured issue. Primary input: a path to an issue file under the manifest `issues`
-  directory — the 7-field
-  issue document produced by the virtuoso skill. Reads the issue, produces a recommendation
-  and a worker-pasteable instruction block, appends a Decision block to the issue file, and
-  amends the dispatch spec. Trigger on: "mid-dispatch decision", "decision needed",
-  "escalation decision", "what should I tell the implementation agent", "the implementation agent is stuck", a virtuoso
-  issue path, or any pasted execution output showing a paused dispatch awaiting direction.
+description: "Decision protocol for when a Virtuoso execution (Zeus) pauses mid-dispatch and routes a structured issue. Primary input: a path to an issue file under the manifest `issues` directory — the 7-field issue document produced by the virtuoso skill. Reads the issue, produces a recommendation and a worker-pasteable instruction block, appends a Decision block to the issue file, and amends the dispatch spec. Trigger on: \"mid-dispatch decision\", \"decision needed\", \"escalation decision\", \"what should I tell the implementation agent\", \"the implementation agent is stuck\", a virtuoso issue path, or any pasted execution output showing a paused dispatch awaiting direction."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

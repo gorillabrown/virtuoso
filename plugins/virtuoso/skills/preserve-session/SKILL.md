@@ -1,15 +1,6 @@
 ---
 name: preserve-session
-description: >
-  MANUAL INVOCATION ONLY. Preserve a settled session before it is cleared. Refuses while
-  anything in this session still runs and offers compaction instead. Otherwise sorts
-  everything the session holds into keep or drop, files every keeper in the registered
-  home that owns its kind (a commit, findings, issues, the holding bay, host or agent
-  memory, a project path), writes one dated session record listing each item, where it
-  went and what was dropped, verifies every destination, and only then reports that the
-  session is safe to clear. It never clears, stops, deletes or pushes anything, and never
-  changes a session setting. Triggered by "/preserve-session", "preserve this session",
-  or "save the session before I clear".
+description: "MANUAL INVOCATION ONLY. Preserve a settled session before it is cleared. Refuses while anything in this session still runs and offers compaction instead. Otherwise sorts everything the session holds into keep or drop, files every keeper in the registered home that owns its kind (a commit, findings, issues, the holding bay, host or agent memory, a project path), writes one dated session record listing each item, where it went and what was dropped, verifies every destination, and only then reports that the session is safe to clear. It never clears, stops, deletes or pushes anything, and never changes a session setting. Triggered by \"/preserve-session\", \"preserve this session\", or \"save the session before I clear\"."
 ---
 
 <!-- virtuoso-shared-contract v2 -->
@@ -106,6 +97,16 @@ It reads this session's whole transcript, writes nothing, and exits:
 | 0 | nothing in this session is still running | continue to Step 2 |
 | 1 | something is still running; each holding is named | **refuse** (below) |
 | 3 | it cannot tell (no transcript or more than one carries the marker, it cannot be read, or this host gives no way to see background work) | **refuse**: cannot tell counts as running |
+
+A holding ends only on the host's own word, never on yours: a completion notice; a stop
+the host confirmed, or answered with "no such task" or "not running"; the end line the
+host writes into a background task's output file; or, for a scheduled check-in, a
+listing of scheduled jobs that no longer shows it. The gate reads all of these itself.
+
+**Before refusing on a scheduled check-in**, list this session's scheduled jobs with the
+host's read-only listing (on Claude Code, `CronList`), then run the gate again: a job the
+listing no longer shows has fired or expired, and stops holding. Never stop a task or
+delete a job only to clear the gate.
 
 **Refusing.** Write nothing. Name what is running, as the gate printed it, and offer
 compaction instead: on a host that has `/compact`, offer `/compact`; on one that does

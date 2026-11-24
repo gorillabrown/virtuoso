@@ -1,13 +1,6 @@
 ---
 name: effort-levels
-description: >
-  Effort level selection framework for dispatch specs. Use this skill whenever
-  authoring a dispatch spec, sizing a dispatch, or reviewing whether a dispatch's effort
-  allocation matches its task complexity. This skill governs how much extended thinking
-  budget each task receives — a real cost lever, not just a quality preference. Trigger on:
-  "spec this dispatch", "author a dispatch", "size this work", "what effort level", "review
-  effort allocation", or any dispatch authoring session where task complexity varies.
-  When in doubt, use this skill — misallocated effort is invisible waste.
+description: "Effort level selection framework for dispatch specs. Use this skill whenever authoring a dispatch spec, sizing a dispatch, or reviewing whether a dispatch's effort allocation matches its task complexity. This skill governs how much extended thinking budget each task receives — a real cost lever, not just a quality preference. Trigger on: \"spec this dispatch\", \"author a dispatch\", \"size this work\", \"what effort level\", \"review effort allocation\", or any dispatch authoring session where task complexity varies. When in doubt, use this skill — misallocated effort is invisible waste."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

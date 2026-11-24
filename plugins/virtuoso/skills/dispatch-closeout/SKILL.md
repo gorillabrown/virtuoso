@@ -1,13 +1,6 @@
 ---
 name: dispatch-closeout
-description: |
-  MANUAL INVOCATION ONLY. Closes a completed dispatch. Verifies completion
-  evidence, drafts the close-out report and retrospective entries, and then
-  performs a transactional crossing — create the close-out artifact, append the
-  append-only terminal record, persist local governance changes, close the item
-  in the live work register through its provider, and verify every result. Any
-  partial failure leaves a recovery record naming exactly what remains. Triggered
-  by "/dispatch-closeout", "close out this dispatch", or "run the close-out".
+description: "MANUAL INVOCATION ONLY. Closes a completed dispatch. Verifies completion\nevidence, drafts the close-out report and retrospective entries, and then\nperforms a transactional crossing — create the close-out artifact, append the\nappend-only terminal record, persist local governance changes, close the item\nin the live work register through its provider, and verify every result. Any\npartial failure leaves a recovery record naming exactly what remains. Triggered\nby \"/dispatch-closeout\", \"close out this dispatch\", or \"run the close-out\"."
 ---
 
 <!-- virtuoso-shared-contract v2 -->
@@ -131,7 +124,9 @@ Wave 1 writes nothing.
 governance updates, next work. One per completed item, named per the project's
 convention, in the registered `closeOuts` directory, from
 [assets/CloseOut.template.md](assets/CloseOut.template.md), with its cost and guards
-(`references/closeout-report-format.md`).
+(`references/closeout-report-format.md`). The template's labelled frontmatter block becomes
+the report's opening frontmatter, between two `---` lines; the label and the fence are not
+copied.
 
 **2. Lessons** — in the registered `lessons` role, where the next specification reads
 them; a lesson only in a close-out is one no specification will apply. Every close-out

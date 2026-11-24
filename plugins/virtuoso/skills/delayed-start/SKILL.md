@@ -1,12 +1,6 @@
 ---
 name: delayed-start
-description: >
-  Defer one task to a clock time or a delay without pausing the session. Use when the user
-  says "start at 3pm", "in N minutes/hours", "at midnight/noon", "kick off at 9:30", or
-  otherwise wants a task to wait for a clock time or relative delay. Parses absolute times,
-  named times, and relative delays; starts a wait that blocks only that task while other
-  work carries on; runs the task when the time comes. Pauses everything only when the user
-  asks for that.
+description: "Defer one task to a clock time or a delay without pausing the session. Use when the user says \"start at 3pm\", \"in N minutes/hours\", \"at midnight/noon\", \"kick off at 9:30\", or otherwise wants a task to wait for a clock time or relative delay. Parses absolute times, named times, and relative delays; starts a wait that blocks only that task while other work carries on; runs the task when the time comes. Pauses everything only when the user asks for that."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

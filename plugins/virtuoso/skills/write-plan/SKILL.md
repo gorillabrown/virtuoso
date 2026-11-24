@@ -1,19 +1,6 @@
 ---
 name: write-plan
-description: |
-  MANUAL INVOCATION ONLY. PLANNING ONLY, never execution. Step two of the ad hoc path:
-  Storyboard scopes, Write-Plan writes the full plan, and only the virtuoso skill
-  executes. It turns storyboard's approved draft stub into full, ready specifications.
-  It always starts from the storyboard: with none, it runs
-  /storyboard first; with one, it re-anchors, checks for drift, and returns there
-  whenever something agreed is in question. It writes each item in roadmap-review's
-  D.5.2 format against the shared readiness rubric and the live lessons, runs
-  next-dispatch's readiness audit and pre-flight, fills in the reconciliation recipe,
-  and works out each item's exact slot in roadmap order. It holds the plan in the
-  registered holding bay, never the roadmap or the register; the next /roadmap-review
-  applies the slot. It never executes: it hands the plan to the virtuoso skill, here or
-  in another session, or holds it for review. Triggered by "/write-plan", "write the
-  plan", "write the spec", or "plan this out".
+description: "MANUAL INVOCATION ONLY. PLANNING ONLY, never execution. Step two of the ad hoc path:\nStoryboard scopes, Write-Plan writes the full plan, and only the virtuoso skill\nexecutes. It turns storyboard's approved draft stub into full, ready specifications.\nIt always starts from the storyboard: with none, it runs\n/storyboard first; with one, it re-anchors, checks for drift, and returns there\nwhenever something agreed is in question. It writes each item in roadmap-review's\nD.5.2 format against the shared readiness rubric and the live lessons, runs\nnext-dispatch's readiness audit and pre-flight, fills in the reconciliation recipe,\nand works out each item's exact slot in roadmap order. It holds the plan in the\nregistered holding bay, never the roadmap or the register; the next /roadmap-review\napplies the slot. It never executes: it hands the plan to the virtuoso skill, here or\nin another session, or holds it for review. Triggered by \"/write-plan\", \"write the\nplan\", \"write the spec\", or \"plan this out\"."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

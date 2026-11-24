@@ -1,14 +1,6 @@
 ---
 name: ultrathink
-description: >
-  Deep-reasoning protocol that overrides default brevity and forces exhaustive, multi-dimensional
-  analysis grounded in first principles. Use this skill whenever the user says "ULTRATHINK",
-  "ultrathink", "think deeply", "think harder", "maximum depth", "don't simplify", or when a
-  problem requires reasoning beyond surface-level logic. This skill suspends conciseness
-  preferences, requires mandatory assumption archaeology before dimensional analysis, and mandates
-  a validation architecture before concluding. Trigger on: "ULTRATHINK", "ultrathink", "deep
-  think", "think step by step", "analyze this thoroughly", "don't be brief", or any signal that
-  the user wants exhaustive reasoning over efficient output.
+description: "Deep-reasoning protocol that overrides default brevity and forces exhaustive, multi-dimensional analysis grounded in first principles. Use this skill whenever the user says \"ULTRATHINK\", \"ultrathink\", \"think deeply\", \"think harder\", \"maximum depth\", \"don't simplify\", or when a problem requires reasoning beyond surface-level logic. This skill suspends conciseness preferences, requires mandatory assumption archaeology before dimensional analysis, and mandates a validation architecture before concluding. Trigger on: \"ULTRATHINK\", \"ultrathink\", \"deep think\", \"think step by step\", \"analyze this thoroughly\", \"don't be brief\", or any signal that the user wants exhaustive reasoning over efficient output."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

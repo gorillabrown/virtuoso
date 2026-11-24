@@ -1,10 +1,12 @@
----
+**Frontmatter — write this block as the file's opening frontmatter, between two `---` lines:**
+
+```yaml
 dispatch: [DISPATCH-ID]
 date: YYYY-MM-DD
 runtime: [Actual from timing --summary --dispatch <DISPATCH-ID>, or "not measured (no time log)"]
 tokens: [~NNNk]
 status: [all-pass | has-regressions | has-discoveries]
----
+```
 
 # Dispatch Close-Out: [DISPATCH-ID]
 

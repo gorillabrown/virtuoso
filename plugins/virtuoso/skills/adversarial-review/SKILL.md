@@ -1,14 +1,6 @@
 ---
 name: adversarial-review
-description: >
-  Structured adversarial review of any technical document — diagnostic plans, analysis
-  reports, architecture proposals, calibration results, feature specs, research findings, or
-  any work product that makes claims and proposes actions. Use whenever the user says
-  "adversarial review", "red team this", "challenge this", "tear this apart", "what am I
-  missing", "review this critically", "poke holes in this", "stress test this analysis",
-  "is this rigorous enough", or wants a deliberately skeptical evaluation of technical work.
-  Also trigger when the user shares a completed analysis and asks whether to proceed
-  ("is this ready?").
+description: "Structured adversarial review of any technical document — diagnostic plans, analysis reports, architecture proposals, calibration results, feature specs, research findings, or any work product that makes claims and proposes actions. Use whenever the user says \"adversarial review\", \"red team this\", \"challenge this\", \"tear this apart\", \"what am I missing\", \"review this critically\", \"poke holes in this\", \"stress test this analysis\", \"is this rigorous enough\", or wants a deliberately skeptical evaluation of technical work. Also trigger when the user shares a completed analysis and asks whether to proceed (\"is this ready?\")."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

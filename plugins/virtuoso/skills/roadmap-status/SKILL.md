@@ -1,14 +1,6 @@
 ---
 name: roadmap-status
-description: |
-  MANUAL INVOCATION ONLY. Read-only status briefing (~5 min). ONLY runs
-  when the user types "/roadmap-status", "roadmap status", or "status
-  update". Reads the roadmap document and the project's configured
-  work register through its provider, computes figures with provenance,
-  and composes a plain-language briefing. It writes nothing to the
-  project unless the user explicitly approves a bounded correction
-  phase. DO NOT auto-trigger on conversational mentions of status,
-  progress, or planning.
+description: "MANUAL INVOCATION ONLY. Read-only status briefing (~5 min). ONLY runs\nwhen the user types \"/roadmap-status\", \"roadmap status\", or \"status\nupdate\". Reads the roadmap document and the project's configured\nwork register through its provider, computes figures with provenance,\nand composes a plain-language briefing. It writes nothing to the\nproject unless the user explicitly approves a bounded correction\nphase. DO NOT auto-trigger on conversational mentions of status,\nprogress, or planning."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

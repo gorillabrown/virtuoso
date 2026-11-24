@@ -2077,6 +2077,26 @@ def test_the_alternate_host_manifest_describes_itself_for_the_plugin_page():
         assert asset.is_file(), f"{key} points at a file that is not shipped: {interface[key]}"
 
 
+def test_the_directory_icon_is_a_square_png():
+    """The Claude plugin directory reads its listing icon from `.claude-plugin/icon.png`:
+    a square PNG, 512 to 2048 px a side, under 2 MB, that does not look like it holds a
+    zip archive. It accepts no SVG, so the alternate host's composer icon is a PNG too."""
+    import struct
+    data = (ROOT / ".claude-plugin" / "icon.png").read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n", "the icon is not a PNG"
+    width, height = struct.unpack(">II", data[16:24])
+    assert width == height, f"the icon is not square: {width}x{height}"
+    assert 512 <= width <= 2048, f"the icon is {width} px a side, outside 512-2048"
+    assert len(data) < 2_000_000, "the icon is 2 MB or more"
+    assert b"PK\x03\x04" not in data, "the icon looks like it holds a zip archive"
+    interface = json.loads(
+        (ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))["interface"]
+    assert interface["composerIcon"].endswith(".png")
+    composer = (ROOT / interface["composerIcon"].lstrip("./")).read_bytes()
+    assert composer[:8] == b"\x89PNG\r\n\x1a\n"
+    assert struct.unpack(">II", composer[16:24]) == (512, 512)
+
+
 def test_the_alternate_host_manifest_lists_the_hooks_it_ships():
     """The plugin page lists `interface.capabilities`, a free-text list. The manifest
     ships a session hook, so the page says so, in the words published manifests that

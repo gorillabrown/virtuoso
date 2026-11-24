@@ -1,11 +1,6 @@
 ---
 name: virtuoso-init
-description: >
-  Initialize or repair the Virtuoso workspace for a project. Use when setting up the
-  virtuoso plugin in a new project, when a governance skill reports a missing workspace,
-  or when the user says "virtuoso init", "set up virtuoso", "create the roadmap workspace",
-  or "initialize virtuoso". Creates the plugin-only documentation tree (the only
-  supported layout) plus the Virtuoso plugin workspace, and never overwrites user content.
+description: "Initialize or repair the Virtuoso workspace for a project. Use when setting up the virtuoso plugin in a new project, when a governance skill reports a missing workspace, or when the user says \"virtuoso init\", \"set up virtuoso\", \"create the roadmap workspace\", or \"initialize virtuoso\". Creates the plugin-only documentation tree (the only supported layout) plus the Virtuoso plugin workspace, and never overwrites user content."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

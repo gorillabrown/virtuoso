@@ -1,10 +1,6 @@
 ---
 name: dispatch-kickoff
-description: |
-  MANUAL INVOCATION ONLY. The earlier name of /next-dispatch, kept so the old
-  command still works. Triggered only by "/dispatch-kickoff". Prints that the
-  command is now /next-dispatch, then runs next-dispatch in full. Removed in
-  the next major release.
+description: "MANUAL INVOCATION ONLY. The earlier name of /next-dispatch, kept so the old\ncommand still works. Triggered only by \"/dispatch-kickoff\". Prints that the\ncommand is now /next-dispatch, then runs next-dispatch in full. Removed in\nthe next major release."
 ---
 
 <!-- virtuoso-shared-contract v2 -->

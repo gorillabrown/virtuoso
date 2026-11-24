@@ -1,16 +1,6 @@
 ---
 name: 3rd-party-audit
-description: >
-  Full lifecycle management of external 3rd-party codebase audits. Use this skill whenever
-  the user says "3rd party audit", "external audit", "outside audit", or when an audit is
-  required at phase close. This skill governs package creation, auditor prompts, remediation
-  planning, and final decision integration. Every audit begins with a Q&A that establishes
-  the primary question the audit must answer and the child questions that bear on it, the
-  child questions offered to the user for approval. It produces 6 deliverables across 7 steps
-  with structured handoffs between the planner, the user, and the external auditor. Trigger on:
-  "3rd party audit", "audit the codebase", "prepare audit package", "audit remediation",
-  "process audit findings", or any phase-close audit gate. This is a planner skill — all
-  audit steps are coordinated from the planning surface.
+description: "Full lifecycle management of external 3rd-party codebase audits. Use this skill whenever the user says \"3rd party audit\", \"external audit\", \"outside audit\", or when an audit is required at phase close. This skill governs package creation, auditor prompts, remediation planning, and final decision integration. Every audit begins with a Q&A that establishes the primary question the audit must answer and the child questions that bear on it, the child questions offered to the user for approval. It produces 6 deliverables across 7 steps with structured handoffs between the planner, the user, and the external auditor. Trigger on: \"3rd party audit\", \"audit the codebase\", \"prepare audit package\", \"audit remediation\", \"process audit findings\", or any phase-close audit gate. This is a planner skill — all audit steps are coordinated from the planning surface."
 ---
 
 <!-- virtuoso-shared-contract v2 -->
