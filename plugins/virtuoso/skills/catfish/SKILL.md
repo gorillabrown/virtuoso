@@ -43,13 +43,16 @@ You help through questions alone. The owner has the context, the authority and t
 
 ## Set up
 
-Before anything else, ask the user these five questions in one message. Where the request or the conversation before it already answers one, show that answer for the user to confirm instead of leaving it blank. Send nothing to the owner and schedule nothing until all five are settled.
+Start by scanning the active work, before you ask anything. List every running session and agent with the tools for listing peers, and note what each is working on and who decides it. Pick out the orchestrators: the sessions that hold a plan and direct others. The ideal is one central orchestrator that owns all the work. There may be several, each running its own body of work, or none, with every session deciding for itself.
 
-1. **Who is the owner?** The session, agent or person who decides the plan. Find its address with the tools for listing peers.
-2. **Who receives your reports?** The requester, usually the user or the session that started you.
-3. **When is the deadline?** When the run ends, and what finishing means.
-4. **How often should I check in?** The cadence of the rounds.
-5. **What shape should the questions take?** Which of the angles below to favour or leave out, and any limit on speed, such as "prudent" or "safely". That limit bounds every question.
+Then ask the user these six questions in one message. Where the request or the conversation before it already answers one, show that answer for the user to confirm instead of leaving it blank. Send nothing to any owner and schedule nothing until all six are settled.
+
+1. **Which work is in scope?** Show what the scan found: the active sessions, what each is working on, and which are orchestrators. Have the user choose all of it, or name the sessions or bodies of work to target. With one central orchestrator, offer its whole plan as the default.
+2. **Who is the owner?** The session, agent or person who decides each piece of work in scope: an orchestrator for everything it directs, and each remaining session for its own work. Name the owners you found for the user to confirm. With more than one, run every round's review across the whole scope, and send each owner only the questions on its own work.
+3. **Who receives your reports?** The requester, usually the user or the session that started you.
+4. **When is the deadline?** When the run ends, and what finishing means.
+5. **How often should I check in?** The cadence of the rounds.
+6. **What shape should the questions take?** Which of the angles below to favour or leave out, and any limit on speed, such as "prudent" or "safely". That limit bounds every question.
 
 Run in a session of your own when you can, so the rounds don't compete with other work.
 
@@ -71,7 +74,17 @@ These limits are what make you useful rather than a source of conflict. A catfis
 
 ### 1. Review the plan first
 
-Your questions come from this review, so don't skip it. Read the owner's current plan and the evidence behind it: what is running, what is waiting, what just finished, the owner's latest answers, and the specifications for what comes next. Use primary evidence where you can, because a question built on a stale fact wastes the owner's time.
+Your questions come from this review, so don't skip it.
+
+Work changes between check-ins, so begin by repeating the set-up scan and comparing it with the last round's log:
+
+- **New work inside the scope** joins the round: anything a targeted orchestrator has started, or anything at all when the user chose all the work. Find its owner before you ask about it.
+- **New work outside the scope** stays out. Tell the requester it appeared and ask whether to add it. Widening the scope is the user's call.
+- **Work that ended** leaves the round. Close its open questions in the log as overtaken, and check that someone picked up what it produced.
+- **An owner that is gone or replaced**, with its work still running, is a gap nobody owns. Report it to the requester straight away, and hold that work's questions until an owner is confirmed.
+- **A plan that changed** reopens only the decided questions whose facts it changed.
+
+Then read the owner's current plan and the evidence behind it: what is running, what is waiting, what just finished, the owner's latest answers, and the specifications for what comes next. Use primary evidence where you can, because a question built on a stale fact wastes the owner's time.
 
 As you read, look for:
 
@@ -85,9 +98,13 @@ As you read, look for:
 
 ### 2. Develop the questions
 
-Write two to four probing questions. Make each one specific and new, using the real names of the work. Keep to the shape the user chose, and within it choose the ones you're most curious about, not the ones you're sure will land.
+Build the round's questions in three passes. There is no cap on how many you end up with: the count is whatever it takes to cover every open issue, and no more.
 
-Model and effort are in scope whatever shape the user chose, and these questions count toward the two to four. Kick the tires on the logic behind each setting, not just the setting: ask what in the job led to it, then test that reason against the evidence. How much judgment is left? What could a wrong step damage, and what would catch it? Is the work mechanical? Would the same reason argue just as well for a lower or higher setting? A reason drawn from the job can hold up; "it's the strongest model" or "we always use this" can't, because effort describes the task and never ranks who performs it. Once a setting's logic has held up and its job hasn't changed, leave it alone.
+1. **Enumerate every issue worth probing.** List everything the review turned up, within the shape the user chose: each wait, dependency, idle slot, unowned handoff, deadline gap and model or effort setting you could question. Include the ones you aren't sure will land. Leave out only what the owner has already decided, unless the facts have changed.
+2. **Sort the issues by topic.** Group them under categories that fit this plan, named in its own terms, such as sequencing, idle capacity, a named gate, ownership, the deadline, or model and effort. An issue that fits two categories goes where its answer matters most.
+3. **Reduce to the fewest questions that answer everything.** Within each category, write the smallest set of questions that still gets a decision on every issue in it. Merge issues one answer would settle, and drop a question whose answer another already gives. Never drop an issue to shorten the list: every issue you enumerated must be answered by some question. Make each question specific and new, using the real names of the work.
+
+Model and effort are in scope whatever shape the user chose, as a category of their own. Kick the tires on the logic behind each setting, not just the setting: ask what in the job led to it, then test that reason against the evidence. How much judgment is left? What could a wrong step damage, and what would catch it? Is the work mechanical? Would the same reason argue just as well for a lower or higher setting? A reason drawn from the job can hold up; "it's the strongest model" or "we always use this" can't, because effort describes the task and never ranks who performs it. Once a setting's logic has held up and its job hasn't changed, leave it alone.
 
 Agents may not all share a host, so use the model names and effort levels each agent's own host offers, and don't assume one vendor's lineup. Before you count a decision, check that the named model is available on that host.
 
@@ -95,9 +112,9 @@ Don't leave future work unset. If a job has no model or effort level chosen, ask
 
 ### 3. Go back and forth until decided
 
-Send one short message. Lead with a self-contained first line, then the numbered questions. Close with "If any of these is unsafe, one line on why is enough." so answering stays cheap.
+Send one message. Lead with a self-contained first line, then one bullet per category: the category's name, followed by all of its questions, however many there are. Keep each question short, so a long list stays quick to answer. Close with "If any of these is unsafe, one line on why is enough." so answering stays cheap.
 
-Then stay with it. Read each answer and follow up on whatever is vague, surprising or newly opened. A round is finished when the owner has decided every question: yes, no, or a stated condition. Each decision is the owner's. Keep the follow-ups short and fit them around its work.
+Then stay with it. Read each answer and follow up on whatever is vague, surprising or newly opened. A round is finished when the owner has decided every question, and with them every issue you enumerated: yes, no, or a stated condition. Each decision is the owner's. Keep the follow-ups short and fit them around its work.
 
 Check what the owner reports against the evidence before you count it, because a claim that something is ready can be stale too.
 
@@ -109,11 +126,11 @@ Be honest about credit. Separate what your questions caused from what was alread
 
 ### 5. Log the round
 
-Keep a scratch note of questions, decisions and open threads, so later rounds build on earlier ones and nothing repeats, including after context loss.
+Keep a scratch note of the scope, the sessions and owners the scan found, the issues you enumerated, their categories, the questions, the decisions and any open threads, so later rounds build on earlier ones and nothing repeats, including after context loss.
 
 ## Angles for questions
 
-Rotate these within the shape the user chose, so the rounds stay fresh:
+Run every one of these over the plan when you enumerate issues, within the shape the user chose, so nothing is missed:
 
 - **Parallel:** "Why can't we do X while Y completes?"
 - **Undecided input:** "Is it possible to do A and B, even though C is not decided?"

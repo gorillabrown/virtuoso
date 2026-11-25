@@ -1,5 +1,19 @@
 # Virtuoso Release Notes
 
+## v1.17.7 (2026-11-24) — catfish covers every open issue and rescans each round
+
+### catfish
+
+- **Catfish now probes every open issue, not two to four.** It lists every issue worth
+  probing, sorts them by topic, and reduces them to the fewest questions that answer them
+  all. The owner gets one bullet per category, holding all of that category's questions.
+- **Set-up targets the work.** Catfish scans the active work first, identifies the
+  orchestrators, and has you choose which work is in scope before anything is sent. With
+  several owners, each one gets only the questions about its own work.
+- **Each round rescans.** At the start of every round it repeats the scan, and handles
+  work that started, stopped, lost its owner or changed plan since the last round.
+  Widening the scope stays your call.
+
 ## v1.17.6 (2026-11-24) — a stopped background task no longer blocks preserve-session, and fixes for the Claude plugin directory
 
 ### preserve-session
